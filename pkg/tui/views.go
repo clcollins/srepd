@@ -69,15 +69,6 @@ func renderStatusArea(s string) string {
 	return style.Render(fmt.Sprintf(fstring, s))
 }
 
-// Gotta figure out how to accurately update the width on screen resize
-var logArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(1).
-	Align(lipgloss.Left).
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240")).
-	Bold(false)
-
 func renderHelpArea(s string) string {
 	var style = lipgloss.NewStyle().
 		Width(initialTableWidth).
@@ -88,18 +79,27 @@ func renderHelpArea(s string) string {
 	return style.Render(s)
 }
 
-var incidentScreenArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(initialTableHeight+2).
-	Align(lipgloss.Center, lipgloss.Center).
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240")).
-	Bold(false)
-
-var logScreenArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(initialTableHeight).
-	Align(lipgloss.Left).
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240")).
-	Bold(false)
+// Gotta figure out how to accurately update the width on screen resize
+// var logArea = lipgloss.NewStyle().
+// 	Width(initialTableWidth).
+// 	Height(1).
+// 	Align(lipgloss.Left).
+// 	BorderStyle(lipgloss.NormalBorder()).
+// 	BorderForeground(lipgloss.Color("240")).
+// 	Bold(false)
+//
+// var incidentScreenArea = lipgloss.NewStyle().
+// 	Width(initialTableWidth).
+// 	Height(initialTableHeight+2).
+// 	Align(lipgloss.Center, lipgloss.Center).
+// 	BorderStyle(lipgloss.NormalBorder()).
+// 	BorderForeground(lipgloss.Color("240")).
+// 	Bold(false)
+//
+// var logScreenArea = lipgloss.NewStyle().
+// 	Width(initialTableWidth).
+// 	Height(initialTableHeight).
+// 	Align(lipgloss.Left).
+// 	BorderStyle(lipgloss.NormalBorder()).
+// 	BorderForeground(lipgloss.Color("240")).
+// 	Bold(false)
