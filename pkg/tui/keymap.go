@@ -18,13 +18,16 @@ type KeyMap struct {
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit, k.Enter}
+	return []key.Binding{k.Enter, k.Quit, k.Help}
 }
 
 func (k KeyMap) FullHelp() [][]key.Binding {
 	// TODO: Return a pop-over window here instead
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Quit, k.Help, k.Back, k.Refresh}, // First column
+		// Each slice here is a column in the help window
+		{k.Up, k.Down},
+		{k.Quit, k.Help},
+		{k.Enter, k.Back}, // First column
 	}
 }
 
@@ -55,11 +58,7 @@ var defaultKeyMap = KeyMap{
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
-		key.WithHelp("enter", "view details"),
-	),
-	Esc: key.NewBinding(
-		key.WithKeys("esc"),
-		key.WithHelp("esc", "back"),
+		key.WithHelp("enter", "select"),
 	),
 	Team: key.NewBinding(
 		key.WithKeys("t"),

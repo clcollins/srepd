@@ -30,7 +30,7 @@ func (m model) renderIncidentTable() string {
 	//s.WriteString(renderAssigneeArea(assignedTo))
 	s.WriteString(renderStatusArea(m.statusMessage))
 	s.WriteString(renderTableArea(m.table))
-	//s.WriteString(renderHelpArea(m.help.View(defaultKeyMap)))
+	s.WriteString(renderHelpArea(m.help.View(defaultKeyMap)))
 
 	return s.String()
 }
@@ -43,12 +43,14 @@ func renderAssigneeArea(s string) string {
 		Align(lipgloss.Right, lipgloss.Bottom).
 		BorderStyle(lipgloss.HiddenBorder())
 
-	var fstring = "Assigned to %s\n"
+	var fstring = "Assigned to %s"
+	fstring = strings.TrimSuffix(fstring, "\n")
 	return style.Render(fmt.Sprintf(fstring, s))
 }
 
 func renderTableArea(t table.Model) string {
 	var style = lipgloss.NewStyle().
+		MarginTop(1).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240"))
 	return style.Render(t.View())
@@ -56,23 +58,26 @@ func renderTableArea(t table.Model) string {
 
 func renderStatusArea(s string) string {
 	var style = lipgloss.NewStyle().
-		Width(initialTableWidth).
-		Height(1).
+		Width(initialViewPortWidth).
 		Align(lipgloss.Left).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		// No top/bottom padding
+		Padding(0, 1).
 		Bold(false)
 
-	var fstring = "msg > %s"
+	// Whitespace before "msg" for formatting
+	var fstring = "> %s"
+	fstring = strings.TrimSuffix(fstring, "\n")
 	return style.Render(fmt.Sprintf(fstring, s))
 }
 
 func renderHelpArea(s string) string {
 	var style = lipgloss.NewStyle().
-		Width(initialTableWidth).
+		Width(initialViewPortWidth).
 		Height(1).
-		Align(lipgloss.Right, lipgloss.Bottom).
-		BorderStyle(lipgloss.HiddenBorder())
+		Align(lipgloss.Left).
+		Padding(0, 1).
+		MarginTop(1).
+		Foreground(lipgloss.Color("240"))
 
 	return style.Render(s)
 }

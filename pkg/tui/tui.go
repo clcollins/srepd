@@ -82,7 +82,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		// There's a couple of things that need to update on resize
 		// Gotta figure out how to do that
-		m.help.Width = msg.Width
 		return m, nil
 
 	case tea.KeyMsg:

@@ -10,14 +10,21 @@ import (
 // and resize tea.Msg events received from the terminal
 const (
 	// Standard terminal size is 80x24
-	// so we have 78 columns to work with after subtracting for the table borders
-	// And 20 rows subtracting table borders, status messages, and help
-	initialTableHeight = 20
+	// so we have 70 columns to work with after subtracting for the table borders (2)
+	// and 2 for each column's cellpadding (8)
+	// and 2 more for the terminal scroll bars
+	// For rows: 20 subtracting table borders, status messages, and help
+	initialTableWidth  = dotWidth + idWidth + summaryWidth + clusterIDWidth - scrollbars
+	initialTableHeight = 18
 	dotWidth           = 2
 	idWidth            = 16 // Looks like most PD alerts are 14 characters
-	summaryWidth       = 46
+	summaryWidth       = 36
 	clusterIDWidth     = 16 // ClusterID and UUIDs are 32 characters; Display Names tend to be ~16
-	initialTableWidth  = dotWidth + idWidth + summaryWidth + clusterIDWidth
+
+	// Basic stuff (subtract 2 for scroll bars)
+	defaultTerminalWidth = 80 - scrollbars
+	scrollbars           = 2
+	initialViewPortWidth = defaultTerminalWidth
 )
 
 var (
