@@ -62,8 +62,8 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		var config = &pd.Config{}
 		var ctx = context.Background()
+		var config = &pd.Config{}
 
 		token := viper.GetString("token")
 		teams := viper.GetStringSlice("teams")
@@ -79,7 +79,6 @@ but rather a simple tool to make on-call tasks easier.`,
 		if err != nil {
 			log.Fatal(err)
 		}
-
 	},
 }
 

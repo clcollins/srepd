@@ -15,17 +15,22 @@ const (
 var pagerDutyDefaultStatuses = []string{"triggered", "acknowledged"}
 
 type Config struct {
-	Client     *pagerduty.Client
-	Teams      []*pagerduty.Team
-	SilentUser *pagerduty.User
-	ListOpts   *pagerduty.ListIncidentsOptions
+	Client          *pagerduty.Client
+	Teams           []*pagerduty.Team
+	SilentUser      *pagerduty.User
+	DefaultListOpts *pagerduty.ListIncidentsOptions
 }
 
-func GetIncidents(ctx context.Context, c *Config) ([]pagerduty.Incident, error) {
-	var i []pagerduty.Incident
+func GetSingleIncident(ctx context.Context, c *Config, id string) (*pagerduty.Incident, error) {
+	incident, err := c.Client.GetIncidentWithContext(ctx, id)
+	if err != nil {
+		return incident, err
+	}
+	return incident, nil
+}
 
-	opts := *c.ListOpts
-	opts.Statuses = pagerDutyDefaultStatuses
+func GetIncidents(ctx context.Context, c *Config, opts pagerduty.ListIncidentsOptions) ([]pagerduty.Incident, error) {
+	var i []pagerduty.Incident
 
 	for {
 		response, err := c.Client.ListIncidentsWithContext(ctx, opts)
@@ -33,16 +38,13 @@ func GetIncidents(ctx context.Context, c *Config) ([]pagerduty.Incident, error) 
 			return i, err
 		}
 
-		for _, p := range response.Incidents {
-			i = append(i, p)
-		}
+		i = append(i, response.Incidents...)
 
 		opts.Offset += pageLimit
 
-		if response.More != true {
+		if !response.More {
 			break
 		}
-
 	}
 
 	return i, nil
@@ -51,16 +53,11 @@ func GetIncidents(ctx context.Context, c *Config) ([]pagerduty.Incident, error) 
 func (c *Config) PopulateConfig(ctx context.Context, token string, teams []string, user string) error {
 	c.Client = pagerduty.NewOAuthClient(token)
 
-	c.ListOpts = &pagerduty.ListIncidentsOptions{
-		TeamIDs: teams,
-		Limit:   pageLimit,
-		Offset:  defaultOffset,
-	}
-
-	// TODO: Capture this and store the current user info in the ctx
-	_, err := c.Client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
-	if err != nil {
-		return err
+	c.DefaultListOpts = &pagerduty.ListIncidentsOptions{
+		TeamIDs:  teams,
+		Limit:    pageLimit,
+		Offset:   defaultOffset,
+		Statuses: pagerDutyDefaultStatuses,
 	}
 
 	for _, i := range teams {
