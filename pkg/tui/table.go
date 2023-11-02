@@ -7,16 +7,25 @@ import (
 )
 
 const (
+	// Standard terminal size is 80x24
+	// so we have 78 columns to work with after subtracting for the table borders
+	// And 20 rows subtracting table borders, status messages, and help
 	initialTableHeight = 20
-	initialTableWidth  = 106
+	dotWidth           = 2
+	idWidth            = 16 // Looks like most PD alerts are 14 characters
+	summaryWidth       = 46
+	clusterIDWidth     = 16 // ClusterID and UUIDs are 32 characters; Display Names tend to be ~16
+	initialTableWidth  = dotWidth + idWidth + summaryWidth + clusterIDWidth
 )
 
 var (
 	incidentListTableColumns = []table.Column{
-		{Title: dot, Width: 2},
-		{Title: "ID", Width: 16},
-		{Title: "Summary", Width: 64},
-		{Title: "ClusterID", Width: 16},
+		// Currently the dot column is not used
+		// but may be useful for selecting multiple incidents
+		{Title: dot, Width: dotWidth},
+		{Title: "ID", Width: idWidth},
+		{Title: "Summary", Width: summaryWidth},
+		{Title: "ClusterID", Width: clusterIDWidth},
 	}
 )
 

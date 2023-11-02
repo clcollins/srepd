@@ -19,18 +19,18 @@ func (m model) renderIncidentView() string {
 
 func (m model) renderIncidentTable() string {
 	var s strings.Builder
-	var assignedTo string
+	//var assignedTo string
 
-	assignedTo = "Team"
+	//assignedTo = "Team"
 
 	if m.toggleCurrentUserOnly {
-		assignedTo = m.currentUser.Name
+		//assignedTo = m.currentUser.Name
 	}
 
-	s.WriteString(renderAssigneeArea(assignedTo))
-	s.WriteString(renderStatusArea(m.statusMessage))
+	//s.WriteString(renderAssigneeArea(assignedTo))
+	//s.WriteString(renderStatusArea(m.statusMessage))
 	s.WriteString(renderTableArea(m.table))
-	s.WriteString(renderHelpArea(m.help.View(defaultKeyMap)))
+	//s.WriteString(renderHelpArea(m.help.View(defaultKeyMap)))
 
 	return s.String()
 }
@@ -44,16 +44,14 @@ func renderAssigneeArea(s string) string {
 		BorderStyle(lipgloss.HiddenBorder())
 
 	var fstring = "Assigned to %s\n"
-	return style.Render(fmt.Sprint(fstring, s))
+	return style.Render(fmt.Sprintf(fstring, s))
 }
 
 func renderTableArea(t table.Model) string {
 	var style = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240"))
-
-	var fstring = "%s\n"
-	return style.Render(fmt.Sprint(fstring, t.View()))
+	return style.Render(t.View())
 }
 
 func renderStatusArea(s string) string {
@@ -65,7 +63,7 @@ func renderStatusArea(s string) string {
 		BorderForeground(lipgloss.Color("240")).
 		Bold(false)
 
-	var fstring = "msg > %s\n"
+	var fstring = "msg > %s"
 	return style.Render(fmt.Sprintf(fstring, s))
 }
 
