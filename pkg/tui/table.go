@@ -18,10 +18,6 @@ var (
 		{Title: "Summary", Width: 64},
 		{Title: "ClusterID", Width: 16},
 	}
-
-	baseStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240"))
 )
 
 type createTableWithStylesMsg string

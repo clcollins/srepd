@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
@@ -25,45 +24,6 @@ const (
 
 var debug bool
 var errorLog []error
-var viewLog bool
-
-// Gotta figure out how to accurately update the width on screen resize
-var logArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(1).
-	Align(lipgloss.Left).
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240")).
-	Bold(false)
-
-// Gotta figure out how to accurately update the width on screen resize
-var assigneeArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(1).
-	Align(lipgloss.Right, lipgloss.Bottom).
-	BorderStyle(lipgloss.HiddenBorder())
-
-var helpArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(1).
-	Align(lipgloss.Right, lipgloss.Bottom).
-	BorderStyle(lipgloss.HiddenBorder())
-
-var incidentScreenArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(initialTableHeight+2).
-	Align(lipgloss.Center, lipgloss.Center).
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240")).
-	Bold(false)
-
-var logScreenArea = lipgloss.NewStyle().
-	Width(initialTableWidth).
-	Height(initialTableHeight).
-	Align(lipgloss.Left).
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240")).
-	Bold(false)
 
 // Type and function for capturing error messages with tea.Msg
 type errMsg struct{ err error }
@@ -75,13 +35,14 @@ type model struct {
 	context               context.Context
 	pdConfig              *pd.Config
 	currentUser           *pagerduty.User
-	table                 table.Model
 	incidentList          []pagerduty.Incident
-	selected              *pagerduty.Incident
+	selectedIncident      *pagerduty.Incident
+	table                 table.Model
 	toggleCurrentUserOnly bool
 	statusMessage         string
-	confirm               bool
-	debugMessage          string
+	// Not Implemented
+	// debugMessage          string
+	// confirm               bool
 }
 
 func InitialModel(ctx context.Context, pdConfig *pd.Config) model {
@@ -108,9 +69,10 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if debug {
-		log.Print("update")
+		log.Print("Update: ", msg)
 	}
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
 		// There's a couple of things that need to update on resize
 		// Gotta figure out how to do that
@@ -119,34 +81,49 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch {
+
+		// Pressing "q" or "ctrl-c" quits the program
 		case key.Matches(msg, defaultKeyMap.Quit):
 			return m, tea.Quit
+
+		// Pressing "h" shows the full help message
 		case key.Matches(msg, defaultKeyMap.Help):
 			m.help.ShowAll = !m.help.ShowAll
+
+		// Pressing "f" refreshes the incident list from PagerDuty
 		case key.Matches(msg, defaultKeyMap.Refresh):
 			m.statusMessage = refreshLogMessage
 			return m, getIncidents(m.context, m.pdConfig)
+
+		// Up and down arrows, and j/k keys move the cursor
 		case key.Matches(msg, defaultKeyMap.Up):
 			m.table.MoveUp(1)
 			return m, nil
 		case key.Matches(msg, defaultKeyMap.Down):
 			m.table.MoveDown(1)
 			return m, nil
+
+		// Pressing "Enter" selects the incident to view
+		// Get the incident id from the selected row, set the status message,
+		// and call "getSingleIncident" to get the incident details
 		case key.Matches(msg, defaultKeyMap.Enter):
 			i := m.table.SelectedRow()[1]
 			m.statusMessage = fmt.Sprintf("getting incident %s", i)
 			return m, getSingleIncident(m.context, m.pdConfig, i)
+
+		// Pressing "Esc" clears the selected incident
 		case key.Matches(msg, defaultKeyMap.Esc):
-			if m.confirm {
-				m.confirm = false
-				return m, nil
-			}
-			m.selected = nil
+			m.selectedIncident = nil
 			return m, nil
+
+		// Toggle team view vs. current user view
+		// And call "gotIncidentsMsg" with the unfiltered list of incidents
+		// to rebuild the table base on the current criteria
 		case key.Matches(msg, defaultKeyMap.Team):
 			m.toggleCurrentUserOnly = !m.toggleCurrentUserOnly
 			// pass the unfiltered incident list stored in the model
 			return m, func() tea.Msg { return gotIncidentsMsg(m.incidentList) }
+
 		case key.Matches(msg, defaultKeyMap.Silence):
 			// not implemented
 			return m, nil
@@ -160,60 +137,73 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	// Receipt of an errMsg
+	// Set the status message to the error message and append the error to the error log
 	case errMsg:
 		m.statusMessage = "ERROR: " + msg.Error()
 		errorLog = append(errorLog, msg.err)
 		return m, nil
+
+	// Command to create a table with styles
+	// Not sure if this is the best way to do this - maybe should just live in init
 	case createTableWithStylesMsg:
-		if debug {
-			log.Printf("createTableWithStylesMsg")
-		}
 		return m, createTableWithStyles()
+
+	// Set the table model to the table created in the createTableWithStyles command
 	case createdTableWithStylesMsg:
-		if debug {
-			log.Printf("createdTableWithStylesMsg")
-		}
 		m.table = msg.table
 		return m, nil
+
+	// Command to get the current user
 	case getCurrentUserMsg:
-		if debug {
-			log.Printf("getCurrentUserMsg")
-		}
 		m.statusMessage = gettingUserMessage
 		return m, getCurrentUser(m.context, m.pdConfig)
+
+	// Set the current user to the user returned from the getCurrentUser command
 	case gotCurrentUserMsg:
-		if debug {
-			log.Printf("gotCurrentUserMsg")
-		}
 		m.currentUser = msg
+		return m, nil
+
 	// Just validate the silent user exists
 	case getSilentUserMsg:
 		m.statusMessage = gettingSilentUserMsg
 		return m, getUser(m.context, m.pdConfig, m.pdConfig.SilentUser.ID)
+
+	// Do nothing; this is just a placeholder for the future if necessary
 	case gotSilentUserMsg:
 		return m, nil
-	// Nothing currently sends this message (see the "enter" case above, which just does the thing)
+
+	// Command to retrieve a single incident
+	// Nothing currently sends this message (see the "enter" case above, which sends the command)
+	// This is just included for completeness
 	case getSingleIncidentMsg:
-		return m, getSingleIncident(m.context, m.pdConfig, m.selected.ID)
+		return m, getSingleIncident(m.context, m.pdConfig, m.selectedIncident.ID)
+
+	// Set the selected incident to the incident returned from the getSingleIncident command
 	case gotSingleIncidentMsg:
 		m.statusMessage = fmt.Sprintf("got incident %s", msg.ID)
-		m.selected = msg
+		m.selectedIncident = msg
 		return m, nil
+
+	// Command to retrieve the list of incidents from PagerDuty
 	case getIncidentsMsg:
-		if debug {
-			log.Printf("getIncidentsMsg")
-		}
 		return m, getIncidents(m.context, m.pdConfig)
+
+	// Set the incident list to the list returned from the getIncidents command
 	case gotIncidentsMsg:
 		m.incidentList = msg
 		var rows []table.Row
 		m.table.SetRows(rows)
 		for _, p := range m.incidentList {
+			// If toggleCurrentUserOnly is true, rebuild the table from the incident list
+			// including only the incidents assigned to the current user
 			if m.toggleCurrentUserOnly {
 				if AssignedToUser(p, m.currentUser.ID) {
 					rows = append(rows, table.Row{"", p.ID, p.Title, p.Service.Summary})
 				}
 			} else {
+				// Otherwise rebuild the table from the incident list, excluding the incidents
+				// assigned to the silent user - we never want to see those
 				if !AssignedToUser(p, m.pdConfig.SilentUser.ID) {
 					rows = append(rows, table.Row{"", p.ID, p.Title, p.Service.Summary})
 				}
@@ -222,6 +212,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMessage = fmt.Sprintf("got %d incidents", len(rows))
 		m.table.SetRows(rows)
 		return m, nil
+
+	// Do nothing
 	default:
 		return m, nil
 	}
@@ -230,109 +222,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	// this viewLog is ugly; need to do this better
-	viewLog = false
-	if viewLog {
-		var errorLogOutput string
-		for _, e := range errorLog {
-			errorLogOutput += fmt.Sprintf("%s\n", e.Error())
-		}
-
-		return logScreenArea.Render(errorLogOutput)
+	if m.selectedIncident != nil {
+		return m.renderIncidentView()
 	}
-
-	if m.selected != nil {
-		// This is a cheat-y way to make the layout match, with a hidden render area
-		return assigneeArea.Render("") + "\n" +
-			incidentScreenArea.Render(m.selected.Summary) + "\n" +
-			logArea.Render("") + "\n" +
-			helpArea.Render(m.help.View(defaultKeyMap))
-	}
-	var assignedTo string = "Assigned to Team"
-
-	if m.toggleCurrentUserOnly {
-		assignedTo = fmt.Sprintf("Assigned to %s", m.currentUser.Name)
-	}
-
-	s := assigneeArea.Render(assignedTo)
-	s += "\n" + baseStyle.Render(m.table.View()) + "\n"
-	s += logArea.Render(fmt.Sprintf("msg > "+m.statusMessage)) + "\n"
-	s += helpArea.Render(m.help.View(defaultKeyMap))
-
-	return s
-}
-
-type getCurrentUserMsg string
-type gotCurrentUserMsg *pagerduty.User
-
-func getCurrentUser(ctx context.Context, pdConfig *pd.Config) tea.Cmd {
-	if debug {
-		log.Printf("getCurrentUser")
-	}
-	return func() tea.Msg {
-		u, err := pdConfig.Client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
-		if err != nil {
-			return errMsg{err}
-		}
-		return gotCurrentUserMsg(u)
-	}
-}
-
-type getSilentUserMsg string
-type gotSilentUserMsg *pagerduty.User
-
-func getUser(ctx context.Context, pdConfig *pd.Config, id string) tea.Cmd {
-	return func() tea.Msg {
-		u, err := pdConfig.Client.GetUserWithContext(ctx, id, pagerduty.GetUserOptions{})
-		if err != nil {
-			return errMsg{err}
-		}
-		return gotSilentUserMsg(u)
-	}
-}
-
-func AssignedToUser(i pagerduty.Incident, id string) bool {
-	for _, a := range i.Assignments {
-		if a.Assignee.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
-type getIncidentsMsg string
-type gotIncidentsMsg []pagerduty.Incident
-
-func getIncidents(ctx context.Context, pdConfig *pd.Config) tea.Cmd {
-	if debug {
-		log.Printf("getIncidents")
-	}
-	return func() tea.Msg {
-		opts := pagerduty.ListIncidentsOptions{
-			TeamIDs:  pdConfig.DefaultListOpts.TeamIDs,
-			Limit:    pdConfig.DefaultListOpts.Limit,
-			Offset:   pdConfig.DefaultListOpts.Offset,
-			Statuses: pdConfig.DefaultListOpts.Statuses,
-		}
-
-		i, err := pd.GetIncidents(ctx, pdConfig, opts)
-		if err != nil {
-			return errMsg{err}
-		}
-		return gotIncidentsMsg(i)
-	}
-}
-
-type getSingleIncidentMsg string
-type gotSingleIncidentMsg *pagerduty.Incident
-
-func getSingleIncident(ctx context.Context, pdConfig *pd.Config, id string) tea.Cmd {
-	return func() tea.Msg {
-		i, err := pd.GetSingleIncident(ctx, pdConfig, id)
-		if err != nil {
-			return errMsg{err}
-		}
-		return gotSingleIncidentMsg(i)
-
-	}
+	return m.renderIncidentTable()
 }
