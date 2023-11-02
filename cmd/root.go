@@ -63,18 +63,22 @@ but rather a simple tool to make on-call tasks easier.`,
 		}
 
 		var ctx = context.Background()
-		var config = &pd.Config{}
+		var tuiConfig = &tui.Config{
+			Debug:   Debug,
+			Verbose: false,
+		}
+		var pdConfig = &pd.Config{}
 
 		token := viper.GetString("token")
 		teams := viper.GetStringSlice("teams")
 		silentuser := viper.GetString("silentuser")
 
-		err := config.PopulateConfig(ctx, token, teams, silentuser)
+		err := pdConfig.PopulateConfig(ctx, token, teams, silentuser)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		p := tea.NewProgram(tui.InitialModel(ctx, config))
+		p := tea.NewProgram(tui.InitialModel(ctx, tuiConfig, pdConfig))
 		_, err = p.Run()
 		if err != nil {
 			log.Fatal(err)

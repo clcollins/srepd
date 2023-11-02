@@ -2,20 +2,19 @@ package tui
 
 import (
 	"context"
-	"log"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
+var logLevel = "warn"
+
 type getCurrentUserMsg string
 type gotCurrentUserMsg *pagerduty.User
 
 func getCurrentUser(ctx context.Context, pdConfig *pd.Config) tea.Cmd {
-	if debug {
-		log.Printf("getCurrentUser")
-	}
+	debug("getCurrentUser")
 	return func() tea.Msg {
 		u, err := pdConfig.Client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
 		if err != nil {
@@ -51,9 +50,7 @@ type getIncidentsMsg string
 type gotIncidentsMsg []pagerduty.Incident
 
 func getIncidents(ctx context.Context, pdConfig *pd.Config) tea.Cmd {
-	if debug {
-		log.Printf("getIncidents")
-	}
+	debug("getIncidents")
 	return func() tea.Msg {
 		opts := pagerduty.ListIncidentsOptions{
 			TeamIDs:  pdConfig.DefaultListOpts.TeamIDs,

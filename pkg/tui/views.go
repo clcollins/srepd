@@ -28,7 +28,7 @@ func (m model) renderIncidentTable() string {
 	}
 
 	//s.WriteString(renderAssigneeArea(assignedTo))
-	//s.WriteString(renderStatusArea(m.statusMessage))
+	s.WriteString(renderStatusArea(m.statusMessage))
 	s.WriteString(renderTableArea(m.table))
 	//s.WriteString(renderHelpArea(m.help.View(defaultKeyMap)))
 

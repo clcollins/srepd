@@ -6,6 +6,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// TODO: Figure out how to dynamically resize the table and columns based on terminal size
+// and resize tea.Msg events received from the terminal
 const (
 	// Standard terminal size is 80x24
 	// so we have 78 columns to work with after subtracting for the table borders

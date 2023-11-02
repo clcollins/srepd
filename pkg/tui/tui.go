@@ -22,7 +22,11 @@ const (
 	gettingSilentUserMsg = "getting 'Silent' user info..."
 )
 
-var debug bool
+type Config struct {
+	Debug   bool
+	Verbose bool
+}
+
 var errorLog []error
 
 // Type and function for capturing error messages with tea.Msg
@@ -32,8 +36,9 @@ func (e errMsg) Error() string { return e.err.Error() }
 
 type model struct {
 	help                  help.Model
-	context               context.Context
+	cliConfig             *Config
 	pdConfig              *pd.Config
+	context               context.Context
 	currentUser           *pagerduty.User
 	incidentList          []pagerduty.Incident
 	selectedIncident      *pagerduty.Incident
@@ -45,18 +50,20 @@ type model struct {
 	// confirm               bool
 }
 
-func InitialModel(ctx context.Context, pdConfig *pd.Config) model {
+func InitialModel(ctx context.Context, config *Config, pdConfig *pd.Config) model {
 	return model{
-		help:     help.New(),
-		context:  ctx,
-		pdConfig: pdConfig,
+		help:      help.New(),
+		context:   ctx,
+		cliConfig: config,
+		pdConfig:  pdConfig,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	if debug {
-		log.Print("init")
+	if m.cliConfig.Debug {
+		logLevel = "debug"
 	}
+
 	return tea.Batch(
 		func() tea.Msg { return tea.ClearScreen() },
 		func() tea.Msg { return createTableWithStylesMsg("create table") },
@@ -68,9 +75,8 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if debug {
-		log.Print("Update: ", msg)
-	}
+	debug(fmt.Sprintf("Update: %s", msg))
+
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
@@ -226,4 +232,10 @@ func (m model) View() string {
 		return m.renderIncidentView()
 	}
 	return m.renderIncidentTable()
+}
+
+func debug(s string) {
+	if logLevel == "debug" {
+		log.Print(s)
+	}
 }
