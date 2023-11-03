@@ -94,6 +94,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Pressing "h" shows the full help message
 		case key.Matches(msg, defaultKeyMap.Help):
 			m.help.ShowAll = !m.help.ShowAll
+			return m, nil
 
 		// Pressing "f" refreshes the incident list from PagerDuty
 		case key.Matches(msg, defaultKeyMap.Refresh):
@@ -103,10 +104,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Up and down arrows, and j/k keys move the cursor
 		case key.Matches(msg, defaultKeyMap.Up):
 			m.table.MoveUp(1)
-			return m, nil
+
 		case key.Matches(msg, defaultKeyMap.Down):
 			m.table.MoveDown(1)
-			return m, nil
 
 		// Pressing "Enter" selects the incident to view
 		// Get the incident id from the selected row, set the status message,
@@ -117,7 +117,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, getSingleIncident(m.context, m.pdConfig, i)
 
 		// Pressing "Esc" clears the selected incident
-		case key.Matches(msg, defaultKeyMap.Esc):
+		case key.Matches(msg, defaultKeyMap.Back):
 			m.selectedIncident = nil
 			return m, nil
 
@@ -181,13 +181,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Command to retrieve a single incident
 	// Nothing currently sends this message (see the "enter" case above, which sends the command)
 	// This is just included for completeness
-	case getSingleIncidentMsg:
-		return m, getSingleIncident(m.context, m.pdConfig, m.selectedIncident.ID)
+	// case getSingleIncidentMsg:
+	// 	return m, getSingleIncident(m.context, m.pdConfig, <INCIDENT ID TO GET> )
 
 	// Set the selected incident to the incident returned from the getSingleIncident command
 	case gotSingleIncidentMsg:
+		debug("gotSingleIncidentMsg")
 		m.statusMessage = fmt.Sprintf("got incident %s", msg.ID)
-		m.selectedIncident = msg
+		i := pagerduty.Incident(msg)
+		m.selectedIncident = &i
 		return m, nil
 
 	// Command to retrieve the list of incidents from PagerDuty
@@ -227,6 +229,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	debug("View")
 	if m.selectedIncident != nil {
 		return m.renderIncidentView()
 	}

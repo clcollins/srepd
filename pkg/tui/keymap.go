@@ -10,7 +10,6 @@ type KeyMap struct {
 	Back     key.Binding
 	Refresh  key.Binding
 	Enter    key.Binding
-	Esc      key.Binding
 	Team     key.Binding
 	Silence  key.Binding
 	Ack      key.Binding
@@ -26,8 +25,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		// Each slice here is a column in the help window
 		{k.Up, k.Down},
+		{k.Enter, k.Back},
 		{k.Quit, k.Help},
-		{k.Enter, k.Back}, // First column
 	}
 }
 

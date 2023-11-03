@@ -68,7 +68,7 @@ func getIncidents(ctx context.Context, pdConfig *pd.Config) tea.Cmd {
 }
 
 type getSingleIncidentMsg string
-type gotSingleIncidentMsg *pagerduty.Incident
+type gotSingleIncidentMsg pagerduty.Incident
 
 func getSingleIncident(ctx context.Context, pdConfig *pd.Config, id string) tea.Cmd {
 	return func() tea.Msg {
@@ -76,7 +76,8 @@ func getSingleIncident(ctx context.Context, pdConfig *pd.Config, id string) tea.
 		if err != nil {
 			return errMsg{err}
 		}
-		return gotSingleIncidentMsg(i)
+
+		return gotSingleIncidentMsg(*i)
 
 	}
 }

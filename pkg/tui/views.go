@@ -11,6 +11,7 @@ import (
 func (m model) renderIncidentView() string {
 	var s strings.Builder
 
+	s.WriteString(renderStatusArea(m.statusMessage))
 	s.WriteString(fmt.Sprintf("%s\n", m.selectedIncident.Title))
 	s.WriteString(renderHelpArea(m.help.View(defaultKeyMap)))
 
@@ -64,10 +65,21 @@ func renderStatusArea(s string) string {
 		Padding(0, 1).
 		Bold(false)
 
-	// Whitespace before "msg" for formatting
 	var fstring = "> %s"
 	fstring = strings.TrimSuffix(fstring, "\n")
-	return style.Render(fmt.Sprintf(fstring, s))
+
+	maxTextWidth := style.GetWidth() - style.GetHorizontalPadding() - style.GetHorizontalMargins()
+	fstring = truncateStringToWidth(fmt.Sprintf(fstring, s), maxTextWidth)
+
+	return style.Render(fstring)
+}
+
+func truncateStringToWidth(s string, width int) string {
+	if len(s) > width {
+		s = s[:width-1] + "…"
+	}
+
+	return s
 }
 
 func renderHelpArea(s string) string {
