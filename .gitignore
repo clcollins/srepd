@@ -1,2 +1,3 @@
 .vscode/*
-pkg/oldTui
+pkg.old/*
+

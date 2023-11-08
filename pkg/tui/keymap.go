@@ -2,42 +2,42 @@ package tui
 
 import "github.com/charmbracelet/bubbles/key"
 
-type KeyMap struct {
-	Up       key.Binding
-	Down     key.Binding
-	Quit     key.Binding
-	Help     key.Binding
-	Back     key.Binding
-	Refresh  key.Binding
-	Enter    key.Binding
-	Team     key.Binding
-	Silence  key.Binding
-	Ack      key.Binding
-	Escalate key.Binding
+func (k keymap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Help, k.Quit}
 }
 
-func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Enter, k.Quit, k.Help}
-}
-
-func (k KeyMap) FullHelp() [][]key.Binding {
+func (k keymap) FullHelp() [][]key.Binding {
 	// TODO: Return a pop-over window here instead
 	return [][]key.Binding{
 		// Each slice here is a column in the help window
-		{k.Up, k.Down},
-		{k.Enter, k.Back},
+		{k.Up, k.Down, k.Enter, k.Back},
+		{k.Team, k.Refresh, k.Ack, k.Silence},
 		{k.Quit, k.Help},
 	}
 }
 
-var defaultKeyMap = KeyMap{
+type keymap struct {
+	Up      key.Binding
+	Down    key.Binding
+	Back    key.Binding
+	Enter   key.Binding
+	Quit    key.Binding
+	Help    key.Binding
+	Team    key.Binding
+	Refresh key.Binding
+	Note    key.Binding
+	Silence key.Binding
+	Ack     key.Binding
+}
+
+var defaultKeyMap = keymap{
 	Up: key.NewBinding(
 		key.WithKeys("k", "up"),
-		key.WithHelp(upArrow+"/k", "up"),
+		key.WithHelp("↑/k", "up"),
 	),
 	Down: key.NewBinding(
 		key.WithKeys("j", "down"),
-		key.WithHelp(downArrow+"/j", "down"),
+		key.WithHelp("↓/j", "down"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "ctrl+c"),
@@ -51,10 +51,6 @@ var defaultKeyMap = KeyMap{
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "back"),
 	),
-	Refresh: key.NewBinding(
-		key.WithKeys("f"),
-		key.WithHelp("f", "refresh"),
-	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
 		key.WithHelp("enter", "select"),
@@ -63,6 +59,14 @@ var defaultKeyMap = KeyMap{
 		key.WithKeys("t"),
 		key.WithHelp("t", "toggle team/individual"),
 	),
+	Refresh: key.NewBinding(
+		key.WithKeys("r"),
+		key.WithHelp("r", "refresh"),
+	),
+	Note: key.NewBinding(
+		key.WithKeys("n"),
+		key.WithHelp("n", "add [n]ote"),
+	),
 	Silence: key.NewBinding(
 		key.WithKeys("s"),
 		key.WithHelp("s", "silence"),
@@ -70,9 +74,5 @@ var defaultKeyMap = KeyMap{
 	Ack: key.NewBinding(
 		key.WithKeys("a"),
 		key.WithHelp("a", "acknowledge"),
-	),
-	Escalate: key.NewBinding(
-		key.WithKeys("u"),
-		key.WithHelp("u", "un-acknowledge"),
 	),
 }

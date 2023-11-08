@@ -23,13 +23,11 @@ THE SOFTWARE.
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -37,9 +35,10 @@ import (
 
 const cfgFile = "srepd.yaml"
 const cfgFilePath = ".config/srepd/"
+const defaultEditor = "/usr/bin/vim"
 
-var PagerDutyOauthToken string
-var Debug bool
+var debug bool
+var editor string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -53,7 +52,7 @@ to be a full-featured PagerDuty client, or kitchen sink,
 but rather a simple tool to make on-call tasks easier.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		if Debug {
+		if debug {
 			for k, v := range viper.GetViper().AllSettings() {
 				if k == "token" {
 					v = "*****"
@@ -62,24 +61,22 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		var ctx = context.Background()
-		var tuiConfig = &tui.Config{
-			Debug:   Debug,
-			Verbose: false,
-		}
-		var pdConfig = &pd.Config{}
-
 		token := viper.GetString("token")
 		teams := viper.GetStringSlice("teams")
 		silentuser := viper.GetString("silentuser")
+		ignoreusers := viper.GetStringSlice("ignoreusers")
 
-		err := pdConfig.PopulateConfig(ctx, token, teams, silentuser)
-		if err != nil {
-			log.Fatal(err)
+		// The environment variable will always override the config file if set
+		if editor == "" {
+			editor = viper.GetString("editor")
+			if editor == "" {
+				editor = defaultEditor
+			}
 		}
 
-		p := tea.NewProgram(tui.InitialModel(ctx, tuiConfig, pdConfig))
-		_, err = p.Run()
+		m, _ := tui.InitialModel(token, teams, silentuser, ignoreusers, editor)
+		p := tea.NewProgram(m, tea.WithAltScreen())
+		_, err := p.Run()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -97,8 +94,8 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().BoolVarP(&Debug, "debug", "d", false, "Enable debugging output")
-	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debugging output")
+	rootCmd.PersistentFlags().StringVarP(&editor, "editor", "e", "", "Editor to use for notes; default is `$EDITOR` environment variable")
 }
 
 // initConfig reads in config file and ENV variables if set.
