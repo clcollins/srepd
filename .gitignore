@@ -1,3 +1,5 @@
 .vscode/*
 pkg.old/*
+srepd
+build/*
 
