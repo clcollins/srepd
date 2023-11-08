@@ -10,6 +10,7 @@ Features:
 * Vew a summary of an incident, including alerts and notes
 * Add a note to an incident
 * Reassign incidents to a (configured) "silent" user (ie. silence the alert)
+* Resizes nicely(-ish) when the terminal is resized
 
 Planned Features:
 
