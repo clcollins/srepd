@@ -23,12 +23,8 @@ type updatedIncidentListMsg struct {
 
 func updateIncidentList(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
-		var teams []string
-		for _, t := range p.Teams {
-			teams = append(teams, t.ID)
-		}
 		opts := pd.NewListIncidentOptsFromDefaults()
-		opts.TeamIDs = teams
+		opts.TeamIDs = getTeamsAsStrings(p)
 
 		i, err := pd.GetIncidents(p.Client, opts)
 		return updatedIncidentListMsg{i, err}
@@ -230,4 +226,12 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, user *pagerdu
 		n, err := pd.PostNote(p.Client, incident.ID, user, content)
 		return addedIncidentNoteMsg{n, err}
 	}
+}
+
+func getTeamsAsStrings(p *pd.Config) []string {
+	var teams []string
+	for _, t := range p.Teams {
+		teams = append(teams, t.ID)
+	}
+	return teams
 }
