@@ -28,6 +28,7 @@ type keymap struct {
 	Note    key.Binding
 	Silence key.Binding
 	Ack     key.Binding
+	Input   key.Binding
 }
 
 var defaultKeyMap = keymap{
@@ -74,5 +75,9 @@ var defaultKeyMap = keymap{
 	Ack: key.NewBinding(
 		key.WithKeys("a"),
 		key.WithHelp("a", "acknowledge"),
+	),
+	Input: key.NewBinding(
+		key.WithKeys("i"),
+		key.WithHelp("i", "input"),
 	),
 }

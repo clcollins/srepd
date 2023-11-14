@@ -44,7 +44,7 @@ type Model struct {
 	teamMode bool
 }
 
-func InitialModel(token string, teams []string, user string, ignoreusers []string, editor string) (tea.Model, tea.Cmd) {
+func InitialModel(token string, teams []string, user string, ignoredusers []string, editor string) (tea.Model, tea.Cmd) {
 	var err error
 
 	input := textinput.New()
@@ -76,7 +76,10 @@ func InitialModel(token string, teams []string, user string, ignoreusers []strin
 	m.table.SetStyles(s)
 
 	// This is an ugly way to handle this error
-	pd, err := pd.NewConfig(token, teams, user, ignoreusers)
+	pd, err := pd.NewConfig(token, teams, user, ignoredusers)
+	if err != nil {
+		panic(err)
+	}
 	m.config = pd
 
 	return m, func() tea.Msg {
@@ -160,9 +163,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 
 			// case SOME KEY FOR INPUT MODE:
-			// 	m.input.Focus()
-			// 	m.input.SetValue("View Incident by ID")
-			// 	m.input.Blink()
+			case key.Matches(msg, defaultKeyMap.Input):
+				m.input.Focus()
 
 			case key.Matches(msg, defaultKeyMap.Help):
 				m.help.ShowAll = !m.help.ShowAll
@@ -212,7 +214,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						func() tea.Msg { return waitForSelectedIncidentsThenSilenceMsg("wait") },
 					)
 				} else {
-					return m, func() tea.Msg { return silenceIncidentsMsg([]pagerduty.Incident{*m.selectedIncident}) }
+					return m, func() tea.Msg { return silenceIncidentsMsg([]*pagerduty.Incident{m.selectedIncident}) }
 				}
 
 			case key.Matches(msg, defaultKeyMap.Ack):
@@ -298,13 +300,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.incidentList = msg.incidents
 		var rows []table.Row
 
-		var ignoreUsersList []string
-		for _, i := range m.config.IgnoreUsers {
-			ignoreUsersList = append(ignoreUsersList, i.ID)
+		var ignoredUsersList []string
+		for _, i := range m.config.IgnoredUsers {
+			ignoredUsersList = append(ignoredUsersList, i.ID)
 		}
 		for _, i := range msg.incidents {
 			if m.teamMode {
-				if !AssignedToAnyUsers(i, ignoreUsersList) {
+				if !AssignedToAnyUsers(i, ignoredUsersList) {
 					rows = append(rows, table.Row{"", i.ID, i.Title, i.Service.Summary})
 				}
 			} else {
@@ -327,7 +329,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		cmds = append(cmds, addNoteToIncident(m.config, m.selectedIncident.ID, m.currentUser, msg.file))
+		cmds = append(cmds, addNoteToIncident(m.config, m.selectedIncident, m.currentUser, msg.file))
 
 	case waitForSelectedIncidentsThenAcknowledgeMsg:
 		if m.selectedIncident == nil {
@@ -338,16 +340,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
 
 	case reassignIncidentsMsg:
-		return m, reassignIncidents(m.config, m.currentUser.Email, msg.incidents, msg.users)
+		return m, reassignIncidents(m.config, msg.incidents, m.currentUser, msg.users)
 
 	case reassignedIncidentsMsg:
 		m.status = fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", msg)
 		return m, func() tea.Msg { return updateIncidentListMsg("get incidents") }
 
 	case silenceIncidentsMsg:
-		var incidents []pagerduty.Incident = msg
+		var incidents []*pagerduty.Incident = msg
 		var users []*pagerduty.User
-		incidents = append(incidents, *m.selectedIncident)
+		incidents = append(incidents, m.selectedIncident)
 		users = append(users, m.config.SilentUser)
 		return m, tea.Sequence(
 			silenceIncidents(incidents, users),
@@ -360,7 +362,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "waiting for incident info..."
 			return m, func() tea.Msg { return waitForSelectedIncidentsThenSilenceMsg(msg) }
 		}
-		return m, func() tea.Msg { return silenceIncidentsMsg([]pagerduty.Incident{*m.selectedIncident}) }
+		return m, func() tea.Msg { return silenceIncidentsMsg([]*pagerduty.Incident{m.selectedIncident}) }
 
 	case clearSelectedIncidentsMsg:
 		m.selectedIncident = nil

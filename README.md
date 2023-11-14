@@ -33,7 +33,7 @@ SREPD used the [Viper](https://github.com/spf13/viper) configuration setup, and 
 
 **Optional Values**
 
-* ignoreusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.  It's recommended that the "silentuser" ID is in this list.
+* ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.  It's recommended that the "silentuser" ID is in this list.
 * editor: Your choice of editor.  This will ALWAYS lose precedence to the `$EDITOR` environment variable, unless the ENV VAR is not set for some reason.
 
 An example srepd.yaml file might look like so:
@@ -55,7 +55,7 @@ teams:
 silentuser: <pagerDuty User ID>
 
 # Ignore Users is a list of PagerDuty User IDs to ignore when gathering incidents
-ignoreusers:
+ignoredusers:
   - <pageDuty User ID>
   - <pagerDuty User ID>
 ```

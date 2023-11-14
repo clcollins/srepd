@@ -65,13 +65,14 @@ func statusArea(s string) string {
 	return fmt.Sprintf(fstring, s)
 }
 
-func truncateStringToWidth(s string, width int) string {
-	if len(s) > width {
-		s = s[:width-1] + "…"
-	}
-
-	return s
-}
+// TODO: Is this needed
+// func truncateStringToWidth(s string, width int) string {
+// 	if len(s) > width {
+// 		s = s[:width-1] + "…"
+// 	}
+//
+// 	return s
+// }
 
 func (m Model) template() string {
 	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)

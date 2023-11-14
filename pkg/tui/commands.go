@@ -23,8 +23,14 @@ type updatedIncidentListMsg struct {
 
 func updateIncidentList(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
-		opts := pd.NewListIncidentOptsFromDefaults(p)
-		i, err := pd.GetIncidents(p, opts)
+		var teams []string
+		for _, t := range p.Teams {
+			teams = append(teams, t.ID)
+		}
+		opts := pd.NewListIncidentOptsFromDefaults()
+		opts.TeamIDs = teams
+
+		i, err := pd.GetIncidents(p.Client, opts)
 		return updatedIncidentListMsg{i, err}
 	}
 }
@@ -50,8 +56,7 @@ type gotIncidentAlertsMsg struct {
 
 func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		a, err := pd.GetAlerts(ctx, p, id)
+		a, err := pd.GetAlerts(p.Client, id, pagerduty.ListIncidentAlertsOptions{})
 		return gotIncidentAlertsMsg{a, err}
 	}
 }
@@ -63,8 +68,7 @@ type gotIncidentNotesMsg struct {
 
 func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		n, err := pd.GetNotes(ctx, p, id)
+		n, err := pd.GetNotes(p.Client, id)
 		return gotIncidentNotesMsg{n, err}
 	}
 }
@@ -75,10 +79,12 @@ type gotCurrentUserMsg struct {
 	err  error
 }
 
-func getCurrentUser(pdConfig *pd.Config) tea.Cmd {
+func getCurrentUser(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		u, err := pdConfig.Client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
+		u, err := p.Client.GetCurrentUserWithContext(
+			context.Background(),
+			pagerduty.GetCurrentUserOptions{},
+		)
 		return gotCurrentUserMsg{u, err}
 	}
 }
@@ -108,7 +114,8 @@ type editorFinishedMsg struct {
 	file *os.File
 }
 
-var defaultEditor = "/usr/bin/vim"
+// TODO: is this needed
+// var defaultEditor = "/usr/bin/vim"
 
 func openEditorCmd(editor string) tea.Cmd {
 	file, err := os.CreateTemp(os.TempDir(), "")
@@ -158,26 +165,29 @@ type acknowledgedIncidentsMsg struct {
 }
 type waitForSelectedIncidentsThenAcknowledgeMsg string
 
-func acknowledgeIncidents(pdConfig *pd.Config, email string, i []pagerduty.Incident) tea.Cmd {
+func acknowledgeIncidents(p *pd.Config, incidents []*pagerduty.Incident) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		a, err := pd.AcknowledgeIncident(ctx, pdConfig, email, i)
+		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		if err != nil {
+			return errMsg{err}
+		}
+		a, err := pd.AcknowledgeIncident(p.Client, incidents, u)
+		if err != nil {
+			return errMsg{err}
+		}
 		return acknowledgedIncidentsMsg{a, err}
 	}
 }
 
 type reassignIncidentsMsg struct {
-	incidents []pagerduty.Incident
+	incidents []*pagerduty.Incident
 	users     []*pagerduty.User
 }
 type reassignedIncidentsMsg []pagerduty.Incident
 
-// reassignIncident accepts a context, pdConfig, currentUser email, incident ID, and a []pagerduty.User to assign
-// and returns a "reassignedIncidentMsg" tea.Msg with the incident ID as a string
-func reassignIncidents(pdConfig *pd.Config, email string, i []pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
+func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		r, err := pd.ReassignIncident(ctx, pdConfig, email, i, u)
+		r, err := pd.ReassignIncidents(p.Client, i, user, users)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -185,13 +195,12 @@ func reassignIncidents(pdConfig *pd.Config, email string, i []pagerduty.Incident
 	}
 }
 
-type silenceIncidentsMsg []pagerduty.Incident
+type silenceIncidentsMsg []*pagerduty.Incident
 type waitForSelectedIncidentsThenSilenceMsg string
 
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
 
-// Silence incidents accepts a []pagerduty.Incident, and []pagerduty.User to assign
-func silenceIncidents(i []pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
+func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
 	return func() tea.Msg {
 		if len(i) == 0 || len(u) == 0 {
 			return errMsg{errSilenceIncidentInvalidArgs}
@@ -208,11 +217,9 @@ type addedIncidentNoteMsg struct {
 	err  error
 }
 
-func addNoteToIncident(pdConfig *pd.Config, id string, user *pagerduty.User, content *os.File) tea.Cmd {
+func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, user *pagerduty.User, content *os.File) tea.Cmd {
 	return func() tea.Msg {
 		defer content.Close()
-
-		ctx := context.Background()
 
 		bytes, err := os.ReadFile(content.Name())
 		if err != nil {
@@ -220,7 +227,7 @@ func addNoteToIncident(pdConfig *pd.Config, id string, user *pagerduty.User, con
 		}
 		content := string(bytes[:])
 
-		n, err := pd.AddNoteToIncident(ctx, pdConfig, id, user, content)
+		n, err := pd.PostNote(p.Client, incident.ID, user, content)
 		return addedIncidentNoteMsg{n, err}
 	}
 }

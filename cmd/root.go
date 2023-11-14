@@ -64,7 +64,7 @@ but rather a simple tool to make on-call tasks easier.`,
 		token := viper.GetString("token")
 		teams := viper.GetStringSlice("teams")
 		silentuser := viper.GetString("silentuser")
-		ignoreusers := viper.GetStringSlice("ignoreusers")
+		ignoredusers := viper.GetStringSlice("ignoredusers")
 
 		// The environment variable will always override the config file if set
 		if editor == "" {
@@ -74,7 +74,7 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		m, _ := tui.InitialModel(token, teams, silentuser, ignoreusers, editor)
+		m, _ := tui.InitialModel(token, teams, silentuser, ignoredusers, editor)
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err := p.Run()
 		if err != nil {
