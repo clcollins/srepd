@@ -18,6 +18,8 @@ const (
 	loadingIncidentsStatus = "loading incidents..."
 )
 
+type waitForSelectedIncidentThenRenderMsg string
+
 func renderIncidentMarkdown(content string) (string, error) {
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
@@ -156,9 +158,11 @@ func openEditorCmd(editor string) tea.Cmd {
 
 type clearSelectedIncidentsMsg string
 
+// Render a single incident to view
+
 // Acknowledge a list of incidents
 type acknowledgeIncidentsMsg struct {
-	incidents []pagerduty.Incident
+	incidents []*pagerduty.Incident
 }
 type acknowledgedIncidentsMsg struct {
 	incidents []pagerduty.Incident
@@ -198,7 +202,9 @@ func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, user *pagerduty.Us
 }
 
 // Silence a list of incidents
-type silenceIncidentsMsg []*pagerduty.Incident
+type silenceIncidentsMsg struct {
+	incidents []*pagerduty.Incident
+}
 type waitForSelectedIncidentsThenSilenceMsg string
 
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
