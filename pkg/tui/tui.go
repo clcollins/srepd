@@ -250,6 +250,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "waiting for incident info..."
 			return m, func() tea.Msg { return waitForSelectedIncidentThenRenderMsg(msg) }
 		}
+		// TODO: These should be tea.Cmds...
 		renderIncidentMarkdown(m.template())
 		m.incidentViewer.SetContent(m.template())
 		m.viewingIncident = true
@@ -299,6 +300,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return silenceIncidentsMsg{incidents: []*pagerduty.Incident{m.selectedIncident}} }
 
 	case clearSelectedIncidentsMsg:
+		m.viewingIncident = false
 		m.selectedIncident = nil
 		m.selectedIncidentNotes = nil
 		m.selectedIncidentAlerts = nil
@@ -317,7 +319,8 @@ func (m model) View() string {
 	// case m.input.Focused():
 	// 	return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + m.input.View() + "\n" + helpView)
 	case m.viewingIncident:
-		return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
+		//return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
+		return m.incidentViewer.View()
 	default:
 		return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + helpView)
 	}
