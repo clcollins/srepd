@@ -8,12 +8,40 @@ import (
 	"os/exec"
 
 	"github.com/PagerDuty/go-pagerduty"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/clcollins/srepd/pkg/pd"
 )
+
+const (
+	gettingUserStatus      = "getting user info..."
+	loadingIncidentsStatus = "loading incidents..."
+)
+
+func renderIncidentMarkdown(content string) (string, error) {
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(windowSize.Width),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	str, err := renderer.Render(content)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return str, nil
+}
+
+func updateSelectedIncident(p *pd.Config, id string) tea.Cmd {
+	return tea.Sequence(
+		getIncident(p, id),
+		getIncidentAlerts(p, id),
+		getIncidentNotes(p, id),
+	)
+}
 
 type updateIncidentListMsg string
 type updatedIncidentListMsg struct {
@@ -126,32 +154,9 @@ func openEditorCmd(editor string) tea.Cmd {
 	})
 }
 
-func newIncidentViewer(content string) viewport.Model {
+type clearSelectedIncidentsMsg string
 
-	vp := viewport.New(windowSize.Width, windowSize.Height-5)
-	vp.MouseWheelEnabled = true
-	vp.Style = lipgloss.NewStyle().
-		Width(windowSize.Width - 10).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		PaddingRight(2)
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(windowSize.Width),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	str, err := renderer.Render(content)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	vp.SetContent(str)
-	return vp
-}
-
+// Acknowledge a list of incidents
 type acknowledgeIncidentsMsg struct {
 	incidents []pagerduty.Incident
 }
@@ -175,6 +180,7 @@ func acknowledgeIncidents(p *pd.Config, incidents []*pagerduty.Incident) tea.Cmd
 	}
 }
 
+// Reassign a list of incidents to a list of users
 type reassignIncidentsMsg struct {
 	incidents []*pagerduty.Incident
 	users     []*pagerduty.User
@@ -191,6 +197,7 @@ func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, user *pagerduty.Us
 	}
 }
 
+// Silence a list of incidents
 type silenceIncidentsMsg []*pagerduty.Incident
 type waitForSelectedIncidentsThenSilenceMsg string
 
@@ -205,9 +212,9 @@ func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
 	}
 }
 
-type clearSelectedIncidentsMsg string
-
+// Add a note to an incident
 type addIncidentNoteMsg string
+type waitForSelectedIncidentsThenAnnotateMsg string
 type addedIncidentNoteMsg struct {
 	note *pagerduty.IncidentNote
 	err  error

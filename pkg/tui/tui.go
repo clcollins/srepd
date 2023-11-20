@@ -12,18 +12,14 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/clcollins/srepd/pkg/pd"
-)
-
-const (
-	gettingUserStatus      = "getting user info..."
-	loadingIncidentsStatus = "loading incidents..."
 )
 
 type errMsg struct{ error }
 
-type Model struct {
+type model struct {
+	err error
+
 	config *pd.Config
 	editor string
 
@@ -44,36 +40,45 @@ type Model struct {
 	teamMode bool
 }
 
+func newTableWithStyles() table.Model {
+	t := table.New(table.WithFocused(true))
+	t.SetStyles(tableStyle)
+	return t
+}
+
+func newTextInput() textinput.Model {
+	i := textinput.New()
+	i.Prompt = " $ "
+	i.CharLimit = 32
+	i.Width = 50
+	return i
+}
+
+func newHelp() help.Model {
+	h := help.New()
+	h.ShowAll = false
+	return h
+}
+
+func newIncidentViewer(content string) viewport.Model {
+
+	vp := viewport.New(windowSize.Width, windowSize.Height-5)
+	vp.Style = incidentViewerStyle
+	vp.SetContent(content)
+
+	return vp
+}
+
 func InitialModel(token string, teams []string, user string, ignoredusers []string, editor string) (tea.Model, tea.Cmd) {
 	var err error
 
-	input := textinput.New()
-	input.Prompt = " $ "
-	input.CharLimit = 32
-	input.Width = 50
-
-	m := Model{
+	m := model{
 		editor: editor,
-		help:   help.New(),
-		table: table.New(
-			table.WithFocused(true),
-		),
-		input:    input,
-		status:   loadingIncidentsStatus,
-		teamMode: false,
+		help:   newHelp(),
+		table:  newTableWithStyles(),
+		input:  newTextInput(),
+		status: loadingIncidentsStatus,
 	}
-
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
-	m.table.SetStyles(s)
 
 	// This is an ugly way to handle this error
 	pd, err := pd.NewConfig(token, teams, user, ignoredusers)
@@ -87,18 +92,21 @@ func InitialModel(token string, teams []string, user string, ignoredusers []stri
 	}
 }
 
-func (m Model) Init() tea.Cmd {
+func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		updateIncidentList(m.config),
 		getCurrentUser(m.config),
 	)
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
+	case errMsg:
+		m.err = msg
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		windowSize = msg
@@ -113,7 +121,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			{Title: dot, Width: 1},
 			{Title: "ID", Width: eighthWindow + cellPadding - borderEdges},
 			{Title: "Summary", Width: eighthWindow * 3},
-			{Title: "ClusterID", Width: eighthWindow * 3},
+			{Title: "Service", Width: eighthWindow * 3},
 		})
 
 		height := windowSize.Height - top - bottom - 10
@@ -121,114 +129,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetHeight(height)
 
 	case tea.KeyMsg:
-		// Always allow for quitting with q or Esc no matter what view is focused
 		if key.Matches(msg, defaultKeyMap.Quit) {
 			return m, tea.Quit
 		}
 
-		if m.selectedIncident != nil {
-			switch {
-			case key.Matches(msg, defaultKeyMap.Up):
-			case key.Matches(msg, defaultKeyMap.Down):
-			case key.Matches(msg, defaultKeyMap.Back):
-				m.status = ""
-				m.selectedIncident = nil
-				m.selectedIncidentAlerts = nil
-				m.selectedIncidentNotes = nil
-			}
+		// Default commands for the table view
+		switch {
+		case m.table.Focused():
+			return switchTableFocusMode(m, msg)
+		case m.input.Focused():
+			return switchInputFocusMode(m, msg)
 
-		}
-
-		// Key map behavior based on what view is currently focused
-		if m.input.Focused() {
-			// Command for focused "input" textarea
-
-			switch {
-			case key.Matches(msg, defaultKeyMap.Enter):
-				// TODO: SAVE INPUT TO VARIABLE HERE WHEN ENTER IS PRESSED
-				m.input.SetValue("")
-				m.input.Blur()
-
-			case key.Matches(msg, defaultKeyMap.Back):
-				m.input.SetValue("")
-				m.input.Blur()
-			}
-
-			m.input, cmd = m.input.Update(msg)
-			cmds = append(cmds, cmd)
-
-		} else {
-
-			// Default commands for the table view
-			switch {
-
-			// case SOME KEY FOR INPUT MODE:
-			case key.Matches(msg, defaultKeyMap.Input):
-				m.input.Focus()
-
-			case key.Matches(msg, defaultKeyMap.Help):
-				m.help.ShowAll = !m.help.ShowAll
-
-			case key.Matches(msg, defaultKeyMap.Up):
-				m.table.MoveUp(1)
-				m.incidentViewer.LineUp(1)
-
-			case key.Matches(msg, defaultKeyMap.Down):
-				m.table.MoveDown(1)
-				m.incidentViewer.LineDown(1)
-
-			case key.Matches(msg, defaultKeyMap.Enter):
-				if m.table.SelectedRow() == nil {
-					m.status = "no incident selected"
-					return m, nil
-				}
-				cmds = append(cmds,
-					getIncident(m.config, m.table.SelectedRow()[1]),
-					getIncidentAlerts(m.config, m.table.SelectedRow()[1]),
-					getIncidentNotes(m.config, m.table.SelectedRow()[1]),
-				)
-
-			case key.Matches(msg, defaultKeyMap.Back):
-				m.status = ""
-				m.selectedIncident = nil
-				m.selectedIncidentAlerts = nil
-				m.selectedIncidentNotes = nil
-
-			case key.Matches(msg, defaultKeyMap.Team):
-				m.teamMode = !m.teamMode
-				cmds = append(cmds, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} })
-
-			case key.Matches(msg, defaultKeyMap.Refresh):
-				m.status = loadingIncidentsStatus
-				cmds = append(cmds, updateIncidentList(m.config))
-
-			case key.Matches(msg, defaultKeyMap.Note):
-				cmds = append(cmds, openEditorCmd(m.editor))
-
-			case key.Matches(msg, defaultKeyMap.Silence):
-				if m.selectedIncident == nil {
-					return m, tea.Sequence(
-						// These fire in sequence, but because they're messages, they don't wait for the previous one to finish
-						// So we need some way of telling the system to poll
-						func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
-						func() tea.Msg { return waitForSelectedIncidentsThenSilenceMsg("wait") },
-					)
-				} else {
-					return m, func() tea.Msg { return silenceIncidentsMsg([]*pagerduty.Incident{m.selectedIncident}) }
-				}
-
-			case key.Matches(msg, defaultKeyMap.Ack):
-				if m.selectedIncident == nil {
-					return m, tea.Sequence(
-						// These fire in sequence, but because they're messages, they don't wait for the previous one to finish
-						// So we need some way of telling the system to poll
-						func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
-						func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg("wait") },
-					)
-				} else {
-					return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
-				}
-			}
 		}
 
 	// Command to get an incident by ID
@@ -331,6 +242,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		cmds = append(cmds, addNoteToIncident(m.config, m.selectedIncident, m.currentUser, msg.file))
 
+	case waitForSelectedIncidentsThenAnnotateMsg:
+		if m.selectedIncident == nil {
+			time.Sleep(time.Second * 1)
+			m.status = "waiting for incident info..."
+			return m, func() tea.Msg { return waitForSelectedIncidentsThenAnnotateMsg(msg) }
+		}
+		cmds = append(cmds, openEditorCmd(m.editor))
+
 	case waitForSelectedIncidentsThenAcknowledgeMsg:
 		if m.selectedIncident == nil {
 			time.Sleep(time.Second * 1)
@@ -375,15 +294,106 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 }
 
-func (m Model) View() string {
+func (m model) View() string {
 	helpView := helpStyle.Render(m.help.View(defaultKeyMap))
+	tableView := tableContainerStyle.Render(m.table.View())
 
-	if m.selectedIncident != nil {
-		m.incidentViewer = newIncidentViewer(m.template())
-		return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
+	switch {
+	case m.input.Focused():
+		return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + m.input.View() + "\n" + helpView)
+	// case m.incidentViewer.Focused():
+	// return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
+	default:
+		return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + helpView)
 	}
-	if m.input.Focused() {
-		return mainStyle.Render(m.renderHeader() + "\n" + tableStyle.Render(m.table.View()) + "\n" + m.input.View() + "\n" + helpView)
+}
+
+// tableFocusedMode is the main mode for the application
+func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, defaultKeyMap.Help):
+			m.help.ShowAll = !m.help.ShowAll
+
+		case key.Matches(msg, defaultKeyMap.Up):
+			m.table.MoveUp(1)
+
+		case key.Matches(msg, defaultKeyMap.Down):
+			m.table.MoveDown(1)
+
+		case key.Matches(msg, defaultKeyMap.Enter):
+			// Is this the proper way to do this?
+			// Should be a message.
+			renderIncidentMarkdown(m.template())
+
+		// Is this unnecessary in Table mode?
+		// case key.Matches(msg, defaultKeyMap.Back):
+		// 	m.selectedIncident = nil
+		// 	m.selectedIncidentAlerts = nil
+		// 	m.selectedIncidentNotes = nil
+		// }
+
+		case key.Matches(msg, defaultKeyMap.Team):
+			m.teamMode = !m.teamMode
+			cmds = append(cmds, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} })
+
+		case key.Matches(msg, defaultKeyMap.Refresh):
+			m.status = loadingIncidentsStatus
+			cmds = append(cmds, updateIncidentList(m.config))
+
+		// In table mode, highlighted incidents are not selected yet, so they need to be retrieved
+		// and then can be acted upon.  Since tea.Sequence does not wait for completion, the
+		// "waitForSelectedIncidentsThen..." functions are used to wait for the selected incident
+		// to be retrieved from PagerDuty
+		case key.Matches(msg, defaultKeyMap.Silence):
+			return m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+				func() tea.Msg { return waitForSelectedIncidentsThenSilenceMsg("wait") },
+			)
+
+		case key.Matches(msg, defaultKeyMap.Ack):
+			return m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+				func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg("wait") },
+			)
+
+		case key.Matches(msg, defaultKeyMap.Note):
+			return m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+				func() tea.Msg { return waitForSelectedIncidentsThenAnnotateMsg("wait") },
+			)
+		}
 	}
-	return mainStyle.Render(m.renderHeader() + "\n" + tableStyle.Render(m.table.View()) + "\n" + helpView)
+	return m, tea.Batch(cmds...)
+}
+
+func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, defaultKeyMap.Enter):
+
+		}
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func switchIncidentFocusedMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, defaultKeyMap.Ack):
+			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
+		case key.Matches(msg, defaultKeyMap.Silence):
+			return m, func() tea.Msg { return silenceIncidentsMsg([]*pagerduty.Incident{m.selectedIncident}) }
+		}
+	}
+	return m, tea.Batch(cmds...)
 }

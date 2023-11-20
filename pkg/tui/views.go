@@ -8,14 +8,19 @@ import (
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 const (
-	dot       = "•"
-	upArrow   = "↑"
-	downArrow = "↓"
+	dot        = "•"
+	upArrow    = "↑"
+	downArrow  = "↓"
+	gray       = lipgloss.Color("240")
+	paleYellow = lipgloss.Color("229")
+	neonPurple = lipgloss.Color("57")
+	lilac      = lipgloss.Color("105")
 )
 
 var (
@@ -26,11 +31,17 @@ var (
 	assigneeStyle       = mainStyle.Copy()
 	statusStyle         = mainStyle.Copy()
 	assignedStringWidth = len("Assigned to User") + (horizontalPadding * 2 * 2) + (borderWidth * 2 * 2) + 10
-	tableStyle          = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240"))
-	helpStyle           = lipgloss.NewStyle().Foreground(lipgloss.Color("105"))
+	tableContainerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(gray)
+	tableStyle          = table.Styles{
+		Selected: lipgloss.NewStyle().Bold(true).Foreground(paleYellow).Background(neonPurple),
+		Header:   lipgloss.NewStyle().Bold(false).Padding(0, 1).BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(gray)).BorderBottom(true),
+		Cell:     lipgloss.NewStyle().Padding(0, 1),
+	}
+	helpStyle           = lipgloss.NewStyle().Foreground(lilac)
+	incidentViewerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(gray)).Padding(2)
 )
 
-func (m Model) renderHeader() string {
+func (m model) renderHeader() string {
 	var s strings.Builder
 	var assignedTo string
 
@@ -74,7 +85,7 @@ func statusArea(s string) string {
 // 	return s
 // }
 
-func (m Model) template() string {
+func (m model) template() string {
 	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
 	if err != nil {
 		log.Fatal(err)
