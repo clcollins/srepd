@@ -86,6 +86,7 @@ func statusArea(s string) string {
 // }
 
 func (m model) template() string {
+	debug("template")
 	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
 	if err != nil {
 		log.Fatal(err)
@@ -102,6 +103,7 @@ func (m model) template() string {
 }
 
 func summarize(i *pagerduty.Incident, a []pagerduty.IncidentAlert, n []pagerduty.IncidentNote) incidentSummary {
+	debug("summarize")
 	summary := summarizeIncident(i)
 	summary.Alerts = summarizeAlerts(a)
 	summary.Notes = summarizeNotes(n)
@@ -116,6 +118,7 @@ type noteSummary struct {
 }
 
 func summarizeNotes(n []pagerduty.IncidentNote) []noteSummary {
+	debug(fmt.Sprintf("summarizeNotes: %v", len(n)))
 	var s []noteSummary
 
 	for _, note := range n {
@@ -132,7 +135,7 @@ func summarizeNotes(n []pagerduty.IncidentNote) []noteSummary {
 
 type alertSummary struct {
 	ID       string
-	Self     string
+	HTMLURL  string
 	Service  string
 	Created  string
 	Status   string
@@ -141,12 +144,13 @@ type alertSummary struct {
 }
 
 func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
+	debug(fmt.Sprintf("summarizeAlerts: %v", len(a)))
 	var s []alertSummary
 
 	for _, alt := range a {
 		s = append(s, alertSummary{
 			ID:       alt.ID,
-			Self:     alt.Self,
+			HTMLURL:  alt.HTMLURL,
 			Service:  alt.Service.Summary,
 			Created:  alt.CreatedAt,
 			Status:   alt.Status,
@@ -161,7 +165,7 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 type incidentSummary struct {
 	ID               string
 	Title            string
-	Self             string
+	HTMLURL          string
 	Service          string
 	EscalationPolicy string
 	Created          string
@@ -176,11 +180,12 @@ type incidentSummary struct {
 }
 
 func summarizeIncident(i *pagerduty.Incident) incidentSummary {
+	debug(fmt.Sprintf("summarizeIncident: %+v", i))
 	var s incidentSummary
 
 	s.ID = i.ID
 	s.Title = i.Title
-	s.Self = i.Self
+	s.HTMLURL = i.HTMLURL
 	s.Service = i.Service.Summary
 	s.EscalationPolicy = i.EscalationPolicy.Summary
 	s.Created = i.CreatedAt
@@ -216,7 +221,7 @@ const incidentTemplate = `
 
 {{ if .Priority }}PRIORITY {{ .Priority }} - {{ end }}{{ .Title }}
 
-{{ .Self }}
+{{ .HTMLURL }}
 
 ## Summary
 
@@ -253,9 +258,7 @@ Acknowledged by:{{ range $ack := .Acknowledged }}
 * Service: {{ $alert.Service }}
 * Status: {{ $alert.Status }}
 * Created: {{ $alert.Created }}
-* Link: {{ $alert.Self }}
+* Link: {{ $alert.HTMLURL }}
 {{ $alert.Details }}
 {{ end }}
-
-
 `

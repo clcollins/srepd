@@ -2,4 +2,5 @@
 pkg.old/*
 srepd
 build/*
+debug.log
 

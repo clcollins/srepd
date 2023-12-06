@@ -61,6 +61,25 @@ func updateIncidentList(p *pd.Config) tea.Cmd {
 	}
 }
 
+type renderIncidentMsg string
+
+type renderedIncidentMsg struct {
+	content string
+	err     error
+}
+
+func renderIncident(m *model) tea.Cmd {
+	return func() tea.Msg {
+		content, err := renderIncidentMarkdown(m.template())
+		if err != nil {
+			m.setStatus(err.Error())
+			log.Fatal(err)
+		}
+
+		return renderedIncidentMsg{content, err}
+	}
+}
+
 type getIncidentMsg string
 type gotIncidentMsg struct {
 	incident *pagerduty.Incident
@@ -81,6 +100,7 @@ type gotIncidentAlertsMsg struct {
 }
 
 func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
+	debug("getIncidentAlerts")
 	return func() tea.Msg {
 		a, err := pd.GetAlerts(p.Client, id, pagerduty.ListIncidentAlertsOptions{})
 		return gotIncidentAlertsMsg{a, err}
@@ -93,6 +113,7 @@ type gotIncidentNotesMsg struct {
 }
 
 func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
+	debug("getIncidentNotes")
 	return func() tea.Msg {
 		n, err := pd.GetNotes(p.Client, id)
 		return gotIncidentNotesMsg{n, err}
@@ -191,9 +212,13 @@ type reassignIncidentsMsg struct {
 }
 type reassignedIncidentsMsg []pagerduty.Incident
 
-func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) tea.Cmd {
+func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, users []*pagerduty.User) tea.Cmd {
 	return func() tea.Msg {
-		r, err := pd.ReassignIncidents(p.Client, i, user, users)
+		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		if err != nil {
+			return errMsg{err}
+		}
+		r, err := pd.ReassignIncidents(p.Client, i, u, users)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -226,7 +251,7 @@ type addedIncidentNoteMsg struct {
 	err  error
 }
 
-func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, user *pagerduty.User, content *os.File) tea.Cmd {
+func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, content *os.File) tea.Cmd {
 	return func() tea.Msg {
 		defer content.Close()
 
@@ -236,7 +261,12 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, user *pagerdu
 		}
 		content := string(bytes[:])
 
-		n, err := pd.PostNote(p.Client, incident.ID, user, content)
+		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		if err != nil {
+			return errMsg{err}
+		}
+
+		n, err := pd.PostNote(p.Client, incident.ID, u, content)
 		return addedIncidentNoteMsg{n, err}
 	}
 }
