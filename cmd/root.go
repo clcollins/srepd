@@ -52,6 +52,13 @@ to be a full-featured PagerDuty client, or kitchen sink,
 but rather a simple tool to make on-call tasks easier.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+
 		if debug {
 			for k, v := range viper.GetViper().AllSettings() {
 				if k == "token" {
@@ -74,13 +81,7 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		f, err := tea.LogToFile("debug.log", "debug")
 		m, _ := tui.InitialModel(token, teams, silentuser, ignoredusers, editor)
-		if err != nil {
-			fmt.Println("fatal:", err)
-			os.Exit(1)
-		}
-		defer f.Close()
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err = p.Run()
