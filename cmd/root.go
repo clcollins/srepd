@@ -74,9 +74,8 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		m, _ := tui.InitialModel(token, teams, silentuser, ignoredusers, editor)
-
 		f, err := tea.LogToFile("debug.log", "debug")
+		m, _ := tui.InitialModel(token, teams, silentuser, ignoredusers, editor)
 		if err != nil {
 			fmt.Println("fatal:", err)
 			os.Exit(1)
