@@ -161,9 +161,6 @@ type editorFinishedMsg struct {
 	file *os.File
 }
 
-// TODO: is this needed
-// var defaultEditor = "/usr/bin/vim"
-
 func openEditorCmd(editor string) tea.Cmd {
 	file, err := os.CreateTemp(os.TempDir(), "")
 	if err != nil {
@@ -175,6 +172,28 @@ func openEditorCmd(editor string) tea.Cmd {
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return editorFinishedMsg{err, file}
 	})
+}
+
+type openOCMContainerMsg string
+type ocmContainerFinishedMsg error
+
+const term = "/usr/bin/gnome-terminal"
+const clusterCmd = "o"
+
+func openOCMContainer(cluster string) tea.Cmd {
+	debug("openOCMContainer")
+	c := exec.Command(term, "--", "/bin/bash", "srepd_exec_ocm_container", cluster)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	debug(c.String())
+	err := c.Start()
+	if err != nil {
+		debug(err.Error())
+	}
+	return func() tea.Msg {
+		return ocmContainerFinishedMsg(err)
+	}
 }
 
 type clearSelectedIncidentsMsg string

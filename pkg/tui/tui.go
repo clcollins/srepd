@@ -171,7 +171,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Default commands for the table view
 		switch {
-		case m.selectedIncident != nil:
+		case m.viewingIncident:
 			return switchIncidentFocusedMode(m, msg)
 		case m.table.Focused():
 			return switchTableFocusMode(m, msg)
@@ -216,7 +216,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, renderIncident(&m))
 
 	case gotIncidentAlertsMsg:
-		debug("gotIncidentAlertsMsg", fmt.Sprint("TRUNCATED"))
+		//debug("gotIncidentAlertsMsg", fmt.Sprint("TRUNCATED"))
+		debug("gotIncidentAlertsMsg", fmt.Sprint(msg))
 		if msg.err != nil {
 			m.setStatus(msg.err.Error())
 			log.Fatal(msg.err)
@@ -317,7 +318,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case renderedIncidentMsg:
 		debug("renderedIncidentMsg", fmt.Sprint(msg))
 		// TODO - check the msg.err properly
-		// not in the renderIncident() functio
+		// not in the renderIncident() function
 		m.incidentViewer.SetContent(msg.content)
 		m.viewingIncident = true
 
@@ -468,6 +469,12 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
 				func() tea.Msg { return waitForSelectedIncidentsThenAnnotateMsg("wait") },
 			)
+
+		// TODO: Figure out how to pass the cluster id
+		case key.Matches(msg, defaultKeyMap.Launch):
+			return m, tea.Sequence(
+				func() tea.Msg { return openOCMContainer("") },
+			)
 		}
 	}
 	return m, tea.Batch(cmds...)
@@ -508,6 +515,7 @@ func switchIncidentFocusedMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Note):
 			cmds = append(cmds, openEditorCmd(m.editor))
 		}
+
 		// TODO: Handle scrolling and up/down arrows
 	}
 

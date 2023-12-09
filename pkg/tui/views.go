@@ -259,6 +259,9 @@ Acknowledged by:{{ range $ack := .Acknowledged }}
 * Status: {{ $alert.Status }}
 * Created: {{ $alert.Created }}
 * Link: {{ $alert.HTMLURL }}
-{{ $alert.Details }}
+{{ range $key, $value := $alert.Details }}
+* {{ $key }}: {{ $value }} 
+{{ end }}
+
 {{ end }}
 `

@@ -29,6 +29,7 @@ type keymap struct {
 	Silence key.Binding
 	Ack     key.Binding
 	Input   key.Binding
+	Launch  key.Binding
 }
 
 var defaultKeyMap = keymap{
@@ -79,5 +80,9 @@ var defaultKeyMap = keymap{
 	Input: key.NewBinding(
 		key.WithKeys("i"),
 		key.WithHelp("i", "input"),
+	),
+	Launch: key.NewBinding(
+		key.WithKeys("l"),
+		key.WithHelp("l", "launch"),
 	),
 }
