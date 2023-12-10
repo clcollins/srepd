@@ -135,12 +135,15 @@ func summarizeNotes(n []pagerduty.IncidentNote) []noteSummary {
 
 type alertSummary struct {
 	ID       string
+	Name     string
+	Link     string
 	HTMLURL  string
 	Service  string
 	Created  string
 	Status   string
 	Incident string
 	Details  map[string]interface{}
+	Cluster  string
 }
 
 func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
@@ -148,8 +151,19 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 	var s []alertSummary
 
 	for _, alt := range a {
+
+		// name := alt.Body["details"].(map[string]interface{})["alert_name"].(string)
+		// link := alt.Body["details"].(map[string]interface{})["link"].(string)
+
+		name := getDetailFieldFromAlert("alert_name", alt)
+		cluster := getDetailFieldFromAlert("cluster_id", alt)
+		link := getDetailFieldFromAlert("link", alt)
+
 		s = append(s, alertSummary{
 			ID:       alt.ID,
+			Name:     name,
+			Link:     link,
+			Cluster:  cluster,
 			HTMLURL:  alt.HTMLURL,
 			Service:  alt.Service.Summary,
 			Created:  alt.CreatedAt,
@@ -157,6 +171,7 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 			Incident: alt.Incident.ID,
 			Details:  alt.Body["details"].(map[string]interface{}),
 		})
+
 	}
 
 	return s
@@ -177,6 +192,7 @@ type incidentSummary struct {
 	Acknowledged     []string
 	Alerts           []alertSummary
 	Notes            []noteSummary
+	Clusters         []string
 }
 
 func summarizeIncident(i *pagerduty.Incident) incidentSummary {
@@ -217,44 +233,46 @@ var funcMap = template.FuncMap{
 }
 
 const incidentTemplate = `
-# {{ .ID }}
+# {{ .ID }} - {{ .Status }}
 
-{{ if .Priority }}PRIORITY {{ .Priority }} - {{ end }}{{ .Title }}
-
-{{ .HTMLURL }}
-
-## Summary
+{{ if .Priority }}PRIORITY {{ .Priority }} - {{ end }}{{ .Title }} - {{ .HTMLURL }}
 
 * Service: {{ .Service }}
-* Status: {{ .Status }}
-* Priority: {{ .Priority }}
 * Urgency: {{ .Urgency }}
 * Created: {{ .Created }}
 
-## Responders and Escalation
-
 {{ if not .Acknowledged -}}
 Assigned to:{{ range $assignee := .Assigned }}
-+ {{ $assignee }}
++ *{{ $assignee }}* *(not yet acknowledged)*
 {{ end -}}
 {{ else -}}
 Acknowledged by:{{ range $ack := .Acknowledged }}
-* {{ $ack }}
++ **{{ $ack }}**
 {{ end -}}
 {{ end -}}
 
 ## Notes
 
+{{ if .Notes }}
 {{ range $note := .Notes }}
 > {{ $note.Content }}
 
 - {{ $note.User }} @ {{ $note.Created }}
 {{ end }}
+{{ else }}
+_none_
+{{ end }}
 
 ## Alerts ({{ len .Alerts }})
 
 {{ range $alert := .Alerts }}
-### {{ $alert.ID }}
+_{{ $alert.ID }} - {{ $alert.Name }}_
+
+* Cluster: {{ $alert.Cluster }}
+* SOP: {{ $alert.Link }}
+
+Details :
+
 * Service: {{ $alert.Service }}
 * Status: {{ $alert.Status }}
 * Created: {{ $alert.Created }}

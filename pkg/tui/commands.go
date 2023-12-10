@@ -18,6 +18,11 @@ const (
 	loadingIncidentsStatus = "loading incidents..."
 )
 
+type waitForSelectedIncidentThenDoMsg struct {
+	action string
+	msg    tea.Msg
+}
+
 type waitForSelectedIncidentThenRenderMsg string
 
 func renderIncidentMarkdown(content string) (string, error) {
@@ -208,6 +213,7 @@ type acknowledgedIncidentsMsg struct {
 	incidents []pagerduty.Incident
 	err       error
 }
+
 type waitForSelectedIncidentsThenAcknowledgeMsg string
 
 func acknowledgeIncidents(p *pd.Config, incidents []*pagerduty.Incident) tea.Cmd {
@@ -254,6 +260,9 @@ type waitForSelectedIncidentsThenSilenceMsg string
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
 
 func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
+	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage"
+	// because it's really just a reassignment
+	log.Printf("silence requested for incident(s) %v; reassigning to %v", i, u)
 	return func() tea.Msg {
 		if len(i) == 0 || len(u) == 0 {
 			return errMsg{errSilenceIncidentInvalidArgs}
@@ -296,4 +305,8 @@ func getTeamsAsStrings(p *pd.Config) []string {
 		teams = append(teams, t.ID)
 	}
 	return teams
+}
+
+func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
+	return a.Body["details"].(map[string]interface{})[f].(string)
 }
