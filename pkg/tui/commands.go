@@ -203,9 +203,6 @@ func openOCMContainer(cluster string) tea.Cmd {
 
 type clearSelectedIncidentsMsg string
 
-// Render a single incident to view
-
-// Acknowledge a list of incidents
 type acknowledgeIncidentsMsg struct {
 	incidents []*pagerduty.Incident
 }
@@ -230,7 +227,6 @@ func acknowledgeIncidents(p *pd.Config, incidents []*pagerduty.Incident) tea.Cmd
 	}
 }
 
-// Reassign a list of incidents to a list of users
 type reassignIncidentsMsg struct {
 	incidents []*pagerduty.Incident
 	users     []*pagerduty.User
@@ -251,7 +247,6 @@ func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, users []*pagerduty
 	}
 }
 
-// Silence a list of incidents
 type silenceIncidentsMsg struct {
 	incidents []*pagerduty.Incident
 }
@@ -271,7 +266,6 @@ func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
 	}
 }
 
-// Add a note to an incident
 type addIncidentNoteMsg string
 type waitForSelectedIncidentsThenAnnotateMsg string
 type addedIncidentNoteMsg struct {

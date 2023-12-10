@@ -159,7 +159,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.table.SetHeight(height)
 
-		// INCIDENTVIEWER
 		m.incidentViewer.Width = windowSize.Width - borderEdges
 		m.incidentViewer.Height = height
 
@@ -218,8 +217,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case gotIncidentAlertsMsg:
-		//debug("gotIncidentAlertsMsg", fmt.Sprint("TRUNCATED"))
-		debug("gotIncidentAlertsMsg", fmt.Sprint(msg))
+		debug("gotIncidentAlertsMsg", fmt.Sprint("TRUNCATED"))
 		if msg.err != nil {
 			m.setStatus(msg.err.Error())
 			log.Fatal(msg.err)
@@ -503,11 +501,7 @@ func (m model) View() string {
 	switch {
 	case m.viewingIncident:
 		debug("viewingIncident")
-		// INCIDENTVIEWER
-		//m.incidentViewer.Width = 50
-		//m.incidentViewer.Height = 50
 		return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
-		//return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer + "\n" + helpView)
 	default:
 		tableView := tableContainerStyle.Render(m.table.View())
 		if m.input.Focused() {
@@ -540,7 +534,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewingIncident = true
 			return m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
-				// func() tea.Msg { return waitForSelectedIncidentThenRenderMsg("wait") },
 				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "renderIncidentMsg", msg: "render"} },
 			)
 
@@ -633,7 +626,6 @@ func switchIncidentFocusedMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// INCIDENTVIEWER
 	m.incidentViewer, cmd = m.incidentViewer.Update(msg)
 	cmds = append(cmds, cmd)
 
