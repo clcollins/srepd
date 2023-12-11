@@ -1,6 +1,4 @@
 .vscode/*
-pkg.old/*
-srepd
 build/*
-debug.log
+*.log
 
