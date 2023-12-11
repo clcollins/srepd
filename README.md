@@ -10,11 +10,11 @@ Features:
 * Vew a summary of an incident, including alerts and notes
 * Add a note to an incident
 * Reassign incidents to a (configured) "silent" user (ie. silence the alert)
+* Acknowledge incidents
 * Resizes nicely(-ish) when the terminal is resized
 
 Planned Features:
 
-* Acknowledge incidents
 * Un-Acknowledge incidents (re-assign to the Escalation Policy)
 * View arbitrary incidents
 * Assign incidents to any PagerDuty User ID
@@ -59,3 +59,7 @@ ignoredusers:
   - <pageDuty User ID>
   - <pagerDuty User ID>
 ```
+
+## Try it out
+
+The easiest way to get started with SREPD, after adding the required config file, is to just clone this repository and run `go build -o ${GOPATH}/bin/srepd .`
