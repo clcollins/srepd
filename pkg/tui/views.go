@@ -76,15 +76,6 @@ func statusArea(s string) string {
 	return fmt.Sprintf(fstring, s)
 }
 
-// TODO: Is this needed
-// func truncateStringToWidth(s string, width int) string {
-// 	if len(s) > width {
-// 		s = s[:width-1] + "…"
-// 	}
-//
-// 	return s
-// }
-
 func (m model) template() string {
 	debug("template")
 	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
@@ -152,9 +143,8 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 
 	for _, alt := range a {
 
-		// name := alt.Body["details"].(map[string]interface{})["alert_name"].(string)
-		// link := alt.Body["details"].(map[string]interface{})["link"].(string)
-
+		// Our alerts are not standardized enough
+		// CPD, for example, does not have "alert_name"
 		name := getDetailFieldFromAlert("alert_name", alt)
 		cluster := getDetailFieldFromAlert("cluster_id", alt)
 		link := getDetailFieldFromAlert("link", alt)
@@ -266,7 +256,7 @@ _none_
 ## Alerts ({{ len .Alerts }})
 
 {{ range $alert := .Alerts }}
-_{{ $alert.ID }} - {{ $alert.Name }}_
+_{{ $alert.ID }}_{{ if $alert.Name }}- _{{ $alert.Name }}_{{ end }}
 
 * Cluster: {{ $alert.Cluster }}
 * SOP: {{ $alert.Link }}

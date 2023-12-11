@@ -36,6 +36,7 @@ func (m *model) setStatus(msg string) {
 	log.Printf("%s\n", d)
 }
 
+// TODO https://github.com/clcollins/srepd/issues/3 - not handling error messages properly
 type errMsg struct{ error }
 
 type model struct {
@@ -135,7 +136,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		debug("errMsg")
+		m.setStatus(msg.Error())
 		m.err = msg
+		log.Fatal(m.err)
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -334,7 +337,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return openOCMContainer(cluster) }
 		}
 
-		// TODO: Figure out how to prompt with list to select from
+		// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
 		cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
 		m.setStatus(fmt.Sprintf("multiple alerts for incident - opening cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
 		return m, func() tea.Msg { return openOCMContainer(cluster) }
@@ -356,11 +359,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return waitForSelectedIncidentThenDoMsg(msg) }
 		}
 
-		// TODO: Figure out how to use an interface for the msg.action to write this once
+		// TODO https://github.com/clcollins/srepd/issues/2: Figure out how to use an interface for the msg.action to write this once
 		// cmds = append(cmds, func() tea.Msg { return msg.action(msg.msg) })
 
 		switch msg.action {
-		// TODO: See TODO above
+		// TODO https://github.com/clcollins/srepd/issues/2: See TODO above
 		// case "acknowledgeIncidentsMsg":
 		// 	if msg.msg.incidents == nil {
 		// 		m.setStatus("failed acknowledging incidents - no incidents provided")
@@ -394,7 +397,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case renderedIncidentMsg:
 		debug("renderedIncidentMsg", fmt.Sprint(msg))
-		// TODO - check the msg.err properly
+		// TODO https://github.com/clcollins/srepd/issues/3 - check the msg.err properly
 		// not in the renderIncident() function
 		m.incidentViewer.SetContent(msg.content)
 		m.viewingIncident = true
@@ -406,7 +409,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("waiting for incident info...")
 			return m, func() tea.Msg { return waitForSelectedIncidentsThenAnnotateMsg(msg) }
 		}
-		// TODO: This needs to be a tea.Cmd to allow waitForSelectedIncidentsThenDo
+		// TODO - https://github.com/clcollins/srepd/issues/2: This needs to be a tea.Cmd to allow waitForSelectedIncidentsThenDo
 		cmds = append(cmds, openEditorCmd(m.editor))
 
 	case acknowledgeIncidentsMsg:
@@ -499,6 +502,10 @@ func (m model) View() string {
 	helpView := helpStyle.Render(m.help.View(defaultKeyMap))
 
 	switch {
+	case m.err != nil:
+		debug("error")
+		return fmt.Sprintf("ERROR: %s\n", m.err.Error())
+
 	case m.viewingIncident:
 		debug("viewingIncident")
 		return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -185,6 +186,7 @@ type ocmContainerFinishedMsg error
 const term = "/usr/bin/gnome-terminal"
 const clusterCmd = "o"
 
+// TODO https://github.com/clcollins/srepd/issues/6 - allow custom commands
 func openOCMContainer(cluster string) tea.Cmd {
 	debug("openOCMContainer")
 	c := exec.Command(term, "--", "/bin/bash", "srepd_exec_ocm_container", cluster)
@@ -194,10 +196,14 @@ func openOCMContainer(cluster string) tea.Cmd {
 	debug(c.String())
 	err := c.Start()
 	if err != nil {
+		// TODO https://github.com/clcollins/srepd/issues/3 - not handling error messages properly
 		debug(err.Error())
+		return func() tea.Msg {
+			return errMsg{err}
+		}
 	}
 	return func() tea.Msg {
-		return ocmContainerFinishedMsg(err)
+		return ocmContainerFinishedMsg(nil)
 	}
 }
 
@@ -302,5 +308,14 @@ func getTeamsAsStrings(p *pd.Config) []string {
 }
 
 func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
-	return a.Body["details"].(map[string]interface{})[f].(string)
+	if a.Body["details"] != nil {
+
+		if a.Body["details"].(map[string]interface{})[f] != nil {
+			return a.Body["details"].(map[string]interface{})[f].(string)
+		}
+		debug(fmt.Sprintf("alert body \"details\" does not contain field %s", f))
+		return ""
+	}
+	debug("alert body \"details\" is nil")
+	return ""
 }
