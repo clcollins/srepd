@@ -174,11 +174,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Default commands for the table view
 		switch {
 		case m.viewingIncident:
-			return switchIncidentFocusedMode(m, msg)
-		case m.table.Focused():
-			return switchTableFocusMode(m, msg)
+			return switchIncidentFocusMode(m, msg)
 		case m.input.Focused():
 			return switchInputFocusMode(m, msg)
+		case m.table.Focused():
+			return switchTableFocusMode(m, msg)
 		}
 
 	// Command to get an incident by ID
@@ -521,7 +521,7 @@ func (m model) View() string {
 	}
 }
 
-// tableFocusedMode is the main mode for the application
+// tableFocusMode is the main mode for the application
 func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	debug("switchTableFocusMode")
 	var cmds []tea.Cmd
@@ -580,6 +580,11 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
 				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "openClusterMsg", msg: "wait"} },
 			)
+
+		case key.Matches(msg, defaultKeyMap.Input):
+			return m, tea.Sequence(
+				m.input.Focus(),
+			)
 		}
 	}
 	return m, tea.Batch(cmds...)
@@ -592,6 +597,11 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, defaultKeyMap.Back):
+			m.input.Blur()
+			m.table.Focus()
+			return m, nil
+
 		case key.Matches(msg, defaultKeyMap.Enter):
 
 		}
@@ -599,8 +609,8 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func switchIncidentFocusedMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("switchIncidentFocusedMode")
+func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	debug("switchIncidentFocusMode")
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
