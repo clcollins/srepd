@@ -5,7 +5,7 @@ TESTOPTS ?=
 GOARCH?=amd64
 GOENV=GOOS=${GOOS} GOARCH=${GOARCH} CGO_ENABLED=0 GOFLAGS=
 GOPATH := $(shell go env GOPATH)
-HOME=$(shell mktemp -d)
+HOME?=$(shell mktemp -d)
 
 GOLANGCI_LINT_VERSION=v1.51.2
 GORELEASER_VERSION=v1.14.1
@@ -24,6 +24,10 @@ build:
 .PHONY: install
 install:
 	go build -o ${GOPATH}/bin/srepd .
+
+.PHONY: install-local
+install-local:
+	go build -o ${HOME}/.local/bin/srepd .
 
 .PHONY: mod
 mod:
