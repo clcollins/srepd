@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// TODO https://github.com/clcollins/srepd/issues/6 - allow custom commands
 const cfgFile = "srepd.yaml"
 const cfgFilePath = ".config/srepd/"
 const defaultEditor = "/usr/bin/vim"

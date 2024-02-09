@@ -24,6 +24,7 @@ type waitForSelectedIncidentThenDoMsg struct {
 	msg    tea.Msg
 }
 
+//lint:ignore U1000 - future proofing
 type waitForSelectedIncidentThenRenderMsg string
 
 func renderIncidentMarkdown(content string) (string, error) {
@@ -43,6 +44,7 @@ func renderIncidentMarkdown(content string) (string, error) {
 	return str, nil
 }
 
+//lint:ignore U1000 - future proofing
 func updateSelectedIncident(p *pd.Config, id string) tea.Cmd {
 	return tea.Sequence(
 		getIncident(p, id),
@@ -61,7 +63,6 @@ func updateIncidentList(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
 		opts := pd.NewListIncidentOptsFromDefaults()
 		opts.TeamIDs = getTeamsAsStrings(p)
-
 		i, err := pd.GetIncidents(p.Client, opts)
 		return updatedIncidentListMsg{i, err}
 	}
@@ -180,16 +181,17 @@ func openEditorCmd(editor string) tea.Cmd {
 	})
 }
 
-type openOCMContainerMsg string
-type ocmContainerFinishedMsg error
+type openClusterMsg string
+type openClusterFinishedMsg error
 
-const term = "/usr/bin/gnome-terminal"
-const clusterCmd = "o"
+// Must not be aliases - must be real commands or links
+const defaultTerm = "/usr/bin/gnome-terminal"
+const defaultShell = "/bin/bash"
+const defaultClusterCmd = "srepd_exec_ocm_container"
 
-// TODO https://github.com/clcollins/srepd/issues/6 - allow custom commands
-func openOCMContainer(cluster string) tea.Cmd {
-	debug("openOCMContainer")
-	c := exec.Command(term, "--", "/bin/bash", "srepd_exec_ocm_container", cluster)
+func openCluster(cluster string) tea.Cmd {
+	debug("openCluster")
+	c := exec.Command(defaultTerm, "--", defaultShell, defaultClusterCmd, cluster)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
@@ -203,7 +205,7 @@ func openOCMContainer(cluster string) tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		return ocmContainerFinishedMsg(nil)
+		return openClusterFinishedMsg(nil)
 	}
 }
 
@@ -272,6 +274,7 @@ func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
 	}
 }
 
+//lint:ignore U1000 - future proofing
 type addIncidentNoteMsg string
 type waitForSelectedIncidentsThenAnnotateMsg string
 type addedIncidentNoteMsg struct {

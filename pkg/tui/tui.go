@@ -189,7 +189,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Set the selected incident to the incident returned from the getIncident command
 	case gotIncidentMsg:
-		debug("gotIncidentMsg", fmt.Sprint("TRUNCATED"))
+		debug("gotIncidentMsg", "TRUNCATED")
 		if msg.err != nil {
 			m.setStatus(msg.err.Error())
 			log.Fatal(msg.err)
@@ -204,7 +204,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case gotIncidentNotesMsg:
-		debug("gotIncidentNotesMsg", fmt.Sprint("TRUNCATED"))
+		debug("gotIncidentNotesMsg", "TRUNCATED")
 		if msg.err != nil {
 			m.setStatus(msg.err.Error())
 			log.Fatal(msg.err)
@@ -220,7 +220,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case gotIncidentAlertsMsg:
-		debug("gotIncidentAlertsMsg", fmt.Sprint("TRUNCATED"))
+		debug("gotIncidentAlertsMsg", "TRUNCATED")
 		if msg.err != nil {
 			m.setStatus(msg.err.Error())
 			log.Fatal(msg.err)
@@ -261,7 +261,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, updateIncidentList(m.config))
 
 	case updatedIncidentListMsg:
-		debug("updatedIncidentListMsg", fmt.Sprint("TRUNCATED"))
+		debug("updatedIncidentListMsg", "TRUNCATED")
 		if msg.err != nil {
 			m.setStatus(msg.err.Error())
 			log.Fatal(msg.err)
@@ -324,23 +324,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) })
 
-	case openOCMContainerMsg:
-		debug("openOCMContainerMsg", fmt.Sprint(msg))
+	case openClusterMsg:
+		debug("openClusterMsg", fmt.Sprint(msg))
 		if len(m.selectedIncidentAlerts) == 0 {
 			debug(fmt.Sprintf("no alerts found for incident %s - requeuing", m.selectedIncident.ID))
-			return m, func() tea.Msg { return openOCMContainerMsg("sender: openOCMContainerMsg; requeue") }
+			return m, func() tea.Msg { return openClusterMsg("sender: openClusterMsg; requeue") }
 
 		}
 		if len(m.selectedIncidentAlerts) == 1 {
 			cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
 			m.setStatus(fmt.Sprintf("opening cluster %s", cluster))
-			return m, func() tea.Msg { return openOCMContainer(cluster) }
+			return m, func() tea.Msg { return openCluster(cluster) }
 		}
 
 		// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
 		cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
 		m.setStatus(fmt.Sprintf("multiple alerts for incident - opening cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
-		return m, func() tea.Msg { return openOCMContainer(cluster) }
+		return m, func() tea.Msg { return openCluster(cluster) }
 
 	case waitForSelectedIncidentThenDoMsg:
 		debug("waitForSelectedIncidentThenDoMsg", fmt.Sprint(msg.action, msg.msg))
@@ -375,8 +375,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 		func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
 		// 	)
 		// case "annotateIncidentsMsg":
-		case "openOCMContainerMsg":
-			return m, func() tea.Msg { return openOCMContainerMsg("open") }
+		// TODO: The "ACTION" here needs to be a tea.Msg, not a string
+		case "openClusterMsg":
+			return m, func() tea.Msg { return openClusterMsg("open") }
 		// case "reassignIncidentsMsg":
 		case "renderIncidentMsg":
 			return m, func() tea.Msg { return renderIncidentMsg("render") }
@@ -577,7 +578,7 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Open):
 			return m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
-				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "openOCMContainerMsg", msg: "wait"} },
+				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "openClusterMsg", msg: "wait"} },
 			)
 		}
 	}
@@ -628,7 +629,7 @@ func switchIncidentFocusedMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Open):
 			return m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
-				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "openOCMContainerMsg", msg: "wait"} },
+				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "openClusterMsg", msg: "wait"} },
 			)
 		}
 	}
