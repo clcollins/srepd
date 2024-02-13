@@ -2,11 +2,14 @@ package tui
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
@@ -184,29 +187,105 @@ func openEditorCmd(editor string) tea.Cmd {
 type loginMsg string
 type loginFinishedMsg error
 
-// Must not be aliases - must be real commands or links
-const defaultTerm = "/usr/bin/gnome-terminal"
-const defaultShell = "/bin/bash"
-const defaultClusterCmd = "srepd_exec_ocm_container"
+type ClusterLauncher struct {
+	Terminal            string
+	Shell               string
+	ClusterLoginCommand string
+}
 
-func login(cluster string) tea.Cmd {
+func login(cluster string, config ClusterLauncher) tea.Cmd {
 	debug("login")
-	c := exec.Command(defaultTerm, "--", defaultShell, defaultClusterCmd, cluster)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	debug(c.String())
-	err := c.Start()
-	if err != nil {
-		// TODO https://github.com/clcollins/srepd/issues/3 - not handling error messages properly
-		debug(err.Error())
-		return func() tea.Msg {
-			return errMsg{err}
+
+	// Check if we have the necessary info to try to login
+	errs := []error{}
+	for _, n := range []string{config.Terminal, config.Shell, config.ClusterLoginCommand} {
+		if n == "" {
+			debug(fmt.Sprintf("%s is not set", n))
+			errs = append(errs, fmt.Errorf("%s is not set", n))
 		}
 	}
+
+	if len(errs) > 0 {
+		err := fmt.Errorf("login error: %v", errs)
+		debug(err.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(err)
+		}
+	}
+
+	// We have to slice the strings in case they have quotes or spaces
+	t := stringSlicer(config.Terminal)
+	s := stringSlicer(config.Shell)
+	l := stringSlicer(config.ClusterLoginCommand)
+
+	var args []string
+	args = append(args, t[1:]...)
+	args = append(args, "--") // Terminal separator
+	args = append(args, s...)
+	args = append(args, l...)
+	args = append(args, cluster)
+
+	// The first element of Terminal is the command to be executed, followed by args, in order
+	// This handles if folks use, eg: flatpak run <some package> as a terminal.
+	c := exec.Command(t[0], args...)
+
+	debug(c.String())
+	// TODO: What do we do with the stdout?  Anything?
+	_, pipeErr := c.StdoutPipe()
+	if pipeErr != nil {
+		debug(pipeErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(pipeErr)
+		}
+	}
+	stderr, pipeErr := c.StderrPipe()
+	if pipeErr != nil {
+		debug(pipeErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(pipeErr)
+		}
+	}
+
+	err := c.Start()
+	if err != nil {
+		debug(err.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(err)
+		}
+	}
+
+	out, err := io.ReadAll(stderr)
+	if err != nil {
+		debug(err.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(err)
+		}
+	}
+
+	if len(out) > 0 {
+		debug(fmt.Sprintf("login error: %s", out))
+		return func() tea.Msg {
+			return loginFinishedMsg(fmt.Errorf("%s", out))
+		}
+	}
+
 	return func() tea.Msg {
 		return loginFinishedMsg(nil)
 	}
+}
+
+func stringSlicer(s string) []string {
+	r := csv.NewReader(strings.NewReader(s))
+	r.Comma = ' '
+	record, err := r.Read()
+	if err != nil {
+		// TODO Figure out how to do proper error handling here
+		log.Fatal(err)
+	}
+
+	o := []string{}
+	o = append(o, record...)
+	return o
 }
 
 type clearSelectedIncidentsMsg string

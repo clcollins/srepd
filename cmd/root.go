@@ -33,13 +33,24 @@ import (
 	"github.com/spf13/viper"
 )
 
-// TODO https://github.com/clcollins/srepd/issues/6 - allow custom commands
-const cfgFile = "srepd.yaml"
-const cfgFilePath = ".config/srepd/"
-const defaultEditor = "/usr/bin/vim"
+const (
+	cfgFile     = "srepd.yaml"
+	cfgFilePath = ".config/srepd/"
 
-var debug bool
-var editor string
+	// Must not be aliases - must be real commands or links
+	defaultEditor          = "/usr/bin/vim"
+	defaultTerminal        = "/usr/bin/gnome-terminal"
+	defaultShell           = "/bin/bash"
+	defaultClusterLoginCmd = "/usr/local/bin/ocm backplane login"
+)
+
+var (
+	debug                 bool
+	editor                string
+	terminal              string
+	shell                 string
+	cluster_login_command string
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -82,7 +93,46 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		m, _ := tui.InitialModel(token, teams, silentuser, ignoredusers, editor)
+		if terminal == "" {
+			terminal = viper.GetString("terminal")
+			if terminal == "" {
+				terminal = defaultTerminal
+			}
+		}
+
+		if shell == "" {
+			shell = viper.GetString("shell")
+			if shell == "" {
+				shell = defaultShell
+			}
+		}
+
+		if cluster_login_command == "" {
+			cluster_login_command = viper.GetString("cluster_login_command")
+			if cluster_login_command == "" {
+				cluster_login_command = defaultClusterLoginCmd
+			}
+		}
+
+		if debug {
+			log.Printf("Using editor: `%v`\n", editor)
+			log.Printf("Using terminal: `%v`\n", terminal)
+			log.Printf("Using shell: `%v`\n", shell)
+			log.Printf("Using ClusterLoginCommand: `%v`\n", cluster_login_command)
+		}
+
+		m, _ := tui.InitialModel(
+			token,
+			teams,
+			silentuser,
+			ignoredusers,
+			editor,
+			tui.ClusterLauncher{
+				Terminal:            terminal,
+				Shell:               shell,
+				ClusterLoginCommand: cluster_login_command,
+			},
+		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err = p.Run()
@@ -104,7 +154,10 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debugging output")
-	rootCmd.PersistentFlags().StringVarP(&editor, "editor", "e", "", "Editor to use for notes; default is `$EDITOR` environment variable")
+	rootCmd.PersistentFlags().StringVarP(&editor, "editor", "e", "", "Editor to use for notes; default: `$EDITOR`")
+	rootCmd.PersistentFlags().StringVarP(&terminal, "terminal", "t", "", "Terminal to use for exec commands; default: `/usr/bin/gnome-terminal`")
+	rootCmd.PersistentFlags().StringVarP(&shell, "shell", "s", "", "Shell to use for exec commands; default: `$SHELL`")
+	rootCmd.PersistentFlags().StringVarP(&cluster_login_command, "cluster_login_cmd", "c", "", "Cluster login command; default: `/usr/local/bin/ocm backplane login`")
 }
 
 // initConfig reads in config file and ENV variables if set.
