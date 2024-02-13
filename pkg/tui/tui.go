@@ -17,6 +17,7 @@ import (
 
 const DEBUG = true
 const waitTime = time.Millisecond * 1
+const defaultInputPrompt = " $ "
 
 func debug(msg ...string) {
 	if !DEBUG {
@@ -324,23 +325,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) })
 
-	case openClusterMsg:
-		debug("openClusterMsg", fmt.Sprint(msg))
+	case loginMsg:
+		debug("loginMsg", fmt.Sprint(msg))
 		if len(m.selectedIncidentAlerts) == 0 {
 			debug(fmt.Sprintf("no alerts found for incident %s - requeuing", m.selectedIncident.ID))
-			return m, func() tea.Msg { return openClusterMsg("sender: openClusterMsg; requeue") }
+			return m, func() tea.Msg { return loginMsg("sender: loginMsg; requeue") }
 
 		}
 		if len(m.selectedIncidentAlerts) == 1 {
 			cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
-			m.setStatus(fmt.Sprintf("opening cluster %s", cluster))
-			return m, func() tea.Msg { return openCluster(cluster) }
+			m.setStatus(fmt.Sprintf("logging into cluster %s", cluster))
+			return m, func() tea.Msg { return login(cluster) }
 		}
 
 		// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
 		cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
-		m.setStatus(fmt.Sprintf("multiple alerts for incident - opening cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
-		return m, func() tea.Msg { return openCluster(cluster) }
+		m.setStatus(fmt.Sprintf("multiple alerts for incident - logging into cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
+		return m, func() tea.Msg { return login(cluster) }
 
 	case waitForSelectedIncidentThenDoMsg:
 		debug("waitForSelectedIncidentThenDoMsg", fmt.Sprint(msg.action, msg.msg))
@@ -376,8 +377,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 	)
 		// case "annotateIncidentsMsg":
 		// TODO: The "ACTION" here needs to be a tea.Msg, not a string
-		case "openClusterMsg":
-			return m, func() tea.Msg { return openClusterMsg("open") }
+		case "loginMsg":
+			return m, func() tea.Msg { return loginMsg("login") }
 		// case "reassignIncidentsMsg":
 		case "renderIncidentMsg":
 			return m, func() tea.Msg { return renderIncidentMsg("render") }
@@ -575,10 +576,10 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				func() tea.Msg { return waitForSelectedIncidentsThenAnnotateMsg("wait") },
 			)
 
-		case key.Matches(msg, defaultKeyMap.Open):
+		case key.Matches(msg, defaultKeyMap.Login):
 			return m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
-				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "openClusterMsg", msg: "wait"} },
+				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "loginMsg", msg: "wait"} },
 			)
 
 		case key.Matches(msg, defaultKeyMap.Input):
@@ -600,6 +601,7 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.input.Blur()
 			m.table.Focus()
+			m.input.Prompt = defaultInputPrompt
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Enter):
@@ -636,10 +638,10 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Refresh):
 			return m, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) }
 
-		case key.Matches(msg, defaultKeyMap.Open):
+		case key.Matches(msg, defaultKeyMap.Login):
 			return m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
-				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "openClusterMsg", msg: "wait"} },
+				func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: "loginMsg", msg: "wait"} },
 			)
 		}
 	}

@@ -181,16 +181,16 @@ func openEditorCmd(editor string) tea.Cmd {
 	})
 }
 
-type openClusterMsg string
-type openClusterFinishedMsg error
+type loginMsg string
+type loginFinishedMsg error
 
 // Must not be aliases - must be real commands or links
 const defaultTerm = "/usr/bin/gnome-terminal"
 const defaultShell = "/bin/bash"
 const defaultClusterCmd = "srepd_exec_ocm_container"
 
-func openCluster(cluster string) tea.Cmd {
-	debug("openCluster")
+func login(cluster string) tea.Cmd {
+	debug("login")
 	c := exec.Command(defaultTerm, "--", defaultShell, defaultClusterCmd, cluster)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
@@ -205,7 +205,7 @@ func openCluster(cluster string) tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		return openClusterFinishedMsg(nil)
+		return loginFinishedMsg(nil)
 	}
 }
 
