@@ -23,7 +23,7 @@ Planned Features:
 
 ## Configuration
 
-SREPD used the [Viper](https://github.com/spf13/viper) configuration setup, and will read required values from `~/.config/srepd/srepd.yaml`.
+SREPD uses the [Viper](https://github.com/spf13/viper) configuration setup, and will read required values from `~/.config/srepd/srepd.yaml`.
 
 **Required Values**
 
