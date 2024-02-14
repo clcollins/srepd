@@ -171,14 +171,20 @@ type editorFinishedMsg struct {
 	file *os.File
 }
 
-func openEditorCmd(editor string) tea.Cmd {
+func openEditorCmd(editor []string) tea.Cmd {
+	var args []string
+
 	file, err := os.CreateTemp(os.TempDir(), "")
 	if err != nil {
 		return func() tea.Msg {
 			return errMsg{error: err}
 		}
 	}
-	c := exec.Command(editor, file.Name())
+
+	args = append(args, editor[1:]...)
+	args = append(args, file.Name())
+
+	c := exec.Command(editor[0], args...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return editorFinishedMsg{err, file}
 	})
@@ -188,21 +194,27 @@ type loginMsg string
 type loginFinishedMsg error
 
 type ClusterLauncher struct {
-	Terminal            string
-	Shell               string
-	ClusterLoginCommand string
+	Terminal            []string
+	Shell               []string
+	ClusterLoginCommand []string
 }
 
-func login(cluster string, config ClusterLauncher) tea.Cmd {
+func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	debug("login")
 
 	// Check if we have the necessary info to try to login
 	errs := []error{}
-	for _, n := range []string{config.Terminal, config.Shell, config.ClusterLoginCommand} {
-		if n == "" {
-			debug(fmt.Sprintf("%s is not set", n))
-			errs = append(errs, fmt.Errorf("%s is not set", n))
-		}
+	if launcher.Terminal == nil {
+		debug("Terminal is not set")
+		errs = append(errs, errors.New("Terminal is not set"))
+	}
+	if launcher.Shell == nil {
+		debug("Shell is not set")
+		errs = append(errs, errors.New("Shell is not set"))
+	}
+	if launcher.ClusterLoginCommand == nil {
+		debug("ClusterLoginCommand is not set")
+		errs = append(errs, errors.New("ClusterLoginCommand is not set"))
 	}
 
 	if len(errs) > 0 {
@@ -213,21 +225,16 @@ func login(cluster string, config ClusterLauncher) tea.Cmd {
 		}
 	}
 
-	// We have to slice the strings in case they have quotes or spaces
-	t := stringSlicer(config.Terminal)
-	s := stringSlicer(config.Shell)
-	l := stringSlicer(config.ClusterLoginCommand)
-
 	var args []string
-	args = append(args, t[1:]...)
+	args = append(args, launcher.Terminal[1:]...)
 	args = append(args, "--") // Terminal separator
-	args = append(args, s...)
-	args = append(args, l...)
+	args = append(args, launcher.Shell...)
+	args = append(args, launcher.ClusterLoginCommand...)
 	args = append(args, cluster)
 
 	// The first element of Terminal is the command to be executed, followed by args, in order
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.
-	c := exec.Command(t[0], args...)
+	c := exec.Command(launcher.Terminal[0], args...)
 
 	debug(c.String())
 	// TODO: What do we do with the stdout?  Anything?

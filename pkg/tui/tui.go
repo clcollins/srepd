@@ -44,7 +44,7 @@ type model struct {
 	err error
 
 	config   *pd.Config
-	editor   string
+	editor   []string
 	launcher ClusterLauncher
 
 	currentUser *pagerduty.User
@@ -101,7 +101,7 @@ func InitialModel(
 	teams []string,
 	user string,
 	ignoredusers []string,
-	editor string,
+	editor []string,
 	launcher ClusterLauncher,
 ) (tea.Model, tea.Cmd) {
 	debug("InitialModel")
