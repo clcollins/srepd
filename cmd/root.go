@@ -33,16 +33,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	cfgFile     = "srepd.yaml"
-	cfgFilePath = ".config/srepd/"
-	// Must not be aliases - must be real commands or links
-	defaultEditor          = "/usr/bin/vim"
-	defaultTerminal        = "/usr/bin/gnome-terminal"
-	defaultShell           = "/bin/bash"
-	defaultClusterLoginCmd = "/usr/local/bin/ocm backplane login"
-)
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "srepd",
@@ -132,6 +122,14 @@ func bindArgsToViper(cmd *cobra.Command) {
 }
 
 func init() {
+	// Must not be aliases - must be real commands or links
+	const (
+		defaultEditor          = "/usr/bin/vim"
+		defaultTerminal        = "/usr/bin/gnome-terminal"
+		defaultShell           = "/bin/bash"
+		defaultClusterLoginCmd = "/usr/local/bin/ocm backplane login"
+	)
+
 	cobra.OnInitialize(initConfig)
 	rootCmd.Flags().BoolP("debug", "d", false, "Enable debugging output")
 	rootCmd.Flags().StringP("editor", "e", defaultEditor, "Editor to use for notes; $EDITOR takes precedence")
@@ -142,6 +140,11 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	const (
+		cfgFile     = "srepd.yaml"
+		cfgFilePath = ".config/srepd/"
+	)
+
 	// Find home directory.
 	home, err := os.UserHomeDir()
 	cobra.CheckErr(err)
