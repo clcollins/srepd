@@ -235,14 +235,6 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	c := exec.Command(launcher.Terminal[0], args...)
 
 	debug(c.String())
-	// TODO: What do we do with the stdout?  Anything?
-	_, pipeErr := c.StdoutPipe()
-	if pipeErr != nil {
-		debug(pipeErr.Error())
-		return func() tea.Msg {
-			return loginFinishedMsg(pipeErr)
-		}
-	}
 	stderr, pipeErr := c.StderrPipe()
 	if pipeErr != nil {
 		debug(pipeErr.Error())
