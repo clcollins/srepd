@@ -15,12 +15,13 @@ import (
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
-const DEBUG = true
+var debugLogging = false
+
 const waitTime = time.Millisecond * 1
 const defaultInputPrompt = " $ "
 
 func debug(msg ...string) {
-	if !DEBUG {
+	if !debugLogging {
 		return
 	}
 	log.Printf("%s\n", msg)
@@ -42,6 +43,8 @@ type errMsg struct{ error }
 
 type model struct {
 	err error
+
+	debug bool
 
 	config   *pd.Config
 	editor   []string
@@ -97,6 +100,8 @@ func newIncidentViewer() viewport.Model {
 }
 
 func InitialModel(
+	// "d" is to avoid a conflict with the "debug" function
+	d bool,
 	token string,
 	teams []string,
 	user string,
@@ -104,6 +109,10 @@ func InitialModel(
 	editor []string,
 	launcher ClusterLauncher,
 ) (tea.Model, tea.Cmd) {
+	if d {
+		debugLogging = true
+	}
+
 	debug("InitialModel")
 	var err error
 

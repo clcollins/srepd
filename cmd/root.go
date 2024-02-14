@@ -55,14 +55,8 @@ but rather a simple tool to make on-call tasks easier.`,
 		}
 		defer f.Close()
 
-		if viper.IsSet("debug") {
-			log.Printf("Debugging enabled\n")
-		}
-
-		debug := false
-
 		if viper.GetBool("debug") {
-			debug = true
+			log.Printf("Debugging enabled\n")
 			for k, v := range viper.GetViper().AllSettings() {
 				if k == "token" {
 					v = "*****"
@@ -71,14 +65,8 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		if debug {
-			log.Printf("Using editor: `%v`\n", viper.GetString("editor"))
-			log.Printf("Using terminal: `%v`\n", viper.GetString("terminal"))
-			log.Printf("Using shell: `%v`\n", viper.GetString("shell"))
-			log.Printf("Using ClusterLoginCommand: `%v`\n", viper.GetString("cluster_login_command"))
-		}
-
 		m, _ := tui.InitialModel(
+			viper.GetBool("debug"),
 			viper.GetString("token"),
 			viper.GetStringSlice("teams"),
 			viper.GetString("silentuser"),
@@ -90,10 +78,6 @@ but rather a simple tool to make on-call tasks easier.`,
 				ClusterLoginCommand: viper.GetStringSlice("cluster_login_command"),
 			},
 		)
-
-		if debug {
-			log.Printf("%+v\n", m)
-		}
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err = p.Run()
