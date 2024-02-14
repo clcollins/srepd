@@ -2,14 +2,12 @@ package tui
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
@@ -206,11 +204,11 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	errs := []error{}
 	if launcher.Terminal == nil {
 		debug("Terminal is not set")
-		errs = append(errs, errors.New("Terminal is not set"))
+		errs = append(errs, errors.New("terminal is not set"))
 	}
 	if launcher.Shell == nil {
 		debug("Shell is not set")
-		errs = append(errs, errors.New("Shell is not set"))
+		errs = append(errs, errors.New("shell is not set"))
 	}
 	if launcher.ClusterLoginCommand == nil {
 		debug("ClusterLoginCommand is not set")
@@ -279,20 +277,6 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	return func() tea.Msg {
 		return loginFinishedMsg(nil)
 	}
-}
-
-func stringSlicer(s string) []string {
-	r := csv.NewReader(strings.NewReader(s))
-	r.Comma = ' '
-	record, err := r.Read()
-	if err != nil {
-		// TODO Figure out how to do proper error handling here
-		log.Fatal(err)
-	}
-
-	o := []string{}
-	o = append(o, record...)
-	return o
 }
 
 type clearSelectedIncidentsMsg string
