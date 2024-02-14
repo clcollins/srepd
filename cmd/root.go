@@ -36,20 +36,11 @@ import (
 const (
 	cfgFile     = "srepd.yaml"
 	cfgFilePath = ".config/srepd/"
-
 	// Must not be aliases - must be real commands or links
 	defaultEditor          = "/usr/bin/vim"
 	defaultTerminal        = "/usr/bin/gnome-terminal"
 	defaultShell           = "/bin/bash"
 	defaultClusterLoginCmd = "/usr/local/bin/ocm backplane login"
-)
-
-var (
-	debug                 bool
-	editor                string
-	terminal              string
-	shell                 string
-	cluster_login_command string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -63,6 +54,9 @@ reassigning to the next on-call, etc.  It is not intended
 to be a full-featured PagerDuty client, or kitchen sink, 
 but rather a simple tool to make on-call tasks easier.`,
 
+	PreRun: func(cmd *cobra.Command, args []string) {
+		bindArgsToViper(cmd)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := tea.LogToFile("debug.log", "debug")
 		if err != nil {
@@ -71,7 +65,14 @@ but rather a simple tool to make on-call tasks easier.`,
 		}
 		defer f.Close()
 
-		if debug {
+		if viper.IsSet("debug") {
+			log.Printf("Debugging enabled\n")
+		}
+
+		debug := false
+
+		if viper.GetBool("debug") {
+			debug = true
 			for k, v := range viper.GetViper().AllSettings() {
 				if k == "token" {
 					v = "*****"
@@ -80,59 +81,29 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		token := viper.GetString("token")
-		teams := viper.GetStringSlice("teams")
-		silentuser := viper.GetString("silentuser")
-		ignoredusers := viper.GetStringSlice("ignoredusers")
-
-		// The environment variable will always override the config file if set
-		if editor == "" {
-			editor = viper.GetString("editor")
-			if editor == "" {
-				editor = defaultEditor
-			}
-		}
-
-		if terminal == "" {
-			terminal = viper.GetString("terminal")
-			if terminal == "" {
-				terminal = defaultTerminal
-			}
-		}
-
-		if shell == "" {
-			shell = viper.GetString("shell")
-			if shell == "" {
-				shell = defaultShell
-			}
-		}
-
-		if cluster_login_command == "" {
-			cluster_login_command = viper.GetString("cluster_login_command")
-			if cluster_login_command == "" {
-				cluster_login_command = defaultClusterLoginCmd
-			}
-		}
-
 		if debug {
-			log.Printf("Using editor: `%v`\n", editor)
-			log.Printf("Using terminal: `%v`\n", terminal)
-			log.Printf("Using shell: `%v`\n", shell)
-			log.Printf("Using ClusterLoginCommand: `%v`\n", cluster_login_command)
+			log.Printf("Using editor: `%v`\n", viper.GetString("editor"))
+			log.Printf("Using terminal: `%v`\n", viper.GetString("terminal"))
+			log.Printf("Using shell: `%v`\n", viper.GetString("shell"))
+			log.Printf("Using ClusterLoginCommand: `%v`\n", viper.GetString("cluster_login_command"))
 		}
 
 		m, _ := tui.InitialModel(
-			token,
-			teams,
-			silentuser,
-			ignoredusers,
-			editor,
+			viper.GetString("token"),
+			viper.GetStringSlice("teams"),
+			viper.GetString("silentuser"),
+			viper.GetStringSlice("ignoredusers"),
+			viper.GetString("editor"),
 			tui.ClusterLauncher{
-				Terminal:            terminal,
-				Shell:               shell,
-				ClusterLoginCommand: cluster_login_command,
+				Terminal:            viper.GetString("terminal"),
+				Shell:               viper.GetString("shell"),
+				ClusterLoginCommand: viper.GetString("cluster_login_command"),
 			},
 		)
+
+		if debug {
+			log.Printf("%+v\n", m)
+		}
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err = p.Run()
@@ -151,13 +122,22 @@ func Execute() {
 	}
 }
 
+// bindArgsToViper binds the command line arguments to viper
+func bindArgsToViper(cmd *cobra.Command) {
+	viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
+	viper.BindPFlag("editor", cmd.Flags().Lookup("editor"))
+	viper.BindPFlag("terminal", cmd.Flags().Lookup("terminal"))
+	viper.BindPFlag("shell", cmd.Flags().Lookup("shell"))
+	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("clusterLoginCommand"))
+}
+
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debugging output")
-	rootCmd.PersistentFlags().StringVarP(&editor, "editor", "e", "", "Editor to use for notes; default: `$EDITOR`")
-	rootCmd.PersistentFlags().StringVarP(&terminal, "terminal", "t", "", "Terminal to use for exec commands; default: `/usr/bin/gnome-terminal`")
-	rootCmd.PersistentFlags().StringVarP(&shell, "shell", "s", "", "Shell to use for exec commands; default: `$SHELL`")
-	rootCmd.PersistentFlags().StringVarP(&cluster_login_command, "cluster_login_cmd", "c", "", "Cluster login command; default: `/usr/local/bin/ocm backplane login`")
+	rootCmd.Flags().BoolP("debug", "d", false, "Enable debugging output")
+	rootCmd.Flags().StringP("editor", "e", defaultEditor, "Editor to use for notes; $EDITOR takes precedence")
+	rootCmd.Flags().StringP("terminal", "t", defaultTerminal, "Terminal to use for exec commands")
+	rootCmd.Flags().StringP("shell", "s", defaultShell, "Shell to use for exec commands; $SHELL takes precedence")
+	rootCmd.Flags().StringP("clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command")
 }
 
 // initConfig reads in config file and ENV variables if set.
