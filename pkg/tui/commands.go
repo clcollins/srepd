@@ -128,22 +128,6 @@ func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 	}
 }
 
-type getCurrentUserMsg string
-type gotCurrentUserMsg struct {
-	user *pagerduty.User
-	err  error
-}
-
-func getCurrentUser(p *pd.Config) tea.Cmd {
-	return func() tea.Msg {
-		u, err := p.Client.GetCurrentUserWithContext(
-			context.Background(),
-			pagerduty.GetCurrentUserOptions{},
-		)
-		return gotCurrentUserMsg{u, err}
-	}
-}
-
 func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
 	for _, a := range i.Assignments {
 		for _, id := range ids {
