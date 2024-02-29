@@ -44,13 +44,9 @@ type errMsg struct{ error }
 type model struct {
 	err error
 
-	debug bool
-
 	config   *pd.Config
 	editor   []string
 	launcher ClusterLauncher
-
-	currentUser *pagerduty.User
 
 	table table.Model
 	input textinput.Model
@@ -128,8 +124,10 @@ func InitialModel(
 	}
 
 	// This is an ugly way to handle this error
+	// TODO: Turn this into an error message window view on failure instead of a panic
 	pd, err := pd.NewConfig(token, teams, user, ignoredusers)
 	if err != nil {
+		log.Fatal(err)
 		panic(err)
 	}
 	m.config = pd
@@ -141,10 +139,9 @@ func InitialModel(
 
 func (m model) Init() tea.Cmd {
 	debug("Init")
-	return tea.Batch(
-		updateIncidentList(m.config),
-		getCurrentUser(m.config),
-	)
+	return func() tea.Msg {
+		return updateIncidentList(m.config)
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -254,25 +251,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, renderIncident(&m))
 		}
 
-	// Command to get the current user
-	case getCurrentUserMsg:
-		debug("getCurrentUserMsg", fmt.Sprint(msg))
-		m.setStatus(gettingUserStatus)
-		if m.viewingIncident {
-			cmds = append(cmds, renderIncident(&m))
-		}
-
-	// Set the current user to the user returned from the getCurrentUser command
-	case gotCurrentUserMsg:
-		debug("gotCurrentUserMsg", fmt.Sprint(msg.user.ID))
-		m.currentUser = msg.user
-		if msg.err != nil {
-			m.setStatus(msg.err.Error())
-			log.Fatal(msg.err)
-			return m, nil
-		}
-		m.setStatus(fmt.Sprintf("got user %s", m.currentUser.Email))
-
 	// Nothing directly calls this yet
 	case updateIncidentListMsg:
 		debug("updateIncidentListMsg", fmt.Sprint(msg))
@@ -299,11 +277,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					rows = append(rows, table.Row{dot, i.ID, i.Title, i.Service.Summary})
 				}
 			} else {
-				if AssignedToUser(i, m.currentUser.ID) {
+				if AssignedToUser(i, m.config.CurrentUser.ID) {
 					acked := "T"
 					for _, a := range i.Acknowledgements {
-						debug(fmt.Sprintf("Acknowledger ID: %v, CurrentUserID: %v", a.Acknowledger.ID, m.currentUser.ID))
-						if a.Acknowledger.ID == m.currentUser.ID {
+						debug(fmt.Sprintf("Acknowledger ID: %v, CurrentUserID: %v", a.Acknowledger.ID, m.config.CurrentUser.ID))
+						if a.Acknowledger.ID == m.config.CurrentUser.ID {
 							acked = "A"
 						}
 					}

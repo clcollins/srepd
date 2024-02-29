@@ -38,6 +38,7 @@ type PagerDutyClient interface {
 // teams, silent user, and ignored users
 type Config struct {
 	Client       PagerDutyClient
+	CurrentUser  *pagerduty.User
 	Teams        []*pagerduty.Team
 	SilentUser   *pagerduty.User
 	IgnoredUsers []*pagerduty.User
@@ -48,6 +49,11 @@ func NewConfig(token string, teams []string, silentUser string, ignoredUsers []s
 	var err error
 
 	c.Client = newClient(token)
+
+	c.CurrentUser, err = c.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+	if err != nil {
+		return &c, fmt.Errorf("NewConfig(): failed to retrieve PagerDuty user: %v", err)
+	}
 
 	c.Teams, err = GetTeams(c.Client, teams)
 	if err != nil {
@@ -71,7 +77,7 @@ func NewConfig(token string, teams []string, silentUser string, ignoredUsers []s
 }
 
 func newClient(token string) PagerDutyClient {
-	return pagerduty.NewOAuthClient(token)
+	return pagerduty.NewClient(token)
 }
 
 func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
