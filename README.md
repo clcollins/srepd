@@ -25,6 +25,10 @@ Planned Features:
 
 SREPD uses the [Viper](https://github.com/spf13/viper) configuration setup, and will read required values from `~/.config/srepd/srepd.yaml`.
 
+Configuration variables have the following precedence: 
+
+`command line arguments > environment variables > config file values`
+
 **Required Values**
 
 * token: A PagerDuty Oauth Token
@@ -34,7 +38,10 @@ SREPD uses the [Viper](https://github.com/spf13/viper) configuration setup, and 
 **Optional Values**
 
 * ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.  It's recommended that the "silentuser" ID is in this list.
-* editor: Your choice of editor.  This will ALWAYS lose precedence to the `$EDITOR` environment variable, unless the ENV VAR is not set for some reason.
+* editor: Your choice of editor.  Defaults to the `$EDITOR` environment variable.
+* cluster_login_cmd: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
+* shell: Your choice of shell to use inside of launched terminal windows. Defaults to `$SHELL`.
+* terminal: Your choice of terminal to use when launching external commands. Defaults to `/usr/bin/gnome-terminal`.
 
 An example srepd.yaml file might look like so:
 
@@ -43,6 +50,17 @@ An example srepd.yaml file might look like so:
 # Editor will always be overridden by the ENV variable
 # unless the ENV is not set for some reason
 editor: vim
+
+# Cluster Login options
+cluster_login_cmd: "ocm-container"
+shell: /bin/bash
+terminal: /usr/bin/gnome-terminal
+
+# Note that aliases, etc, are not sourced by the shell command when launching.
+# This means, for example, that `ocm-container`, as normally setup using an alias, does not work, but calling the command or a symlink directly does.
+
+# More complicated commands can be specified with space-separated strings
+# terminal: "flatpak run org.contourterminal.Contour"
 
 # PagerDutyOauthToken
 token: <pagerDuty Oauth Token>

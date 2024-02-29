@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -168,14 +169,20 @@ type editorFinishedMsg struct {
 	file *os.File
 }
 
-func openEditorCmd(editor string) tea.Cmd {
+func openEditorCmd(editor []string) tea.Cmd {
+	var args []string
+
 	file, err := os.CreateTemp(os.TempDir(), "")
 	if err != nil {
 		return func() tea.Msg {
 			return errMsg{error: err}
 		}
 	}
-	c := exec.Command(editor, file.Name())
+
+	args = append(args, editor[1:]...)
+	args = append(args, file.Name())
+
+	c := exec.Command(editor[0], args...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return editorFinishedMsg{err, file}
 	})
@@ -184,26 +191,81 @@ func openEditorCmd(editor string) tea.Cmd {
 type loginMsg string
 type loginFinishedMsg error
 
-// Must not be aliases - must be real commands or links
-const defaultTerm = "/usr/bin/gnome-terminal"
-const defaultShell = "/bin/bash"
-const defaultClusterCmd = "srepd_exec_ocm_container"
+type ClusterLauncher struct {
+	Terminal            []string
+	Shell               []string
+	ClusterLoginCommand []string
+}
 
-func login(cluster string) tea.Cmd {
+func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	debug("login")
-	c := exec.Command(defaultTerm, "--", defaultShell, defaultClusterCmd, cluster)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	debug(c.String())
-	err := c.Start()
-	if err != nil {
-		// TODO https://github.com/clcollins/srepd/issues/3 - not handling error messages properly
+
+	// Check if we have the necessary info to try to login
+	errs := []error{}
+	if launcher.Terminal == nil {
+		debug("Terminal is not set")
+		errs = append(errs, errors.New("terminal is not set"))
+	}
+	if launcher.Shell == nil {
+		debug("Shell is not set")
+		errs = append(errs, errors.New("shell is not set"))
+	}
+	if launcher.ClusterLoginCommand == nil {
+		debug("ClusterLoginCommand is not set")
+		errs = append(errs, errors.New("ClusterLoginCommand is not set"))
+	}
+
+	if len(errs) > 0 {
+		err := fmt.Errorf("login error: %v", errs)
 		debug(err.Error())
 		return func() tea.Msg {
-			return errMsg{err}
+			return loginFinishedMsg(err)
 		}
 	}
+
+	var args []string
+	args = append(args, launcher.Terminal[1:]...)
+	args = append(args, "--") // Terminal separator
+	args = append(args, launcher.Shell...)
+	args = append(args, launcher.ClusterLoginCommand...)
+	args = append(args, cluster)
+
+	// The first element of Terminal is the command to be executed, followed by args, in order
+	// This handles if folks use, eg: flatpak run <some package> as a terminal.
+	c := exec.Command(launcher.Terminal[0], args...)
+
+	debug(c.String())
+	stderr, pipeErr := c.StderrPipe()
+	if pipeErr != nil {
+		debug(pipeErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(pipeErr)
+		}
+	}
+
+	err := c.Start()
+	if err != nil {
+		debug(err.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(err)
+		}
+	}
+
+	out, err := io.ReadAll(stderr)
+	if err != nil {
+		debug(err.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg(err)
+		}
+	}
+
+	if len(out) > 0 {
+		debug(fmt.Sprintf("login error: %s", out))
+		return func() tea.Msg {
+			return loginFinishedMsg(fmt.Errorf("%s", out))
+		}
+	}
+
 	return func() tea.Msg {
 		return loginFinishedMsg(nil)
 	}

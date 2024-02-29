@@ -15,12 +15,13 @@ import (
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
-const DEBUG = true
+var debugLogging = false
+
 const waitTime = time.Millisecond * 1
 const defaultInputPrompt = " $ "
 
 func debug(msg ...string) {
-	if !DEBUG {
+	if !debugLogging {
 		return
 	}
 	log.Printf("%s\n", msg)
@@ -43,8 +44,11 @@ type errMsg struct{ error }
 type model struct {
 	err error
 
-	config *pd.Config
-	editor string
+	debug bool
+
+	config   *pd.Config
+	editor   []string
+	launcher ClusterLauncher
 
 	currentUser *pagerduty.User
 
@@ -95,15 +99,29 @@ func newIncidentViewer() viewport.Model {
 	return vp
 }
 
-func InitialModel(token string, teams []string, user string, ignoredusers []string, editor string) (tea.Model, tea.Cmd) {
+func InitialModel(
+	// "d" is to avoid a conflict with the "debug" function
+	d bool,
+	token string,
+	teams []string,
+	user string,
+	ignoredusers []string,
+	editor []string,
+	launcher ClusterLauncher,
+) (tea.Model, tea.Cmd) {
+	if d {
+		debugLogging = true
+	}
+
 	debug("InitialModel")
 	var err error
 
 	m := model{
-		editor: editor,
-		help:   newHelp(),
-		table:  newTableWithStyles(),
-		input:  newTextInput(),
+		editor:   editor,
+		launcher: launcher,
+		help:     newHelp(),
+		table:    newTableWithStyles(),
+		input:    newTextInput(),
 		// INCIDENTVIEWER
 		incidentViewer: newIncidentViewer(),
 		status:         loadingIncidentsStatus,
@@ -335,13 +353,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.selectedIncidentAlerts) == 1 {
 			cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
 			m.setStatus(fmt.Sprintf("logging into cluster %s", cluster))
-			return m, func() tea.Msg { return login(cluster) }
+			return m, func() tea.Msg { return login(cluster, m.launcher) }
 		}
 
 		// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
 		cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
 		m.setStatus(fmt.Sprintf("multiple alerts for incident - logging into cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
-		return m, func() tea.Msg { return login(cluster) }
+		return m, func() tea.Msg { return login(cluster, m.launcher) }
 
 	case waitForSelectedIncidentThenDoMsg:
 		debug("waitForSelectedIncidentThenDoMsg", fmt.Sprint(msg.action, msg.msg))

@@ -33,14 +33,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-// TODO https://github.com/clcollins/srepd/issues/6 - allow custom commands
-const cfgFile = "srepd.yaml"
-const cfgFilePath = ".config/srepd/"
-const defaultEditor = "/usr/bin/vim"
-
-var debug bool
-var editor string
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "srepd",
@@ -52,6 +44,9 @@ reassigning to the next on-call, etc.  It is not intended
 to be a full-featured PagerDuty client, or kitchen sink, 
 but rather a simple tool to make on-call tasks easier.`,
 
+	PreRun: func(cmd *cobra.Command, args []string) {
+		bindArgsToViper(cmd)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := tea.LogToFile("debug.log", "debug")
 		if err != nil {
@@ -60,7 +55,8 @@ but rather a simple tool to make on-call tasks easier.`,
 		}
 		defer f.Close()
 
-		if debug {
+		if viper.GetBool("debug") {
+			log.Printf("Debugging enabled\n")
 			for k, v := range viper.GetViper().AllSettings() {
 				if k == "token" {
 					v = "*****"
@@ -69,20 +65,19 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 		}
 
-		token := viper.GetString("token")
-		teams := viper.GetStringSlice("teams")
-		silentuser := viper.GetString("silentuser")
-		ignoredusers := viper.GetStringSlice("ignoredusers")
-
-		// The environment variable will always override the config file if set
-		if editor == "" {
-			editor = viper.GetString("editor")
-			if editor == "" {
-				editor = defaultEditor
-			}
-		}
-
-		m, _ := tui.InitialModel(token, teams, silentuser, ignoredusers, editor)
+		m, _ := tui.InitialModel(
+			viper.GetBool("debug"),
+			viper.GetString("token"),
+			viper.GetStringSlice("teams"),
+			viper.GetString("silentuser"),
+			viper.GetStringSlice("ignoredusers"),
+			viper.GetStringSlice("editor"),
+			tui.ClusterLauncher{
+				Terminal:            viper.GetStringSlice("terminal"),
+				Shell:               viper.GetStringSlice("shell"),
+				ClusterLoginCommand: viper.GetStringSlice("cluster_login_command"),
+			},
+		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err = p.Run()
@@ -101,14 +96,39 @@ func Execute() {
 	}
 }
 
+// bindArgsToViper binds the command line arguments to viper
+func bindArgsToViper(cmd *cobra.Command) {
+	viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
+	viper.BindPFlag("editor", cmd.Flags().Lookup("editor"))
+	viper.BindPFlag("terminal", cmd.Flags().Lookup("terminal"))
+	viper.BindPFlag("shell", cmd.Flags().Lookup("shell"))
+	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("clusterLoginCommand"))
+}
+
 func init() {
+	// Must not be aliases - must be real commands or links
+	const (
+		defaultEditor          = "/usr/bin/vim"
+		defaultTerminal        = "/usr/bin/gnome-terminal"
+		defaultShell           = "/bin/bash"
+		defaultClusterLoginCmd = "/usr/local/bin/ocm backplane login"
+	)
+
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debugging output")
-	rootCmd.PersistentFlags().StringVarP(&editor, "editor", "e", "", "Editor to use for notes; default is `$EDITOR` environment variable")
+	rootCmd.Flags().BoolP("debug", "d", false, "Enable debugging output")
+	rootCmd.Flags().StringP("editor", "e", defaultEditor, "Editor to use for notes; $EDITOR takes precedence")
+	rootCmd.Flags().StringP("terminal", "t", defaultTerminal, "Terminal to use for exec commands")
+	rootCmd.Flags().StringP("shell", "s", defaultShell, "Shell to use for exec commands; $SHELL takes precedence")
+	rootCmd.Flags().StringP("clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command")
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	const (
+		cfgFile     = "srepd.yaml"
+		cfgFilePath = ".config/srepd/"
+	)
+
 	// Find home directory.
 	home, err := os.UserHomeDir()
 	cobra.CheckErr(err)
