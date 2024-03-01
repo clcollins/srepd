@@ -20,6 +20,8 @@ func (k keymap) FullHelp() [][]key.Binding {
 type keymap struct {
 	Up      key.Binding
 	Down    key.Binding
+	Top     key.Binding
+	Bottom  key.Binding
 	Back    key.Binding
 	Enter   key.Binding
 	Quit    key.Binding
@@ -42,6 +44,14 @@ var defaultKeyMap = keymap{
 	Down: key.NewBinding(
 		key.WithKeys("j", "down"),
 		key.WithHelp("↓/j", "down"),
+	),
+	Top: key.NewBinding(
+		key.WithKeys("g"),
+		key.WithHelp("g", "jump to top"),
+	),
+	Bottom: key.NewBinding(
+		key.WithKeys("G"),
+		key.WithHelp("G", "jump to bottom"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "ctrl+c"),

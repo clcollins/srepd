@@ -535,6 +535,12 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Down):
 			m.table.MoveDown(1)
 
+		case key.Matches(msg, defaultKeyMap.Top):
+			m.table.GotoTop()
+
+		case key.Matches(msg, defaultKeyMap.Bottom):
+			m.table.GotoBottom()
+
 		case key.Matches(msg, defaultKeyMap.Enter):
 			m.viewingIncident = true
 			return m, tea.Sequence(
