@@ -48,7 +48,9 @@ but rather a simple tool to make on-call tasks easier.`,
 		bindArgsToViper(cmd)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := tea.LogToFile("debug.log", "debug")
+		home, err := os.UserHomeDir()
+		cobra.CheckErr(err)
+		f, err := tea.LogToFile(home+"/.config/srepd/debug.log", "debug")
 		if err != nil {
 			fmt.Println("fatal:", err)
 			os.Exit(1)
@@ -115,7 +117,7 @@ func init() {
 	)
 
 	cobra.OnInitialize(initConfig)
-	rootCmd.Flags().BoolP("debug", "d", false, "Enable debugging output")
+	rootCmd.Flags().BoolP("debug", "d", false, "Enable debug logging (~/.config/srepd/debug.log)")
 	rootCmd.Flags().StringP("editor", "e", defaultEditor, "Editor to use for notes; $EDITOR takes precedence")
 	rootCmd.Flags().StringP("terminal", "t", defaultTerminal, "Terminal to use for exec commands")
 	rootCmd.Flags().StringP("shell", "s", defaultShell, "Shell to use for exec commands; $SHELL takes precedence")
