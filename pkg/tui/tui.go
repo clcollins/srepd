@@ -120,7 +120,7 @@ func InitialModel(
 		input:    newTextInput(),
 		// INCIDENTVIEWER
 		incidentViewer: newIncidentViewer(),
-		status:         loadingIncidentsStatus,
+		status:         "",
 	}
 
 	// This is an ugly way to handle this error
@@ -139,9 +139,7 @@ func InitialModel(
 
 func (m model) Init() tea.Cmd {
 	debug("Init")
-	return func() tea.Msg {
-		return updateIncidentList(m.config)
-	}
+	return func() tea.Msg { return updateIncidentListMsg("sender: Init") }
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -265,35 +263,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.incidentList = msg.incidents
-		var rows []table.Row
-
 		var ignoredUsersList []string
+
 		for _, i := range m.config.IgnoredUsers {
 			ignoredUsersList = append(ignoredUsersList, i.ID)
 		}
+
+		var totalIncidentCount int
+		var rows []table.Row
+
 		for _, i := range msg.incidents {
-			if m.teamMode {
-				if !AssignedToAnyUsers(i, ignoredUsersList) {
-					rows = append(rows, table.Row{dot, i.ID, i.Title, i.Service.Summary})
-				}
-			} else {
-				if AssignedToUser(i, m.config.CurrentUser.ID) {
-					acked := "T"
-					for _, a := range i.Acknowledgements {
-						debug(fmt.Sprintf("Acknowledger ID: %v, CurrentUserID: %v", a.Acknowledger.ID, m.config.CurrentUser.ID))
-						if a.Acknowledger.ID == m.config.CurrentUser.ID {
-							acked = "A"
-						}
+			// If the incident is not AssignedToAnyUsers in the ignoredUsersList, add it to the table
+			if !AssignedToAnyUsers(i, ignoredUsersList) {
+
+				totalIncidentCount++
+				if m.teamMode {
+					rows = append(rows, table.Row{acknowledged(i.Acknowledgements), i.ID, i.Title, i.Service.Summary})
+				} else {
+					if AssignedToUser(i, m.config.CurrentUser.ID) {
+						rows = append(rows, table.Row{acknowledged(i.Acknowledgements), i.ID, i.Title, i.Service.Summary})
 					}
-					rows = append(rows, table.Row{acked, i.ID, i.Title, i.Service.Summary})
 				}
 			}
 		}
+
 		m.table.SetRows(rows)
-		if len(msg.incidents) == 1 {
-			m.setStatus(fmt.Sprintf("retrieved %d incident...", len(m.table.Rows())))
+		if totalIncidentCount == 1 {
+			m.setStatus(fmt.Sprintf("showing %d/%d incident...", len(m.table.Rows()), totalIncidentCount))
 		} else {
-			m.setStatus(fmt.Sprintf("retrieved %d incidents...", len(m.table.Rows())))
+			m.setStatus(fmt.Sprintf("showing %d/%d incidents...", len(m.table.Rows()), totalIncidentCount))
 		}
 
 	case editorFinishedMsg:

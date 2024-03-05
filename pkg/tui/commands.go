@@ -61,6 +61,7 @@ type updatedIncidentListMsg struct {
 }
 
 func updateIncidentList(p *pd.Config) tea.Cmd {
+	debug("updateIncidentList")
 	return func() tea.Msg {
 		opts := pd.NewListIncidentOptsFromDefaults()
 		opts.TeamIDs = getTeamsAsStrings(p)
@@ -77,6 +78,7 @@ type renderedIncidentMsg struct {
 }
 
 func renderIncident(m *model) tea.Cmd {
+	debug("renderIncident")
 	return func() tea.Msg {
 		content, err := renderIncidentMarkdown(m.template())
 		if err != nil {
@@ -95,6 +97,7 @@ type gotIncidentMsg struct {
 }
 
 func getIncident(p *pd.Config, id string) tea.Cmd {
+	debug("getIncident")
 	return func() tea.Msg {
 		ctx := context.Background()
 		i, err := p.Client.GetIncidentWithContext(ctx, id)
@@ -120,6 +123,7 @@ type gotIncidentNotesMsg struct {
 	err   error
 }
 
+// getIncidentNotes returns a command that fetches the notes for the given incident
 func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 	debug("getIncidentNotes")
 	return func() tea.Msg {
@@ -128,7 +132,9 @@ func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 	}
 }
 
+// AssignedToAnyUsers returns true if the incident is assigned to any of the given users
 func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
+	debug("AssignedToAnyUsers")
 	for _, a := range i.Assignments {
 		for _, id := range ids {
 			if a.Assignee.ID == id {
@@ -139,7 +145,9 @@ func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
 	return false
 }
 
+// AssignedToUser returns true if the incident is assigned to the given user
 func AssignedToUser(i pagerduty.Incident, id string) bool {
+	debug("AssignedToUser")
 	for _, a := range i.Assignments {
 		if a.Assignee.ID == id {
 			return true
@@ -154,6 +162,7 @@ type editorFinishedMsg struct {
 }
 
 func openEditorCmd(editor []string) tea.Cmd {
+	debug("openEditorCmd")
 	var args []string
 
 	file, err := os.CreateTemp(os.TempDir(), "")
@@ -268,6 +277,7 @@ type acknowledgedIncidentsMsg struct {
 type waitForSelectedIncidentsThenAcknowledgeMsg string
 
 func acknowledgeIncidents(p *pd.Config, incidents []*pagerduty.Incident) tea.Cmd {
+	debug("acknowledgeIncidents")
 	return func() tea.Msg {
 		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
 		if err != nil {
@@ -288,6 +298,7 @@ type reassignIncidentsMsg struct {
 type reassignedIncidentsMsg []pagerduty.Incident
 
 func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, users []*pagerduty.User) tea.Cmd {
+	debug("reassignIncidents")
 	return func() tea.Msg {
 		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
 		if err != nil {
@@ -309,6 +320,7 @@ type waitForSelectedIncidentsThenSilenceMsg string
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
 
 func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
+	debug("silenceIncidents")
 	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage"
 	// because it's really just a reassignment
 	log.Printf("silence requested for incident(s) %v; reassigning to %v", i, u)
@@ -329,6 +341,7 @@ type addedIncidentNoteMsg struct {
 }
 
 func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, content *os.File) tea.Cmd {
+	debug("addNoteToIncident")
 	return func() tea.Msg {
 		defer content.Close()
 
@@ -349,6 +362,7 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, content *os.F
 }
 
 func getTeamsAsStrings(p *pd.Config) []string {
+	debug("getTeamsAsStrings")
 	var teams []string
 	for _, t := range p.Teams {
 		teams = append(teams, t.ID)
@@ -357,6 +371,7 @@ func getTeamsAsStrings(p *pd.Config) []string {
 }
 
 func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
+	debug("getDetailFieldFromAlert")
 	if a.Body["details"] != nil {
 
 		if a.Body["details"].(map[string]interface{})[f] != nil {
@@ -367,4 +382,14 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 	}
 	debug("alert body \"details\" is nil")
 	return ""
+}
+
+// acknowledged returns "A" for "acknowledged" if the incident has been acknowledged, or a dot for "triggered" otherwise
+func acknowledged(a []pagerduty.Acknowledgement) string {
+	debug("acknowledged")
+	if len(a) > 0 {
+		return "A"
+	}
+
+	return dot
 }
