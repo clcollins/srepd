@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
-	"log"
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -39,6 +38,13 @@ var (
 	}
 	helpStyle           = lipgloss.NewStyle().Foreground(lilac)
 	incidentViewerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(gray)).Padding(2)
+	errorStyle          = lipgloss.NewStyle().
+				Bold(true).
+				Width(64).
+				Foreground(lipgloss.AdaptiveColor{Light: "#E11C9C", Dark: "#FF62DA"}).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.AdaptiveColor{Light: "#E11C9C", Dark: "#FF62DA"}).
+				Padding(1, 3, 1, 3)
 )
 
 func (m model) renderHeader() string {
@@ -76,21 +82,23 @@ func statusArea(s string) string {
 	return fmt.Sprintf(fstring, s)
 }
 
-func (m model) template() string {
+func (m model) template() (string, error) {
 	debug("template")
 	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
 	if err != nil {
-		log.Fatal(err)
+		// TODO: Figure out how to handle this with a proper errMsg
+		return "", err
 	}
 
 	o := new(bytes.Buffer)
 	summary := summarize(m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes)
 	err = template.Execute(o, summary)
 	if err != nil {
-		log.Fatal(err)
+		// TODO: Figure out how to handle this with a proper errMsg
+		return "", err
 	}
 
-	return o.String()
+	return o.String(), nil
 }
 
 func summarize(i *pagerduty.Incident, a []pagerduty.IncidentAlert, n []pagerduty.IncidentNote) incidentSummary {

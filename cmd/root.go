@@ -84,7 +84,8 @@ but rather a simple tool to make on-call tasks easier.`,
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err = p.Run()
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println("fatal:", err)
+			os.Exit(1)
 		}
 	},
 }
