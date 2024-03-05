@@ -21,6 +21,7 @@ type PagerDutyClientInterface interface {
 	GetCurrentUserWithContext(ctx context.Context, opts pagerduty.GetCurrentUserOptions) (*pagerduty.User, error)
 	GetIncidentWithContext(ctx context.Context, id string) (*pagerduty.Incident, error)
 	GetTeamWithContext(ctx context.Context, id string) (*pagerduty.Team, error)
+	ListMembersWithContext(ctx context.Context, id string, opts pagerduty.ListTeamMembersOptions) (*pagerduty.ListTeamMembersResponse, error)
 	GetUserWithContext(ctx context.Context, id string, opts pagerduty.GetUserOptions) (*pagerduty.User, error)
 	ListIncidentAlertsWithContext(ctx context.Context, id string, opts pagerduty.ListIncidentAlertsOptions) (*pagerduty.ListAlertsResponse, error)
 	ListIncidentsWithContext(ctx context.Context, opts pagerduty.ListIncidentsOptions) (*pagerduty.ListIncidentsResponse, error)
@@ -37,9 +38,13 @@ type PagerDutyClient interface {
 // Config is a struct that holds the PagerDuty client used for all the PagerDuty calls, and the config info for
 // teams, silent user, and ignored users
 type Config struct {
-	Client       PagerDutyClient
-	CurrentUser  *pagerduty.User
-	Teams        []*pagerduty.Team
+	Client      PagerDutyClient
+	CurrentUser *pagerduty.User
+
+	// List of the users in the Teams
+	TeamsMemberIDs []string
+	Teams          []*pagerduty.Team
+
 	SilentUser   *pagerduty.User
 	IgnoredUsers []*pagerduty.User
 }
@@ -52,23 +57,28 @@ func NewConfig(token string, teams []string, silentUser string, ignoredUsers []s
 
 	c.CurrentUser, err = c.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
 	if err != nil {
-		return &c, fmt.Errorf("NewConfig(): failed to retrieve PagerDuty user: %v", err)
+		return &c, fmt.Errorf("pd.NewConfig(): failed to retrieve PagerDuty user: %v", err)
 	}
 
 	c.Teams, err = GetTeams(c.Client, teams)
 	if err != nil {
-		return &c, fmt.Errorf("NewConfig(): failed to get team(s) `%v`: %v", teams, err)
+		return &c, fmt.Errorf("pd.NewConfig(): failed to get team(s) `%v`: %v", teams, err)
+	}
+
+	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams)
+	if err != nil {
+		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
 	}
 
 	c.SilentUser, err = GetUser(c.Client, silentUser, pagerduty.GetUserOptions{})
 	if err != nil {
-		return &c, fmt.Errorf("NewConfig(): failed to get silent user: %v", err)
+		return &c, fmt.Errorf("pd.NewConfig(): failed to get silent user: %v", err)
 	}
 
 	for _, i := range ignoredUsers {
 		user, err := GetUser(c.Client, i, pagerduty.GetUserOptions{})
 		if err != nil {
-			return &c, fmt.Errorf("NewConfig(): failed to get user for ignore list `%v`: %v", i, err)
+			return &c, fmt.Errorf("pd.NewConfig(): failed to get user for ignore list `%v`: %v", i, err)
 		}
 		c.IgnoredUsers = append(c.IgnoredUsers, user)
 	}
@@ -108,13 +118,13 @@ func AcknowledgeIncident(client PagerDutyClient, incidents []*pagerduty.Incident
 	for {
 		response, err := client.ManageIncidentsWithContext(ctx, user.Email, opts)
 		if err != nil {
-			return i, fmt.Errorf("AcknowledgeIncident(): failed to acknowledge incident(s) `%v`: %v", incidents, err)
+			return i, fmt.Errorf("pd.AcknowledgeIncident(): failed to acknowledge incident(s) `%v`: %v", incidents, err)
 		}
 
 		i = append(i, response.Incidents...)
 
 		if response.More {
-			panic("AcknowledgeIncident(): PagerDuty response indicated more data available")
+			panic("pd.AcknowledgeIncident(): PagerDuty response indicated more data available")
 		}
 
 		if !response.More {
@@ -133,7 +143,7 @@ func GetAlerts(client PagerDutyClient, id string, opts pagerduty.ListIncidentAle
 	for {
 		response, err := client.ListIncidentAlertsWithContext(ctx, id, opts)
 		if err != nil {
-			return a, fmt.Errorf("GetAlerts(): failed to get alerts for incident `%v`: %v", id, err)
+			return a, fmt.Errorf("pd.GetAlerts(): failed to get alerts for incident `%v`: %v", id, err)
 		}
 
 		a = append(a, response.Alerts...)
@@ -154,7 +164,7 @@ func GetIncident(client PagerDutyClient, id string) (*pagerduty.Incident, error)
 
 	i, err := client.GetIncidentWithContext(ctx, id)
 	if err != nil {
-		return i, fmt.Errorf("GetIncident(): failed to get incident `%v`: %v", id, err)
+		return i, fmt.Errorf("pd.GetIncident(): failed to get incident `%v`: %v", id, err)
 	}
 
 	return i, nil
@@ -167,7 +177,7 @@ func GetIncidents(client PagerDutyClient, opts pagerduty.ListIncidentsOptions) (
 	for {
 		response, err := client.ListIncidentsWithContext(ctx, opts)
 		if err != nil {
-			return i, fmt.Errorf("GetIncidents(): failed to get incidents : %v", err)
+			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents : %v", err)
 		}
 
 		i = append(i, response.Incidents...)
@@ -188,7 +198,7 @@ func GetNotes(client PagerDutyClient, id string) ([]pagerduty.IncidentNote, erro
 
 	n, err := client.ListIncidentNotesWithContext(ctx, id)
 	if err != nil {
-		return n, fmt.Errorf("GetNotes(): failed to get incident notes `%v`: %v", id, err)
+		return n, fmt.Errorf("pd.GetNotes(): failed to get incident notes `%v`: %v", id, err)
 	}
 
 	return n, nil
@@ -201,12 +211,30 @@ func GetTeams(client PagerDutyClient, teams []string) ([]*pagerduty.Team, error)
 	for _, i := range teams {
 		team, err := client.GetTeamWithContext(ctx, i)
 		if err != nil {
-			return t, fmt.Errorf("GetTeams(): failed to find PagerDuty team `%v`: %v", i, err)
+			return t, fmt.Errorf("pd.GetTeams(): failed to find PagerDuty team `%v`: %v", i, err)
 		}
 		t = append(t, team)
 	}
 
 	return t, nil
+}
+
+func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team) ([]string, error) {
+	var ctx = context.Background()
+	var u []string
+
+	for _, team := range teams {
+		response, err := client.ListMembersWithContext(ctx, team.ID, pagerduty.ListTeamMembersOptions{})
+		if err != nil {
+			return u, fmt.Errorf("pd.GetUsers(): failed to retrieve users for PagerDuty team `%v`: %v", team.ID, err)
+		}
+
+		for _, member := range response.Members {
+			u = append(u, member.User.ID)
+		}
+	}
+
+	return u, nil
 }
 
 func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (*pagerduty.User, error) {
@@ -215,7 +243,7 @@ func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (
 
 	u, err := client.GetUserWithContext(ctx, id, opts)
 	if err != nil {
-		return u, fmt.Errorf("GetUser(): failed to find PagerDuty user `%v`: %v", id, err)
+		return u, fmt.Errorf("pd.GetUser(): failed to find PagerDuty user `%v`: %v", id, err)
 	}
 
 	return u, nil
@@ -251,7 +279,7 @@ func ReassignIncidents(client PagerDutyClient, incidents []*pagerduty.Incident, 
 
 		if response.More {
 			// If we ever do get a "More" response, we we need to handle it, so panic to call attention to the problem
-			panic("ReassignIncidents(): PagerDuty response indicated more data available")
+			panic("pd.ReassignIncidents(): PagerDuty response indicated more data available")
 		}
 
 		i = append(i, response.Incidents...)
