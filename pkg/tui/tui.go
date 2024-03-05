@@ -38,7 +38,6 @@ func (m *model) setStatus(msg string) {
 	log.Printf("%s\n", d)
 }
 
-// TODO https://github.com/clcollins/srepd/issues/3 - not handling error messages properly
 type errMsg struct{ error }
 
 type model struct {
@@ -279,32 +278,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.incidentList = msg.incidents
-		var ignoredUsersList []string
-
-		for _, i := range m.config.IgnoredUsers {
-			ignoredUsersList = append(ignoredUsersList, i.ID)
-		}
 
 		var totalIncidentCount int
 		var rows []table.Row
 
-		debug("filtering incidents by user and ignoredUsersList")
 		for _, i := range msg.incidents {
-			// If the incident is not AssignedToAnyUsers in the ignoredUsersList, add it to the table
-			if !AssignedToAnyUsers(i, ignoredUsersList) {
-
-				totalIncidentCount++
-				if m.teamMode {
+			totalIncidentCount++
+			if m.teamMode {
+				rows = append(rows, table.Row{acknowledged(i.Acknowledgements), i.ID, i.Title, i.Service.Summary})
+			} else {
+				if AssignedToUser(i, m.config.CurrentUser.ID) {
 					rows = append(rows, table.Row{acknowledged(i.Acknowledgements), i.ID, i.Title, i.Service.Summary})
-				} else {
-					if AssignedToUser(i, m.config.CurrentUser.ID) {
-						rows = append(rows, table.Row{acknowledged(i.Acknowledgements), i.ID, i.Title, i.Service.Summary})
-					}
 				}
 			}
 		}
 
 		m.table.SetRows(rows)
+
 		if totalIncidentCount == 1 {
 			m.setStatus(fmt.Sprintf("showing %d/%d incident...", len(m.table.Rows()), totalIncidentCount))
 		} else {
