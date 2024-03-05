@@ -124,13 +124,12 @@ func InitialModel(
 	}
 
 	// This is an ugly way to handle this error
-	// TODO: Turn this into an error message window view on failure instead of a panic
+	// We have to set the m.err here instead of how the errMsg is handled
+	// because the Init() occurs before the Update() and the errMsg is not
+	// preserved
 	pd, err := pd.NewConfig(token, teams, user, ignoredusers)
-	if err != nil {
-		log.Fatal(err)
-		panic(err)
-	}
 	m.config = pd
+	m.err = err
 
 	return m, func() tea.Msg {
 		return errMsg{err}
@@ -139,6 +138,9 @@ func InitialModel(
 
 func (m model) Init() tea.Cmd {
 	debug("Init")
+	if m.err != nil {
+		return func() tea.Msg { return errMsg{m.err} }
+	}
 	return func() tea.Msg { return updateIncidentListMsg("sender: Init") }
 }
 
@@ -149,10 +151,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case errMsg:
-		debug("errMsg")
+		debug(fmt.Sprintf("errMsg: %v", msg))
 		m.setStatus(msg.Error())
 		m.err = msg
-		log.Fatal(m.err)
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -187,6 +188,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Default commands for the table view
 		switch {
+		case m.err != nil:
+			return switchErrorFocusMode(m, msg)
 		case m.viewingIncident:
 			return switchIncidentFocusMode(m, msg)
 		case m.input.Focused():
@@ -205,9 +208,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gotIncidentMsg:
 		debug("gotIncidentMsg", "TRUNCATED")
 		if msg.err != nil {
-			m.setStatus(msg.err.Error())
-			log.Fatal(msg.err)
-			return m, nil
+			return m, func() tea.Msg {
+				return errMsg{msg.err}
+			}
 		}
 
 		m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
@@ -220,14 +223,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gotIncidentNotesMsg:
 		debug("gotIncidentNotesMsg", "TRUNCATED")
 		if msg.err != nil {
-			m.setStatus(msg.err.Error())
-			log.Fatal(msg.err)
-			return m, nil
+			return m, func() tea.Msg {
+				return errMsg{msg.err}
+			}
 		}
 
 		// CANNOT refer to the m.SelectedIncident, because it may not have
 		// completed yet, and will be nil
-		m.setStatus(fmt.Sprintf("got %d notes for incident", len(msg.notes)))
+		switch {
+		case len(msg.notes) == 1:
+			m.setStatus(fmt.Sprintf("got %d note for incident", len(msg.notes)))
+		case len(msg.notes) > 1:
+			m.setStatus(fmt.Sprintf("got %d notes for incident", len(msg.notes)))
+		}
+
 		m.selectedIncidentNotes = msg.notes
 		if m.viewingIncident {
 			cmds = append(cmds, renderIncident(&m))
@@ -236,14 +245,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gotIncidentAlertsMsg:
 		debug("gotIncidentAlertsMsg", "TRUNCATED")
 		if msg.err != nil {
-			m.setStatus(msg.err.Error())
-			log.Fatal(msg.err)
-			return m, nil
+			return m, func() tea.Msg {
+				return errMsg{msg.err}
+			}
 		}
 
 		// CANNOT refer to the m.SelectedIncident, because it may not have
 		// completed yet, and will be nil
-		m.setStatus(fmt.Sprintf("got %d alerts for incident", len(msg.alerts)))
+		switch {
+		case len(msg.alerts) == 1:
+			m.setStatus(fmt.Sprintf("got %d alert for incident", len(msg.alerts)))
+		case len(msg.alerts) > 1:
+			m.setStatus(fmt.Sprintf("got %d alerts for incident", len(msg.alerts)))
+		}
+
 		m.selectedIncidentAlerts = msg.alerts
 		if m.viewingIncident {
 			cmds = append(cmds, renderIncident(&m))
@@ -258,10 +273,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updatedIncidentListMsg:
 		debug("updatedIncidentListMsg", "TRUNCATED")
 		if msg.err != nil {
-			m.setStatus(msg.err.Error())
-			log.Fatal(msg.err)
-			return m, nil
+			return m, func() tea.Msg {
+				return errMsg{msg.err}
+			}
 		}
+
 		m.incidentList = msg.incidents
 		var ignoredUsersList []string
 
@@ -272,6 +288,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var totalIncidentCount int
 		var rows []table.Row
 
+		debug("filtering incidents by user and ignoredUsersList")
 		for _, i := range msg.incidents {
 			// If the incident is not AssignedToAnyUsers in the ignoredUsersList, add it to the table
 			if !AssignedToAnyUsers(i, ignoredUsersList) {
@@ -297,9 +314,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editorFinishedMsg:
 		debug("editorFinishedMsg", fmt.Sprint(msg))
 		if msg.err != nil {
-			m.setStatus(msg.err.Error())
-			log.Fatal(msg.err)
-			return m, nil
+			return m, func() tea.Msg {
+				return errMsg{msg.err}
+			}
 		}
 
 		if m.selectedIncident == nil {
@@ -500,7 +517,7 @@ func (m model) View() string {
 	switch {
 	case m.err != nil:
 		debug("error")
-		return fmt.Sprintf("ERROR: %s\n", m.err.Error())
+		return (errorStyle.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + helpView)
 
 	case m.viewingIncident:
 		debug("viewingIncident")
@@ -598,6 +615,9 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, defaultKeyMap.Help):
+			m.help.ShowAll = !m.help.ShowAll
+
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.input.Blur()
 			m.table.Focus()
@@ -619,6 +639,9 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, defaultKeyMap.Help):
+			m.help.ShowAll = !m.help.ShowAll
+
 		// This un-sets the selected incident and returns to the table view
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.viewingIncident = false
@@ -650,4 +673,20 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func switchErrorFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	debug("switchErrorFocusMode")
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, defaultKeyMap.Help):
+			m.help.ShowAll = !m.help.ShowAll
+
+		case key.Matches(msg, defaultKeyMap.Back):
+			m.err = nil
+			m.setStatus("")
+		}
+	}
+	return m, nil
 }

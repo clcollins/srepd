@@ -34,12 +34,12 @@ func renderIncidentMarkdown(content string) (string, error) {
 		glamour.WithWordWrap(windowSize.Width),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	str, err := renderer.Render(content)
 	if err != nil {
-		log.Fatal(err)
+		return str, err
 	}
 
 	return str, nil
@@ -80,10 +80,18 @@ type renderedIncidentMsg struct {
 func renderIncident(m *model) tea.Cmd {
 	debug("renderIncident")
 	return func() tea.Msg {
-		content, err := renderIncidentMarkdown(m.template())
+		t, err := m.template()
 		if err != nil {
-			m.setStatus(err.Error())
-			log.Fatal(err)
+			return func() tea.Msg {
+				return errMsg{err}
+			}
+		}
+
+		content, err := renderIncidentMarkdown(t)
+		if err != nil {
+			return func() tea.Msg {
+				return errMsg{err}
+			}
 		}
 
 		return renderedIncidentMsg{content, err}
@@ -125,7 +133,6 @@ type gotIncidentNotesMsg struct {
 
 // getIncidentNotes returns a command that fetches the notes for the given incident
 func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
-	debug("getIncidentNotes")
 	return func() tea.Msg {
 		n, err := pd.GetNotes(p.Client, id)
 		return gotIncidentNotesMsg{n, err}
@@ -134,7 +141,6 @@ func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 
 // AssignedToAnyUsers returns true if the incident is assigned to any of the given users
 func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
-	debug("AssignedToAnyUsers")
 	for _, a := range i.Assignments {
 		for _, id := range ids {
 			if a.Assignee.ID == id {
@@ -147,7 +153,6 @@ func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
 
 // AssignedToUser returns true if the incident is assigned to the given user
 func AssignedToUser(i pagerduty.Incident, id string) bool {
-	debug("AssignedToUser")
 	for _, a := range i.Assignments {
 		if a.Assignee.ID == id {
 			return true
