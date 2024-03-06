@@ -8,8 +8,8 @@ GOPATH := $(shell go env GOPATH)
 HOME?=$(shell mktemp -d)
 
 GOLANGCI_LINT_VERSION=v1.51.2
-GORELEASER_VERSION=v1.14.1
-export GORELEASER_TOKEN?=$(shell jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token)
+GORELEASER_VERSION=v1.24.0
+export GITHUB_TOKEN?=$(shell jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token)
 
 # Ensure go modules are enabled:
 export GO111MODULE=on
@@ -56,7 +56,7 @@ ensure-goreleaser:
 	@ls $(GOPATH)/bin/goreleaser 1>/dev/null || go install github.com/goreleaser/goreleaser@${GORELEASER_VERSION}
 
 release: ensure-goreleaser
-	goreleaser release --rm-dist
+	goreleaser release --clean
 
 .PHONY: fmt
 fmt:
