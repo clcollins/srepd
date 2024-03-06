@@ -1,6 +1,10 @@
+# IDE configs
 .vscode/*
-build/*
-hack/*
-log/*
+
+# Ignore logfiles
+log/
 *.log
 
+# Build and goreleaser output dirs
+dist/
+build/
