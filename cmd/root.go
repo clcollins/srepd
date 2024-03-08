@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/tui"
@@ -108,6 +109,23 @@ func bindArgsToViper(cmd *cobra.Command) {
 	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("clusterLoginCommand"))
 }
 
+type cliFlag struct {
+	flagType  string
+	name      string
+	shorthand string
+	value     string
+	usage     string
+}
+
+func (f cliFlag) StringValue() string {
+	return f.value
+}
+
+func (f cliFlag) BoolValue() bool {
+	b, _ := strconv.ParseBool(f.value)
+	return b
+}
+
 func init() {
 	// Must not be aliases - must be real commands or links
 	const (
@@ -117,12 +135,24 @@ func init() {
 		defaultClusterLoginCmd = "/usr/local/bin/ocm backplane login"
 	)
 
+	var flags = []cliFlag{
+		{"bool", "debug", "d", "false", "Enable debug logging (~/.config/srepd/debug.log)"},
+		{"string", "editor", "e", defaultEditor, "Editor to use for notes; $EDITOR takes precedence"},
+		{"string", "terminal", "t", defaultTerminal, "Terminal to use for exec commands"},
+		{"string", "shell", "s", defaultShell, "Shell to use for exec commands; $SHELL takes precedence"},
+		{"string", "clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command"},
+	}
+
 	cobra.OnInitialize(initConfig)
-	rootCmd.Flags().BoolP("debug", "d", false, "Enable debug logging (~/.config/srepd/debug.log)")
-	rootCmd.Flags().StringP("editor", "e", defaultEditor, "Editor to use for notes; $EDITOR takes precedence")
-	rootCmd.Flags().StringP("terminal", "t", defaultTerminal, "Terminal to use for exec commands")
-	rootCmd.Flags().StringP("shell", "s", defaultShell, "Shell to use for exec commands; $SHELL takes precedence")
-	rootCmd.Flags().StringP("clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command")
+
+	for _, f := range flags {
+		switch f.flagType {
+		case "bool":
+			rootCmd.Flags().BoolP(f.name, f.shorthand, f.BoolValue(), f.usage)
+		case "string":
+			rootCmd.Flags().StringP(f.name, f.shorthand, f.StringValue(), f.usage)
+		}
+	}
 }
 
 // initConfig reads in config file and ENV variables if set.
