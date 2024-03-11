@@ -65,7 +65,7 @@ func NewConfig(token string, teams []string, silentUser string, ignoredUsers []s
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get team(s) `%v`: %v", teams, err)
 	}
 
-	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams)
+	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
 	if err != nil {
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
 	}
@@ -219,18 +219,26 @@ func GetTeams(client PagerDutyClient, teams []string) ([]*pagerduty.Team, error)
 	return t, nil
 }
 
-func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team) ([]string, error) {
+func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts pagerduty.ListTeamMembersOptions) ([]string, error) {
 	var ctx = context.Background()
 	var u []string
 
 	for _, team := range teams {
-		response, err := client.ListMembersWithContext(ctx, team.ID, pagerduty.ListTeamMembersOptions{})
-		if err != nil {
-			return u, fmt.Errorf("pd.GetUsers(): failed to retrieve users for PagerDuty team `%v`: %v", team.ID, err)
-		}
+		for {
+			response, err := client.ListMembersWithContext(ctx, team.ID, opts)
+			if err != nil {
+				return u, fmt.Errorf("pd.GetUsers(): failed to retrieve users for PagerDuty team `%v`: %v", team.ID, err)
+			}
 
-		for _, member := range response.Members {
-			u = append(u, member.User.ID)
+			for _, member := range response.Members {
+				u = append(u, member.User.ID)
+			}
+
+			opts.Offset += opts.Limit
+
+			if !response.More {
+				break
+			}
 		}
 	}
 
