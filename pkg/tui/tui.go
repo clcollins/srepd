@@ -13,7 +13,7 @@ import (
 const (
 	waitTime           = time.Millisecond * 1
 	defaultInputPrompt = " $ "
-
+	u
 	nilNoteErr = "incident note content is empty"
 )
 
@@ -223,7 +223,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case openBrowserMsg:
 		debug("openBrowserMsg", fmt.Sprint(msg))
-		return m, func() tea.Msg { return openBrowserCmd([]string{"xdg-open"}, m.selectedIncident.HTMLURL) }
+		if defaultBrowserOpenCommand == "" {
+			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
+		}
+		c := []string{defaultBrowserOpenCommand}
+		return m, func() tea.Msg { return openBrowserCmd(c, m.selectedIncident.HTMLURL) }
 
 	case browserFinishedMsg:
 		if msg.err != nil {
