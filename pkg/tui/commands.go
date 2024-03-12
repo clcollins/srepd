@@ -11,8 +11,8 @@ import (
 	"slices"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
@@ -22,29 +22,12 @@ const (
 )
 
 type waitForSelectedIncidentThenDoMsg struct {
-	action string
+	action tea.Cmd
 	msg    tea.Msg
 }
 
 //lint:ignore U1000 - future proofing
 type waitForSelectedIncidentThenRenderMsg string
-
-func renderIncidentMarkdown(content string) (string, error) {
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(windowSize.Width),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	str, err := renderer.Render(content)
-	if err != nil {
-		return str, err
-	}
-
-	return str, nil
-}
 
 //lint:ignore U1000 - future proofing
 func updateSelectedIncident(p *pd.Config, id string) tea.Cmd {
@@ -181,16 +164,72 @@ func AssignedToUser(i pagerduty.Incident, id string) bool {
 	return false
 }
 
+// TODO: Can we use a single function and struct to handle
+// the openEditorCmd, login and openBrowserCmd commands?
+
+type browserFinishedMsg struct {
+	err error
+}
+type openBrowserMsg string
+
+func openBrowserCmd(browser []string, url string) tea.Cmd {
+	debug("tui.openBrowserCmd(): opening browser")
+	debug(fmt.Sprintf("tui.openBrowserCmd(): %v %v", browser, url))
+
+	var args []string
+	args = append(args, browser[1:]...)
+	args = append(args, url)
+
+	c := exec.Command(browser[0], args...)
+	debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
+	stderr, pipeErr := c.StderrPipe()
+	if pipeErr != nil {
+		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
+		return func() tea.Msg {
+			return browserFinishedMsg{err: pipeErr}
+		}
+	}
+
+	err := c.Start()
+	if err != nil {
+		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+		return func() tea.Msg {
+			return browserFinishedMsg{err}
+		}
+	}
+
+	out, err := io.ReadAll(stderr)
+	if err != nil {
+		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+		return func() tea.Msg {
+			return browserFinishedMsg{err}
+		}
+	}
+
+	if len(out) > 0 {
+		debug(fmt.Sprintf("tui.openBrowserCmd(): error: %s", out))
+		return func() tea.Msg {
+			return browserFinishedMsg{fmt.Errorf("%s", out)}
+		}
+	}
+
+	return func() tea.Msg {
+		return browserFinishedMsg{}
+	}
+}
+
 type editorFinishedMsg struct {
 	err  error
 	file *os.File
 }
 
 func openEditorCmd(editor []string) tea.Cmd {
+	debug("tui.openEditorCmd(): opening editor")
 	var args []string
 
 	file, err := os.CreateTemp(os.TempDir(), "")
 	if err != nil {
+		debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
 		return func() tea.Msg {
 			return errMsg{error: err}
 		}
@@ -200,13 +239,21 @@ func openEditorCmd(editor []string) tea.Cmd {
 	args = append(args, file.Name())
 
 	c := exec.Command(editor[0], args...)
+
+	debug(fmt.Sprintf("%+v", c))
 	return tea.ExecProcess(c, func(err error) tea.Msg {
+		if err != nil {
+			debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+			return errMsg{error: err}
+		}
 		return editorFinishedMsg{err, file}
 	})
 }
 
 type loginMsg string
-type loginFinishedMsg error
+type loginFinishedMsg struct {
+	err error
+}
 
 type ClusterLauncher struct {
 	Terminal            []string
@@ -234,7 +281,7 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 		err := fmt.Errorf("login error: %v", errs)
 		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 		return func() tea.Msg {
-			return loginFinishedMsg(err)
+			return loginFinishedMsg{err}
 		}
 	}
 
@@ -254,7 +301,7 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	if pipeErr != nil {
 		debug(fmt.Sprintf("tui.login(): %v", pipeErr.Error()))
 		return func() tea.Msg {
-			return loginFinishedMsg(pipeErr)
+			return loginFinishedMsg{err: pipeErr}
 		}
 	}
 
@@ -262,7 +309,7 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	if err != nil {
 		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 		return func() tea.Msg {
-			return loginFinishedMsg(err)
+			return loginFinishedMsg{err}
 		}
 	}
 
@@ -270,19 +317,19 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	if err != nil {
 		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 		return func() tea.Msg {
-			return loginFinishedMsg(err)
+			return loginFinishedMsg{err}
 		}
 	}
 
 	if len(out) > 0 {
 		debug(fmt.Sprintf("tui.login(): error: %s", out))
 		return func() tea.Msg {
-			return loginFinishedMsg(fmt.Errorf("%s", out))
+			return loginFinishedMsg{fmt.Errorf("%s", out)}
 		}
 	}
 
 	return func() tea.Msg {
-		return loginFinishedMsg(nil)
+		return loginFinishedMsg{err}
 	}
 }
 
@@ -335,7 +382,6 @@ func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, users []*pagerduty
 type silenceIncidentsMsg struct {
 	incidents []*pagerduty.Incident
 }
-type waitForSelectedIncidentsThenSilenceMsg string
 
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
 
@@ -353,7 +399,6 @@ func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
 
 //lint:ignore U1000 - future proofing
 type addIncidentNoteMsg string
-type waitForSelectedIncidentsThenAnnotateMsg string
 type addedIncidentNoteMsg struct {
 	note *pagerduty.IncidentNote
 	err  error
@@ -374,8 +419,12 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, content *os.F
 			return errMsg{err}
 		}
 
-		n, err := pd.PostNote(p.Client, incident.ID, u, content)
-		return addedIncidentNoteMsg{n, err}
+		if content != "" {
+			n, err := pd.PostNote(p.Client, incident.ID, u, content)
+			return addedIncidentNoteMsg{n, err}
+		}
+
+		return addedIncidentNoteMsg{nil, errors.New(nilNoteErr)}
 	}
 }
 
@@ -408,4 +457,16 @@ func acknowledged(a []pagerduty.Acknowledgement) string {
 	}
 
 	return dot
+}
+
+func doIfIncidentSelected(table table.Model, cmd tea.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		if table.SelectedRow() == nil {
+			return errMsg{errors.New("no incident selected")}
+		}
+		return tea.Sequence(
+			func() tea.Msg { return getIncidentMsg(table.SelectedRow()[1]) },
+			cmd,
+		)
+	}
 }
