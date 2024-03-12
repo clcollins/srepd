@@ -9,6 +9,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -46,6 +47,30 @@ var (
 				BorderForeground(lipgloss.AdaptiveColor{Light: "#E11C9C", Dark: "#FF62DA"}).
 				Padding(1, 3, 1, 3)
 )
+
+func (m model) View() string {
+	debug("View")
+	helpView := helpStyle.Render(m.help.View(defaultKeyMap))
+
+	switch {
+	case m.err != nil:
+		debug("error")
+		return (errorStyle.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + helpView)
+
+	case m.viewingIncident:
+		debug("viewingIncident")
+		return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
+
+	default:
+		tableView := tableContainerStyle.Render(m.table.View())
+		if m.input.Focused() {
+			debug("viewingTable and input")
+			return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + m.input.View() + "\n" + helpView)
+		}
+		debug("viewingTable")
+		return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + helpView)
+	}
+}
 
 func (m model) renderHeader() string {
 	var s strings.Builder
@@ -281,3 +306,20 @@ Details :
 
 {{ end }}
 `
+
+func renderIncidentMarkdown(content string) (string, error) {
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(windowSize.Width),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	str, err := renderer.Render(content)
+	if err != nil {
+		return str, err
+	}
+
+	return str, nil
+}
