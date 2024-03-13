@@ -11,7 +11,6 @@ import (
 	"slices"
 
 	"github.com/PagerDuty/go-pagerduty"
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/pd"
 )
@@ -459,14 +458,19 @@ func acknowledged(a []pagerduty.Acknowledgement) string {
 	return dot
 }
 
-func doIfIncidentSelected(table table.Model, cmd tea.Cmd) tea.Cmd {
-	return func() tea.Msg {
-		if table.SelectedRow() == nil {
-			return errMsg{errors.New("no incident selected")}
-		}
+func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
+	debug("doIfIncidentSelected()")
+	if m.table.SelectedRow() == nil {
+		debug("doIfIncidentSelected(): selected row is nil")
+		m.setStatus(nilIncidentErr)
+		m.viewingIncident = false
 		return tea.Sequence(
-			func() tea.Msg { return getIncidentMsg(table.SelectedRow()[1]) },
-			cmd,
+			func() tea.Msg { return errMsg{errors.New(nilIncidentErr)} },
 		)
 	}
+	debug("doIfIncidentSelected(): got selected row")
+	return tea.Sequence(
+		func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+		cmd,
+	)
 }

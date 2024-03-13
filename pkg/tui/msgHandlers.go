@@ -78,7 +78,7 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, defaultKeyMap.Help):
-			m.help.ShowAll = !m.help.ShowAll
+			m.toggleHelp()
 
 		case key.Matches(msg, defaultKeyMap.Up):
 			m.table.MoveUp(1)
@@ -95,8 +95,9 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Enter):
 			m.viewingIncident = true
 			// TODO TODAY - fix this
+			debug("Enter key pressed")
 			return m, doIfIncidentSelected(
-				m.table,
+				&m,
 				func() tea.Msg {
 					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return renderIncidentMsg("render") }, msg: "render"}
 				},
@@ -176,7 +177,7 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, defaultKeyMap.Help):
-			m.help.ShowAll = !m.help.ShowAll
+			m.toggleHelp()
 
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.input.Blur()
@@ -200,7 +201,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, defaultKeyMap.Help):
-			m.help.ShowAll = !m.help.ShowAll
+			m.toggleHelp()
 
 		// This un-sets the selected incident and returns to the table view
 		case key.Matches(msg, defaultKeyMap.Back):
@@ -242,12 +243,8 @@ func switchErrorFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, defaultKeyMap.Help):
-			m.help.ShowAll = !m.help.ShowAll
-
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.err = nil
-			m.setStatus("")
 		}
 	}
 	return m, nil
