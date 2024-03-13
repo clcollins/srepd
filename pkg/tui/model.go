@@ -10,15 +10,17 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/jira"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
 type model struct {
 	err error
 
-	config   *pd.Config
-	editor   []string
-	launcher ClusterLauncher
+	config     *pd.Config
+	jiraConfig *jira.Config
+	editor     []string
+	launcher   ClusterLauncher
 
 	table table.Model
 	input textinput.Model
@@ -40,7 +42,9 @@ type model struct {
 func InitialModel(
 	// "d" is to avoid a conflict with the "debug" function
 	d bool,
-	token string,
+	pdToken string,
+	jiraToken string,
+	jiraHost string,
 	teams []string,
 	user string,
 	ignoredusers []string,
@@ -69,9 +73,32 @@ func InitialModel(
 	// We have to set the m.err here instead of how the errMsg is handled
 	// because the Init() occurs before the Update() and the errMsg is not
 	// preserved
-	pd, err := pd.NewConfig(token, teams, user, ignoredusers)
+	pd, err := pd.NewConfig(pdToken, teams, user, ignoredusers)
 	m.config = pd
-	m.err = err
+	if err != nil {
+		m.err = err
+		return m, func() tea.Msg {
+			return errMsg{err}
+		}
+	}
+
+	debug(fmt.Sprintf("InitialModel: jira.NewConfig(): jiraHost: %v", jiraHost))
+	debug(fmt.Sprintf("InitialModel: jira.NewConfig(): validatedAndEscapedURL: %v", u))
+	if err != nil {
+		m.err = err
+		return m, func() tea.Msg {
+			return errMsg{err}
+		}
+	}
+
+	jira, err := jira.NewConfig(jiraHost, jiraToken)
+	m.jiraConfig = jira
+	if err != nil {
+		m.err = err
+		return m, func() tea.Msg {
+			return errMsg{err}
+		}
+	}
 
 	return m, func() tea.Msg {
 		return errMsg{err}

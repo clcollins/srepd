@@ -34,6 +34,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	// TODO: refactor the "token" to "pdToken" - prompt to update config
+	pdToken   = "token"
+	jiraToken = "jira_token"
+	jiraHost  = "jira_host"
+)
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "srepd",
@@ -61,7 +68,7 @@ but rather a simple tool to make on-call tasks easier.`,
 		if viper.GetBool("debug") {
 			log.Printf("Debugging enabled\n")
 			for k, v := range viper.GetViper().AllSettings() {
-				if k == "token" {
+				if k == pdToken || k == jiraToken {
 					v = "*****"
 				}
 				log.Printf("Found key: `%v`, value: `%v`\n", k, v)
@@ -70,7 +77,9 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		m, _ := tui.InitialModel(
 			viper.GetBool("debug"),
-			viper.GetString("token"),
+			viper.GetString(pdToken),
+			viper.GetString(jiraToken),
+			viper.GetString(jiraHost),
 			viper.GetStringSlice("teams"),
 			viper.GetString("silentuser"),
 			viper.GetStringSlice("ignoredusers"),
