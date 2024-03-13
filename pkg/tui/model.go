@@ -82,15 +82,6 @@ func InitialModel(
 		}
 	}
 
-	debug(fmt.Sprintf("InitialModel: jira.NewConfig(): jiraHost: %v", jiraHost))
-	debug(fmt.Sprintf("InitialModel: jira.NewConfig(): validatedAndEscapedURL: %v", u))
-	if err != nil {
-		m.err = err
-		return m, func() tea.Msg {
-			return errMsg{err}
-		}
-	}
-
 	jira, err := jira.NewConfig(jiraHost, jiraToken)
 	m.jiraConfig = jira
 	if err != nil {
