@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -55,7 +56,8 @@ func (m model) View() string {
 	switch {
 	case m.err != nil:
 		debug("error")
-		return (errorStyle.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + helpView)
+		errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
+		return (errorStyle.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + errHelpView)
 
 	case m.viewingIncident:
 		debug("viewingIncident")

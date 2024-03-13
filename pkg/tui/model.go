@@ -89,6 +89,10 @@ func (m *model) setStatus(msg string) {
 	log.Printf("%s\n", d)
 }
 
+func (m *model) toggleHelp() {
+	m.help.ShowAll = !m.help.ShowAll
+}
+
 func newTableWithStyles() table.Model {
 	debug("newTableWithStyles")
 	t := table.New(table.WithFocused(true))
@@ -108,7 +112,7 @@ func newTextInput() textinput.Model {
 func newHelp() help.Model {
 	debug("newHelp")
 	h := help.New()
-	h.ShowAll = false
+	h.ShowAll = true
 	return h
 }
 

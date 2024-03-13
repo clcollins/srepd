@@ -14,7 +14,8 @@ const (
 	waitTime           = time.Millisecond * 1
 	defaultInputPrompt = " $ "
 	u
-	nilNoteErr = "incident note content is empty"
+	nilNoteErr     = "incident note content is empty"
+	nilIncidentErr = "no incident selected"
 )
 
 type errMsg struct{ error }
@@ -34,6 +35,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case errMsg:
+		m.Init()
 		return m.errMsgHandler(msg)
 
 	case tea.WindowSizeMsg:
@@ -240,7 +242,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// This is a catch all for any action that requires a selected incident
 	//
 	case waitForSelectedIncidentThenDoMsg:
-		debug("waitForSelectedIncidentThenDoMsg: ", fmt.Sprintf("%+v, %+v", msg.action, msg.msg))
+		debug("waitForSelectedIncidentThenDoMsg: ", fmt.Sprintf("action: %+v, msg: %+v", msg.action, msg.msg))
 		if msg.action == nil {
 			m.setStatus("failed to perform action: no action included in msg")
 			return m, nil
