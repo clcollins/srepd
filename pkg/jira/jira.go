@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/andygrunwald/go-jira"
 )
@@ -28,11 +29,12 @@ type JiraClient interface {
 }
 
 type Config struct {
-	Client      JiraClient
-	CurrentUser *jira.User
+	Client        JiraClient
+	CurrentUser   *jira.User
+	DefaultFilter *jira.Filter
 }
 
-func NewConfig(host string, token string, username string) (*Config, error) {
+func NewConfig(host string, token string, username string, filter string) (*Config, error) {
 	var c Config
 	var err error
 
@@ -55,13 +57,19 @@ func NewConfig(host string, token string, username string) (*Config, error) {
 	c.Client, err = newClient(tc, host)
 	log.Printf("jira.NewConfig(): %v", c.Client)
 	if err != nil {
-		return &c, err
+		return &c, fmt.Errorf("jira.NewConfig(): error creating client: %v", err)
 	}
 
 	client := c.Client.(*jira.Client)
-	c.CurrentUser, err = GetUser(client.User, username)
+
+	c.CurrentUser, _, err = client.User.GetSelf()
 	if err != nil {
-		return &c, err
+		return &c, fmt.Errorf("jira.NewConfig(): error getting current user: %v", err)
+	}
+
+	c.DefaultFilter, err = GetFilter(client, filter)
+	if err != nil {
+		return &c, fmt.Errorf("jira.NewConfig(): error getting default filter: %v", err)
 	}
 
 	return &c, nil
@@ -73,6 +81,46 @@ func newClient(t *http.Client, h string) (JiraClient, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func GetFilter(client *jira.Client, filterID string) (*jira.Filter, error) {
+	// Convert filterID to int because the jira.Filter.Get() method expects an int for some reason
+	// even though *jira.Filter.ID is a string
+	i, err := strconv.Atoi(filterID)
+	if err != nil {
+		return nil, fmt.Errorf("jira.GetFilter(): failed to convert filterID to int: %v", err)
+	}
+
+	f, _, err := client.Filter.Get(i)
+	if err != nil {
+		return nil, fmt.Errorf("jira.GetFilter(): failed to get filter: %v", err)
+	}
+	return f, nil
+}
+
+func GetIssues(client *jira.Client, jql string) ([]jira.Issue, error) {
+	var i []jira.Issue
+
+	opts := jira.SearchOptions{
+		MaxResults: 1000,
+	}
+
+	for {
+		chunk, resp, err := client.Issue.Search(jql, &opts)
+		if err != nil {
+			return nil, fmt.Errorf("jira.GetIssues(): failed to get issues: %v", err)
+		}
+
+		i = append(i, chunk...)
+
+		opts.StartAt += opts.MaxResults
+
+		if opts.StartAt >= resp.Total {
+			break
+		}
+	}
+
+	return i, nil
 }
 
 func GetUser(userService *jira.UserService, username string) (*jira.User, error) {

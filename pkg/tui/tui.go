@@ -26,7 +26,14 @@ func (m model) Init() tea.Cmd {
 		return func() tea.Msg { return errMsg{m.err} }
 	}
 
-	return func() tea.Msg { return updateIncidentListMsg("sender: Init") }
+	return tea.Batch(
+		func() tea.Msg { return updateIncidentListMsg("sender: Init") },
+		func() tea.Msg { return updateIssueListMsg("sender: Init") },
+	)
+
+	// TODO: Uncomment this and remove the batch command above after
+	// the Jira issue list table stuff is implemented
+	// return func() tea.Msg { return updateIncidentListMsg("sender: Init") }
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -124,7 +131,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, renderIncident(&m))
 		}
 
-	// Nothing directly calls this yet
+	case updateIssueListMsg:
+		debug("updateIssueListMsg", fmt.Sprint(msg))
+		m.setStatus(loadingIssuesStatus)
+		cmds = append(cmds, updateIssueList(m.jiraConfig, m.jiraConfig.DefaultFilter.ID))
+
+	case updatedIssueListMsg:
+		if msg.err != nil {
+			return m, func() tea.Msg { return errMsg{msg.err} }
+		}
+
+		debug("NOT IMPLEMENTED", fmt.Sprintf("updatedIssueListMsg: retrieved %+v issues", len(msg.issues)))
+
+		return m, nil
+
 	case updateIncidentListMsg:
 		debug("updateIncidentListMsg", fmt.Sprint(msg))
 		m.setStatus(loadingIncidentsStatus)

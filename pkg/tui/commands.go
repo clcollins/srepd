@@ -11,13 +11,16 @@ import (
 	"slices"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/andygrunwald/go-jira"
 	tea "github.com/charmbracelet/bubbletea"
+	jiraSRE "github.com/clcollins/srepd/pkg/jira"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
 const (
 	gettingUserStatus      = "getting user info..."
-	loadingIncidentsStatus = "loading incidents..."
+	loadingIncidentsStatus = "loading PagerDuty incidents..."
+	loadingIssuesStatus    = "loading Jira issues..."
 )
 
 type waitForSelectedIncidentThenDoMsg struct {
@@ -35,6 +38,34 @@ func updateSelectedIncident(p *pd.Config, id string) tea.Cmd {
 		getIncidentAlerts(p, id),
 		getIncidentNotes(p, id),
 	)
+}
+
+type updateIssueListMsg string
+type updatedIssueListMsg struct {
+	issues []jira.Issue
+	err    error
+}
+
+func updateIssueList(j *jiraSRE.Config, f string) tea.Cmd {
+	client := j.Client.(*jira.Client)
+	filter, err := jiraSRE.GetFilter(client, f)
+	if err != nil {
+		return func() tea.Msg {
+			return errMsg{err}
+		}
+	}
+
+	return func() tea.Msg {
+		// Retrieve issues matching the JQL filter
+		i, err := jiraSRE.GetIssues(client, filter.Jql)
+		if err != nil {
+			return func() tea.Msg {
+				return errMsg{err}
+			}
+		}
+		debug(fmt.Sprintf("tui.updateIssueList(): retrieved %v issues after filtering", len(i)))
+		return updatedIssueListMsg{i, err}
+	}
 }
 
 type updateIncidentListMsg string

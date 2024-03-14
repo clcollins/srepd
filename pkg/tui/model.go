@@ -46,6 +46,7 @@ func InitialModel(
 	jiraToken string,
 	jiraHost string,
 	jiraUsername string,
+	jiraDefaultFilter string,
 	teams []string,
 	user string,
 	ignoredusers []string,
@@ -83,7 +84,7 @@ func InitialModel(
 		}
 	}
 
-	jira, err := jira.NewConfig(jiraHost, jiraToken, jiraUsername)
+	jira, err := jira.NewConfig(jiraHost, jiraToken, jiraUsername, jiraDefaultFilter)
 	m.jiraConfig = jira
 	if err != nil {
 		m.err = err
