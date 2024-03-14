@@ -36,9 +36,10 @@ import (
 
 const (
 	// TODO: refactor the "token" to "pdToken" - prompt to update config
-	pdToken   = "token"
-	jiraToken = "jira_token"
-	jiraHost  = "jira_host"
+	pdToken      = "token"
+	jiraToken    = "jira_token"
+	jiraHost     = "jira_host"
+	jiraUsername = "jira_username"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -80,6 +81,7 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetString(pdToken),
 			viper.GetString(jiraToken),
 			viper.GetString(jiraHost),
+			viper.GetString(jiraUsername),
 			viper.GetStringSlice("teams"),
 			viper.GetString("silentuser"),
 			viper.GetStringSlice("ignoredusers"),

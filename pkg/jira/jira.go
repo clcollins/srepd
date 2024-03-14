@@ -28,21 +28,38 @@ type JiraClient interface {
 }
 
 type Config struct {
-	Client JiraClient
+	Client      JiraClient
+	CurrentUser *jira.User
 }
 
-func NewConfig(host string, token string) (*Config, error) {
+func NewConfig(host string, token string, username string) (*Config, error) {
 	var c Config
 	var err error
 
-	transport := jira.PATAuthTransport{
-		Token: token,
+	var tc *http.Client
+	if username == "" {
+		log.Printf("jira.NewConfig(): using PAT")
+		transport := jira.PATAuthTransport{
+			Token: token,
+		}
+		tc = transport.Client()
+	} else {
+		log.Printf("jira.NewConfig(): using BasicAuth")
+		transport := jira.BasicAuthTransport{
+			Username: username,
+			Password: token,
+		}
+		tc = transport.Client()
 	}
-
-	tc := transport.Client()
 
 	c.Client, err = newClient(tc, host)
 	log.Printf("jira.NewConfig(): %v", c.Client)
+	if err != nil {
+		return &c, err
+	}
+
+	client := c.Client.(*jira.Client)
+	c.CurrentUser, err = GetUser(client.User, username)
 	if err != nil {
 		return &c, err
 	}
@@ -66,9 +83,6 @@ func GetUser(userService *jira.UserService, username string) (*jira.User, error)
 		log.Printf("jira.GetUser(): response.Body: %+v", resp.Body)
 		return nil, err
 	}
-
-	// Debug
-	log.Printf("jira.GetUser(): %v", resp)
 
 	if len(users) != 1 {
 		return nil, fmt.Errorf("jira.GetUser(): error finding user %v: expected 1 user but found %v", username, len(users))

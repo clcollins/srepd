@@ -6,10 +6,8 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
-	"github.com/andygrunwald/go-jira"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	srepdjira "github.com/clcollins/srepd/pkg/jira"
 )
 
 const (
@@ -27,19 +25,6 @@ func (m model) Init() tea.Cmd {
 	if m.err != nil {
 		return func() tea.Msg { return errMsg{m.err} }
 	}
-
-	// TODO: THIS IS JUST TEMPORARY, REMOVE AFTER IT WORKS
-	debug("Testing Jira Config")
-	u := m.jiraConfig.Client.(*jira.Client)
-	debug(fmt.Sprintf("Jira Client: %+v\n", u.User))
-
-	me, err := srepdjira.GetUser(u.User, m.config.CurrentUser.ID)
-	if err != nil {
-		m.err = err
-		return func() tea.Msg { return errMsg{m.err} }
-	}
-	debug(fmt.Sprintf("GetUser(): %+v\n", me))
-	// END TODO
 
 	return func() tea.Msg { return updateIncidentListMsg("sender: Init") }
 }
