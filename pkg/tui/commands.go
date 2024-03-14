@@ -46,18 +46,16 @@ type updatedIssueListMsg struct {
 	err    error
 }
 
-func updateIssueList(j *jiraSRE.Config, f string) tea.Cmd {
+func updateIssueList(j *jiraSRE.Config) tea.Cmd {
 	client := j.Client.(*jira.Client)
-	filter, err := jiraSRE.GetFilter(client, f)
-	if err != nil {
-		return func() tea.Msg {
-			return errMsg{err}
-		}
-	}
-
 	return func() tea.Msg {
 		// Retrieve issues matching the JQL filter
-		i, err := jiraSRE.GetIssues(client, filter.Jql)
+		var jql string
+		jql = j.DefaultFilter.Jql
+		if j.CustomJql != "" {
+			jql = j.CustomJql
+		}
+		i, err := jiraSRE.GetIssues(client, jql)
 		if err != nil {
 			return func() tea.Msg {
 				return errMsg{err}
@@ -203,9 +201,6 @@ type browserFinishedMsg struct {
 type openBrowserMsg string
 
 func openBrowserCmd(browser []string, url string) tea.Cmd {
-	debug("tui.openBrowserCmd(): opening browser")
-	debug(fmt.Sprintf("tui.openBrowserCmd(): %v %v", browser, url))
-
 	var args []string
 	args = append(args, browser[1:]...)
 	args = append(args, url)
@@ -214,7 +209,7 @@ func openBrowserCmd(browser []string, url string) tea.Cmd {
 	debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
 	stderr, pipeErr := c.StderrPipe()
 	if pipeErr != nil {
-		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
+		debug(fmt.Sprintf("tui.openBrowserCmd(): error: %v", pipeErr.Error()))
 		return func() tea.Msg {
 			return browserFinishedMsg{err: pipeErr}
 		}
@@ -222,7 +217,7 @@ func openBrowserCmd(browser []string, url string) tea.Cmd {
 
 	err := c.Start()
 	if err != nil {
-		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+		debug(fmt.Sprintf("tui.openBrowserCmd(): error: %v", err.Error()))
 		return func() tea.Msg {
 			return browserFinishedMsg{err}
 		}
@@ -230,7 +225,7 @@ func openBrowserCmd(browser []string, url string) tea.Cmd {
 
 	out, err := io.ReadAll(stderr)
 	if err != nil {
-		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+		debug(fmt.Sprintf("tui.openBrowserCmd(): error: %v", err.Error()))
 		return func() tea.Msg {
 			return browserFinishedMsg{err}
 		}
@@ -254,7 +249,6 @@ type editorFinishedMsg struct {
 }
 
 func openEditorCmd(editor []string) tea.Cmd {
-	debug("tui.openEditorCmd(): opening editor")
 	var args []string
 
 	file, err := os.CreateTemp(os.TempDir(), "")
@@ -295,21 +289,17 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	// Check if we have the necessary info to try to login
 	errs := []error{}
 	if launcher.Terminal == nil {
-		debug("tui.login(): Terminal is not set")
-		errs = append(errs, errors.New("terminal is not set"))
+		errs = append(errs, errors.New("tui.login(): terminal is not set"))
 	}
 	if launcher.Shell == nil {
-		debug("tui.login(): Shell is not set")
-		errs = append(errs, errors.New("shell is not set"))
+		errs = append(errs, errors.New("tui.login(): shell is not set"))
 	}
 	if launcher.ClusterLoginCommand == nil {
-		debug("tui.login(): ClusterLoginCommand is not set")
-		errs = append(errs, errors.New("ClusterLoginCommand is not set"))
+		errs = append(errs, errors.New("tui.login(): clusterLoginCommand is not set"))
 	}
 
 	if len(errs) > 0 {
-		err := fmt.Errorf("login error: %v", errs)
-		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+		err := fmt.Errorf("tui.login(): login error: %v", errs)
 		return func() tea.Msg {
 			return loginFinishedMsg{err}
 		}

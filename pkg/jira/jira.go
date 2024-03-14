@@ -32,9 +32,11 @@ type Config struct {
 	Client        JiraClient
 	CurrentUser   *jira.User
 	DefaultFilter *jira.Filter
+	DefaultBoard  *jira.Board
+	CustomJql     string
 }
 
-func NewConfig(host string, token string, username string, filter string) (*Config, error) {
+func NewConfig(host string, token string, username string, boardID int, jql string) (*Config, error) {
 	var c Config
 	var err error
 
@@ -55,7 +57,6 @@ func NewConfig(host string, token string, username string, filter string) (*Conf
 	}
 
 	c.Client, err = newClient(tc, host)
-	log.Printf("jira.NewConfig(): %v", c.Client)
 	if err != nil {
 		return &c, fmt.Errorf("jira.NewConfig(): error creating client: %v", err)
 	}
@@ -67,10 +68,28 @@ func NewConfig(host string, token string, username string, filter string) (*Conf
 		return &c, fmt.Errorf("jira.NewConfig(): error getting current user: %v", err)
 	}
 
-	c.DefaultFilter, err = GetFilter(client, filter)
+	c.DefaultBoard, err = GetBoard(client, boardID)
 	if err != nil {
-		return &c, fmt.Errorf("jira.NewConfig(): error getting default filter: %v", err)
+		return &c, fmt.Errorf("jira.NewConfig(): error getting board: %v", err)
 	}
+
+	f, err := GetBoardConfigurationFilter(client, boardID)
+	if err != nil {
+		return &c, fmt.Errorf("jira.NewConfig(): error getting board configuration filter: %v", err)
+	}
+
+	// *jira.BoardConfigurationFilter.ID is a string for some reason
+	fint, err := strconv.Atoi(f.ID)
+	if err != nil {
+		return &c, fmt.Errorf("jira.NewConfig(): error converting filter ID to int: %v", err)
+	}
+
+	c.DefaultFilter, err = GetFilter(client, fint)
+	if err != nil {
+		return &c, fmt.Errorf("jira.NewConfig(): error getting filter: %v", err)
+	}
+
+	c.CustomJql = jql
 
 	return &c, nil
 }
@@ -83,18 +102,57 @@ func newClient(t *http.Client, h string) (JiraClient, error) {
 	return c, nil
 }
 
-func GetFilter(client *jira.Client, filterID string) (*jira.Filter, error) {
-	// Convert filterID to int because the jira.Filter.Get() method expects an int for some reason
-	// even though *jira.Filter.ID is a string
-	i, err := strconv.Atoi(filterID)
-	if err != nil {
-		return nil, fmt.Errorf("jira.GetFilter(): failed to convert filterID to int: %v", err)
+// Get Board returns the Jira board associated with the ID string
+func GetBoard(client *jira.Client, boardID int) (*jira.Board, error) {
+	var b *jira.Board
+
+	if boardID == 0 {
+		return b, fmt.Errorf("jira.GetBoardConfigurationFilter(): boardID is unset or invalid: %v", boardID)
 	}
 
-	f, _, err := client.Filter.Get(i)
+	b, resp, err := client.Board.GetBoard(boardID)
 	if err != nil {
-		return nil, fmt.Errorf("jira.GetFilter(): failed to get filter: %v", err)
+		log.Printf("jira.GetBoard(): resp: %+v", resp)
+		return b, fmt.Errorf("jira.GetBoard(): failed to get board: %v", err)
 	}
+
+	return b, nil
+}
+
+// GetBoardConfigurationFilter returns the base filter associated with the given board
+func GetBoardConfigurationFilter(client *jira.Client, boardID int) (jira.BoardConfigurationFilter, error) {
+	var f jira.BoardConfigurationFilter
+
+	if boardID == 0 {
+		return f, fmt.Errorf("jira.GetBoardConfigurationFilter(): boardID is unset or invalid: %v", boardID)
+	}
+
+	b, resp, err := client.Board.GetBoardConfiguration(boardID)
+	if err != nil {
+		log.Printf("jira.GetBoardConfigurationFilter(): resp: %+v", resp)
+		return f, fmt.Errorf("jira.GetBoardDefaultFilterID(): failed to get board configuration: %v, %v", boardID, err)
+	}
+
+	f = b.Filter
+
+	// FYI: *jira.BoardConfigurationFilter.ID is a string for some reason, not an int
+	return f, nil
+}
+
+func GetFilter(client *jira.Client, filterID int) (*jira.Filter, error) {
+	var f *jira.Filter
+
+	if filterID == 0 {
+		return f, fmt.Errorf("jira.GetFilter(): filterID is unset or invalid: %v", filterID)
+	}
+
+	f, resp, err := client.Filter.Get(filterID)
+	if err != nil {
+		log.Printf("jira.GetFilter(): resp: %+v", resp)
+		return nil, fmt.Errorf("jira.GetFilter(): failed to get filter: %v, %v", filterID, err)
+	}
+
+	// FYI: *jira.Filter.ID is a string for some reason, not an int
 	return f, nil
 }
 

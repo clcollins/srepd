@@ -11,7 +11,7 @@ import (
 
 // errMsgHandler is the message handler for the errMsg message
 func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("errMsgHandler")
+	debug(msg.(errMsg).Error())
 	m.setStatus(msg.(errMsg).Error())
 	m.err = msg.(errMsg)
 	return m, nil
@@ -20,7 +20,6 @@ func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 // windowSizeMsgHandler is the message handler for the windowSizeMsg message
 // and resizes the tui according to the new terminal window size
 func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("windowSizeMsgHandler")
 	m.setStatus(fmt.Sprintf("window size changed: %v", msg.(tea.WindowSizeMsg)))
 	windowSize = msg.(tea.WindowSizeMsg)
 	top, _, bottom, _ := mainStyle.GetMargin()
@@ -71,7 +70,6 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // tableFocusMode is the main mode for the application
 func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("switchTableFocusMode")
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -95,7 +93,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Enter):
 			m.viewingIncident = true
 			// TODO TODAY - fix this
-			debug("Enter key pressed")
 			return m, doIfIncidentSelected(
 				&m,
 				func() tea.Msg {
@@ -170,7 +167,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("switchInputFocusMode")
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -193,7 +189,6 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("switchIncidentFocusMode")
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
@@ -239,7 +234,6 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchErrorFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("switchErrorFocusMode")
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {

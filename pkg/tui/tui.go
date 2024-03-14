@@ -21,7 +21,7 @@ const (
 type errMsg struct{ error }
 
 func (m model) Init() tea.Cmd {
-	debug("Init")
+	debug("tui.Init()")
 	if m.err != nil {
 		return func() tea.Msg { return errMsg{m.err} }
 	}
@@ -37,7 +37,7 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	debug("Update")
+	debug("tui.Update()")
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -134,7 +134,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateIssueListMsg:
 		debug("updateIssueListMsg", fmt.Sprint(msg))
 		m.setStatus(loadingIssuesStatus)
-		cmds = append(cmds, updateIssueList(m.jiraConfig, m.jiraConfig.DefaultFilter.ID))
+		cmds = append(cmds, updateIssueList(m.jiraConfig))
 
 	case updatedIssueListMsg:
 		if msg.err != nil {
@@ -279,7 +279,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: msg.action, msg: msg.msg} }
 		}
 
-		debug("Trying to do action")
 		cmds = append(cmds, msg.action)
 
 	case renderIncidentMsg:
