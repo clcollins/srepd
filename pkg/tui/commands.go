@@ -13,6 +13,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/clcollins/srepd/pkg/tui/symbols"
 )
 
 const (
@@ -449,13 +450,13 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 	return ""
 }
 
-// acknowledged returns "A" for "acknowledged" if the incident has been acknowledged, or a dot for "triggered" otherwise
+// acknowledged returns "A" for "acknowledged" if the incident has been acknowledged, or a symbols.Dot for "triggered" otherwise
 func acknowledged(a []pagerduty.Acknowledgement) string {
 	if len(a) > 0 {
 		return "A"
 	}
 
-	return dot
+	return symbols.Dot
 }
 
 func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
