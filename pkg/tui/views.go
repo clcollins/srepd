@@ -8,45 +8,69 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/clcollins/srepd/pkg/tui/style"
 )
 
 const (
-	dot       = "•"
-	upArrow   = "↑"
-	downArrow = "↓"
+	dot        = "•"
+	upArrow    = "↑"
+	downArrow  = "↓"
+	gray       = lipgloss.Color("240")
+	paleYellow = lipgloss.Color("229")
+	neonPurple = lipgloss.Color("57")
+	lilac      = lipgloss.Color("105")
 )
 
 var (
-	windowSize tea.WindowSizeMsg
+	windowSize          tea.WindowSizeMsg
+	horizontalPadding   = 1
+	borderWidth         = 1
+	mainStyle           = lipgloss.NewStyle().Margin(0, 0).Padding(0, horizontalPadding)
+	assigneeStyle       = mainStyle.Copy()
+	statusStyle         = mainStyle.Copy()
+	assignedStringWidth = len("Assigned to User") + (horizontalPadding * 2 * 2) + (borderWidth * 2 * 2) + 10
+	tableContainerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(gray)
+	tableStyle          = table.Styles{
+		Selected: lipgloss.NewStyle().Bold(true).Foreground(paleYellow).Background(neonPurple),
+		Header:   lipgloss.NewStyle().Bold(false).Padding(0, 1).BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(gray)).BorderBottom(true),
+		Cell:     lipgloss.NewStyle().Padding(0, 1),
+	}
+	helpStyle           = lipgloss.NewStyle().Foreground(lilac)
+	incidentViewerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(gray)).Padding(2)
+	errorStyle          = lipgloss.NewStyle().
+				Bold(true).
+				Width(64).
+				Foreground(lipgloss.AdaptiveColor{Light: "#E11C9C", Dark: "#FF62DA"}).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.AdaptiveColor{Light: "#E11C9C", Dark: "#FF62DA"}).
+				Padding(1, 3, 1, 3)
 )
 
 func (m model) View() string {
 	debug("View")
-	helpView := style.Help.Render(m.help.View(defaultKeyMap))
+	helpView := helpStyle.Render(m.help.View(defaultKeyMap))
 
 	switch {
 	case m.err != nil:
 		debug("error")
-		errHelpView := style.Help.Render(help.New().View(errorViewKeyMap))
-		return (style.Error.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + errHelpView)
+		errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
+		return (errorStyle.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + errHelpView)
 
 	case m.viewingIncident:
 		debug("viewingIncident")
-		return style.Main.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
+		return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
 
 	default:
-		tableView := style.TableContainer.Render(m.table.View())
+		tableView := tableContainerStyle.Render(m.table.View())
 		if m.input.Focused() {
 			debug("viewingTable and input")
-			return style.Main.Render(m.renderHeader() + "\n" + tableView + "\n" + m.input.View() + "\n" + helpView)
+			return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + m.input.View() + "\n" + helpView)
 		}
 		debug("viewingTable")
-		return style.Main.Render(m.renderHeader() + "\n" + tableView + "\n" + helpView)
+		return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + helpView)
 	}
 }
 
@@ -63,8 +87,8 @@ func (m model) renderHeader() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			style.Status.Width(windowSize.Width-style.AssignedStringWidth).Render(statusArea(m.status)),
-			style.Assignee.Render(assigneeArea(assignedTo)),
+			statusStyle.Width(windowSize.Width-assignedStringWidth).Render(statusArea(m.status)),
+			assigneeStyle.Render(assigneeArea(assignedTo)),
 		),
 	)
 
@@ -87,10 +111,9 @@ func statusArea(s string) string {
 
 func (m model) template() (string, error) {
 	debug("template")
-	template, err := template.New("incident-full.tmpl").Funcs(funcMap).ParseFiles("pkg/tui/views/incident-full.tmpl")
+	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
 	if err != nil {
 		// TODO: Figure out how to handle this with a proper errMsg
-		fmt.Printf("Could not render template: %+v", err)
 		return "", err
 	}
 
@@ -98,7 +121,6 @@ func (m model) template() (string, error) {
 	summary := summarize(m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes)
 	err = template.Execute(o, summary)
 	if err != nil {
-		fmt.Printf("Could not render template: %+v", err)
 		// TODO: Figure out how to handle this with a proper errMsg
 		return "", err
 	}
@@ -234,6 +256,58 @@ var funcMap = template.FuncMap{
 	},
 	"ToUpper": strings.ToUpper,
 }
+
+const incidentTemplate = `
+# {{ .ID }} - {{ .Status }}
+
+{{ if .Priority }}PRIORITY {{ .Priority }} - {{ end }}{{ .Title }} - {{ .HTMLURL }}
+
+* Service: {{ .Service }}
+* Urgency: {{ .Urgency }}
+* Created: {{ .Created }}
+
+{{ if not .Acknowledged -}}
+Assigned to:{{ range $assignee := .Assigned }}
++ *{{ $assignee }}* *(not yet acknowledged)*
+{{ end -}}
+{{ else -}}
+Acknowledged by:{{ range $ack := .Acknowledged }}
++ **{{ $ack }}**
+{{ end -}}
+{{ end -}}
+
+## Notes
+
+{{ if .Notes }}
+{{ range $note := .Notes }}
+> {{ $note.Content }}
+
+- {{ $note.User }} @ {{ $note.Created }}
+{{ end }}
+{{ else }}
+_none_
+{{ end }}
+
+## Alerts ({{ len .Alerts }})
+
+{{ range $alert := .Alerts }}
+_{{ $alert.ID }}_{{ if $alert.Name }}- _{{ $alert.Name }}_{{ end }}
+
+* Cluster: {{ $alert.Cluster }}
+* SOP: {{ $alert.Link }}
+
+Details :
+
+* Service: {{ $alert.Service }}
+* Status: {{ $alert.Status }}
+* Created: {{ $alert.Created }}
+* Link: {{ $alert.HTMLURL }}
+{{ range $key, $value := $alert.Details }}
+* {{ $key }}: {{ $value }} 
+{{ end }}
+
+{{ end }}
+`
 
 func renderIncidentMarkdown(content string) (string, error) {
 	renderer, err := glamour.NewTermRenderer(

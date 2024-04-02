@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/tui/style"
 )
 
 // errMsgHandler is the message handler for the errMsg message
@@ -24,9 +23,9 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	debug("windowSizeMsgHandler")
 	m.setStatus(fmt.Sprintf("window size changed: %v", msg.(tea.WindowSizeMsg)))
 	windowSize = msg.(tea.WindowSizeMsg)
-	top, _, bottom, _ := style.Main.GetMargin()
+	top, _, bottom, _ := mainStyle.GetMargin()
 	eighthWindow := windowSize.Width / 8
-	cellPadding := (style.HorizontalPadding * 2) * 4
+	cellPadding := (horizontalPadding * 2) * 4
 	borderEdges := 2 + 10
 
 	m.help.Width = windowSize.Width - borderEdges
