@@ -13,7 +13,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/clcollins/srepd/pkg/tui/style"
-	"github.com/clcollins/srepd/pkg/tui/symbols"
+)
+
+const (
+	dot       = "•"
+	upArrow   = "↑"
+	downArrow = "↓"
 )
 
 var (
@@ -28,7 +33,7 @@ func (m model) View() string {
 	case m.err != nil:
 		debug("error")
 		errHelpView := style.Help.Render(help.New().View(errorViewKeyMap))
-		return (style.Error.Render(symbols.Dot+"ERROR"+symbols.Dot+"\n\n"+m.err.Error()) + "\n" + errHelpView)
+		return (style.Error.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + errHelpView)
 
 	case m.viewingIncident:
 		debug("viewingIncident")

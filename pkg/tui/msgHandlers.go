@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/tui/style"
-	"github.com/clcollins/srepd/pkg/tui/symbols"
 )
 
 // errMsgHandler is the message handler for the errMsg message
@@ -33,7 +32,7 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.help.Width = windowSize.Width - borderEdges
 
 	m.table.SetColumns([]table.Column{
-		{Title: symbols.Dot, Width: 1},
+		{Title: dot, Width: 1},
 		{Title: "ID", Width: eighthWindow + cellPadding - borderEdges},
 		{Title: "Summary", Width: eighthWindow * 3},
 		{Title: "Service", Width: eighthWindow * 3},
