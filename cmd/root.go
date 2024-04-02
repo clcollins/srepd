@@ -129,17 +129,17 @@ func (f cliFlag) BoolValue() bool {
 func init() {
 	// Must not be aliases - must be real commands or links
 	const (
-		defaultEditor          = "/usr/bin/vim"
-		defaultTerminal        = "/usr/bin/gnome-terminal"
-		defaultShell           = "/bin/bash"
-		defaultClusterLoginCmd = "/usr/local/bin/ocm backplane login"
+		defaultEditor          = "vim"
+		defaultTerminal        = "gnome-terminal"
+		defaultShell           = "bash -c"
+		defaultClusterLoginCmd = "ocm backplane login"
 	)
 
 	var flags = []cliFlag{
 		{"bool", "debug", "d", "false", "Enable debug logging (~/.config/srepd/debug.log)"},
-		{"string", "editor", "e", defaultEditor, "Editor to use for notes; $EDITOR takes precedence"},
+		{"string", "editor", "e", defaultEditor, "Editor to use for notes"},
 		{"string", "terminal", "t", defaultTerminal, "Terminal to use for exec commands"},
-		{"string", "shell", "s", defaultShell, "Shell to use for exec commands; $SHELL takes precedence"},
+		{"string", "shell", "s", defaultShell, "Shell to use for exec commands"},
 		{"string", "clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command"},
 	}
 
@@ -170,7 +170,9 @@ func initConfig() {
 	viper.AddConfigPath(home + "/" + cfgFilePath)
 	viper.SetConfigName(cfgFile)
 	viper.SetConfigType("yaml")
-	viper.AutomaticEnv() // read in environment variables that match
+
+	viper.SetEnvPrefix("srepd")
+	viper.AutomaticEnv()
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err != nil {
