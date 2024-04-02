@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/clcollins/srepd/pkg/tui/style"
 )
 
 type model struct {
@@ -96,7 +97,7 @@ func (m *model) toggleHelp() {
 func newTableWithStyles() table.Model {
 	debug("newTableWithStyles")
 	t := table.New(table.WithFocused(true))
-	t.SetStyles(tableStyle)
+	t.SetStyles(style.Table)
 	return t
 }
 
@@ -119,6 +120,6 @@ func newHelp() help.Model {
 func newIncidentViewer() viewport.Model {
 	debug("newIncidentViewer")
 	vp := viewport.New(100, 100)
-	vp.Style = incidentViewerStyle
+	vp.Style = style.IncidentViewer
 	return vp
 }
