@@ -256,8 +256,8 @@ type loginFinishedMsg struct {
 
 type ClusterLauncher struct {
 	Terminal            []string
-	Shell               []string
 	ClusterLoginCommand []string
+	// DEPRECATING SHELL: Shell               []string
 }
 
 func login(cluster string, launcher ClusterLauncher) tea.Cmd {
@@ -267,10 +267,10 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 		debug("tui.login(): Terminal is not set")
 		errs = append(errs, errors.New("terminal is not set"))
 	}
-	if launcher.Shell == nil {
-		debug("tui.login(): Shell is not set")
-		errs = append(errs, errors.New("shell is not set"))
-	}
+	// DEPRECATING SHELL: if launcher.Shell == nil {
+	// DEPRECATING SHELL: 	debug("tui.login(): Shell is not set")
+	// DEPRECATING SHELL: 	errs = append(errs, errors.New("shell is not set"))
+	// DEPRECATING SHELL: }
 	if launcher.ClusterLoginCommand == nil {
 		debug("tui.login(): ClusterLoginCommand is not set")
 		errs = append(errs, errors.New("ClusterLoginCommand is not set"))
@@ -287,7 +287,7 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 	var args []string
 	args = append(args, launcher.Terminal[1:]...)
 	args = append(args, "--") // Terminal separator
-	args = append(args, launcher.Shell...)
+	// DEPRECATING SHELL: args = append(args, launcher.Shell...)
 	args = append(args, launcher.ClusterLoginCommand...)
 	args = append(args, cluster)
 
