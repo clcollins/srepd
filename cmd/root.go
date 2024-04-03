@@ -26,10 +26,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -61,12 +63,30 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		if viper.GetBool("debug") {
 			log.Printf("Debugging enabled\n")
-			for k, v := range viper.GetViper().AllSettings() {
+			settings := viper.GetViper().AllSettings()
+			keys := make([]string, 0, len(settings))
+			for k := range settings {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+
+			for _, k := range keys {
+				if deprecation.Deprecated(k) {
+					log.Printf("Found deprecated key: `%v`; you may remove this from your config.", k)
+					continue
+				}
+
+				var v string
+
+				v = fmt.Sprintf("%v", settings[k])
 				if strings.Contains(k, "token") {
 					v = "*****"
 				}
+
 				log.Printf("Found key: `%v`, value: `%v`\n", k, v)
+
 			}
+
 		}
 
 		m, _ := tui.InitialModel(
