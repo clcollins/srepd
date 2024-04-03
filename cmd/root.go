@@ -27,6 +27,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/tui"
@@ -61,7 +62,7 @@ but rather a simple tool to make on-call tasks easier.`,
 		if viper.GetBool("debug") {
 			log.Printf("Debugging enabled\n")
 			for k, v := range viper.GetViper().AllSettings() {
-				if k == "token" {
+				if strings.Contains(k, "token") {
 					v = "*****"
 				}
 				log.Printf("Found key: `%v`, value: `%v`\n", k, v)
@@ -77,8 +78,8 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetStringSlice("editor"),
 			tui.ClusterLauncher{
 				Terminal:            viper.GetStringSlice("terminal"),
-				Shell:               viper.GetStringSlice("shell"),
 				ClusterLoginCommand: viper.GetStringSlice("cluster_login_command"),
+				// DEPRECATING SHELL: Shell:               viper.GetStringSlice("shell"),
 			},
 		)
 
@@ -105,7 +106,7 @@ func bindArgsToViper(cmd *cobra.Command) {
 	viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
 	viper.BindPFlag("editor", cmd.Flags().Lookup("editor"))
 	viper.BindPFlag("terminal", cmd.Flags().Lookup("terminal"))
-	viper.BindPFlag("shell", cmd.Flags().Lookup("shell"))
+	// DEPRECATING SHELL: viper.BindPFlag("shell", cmd.Flags().Lookup("shell"))
 	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("clusterLoginCommand"))
 }
 
@@ -129,9 +130,9 @@ func (f cliFlag) BoolValue() bool {
 func init() {
 	// Must not be aliases - must be real commands or links
 	const (
-		defaultEditor          = "vim"
-		defaultTerminal        = "gnome-terminal"
-		defaultShell           = "bash -c"
+		defaultEditor   = "vim"
+		defaultTerminal = "gnome-terminal"
+		// DEPRECATING SHELL: defaultShell           = "bash -c"
 		defaultClusterLoginCmd = "ocm backplane login"
 	)
 
@@ -139,7 +140,7 @@ func init() {
 		{"bool", "debug", "d", "false", "Enable debug logging (~/.config/srepd/debug.log)"},
 		{"string", "editor", "e", defaultEditor, "Editor to use for notes"},
 		{"string", "terminal", "t", defaultTerminal, "Terminal to use for exec commands"},
-		{"string", "shell", "s", defaultShell, "Shell to use for exec commands"},
+		// DEPRECATING SHELL: {"string", "shell", "s", defaultShell, "Shell to use for exec commands"},
 		{"string", "clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command"},
 	}
 
