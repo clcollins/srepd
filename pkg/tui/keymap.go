@@ -82,8 +82,8 @@ var defaultKeyMap = keymap{
 		key.WithHelp("n", "add [n]ote"),
 	),
 	Silence: key.NewBinding(
-		key.WithKeys("s"),
-		key.WithHelp("s", "silence"),
+		key.WithKeys("ctrl+s"),
+		key.WithHelp("ctrl+s", "silence"),
 	),
 	Ack: key.NewBinding(
 		key.WithKeys("a"),
