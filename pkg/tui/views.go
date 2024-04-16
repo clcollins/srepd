@@ -31,7 +31,7 @@ var (
 	mainStyle           = lipgloss.NewStyle().Margin(0, 0).Padding(0, horizontalPadding)
 	assigneeStyle       = mainStyle.Copy()
 	statusStyle         = mainStyle.Copy()
-	assignedStringWidth = len("Assigned to User") + (horizontalPadding * 2 * 2) + (borderWidth * 2 * 2) + 10
+	assignedStringWidth = len("Showing assigned to User") + (horizontalPadding * 2 * 2) + (borderWidth * 2 * 2) + 10
 	tableContainerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(gray)
 	tableStyle          = table.Styles{
 		Selected: lipgloss.NewStyle().Bold(true).Foreground(paleYellow).Background(neonPurple),
@@ -78,7 +78,7 @@ func (m model) renderHeader() string {
 	var s strings.Builder
 	var assignedTo string
 
-	assignedTo = "User"
+	assignedTo = "You"
 
 	if m.teamMode {
 		assignedTo = "Team"
@@ -96,7 +96,7 @@ func (m model) renderHeader() string {
 }
 
 func assigneeArea(s string) string {
-	var fstring = "Assigned to " + s
+	var fstring = "Showing assigned to " + s
 	fstring = strings.TrimSuffix(fstring, "\n")
 
 	return fstring
