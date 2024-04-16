@@ -215,6 +215,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
 		cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
+		debug(cluster)
 		m.setStatus(fmt.Sprintf("multiple alerts for incident - logging into cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
 		return m, func() tea.Msg { return login(cluster, m.launcher) }
 
@@ -326,9 +327,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", msg))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reassignedIncidentsMsg") }
 
+	case silenceSelectedIncidentMsg:
+		if m.selectedIncident == nil {
+			return m, func() tea.Msg {
+				return waitForSelectedIncidentThenDoMsg{
+					msg:    "silence",
+					action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
+				}
+			}
+		}
+
+		return m, tea.Sequence(
+			silenceIncidents([]*pagerduty.Incident{m.selectedIncident}, []*pagerduty.User{m.config.SilentUser}),
+			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
+		)
+
 	case silenceIncidentsMsg:
-		debug("silenceIncidentsMsg", fmt.Sprint(msg))
-		if (msg.incidents == nil) && (m.selectedIncident == nil) {
+		debug("silenceIncidentsMsg", fmt.Sprintf("%+v", msg))
+		if msg.incidents == nil {
 			m.setStatus("failed silencing incidents - no incidents provided")
 			return m, nil
 		}

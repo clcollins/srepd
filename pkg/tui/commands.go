@@ -378,6 +378,7 @@ func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, users []*pagerduty
 	}
 }
 
+type silenceSelectedIncidentMsg struct{}
 type silenceIncidentsMsg struct {
 	incidents []*pagerduty.Incident
 }
