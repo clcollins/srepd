@@ -54,8 +54,8 @@ var defaultKeyMap = keymap{
 		key.WithHelp("G", "jump to bottom"),
 	),
 	Quit: key.NewBinding(
-		key.WithKeys("q", "ctrl+c"),
-		key.WithHelp("q/ctrl+c", "quit"),
+		key.WithKeys("ctrl+q", "ctrl+c"),
+		key.WithHelp("ctrl+q/ctrl+c", "quit"),
 	),
 	Help: key.NewBinding(
 		key.WithKeys("h"),
