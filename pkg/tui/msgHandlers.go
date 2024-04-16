@@ -120,11 +120,9 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
 				func() tea.Msg {
 					return waitForSelectedIncidentThenDoMsg{
-						msg: "add note",
+						msg: "silence",
 						action: func() tea.Msg {
-							return silenceIncidentsMsg{
-								incidents: []*pagerduty.Incident{m.selectedIncident},
-							}
+							return silenceSelectedIncidentMsg{}
 						},
 					}
 				},
@@ -214,7 +212,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []*pagerduty.Incident{m.selectedIncident}} }
 
 		case key.Matches(msg, defaultKeyMap.Silence):
-			return m, func() tea.Msg { return silenceIncidentsMsg{incidents: []*pagerduty.Incident{m.selectedIncident}} }
+			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
 			cmds = append(cmds, openEditorCmd(m.editor))

@@ -269,6 +269,9 @@ func ReassignIncidents(client PagerDutyClient, incidents []*pagerduty.Incident, 
 	opts := []pagerduty.ManageIncidentsOptions{}
 
 	for _, incident := range incidents {
+		if incident == nil {
+			return i, fmt.Errorf("pd.ReassignIncidents(): incident is nil")
+		}
 		opts = append(opts, pagerduty.ManageIncidentsOptions{
 			ID:          incident.ID,
 			Assignments: a,
