@@ -77,7 +77,7 @@ func TestLoginCommandBuild(t *testing.T) {
 			},
 			expectErr: false,
 			comparisonFN: func(t *testing.T, cmd []string) {
-				expected := "%%CLUSTER_ID%% abcdefg ocm backplane login"
+				expected := "%%CLUSTER_ID%% abcdefg ocm backplane login abcdefg"
 				if strings.Join(cmd, " ") != expected {
 					t.Fatalf("Expected command to be %s, got %s", expected, strings.Join(cmd, " "))
 				}
@@ -114,6 +114,20 @@ func TestLoginCommandBuild(t *testing.T) {
 					if cmd[k] != expected[k] {
 						t.Fatalf("Expected command slice %#v but got %#v", expected, cmd)
 					}
+				}
+			},
+		},
+		{
+			name: "cluster login command when it has no replaceable values should have the cluster ID appended to the end",
+			launcher: ClusterLauncher{
+				terminal:            []string{"gnome-terminal"},
+				clusterLoginCommand: []string{"ocm-container"},
+			},
+			expectErr: false,
+			comparisonFN: func(t *testing.T, cmd []string) {
+				expected := "gnome-terminal ocm-container abcdefg"
+				if expected != strings.Join(cmd, " ") {
+					t.Fatalf("Expected cluster ID to be automaticall appended. Got: %s, expected: %s", cmd, expected)
 				}
 			},
 		},

@@ -59,7 +59,18 @@ func (l *ClusterLauncher) BuildLoginCommand(cluster string) ([]string, error) {
 	command = append(command, l.terminal[0])
 	command = append(command, replaceVars(l.terminal[1:], cluster)...)
 
+	needsClusterIDAppended := true
+	for _, str := range l.clusterLoginCommand {
+		if strings.Contains(str, "%%CLUSTER_ID%%") {
+			needsClusterIDAppended = false
+		}
+	}
 	loginCmd := replaceVars(l.clusterLoginCommand, cluster)
+
+	if needsClusterIDAppended {
+		loginCmd = append(loginCmd, cluster)
+	}
+
 	if l.settings.collapseLoginCommand {
 		command = append(command, strings.Join(loginCmd, " "))
 	} else {
