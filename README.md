@@ -54,10 +54,13 @@ editor: vim
 # Cluster Login options
 cluster_login_cmd: "ocm-container"
 shell: /bin/bash
-terminal: /usr/bin/gnome-terminal
+terminal: /usr/bin/gnome-terminal --
+# Note the trailing `--` is necessary for gnome-terminal and may be necessary
+# for other terminals as well
 
 # Note that aliases, etc, are not sourced by the shell command when launching.
-# This means, for example, that `ocm-container`, as normally setup using an alias, does not work, but calling the command or a symlink directly does.
+# This means, for example, that `ocm-container`, as normally setup using an
+# alias, does not work, but calling the command or a symlink directly does.
 
 # More complicated commands can be specified with space-separated strings
 # terminal: "flatpak run org.contourterminal.Contour"
@@ -74,7 +77,7 @@ silentuser: <pagerDuty User ID>
 
 # Ignore Users is a list of PagerDuty User IDs to ignore when gathering incidents
 ignoredusers:
-  - <pageDuty User ID>
+  - <pagerDuty User ID>
   - <pagerDuty User ID>
 ```
 
@@ -121,7 +124,7 @@ Then, you would add the following to your srepd config:
 
 ```yaml
 terminal: /Users/kbater/Projects/spikes/srepd
-cluster_login_command: ocm-container -C
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
 ### Tmux support
