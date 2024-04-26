@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
@@ -255,8 +256,9 @@ type loginFinishedMsg struct {
 }
 
 type ClusterLauncher struct {
-	Terminal            []string
-	ClusterLoginCommand []string
+	Terminal             []string
+	ClusterLoginCommand  []string
+	CollapseLoginCommand bool
 	// DEPRECATING SHELL: Shell               []string
 }
 
@@ -267,10 +269,7 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 		debug("tui.login(): Terminal is not set")
 		errs = append(errs, errors.New("terminal is not set"))
 	}
-	// DEPRECATING SHELL: if launcher.Shell == nil {
-	// DEPRECATING SHELL: 	debug("tui.login(): Shell is not set")
-	// DEPRECATING SHELL: 	errs = append(errs, errors.New("shell is not set"))
-	// DEPRECATING SHELL: }
+
 	if launcher.ClusterLoginCommand == nil {
 		debug("tui.login(): ClusterLoginCommand is not set")
 		errs = append(errs, errors.New("ClusterLoginCommand is not set"))
@@ -284,12 +283,48 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 		}
 	}
 
+	// Replace any variables in the terminal command
+	for i, str := range launcher.Terminal {
+		if i == 0 {
+			// The first value should never be a variable
+			if strings.Contains(str, "%%") {
+				err := fmt.Errorf("first terminal argument should not contain a replaceable string value, found: %s", str)
+				return func() tea.Msg {
+					return loginFinishedMsg{err}
+				}
+			}
+			continue
+		}
+
+		launcher.Terminal[i] = strings.Replace(launcher.Terminal[i], "%%CLUSTER_NAME%%", "occ", -1)
+	}
+
+	// If the ClusterLoginCommand string has a replaceable variable
+	// in the form of %%CLUSTER_ID%% - replace it. Otherwise, we'll
+	// append it to the end of the args list to maintain backwards
+	// compatibility
+
+	appendClusterID := true
+	for k, str := range launcher.ClusterLoginCommand {
+		if strings.Contains(str, "%%CLUSTER_ID%%") {
+			appendClusterID = false
+		}
+
+		launcher.ClusterLoginCommand[k] = strings.Replace(launcher.ClusterLoginCommand[k], "%%CLUSTER_ID%%", cluster, -1)
+	}
+
 	var args []string
 	args = append(args, launcher.Terminal[1:]...)
-	args = append(args, "--") // Terminal separator
-	// DEPRECATING SHELL: args = append(args, launcher.Shell...)
-	args = append(args, launcher.ClusterLoginCommand...)
-	args = append(args, cluster)
+
+	if launcher.CollapseLoginCommand {
+		args = append(args, strings.Join(launcher.ClusterLoginCommand, " "))
+	} else {
+		args = append(args, launcher.ClusterLoginCommand...)
+	}
+
+	if appendClusterID {
+		args = append(args, cluster)
+	}
 
 	// The first element of Terminal is the command to be executed, followed by args, in order
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.

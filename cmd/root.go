@@ -97,8 +97,9 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetStringSlice("ignoredusers"),
 			viper.GetStringSlice("editor"),
 			tui.ClusterLauncher{
-				Terminal:            viper.GetStringSlice("terminal"),
-				ClusterLoginCommand: viper.GetStringSlice("cluster_login_command"),
+				Terminal:             viper.GetStringSlice("terminal"),
+				ClusterLoginCommand:  viper.GetStringSlice("cluster_login_command"),
+				CollapseLoginCommand: viper.GetBool("collapse_login_command"),
 				// DEPRECATING SHELL: Shell:               viper.GetStringSlice("shell"),
 			},
 		)
