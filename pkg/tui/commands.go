@@ -249,16 +249,10 @@ type loginFinishedMsg struct {
 }
 
 func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
-	return func() tea.Msg {
-		if !launcher.Enabled {
-			log.Debug("tui.login(): " + errLoginNotEnabled.Error())
-			return errMsg{error: errLoginNotEnabled}
-		}
-
-		// The first element of Terminal is the command to be executed, followed by args, in order
-		// This handles if folks use, eg: flatpak run <some package> as a terminal.
-		command := launcher.BuildLoginCommand(cluster)
-		c := exec.Command(command[0], command[1:]...)
+	// The first element of Terminal is the command to be executed, followed by args, in order
+	// This handles if folks use, eg: flatpak run <some package> as a terminal.
+	command := launcher.BuildLoginCommand(cluster)
+	c := exec.Command(command[0], command[1:]...)
 
 		log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
 		stderr, pipeErr := c.StderrPipe()
@@ -267,9 +261,10 @@ func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
 			return loginFinishedMsg{err: pipeErr}
 		}
 
-		err := c.Start()
-		if err != nil {
-			log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+	err := c.Start()
+	if err != nil {
+		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+		return func() tea.Msg {
 			return loginFinishedMsg{err}
 		}
 

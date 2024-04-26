@@ -19,7 +19,6 @@ type launcherSettings struct {
 func NewClusterLauncher(terminal string, clusterLoginCommand string) (ClusterLauncher, error) {
 
 	launcher := ClusterLauncher{
-		Enabled:             false,
 		terminal:            strings.Split(terminal, " "),
 		clusterLoginCommand: strings.Split(clusterLoginCommand, " "),
 		settings:            launcherSettings{},
@@ -27,7 +26,6 @@ func NewClusterLauncher(terminal string, clusterLoginCommand string) (ClusterLau
 
 	err := launcher.validate()
 	if err != nil {
-
 		return ClusterLauncher{}, err
 	}
 
