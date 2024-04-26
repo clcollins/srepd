@@ -91,7 +91,7 @@ A typical linux configuration to launch a new terminal window may look something
 
 ```yaml
 terminal: gnome-terminal
-cluster_login_command: ocm-container -C
+cluster_login_command: ocm backplane login
 ```
 
 ### MacOS
