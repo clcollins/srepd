@@ -12,6 +12,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
@@ -254,46 +255,19 @@ type loginFinishedMsg struct {
 	err error
 }
 
-type ClusterLauncher struct {
-	Terminal            []string
-	ClusterLoginCommand []string
-	// DEPRECATING SHELL: Shell               []string
-}
-
-func login(cluster string, launcher ClusterLauncher) tea.Cmd {
-	// Check if we have the necessary info to try to login
-	errs := []error{}
-	if launcher.Terminal == nil {
-		debug("tui.login(): Terminal is not set")
-		errs = append(errs, errors.New("terminal is not set"))
-	}
-	// DEPRECATING SHELL: if launcher.Shell == nil {
-	// DEPRECATING SHELL: 	debug("tui.login(): Shell is not set")
-	// DEPRECATING SHELL: 	errs = append(errs, errors.New("shell is not set"))
-	// DEPRECATING SHELL: }
-	if launcher.ClusterLoginCommand == nil {
-		debug("tui.login(): ClusterLoginCommand is not set")
-		errs = append(errs, errors.New("ClusterLoginCommand is not set"))
-	}
-
-	if len(errs) > 0 {
-		err := fmt.Errorf("login error: %v", errs)
+func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
+	err := launcher.Validate()
+	if err != nil {
 		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 		return func() tea.Msg {
 			return loginFinishedMsg{err}
 		}
 	}
 
-	var args []string
-	args = append(args, launcher.Terminal[1:]...)
-	args = append(args, "--") // Terminal separator
-	// DEPRECATING SHELL: args = append(args, launcher.Shell...)
-	args = append(args, launcher.ClusterLoginCommand...)
-	args = append(args, cluster)
-
 	// The first element of Terminal is the command to be executed, followed by args, in order
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.
-	c := exec.Command(launcher.Terminal[0], args...)
+	command, _ := launcher.BuildLoginCommand(cluster)
+	c := exec.Command(command[0], command[1:]...)
 
 	debug(fmt.Sprintf("tui.login(): %v", c.String()))
 	stderr, pipeErr := c.StderrPipe()
@@ -304,7 +278,7 @@ func login(cluster string, launcher ClusterLauncher) tea.Cmd {
 		}
 	}
 
-	err := c.Start()
+	err = c.Start()
 	if err != nil {
 		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 		return func() tea.Msg {

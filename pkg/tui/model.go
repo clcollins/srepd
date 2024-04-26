@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
@@ -18,7 +19,7 @@ type model struct {
 
 	config   *pd.Config
 	editor   []string
-	launcher ClusterLauncher
+	launcher launcher.ClusterLauncher
 
 	table table.Model
 	input textinput.Model
@@ -45,7 +46,7 @@ func InitialModel(
 	user string,
 	ignoredusers []string,
 	editor []string,
-	launcher ClusterLauncher,
+	launcher launcher.ClusterLauncher,
 ) (tea.Model, tea.Cmd) {
 	if d {
 		debugLogging = true
