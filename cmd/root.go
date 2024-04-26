@@ -32,6 +32,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/deprecation"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -89,6 +90,13 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		}
 
+		launcher, err := launcher.NewClusterLauncher(viper.GetStringSlice("terminal"), viper.GetStringSlice("cluster_login_command"))
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		launcher.SetCollapseLoginCommand(viper.GetBool("collapse_login_command"))
+
 		m, _ := tui.InitialModel(
 			viper.GetBool("debug"),
 			viper.GetString("token"),
@@ -96,12 +104,7 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetString("silentuser"),
 			viper.GetStringSlice("ignoredusers"),
 			viper.GetStringSlice("editor"),
-			tui.ClusterLauncher{
-				Terminal:             viper.GetStringSlice("terminal"),
-				ClusterLoginCommand:  viper.GetStringSlice("cluster_login_command"),
-				CollapseLoginCommand: viper.GetBool("collapse_login_command"),
-				// DEPRECATING SHELL: Shell:               viper.GetStringSlice("shell"),
-			},
+			launcher,
 		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
@@ -127,7 +130,6 @@ func bindArgsToViper(cmd *cobra.Command) {
 	viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
 	viper.BindPFlag("editor", cmd.Flags().Lookup("editor"))
 	viper.BindPFlag("terminal", cmd.Flags().Lookup("terminal"))
-	// DEPRECATING SHELL: viper.BindPFlag("shell", cmd.Flags().Lookup("shell"))
 	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("clusterLoginCommand"))
 }
 
@@ -151,9 +153,8 @@ func (f cliFlag) BoolValue() bool {
 func init() {
 	// Must not be aliases - must be real commands or links
 	const (
-		defaultEditor   = "vim"
-		defaultTerminal = "gnome-terminal"
-		// DEPRECATING SHELL: defaultShell           = "bash -c"
+		defaultEditor          = "vim"
+		defaultTerminal        = "gnome-terminal"
 		defaultClusterLoginCmd = "ocm backplane login"
 	)
 
@@ -161,7 +162,6 @@ func init() {
 		{"bool", "debug", "d", "false", "Enable debug logging (~/.config/srepd/debug.log)"},
 		{"string", "editor", "e", defaultEditor, "Editor to use for notes"},
 		{"string", "terminal", "t", defaultTerminal, "Terminal to use for exec commands"},
-		// DEPRECATING SHELL: {"string", "shell", "s", defaultShell, "Shell to use for exec commands"},
 		{"string", "clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command"},
 	}
 
