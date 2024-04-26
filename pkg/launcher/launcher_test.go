@@ -8,50 +8,45 @@ import (
 func TestClusterLauncherValidation(t *testing.T) {
 	tests := []struct {
 		name            string
-		terminalArg     []string
-		loginCommandArg []string
+		terminalArg     string
+		loginCommandArg string
 		expectErr       bool
 	}{
 		{
 			name:            "Tests that the clusterLauncher can be created successfully",
-			terminalArg:     []string{"tmux", "new-window", "-n", "%%CLUSTER_NAME%%"},
-			loginCommandArg: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+			terminalArg:     "tmux new-window -n %%CLUSTER_NAME%%",
+			loginCommandArg: "ocm-container -C %%CLUSTER_ID%%",
 			expectErr:       false,
 		},
 		{
 			name:            "Tests both terminal and login args are nil",
-			terminalArg:     nil,
-			loginCommandArg: nil,
+			terminalArg:     "",
+			loginCommandArg: "",
 			expectErr:       true,
 		},
 		{
 			name:            "Tests terminal is nill but login args are not",
-			terminalArg:     nil,
-			loginCommandArg: []string{"ocm", "backplane", "session"},
+			terminalArg:     "",
+			loginCommandArg: "ocm backplane session",
 			expectErr:       true,
 		},
 		{
 			name:            "Tests terminal is not nil but login args are nil",
-			terminalArg:     []string{"/bin/xterm"},
-			loginCommandArg: nil,
+			terminalArg:     "/bin/xterm",
+			loginCommandArg: "",
 			expectErr:       true,
 		},
 		{
 			name:            "Tests that the first terminal argument cannot be a replaceable",
-			terminalArg:     []string{"%%CLUSTER_ID%%", "something"},
-			loginCommandArg: []string{"ocm-container"},
+			terminalArg:     "%%CLUSTER_ID%% something",
+			loginCommandArg: "ocm-container",
 			expectErr:       true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			launcher, err := NewClusterLauncher(test.terminalArg, test.loginCommandArg)
-			if err != nil {
-				t.Fatalf("Unexpected Error initializing Launcher")
-			}
-
-			err = launcher.Validate()
+			_, err := NewClusterLauncher(test.terminalArg, test.loginCommandArg)
 			if test.expectErr && err == nil {
 				t.Fatalf("Expected error but none fired")
 			}
@@ -73,7 +68,7 @@ func TestLoginCommandBuild(t *testing.T) {
 			name: "Validate that the first argument won't be replaced",
 			launcher: ClusterLauncher{
 				terminal:            []string{"%%CLUSTER_ID%%", "%%CLUSTER_ID%%"},
-				clusterLoginCommand: []string{"ocm", "backplane", "login"},
+				clusterLoginCommand: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
 			},
 			expectErr: false,
 			comparisonFN: func(t *testing.T, cmd []string) {
@@ -102,15 +97,14 @@ func TestLoginCommandBuild(t *testing.T) {
 			launcher: ClusterLauncher{
 				terminal:            []string{"tmux", "new-window", "-n", "%%CLUSTER_ID%%"},
 				clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
-				settings:            launcherSettings{collapseLoginCommand: true},
 			},
 			expectErr: false,
 			comparisonFN: func(t *testing.T, cmd []string) {
-				expected := []string{"tmux", "new-window", "-n", "abcdefg", "ocm-container -C abcdefg"}
+				expected := []string{"tmux", "new-window", "-n", "abcdefg", "ocm-container", "-C", "abcdefg"}
 				if len(expected) != len(cmd) {
 					t.Fatalf("Expected command slice %#v but got %#v", expected, cmd)
 				}
-				for k, _ := range cmd {
+				for k := range cmd {
 					if cmd[k] != expected[k] {
 						t.Fatalf("Expected command slice %#v but got %#v", expected, cmd)
 					}
@@ -118,16 +112,21 @@ func TestLoginCommandBuild(t *testing.T) {
 			},
 		},
 		{
-			name: "cluster login command when it has no replaceable values should have the cluster ID appended to the end",
+			name: "terminal or cluster login command must contain %%CLUSTER_ID%%",
 			launcher: ClusterLauncher{
-				terminal:            []string{"gnome-terminal"},
-				clusterLoginCommand: []string{"ocm-container"},
+				terminal:            []string{"gnome-terminal", "--"},
+				clusterLoginCommand: []string{"ocm", "backplane", "login"},
 			},
-			expectErr: false,
+			expectErr: true,
 			comparisonFN: func(t *testing.T, cmd []string) {
-				expected := "gnome-terminal ocm-container abcdefg"
-				if expected != strings.Join(cmd, " ") {
-					t.Fatalf("Expected cluster ID to be automaticall appended. Got: %s, expected: %s", cmd, expected)
+				expected := []string{"gnome-terminal", "--", "ocm", "backplane", "login"} // Don't actually expect this - expect an error
+				if len(expected) != len(cmd) {
+					t.Fatalf("Expected command slice %#v but got %#v", expected, cmd)
+				}
+				for k := range cmd {
+					if cmd[k] != expected[k] {
+						t.Fatalf("Expected command slice %#v but got %#v", expected, cmd)
+					}
 				}
 			},
 		},
@@ -135,14 +134,7 @@ func TestLoginCommandBuild(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd, err := test.launcher.BuildLoginCommand("abcdefg")
-			if test.expectErr && err == nil {
-				t.Fatal("Expected an error and got none")
-			}
-			if !test.expectErr && err != nil {
-				t.Fatalf("Was not expecting an error but got: %v", err)
-			}
-
+			cmd := test.launcher.BuildLoginCommand("abcdefg")
 			test.comparisonFN(t, cmd)
 		})
 	}

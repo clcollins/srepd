@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"slices"
@@ -14,11 +13,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
 	gettingUserStatus      = "getting user info..."
 	loadingIncidentsStatus = "loading incidents..."
+)
+
+var (
+	errLoginNotEnabled = errors.New("login not enabled; check configuration for 'terminal' and 'cluster_login_command'")
 )
 
 type waitForSelectedIncidentThenDoMsg struct {
@@ -30,13 +34,14 @@ type waitForSelectedIncidentThenDoMsg struct {
 type waitForSelectedIncidentThenRenderMsg string
 
 //lint:ignore U1000 - future proofing
-func updateSelectedIncident(p *pd.Config, id string) tea.Cmd {
-	return tea.Sequence(
-		getIncident(p, id),
-		getIncidentAlerts(p, id),
-		getIncidentNotes(p, id),
-	)
-}
+// func updateSelectedIncident(p *pd.Config, id string) tea.Msg {
+// This return won't work as is - these are not tea.Cmd functions
+// 	return tea.Sequence(
+// 		getIncident(p, id),
+// 		getIncidentAlerts(p, id),
+// 		getIncidentNotes(p, id),
+// 	)
+// }
 
 type updateIncidentListMsg string
 type updatedIncidentListMsg struct {
@@ -71,7 +76,7 @@ func updateIncidentList(p *pd.Config) tea.Cmd {
 
 		// Retrieve incidents assigned to the TeamIDs and filtered UserIDs
 		i, err := pd.GetIncidents(p.Client, opts)
-		debug(fmt.Sprintf("tui.updateIncidentList(): retrieved %v incidents after filtering", len(i)))
+		log.Debug(fmt.Sprintf("tui.updateIncidentList(): retrieved %v incidents after filtering", len(i)))
 		return updatedIncidentListMsg{i, err}
 	}
 }
@@ -87,16 +92,12 @@ func renderIncident(m *model) tea.Cmd {
 	return func() tea.Msg {
 		t, err := m.template()
 		if err != nil {
-			return func() tea.Msg {
-				return errMsg{err}
-			}
+			return errMsg{err}
 		}
 
 		content, err := renderIncidentMarkdown(t)
 		if err != nil {
-			return func() tea.Msg {
-				return errMsg{err}
-			}
+			return errMsg{err}
 		}
 
 		return renderedIncidentMsg{content, err}
@@ -173,47 +174,39 @@ type browserFinishedMsg struct {
 type openBrowserMsg string
 
 func openBrowserCmd(browser []string, url string) tea.Cmd {
-	debug("tui.openBrowserCmd(): opening browser")
-	debug(fmt.Sprintf("tui.openBrowserCmd(): %v %v", browser, url))
+	return func() tea.Msg {
+		log.Debug("tui.openBrowserCmd(): opening browser")
+		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v %v", browser, url))
 
-	var args []string
-	args = append(args, browser[1:]...)
-	args = append(args, url)
+		var args []string
+		args = append(args, browser[1:]...)
+		args = append(args, url)
 
-	c := exec.Command(browser[0], args...)
-	debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
-	stderr, pipeErr := c.StderrPipe()
-	if pipeErr != nil {
-		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
-		return func() tea.Msg {
+		c := exec.Command(browser[0], args...)
+		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
+		stderr, pipeErr := c.StderrPipe()
+		if pipeErr != nil {
+			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
 			return browserFinishedMsg{err: pipeErr}
 		}
-	}
 
-	err := c.Start()
-	if err != nil {
-		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
-		return func() tea.Msg {
+		err := c.Start()
+		if err != nil {
+			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
 			return browserFinishedMsg{err}
 		}
-	}
 
-	out, err := io.ReadAll(stderr)
-	if err != nil {
-		debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
-		return func() tea.Msg {
+		out, err := io.ReadAll(stderr)
+		if err != nil {
+			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
 			return browserFinishedMsg{err}
 		}
-	}
 
-	if len(out) > 0 {
-		debug(fmt.Sprintf("tui.openBrowserCmd(): error: %s", out))
-		return func() tea.Msg {
+		if len(out) > 0 {
+			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): error: %s", out))
 			return browserFinishedMsg{fmt.Errorf("%s", out)}
 		}
-	}
 
-	return func() tea.Msg {
 		return browserFinishedMsg{}
 	}
 }
@@ -224,30 +217,30 @@ type editorFinishedMsg struct {
 }
 
 func openEditorCmd(editor []string) tea.Cmd {
-	debug("tui.openEditorCmd(): opening editor")
-	var args []string
+	return func() tea.Msg {
+		log.Debug("tui.openEditorCmd(): opening editor")
+		var args []string
 
-	file, err := os.CreateTemp(os.TempDir(), "")
-	if err != nil {
-		debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
-		return func() tea.Msg {
-			return errMsg{error: err}
-		}
-	}
-
-	args = append(args, editor[1:]...)
-	args = append(args, file.Name())
-
-	c := exec.Command(editor[0], args...)
-
-	debug(fmt.Sprintf("%+v", c))
-	return tea.ExecProcess(c, func(err error) tea.Msg {
+		file, err := os.CreateTemp(os.TempDir(), "")
 		if err != nil {
-			debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+			log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
 			return errMsg{error: err}
 		}
-		return editorFinishedMsg{err, file}
-	})
+
+		args = append(args, editor[1:]...)
+		args = append(args, file.Name())
+
+		c := exec.Command(editor[0], args...)
+
+		log.Debug(fmt.Sprintf("%+v", c))
+		return tea.ExecProcess(c, func(err error) tea.Msg {
+			if err != nil {
+				log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+				return errMsg{error: err}
+			}
+			return editorFinishedMsg{err, file}
+		})
+	}
 }
 
 type loginMsg string
@@ -256,52 +249,41 @@ type loginFinishedMsg struct {
 }
 
 func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
-	err := launcher.Validate()
-	if err != nil {
-		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
-		return func() tea.Msg {
-			return loginFinishedMsg{err}
+	return func() tea.Msg {
+		if !launcher.Enabled {
+			log.Debug("tui.login(): " + errLoginNotEnabled.Error())
+			return errMsg{error: errLoginNotEnabled}
 		}
-	}
 
-	// The first element of Terminal is the command to be executed, followed by args, in order
-	// This handles if folks use, eg: flatpak run <some package> as a terminal.
-	command, _ := launcher.BuildLoginCommand(cluster)
-	c := exec.Command(command[0], command[1:]...)
+		// The first element of Terminal is the command to be executed, followed by args, in order
+		// This handles if folks use, eg: flatpak run <some package> as a terminal.
+		command := launcher.BuildLoginCommand(cluster)
+		c := exec.Command(command[0], command[1:]...)
 
-	debug(fmt.Sprintf("tui.login(): %v", c.String()))
-	stderr, pipeErr := c.StderrPipe()
-	if pipeErr != nil {
-		debug(fmt.Sprintf("tui.login(): %v", pipeErr.Error()))
-		return func() tea.Msg {
+		log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
+		stderr, pipeErr := c.StderrPipe()
+		if pipeErr != nil {
+			log.Debug(fmt.Sprintf("tui.login(): %v", pipeErr.Error()))
 			return loginFinishedMsg{err: pipeErr}
 		}
-	}
 
-	err = c.Start()
-	if err != nil {
-		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
-		return func() tea.Msg {
+		err := c.Start()
+		if err != nil {
+			log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 			return loginFinishedMsg{err}
 		}
-	}
 
-	out, err := io.ReadAll(stderr)
-	if err != nil {
-		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
-		return func() tea.Msg {
+		out, err := io.ReadAll(stderr)
+		if err != nil {
+			log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 			return loginFinishedMsg{err}
 		}
-	}
 
-	if len(out) > 0 {
-		debug(fmt.Sprintf("tui.login(): error: %s", out))
-		return func() tea.Msg {
+		if len(out) > 0 {
+			log.Debug(fmt.Sprintf("tui.login(): error: %s", out))
 			return loginFinishedMsg{fmt.Errorf("%s", out)}
 		}
-	}
 
-	return func() tea.Msg {
 		return loginFinishedMsg{err}
 	}
 }
@@ -417,10 +399,10 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 		if a.Body["details"].(map[string]interface{})[f] != nil {
 			return a.Body["details"].(map[string]interface{})[f].(string)
 		}
-		debug(fmt.Sprintf("tui.getDetailFieldFromAlert(): alert body \"details\" does not contain field %s", f))
+		log.Debug(fmt.Sprintf("tui.getDetailFieldFromAlert(): alert body \"details\" does not contain field %s", f))
 		return ""
 	}
-	debug("tui.getDetailFieldFromAlert(): alert body \"details\" is nil")
+	log.Debug("tui.getDetailFieldFromAlert(): alert body \"details\" is nil")
 	return ""
 }
 
@@ -434,16 +416,16 @@ func acknowledged(a []pagerduty.Acknowledgement) string {
 }
 
 func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
-	debug("doIfIncidentSelected()")
+	log.Debug("doIfIncidentSelected()")
 	if m.table.SelectedRow() == nil {
-		debug("doIfIncidentSelected(): selected row is nil")
+		log.Debug("doIfIncidentSelected(): selected row is nil")
 		m.setStatus(nilIncidentErr)
 		m.viewingIncident = false
 		return tea.Sequence(
 			func() tea.Msg { return errMsg{errors.New(nilIncidentErr)} },
 		)
 	}
-	debug("doIfIncidentSelected(): got selected row")
+	log.Debug("doIfIncidentSelected(): got selected row")
 	return tea.Sequence(
 		func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
 		cmd,

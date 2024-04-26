@@ -24,7 +24,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -34,6 +33,7 @@ import (
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/tui"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -53,52 +53,66 @@ but rather a simple tool to make on-call tasks easier.`,
 		bindArgsToViper(cmd)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		// log.SetReportCaller(true)
+		log.SetFormatter(&log.TextFormatter{
+			DisableTimestamp:       true,
+			DisableLevelTruncation: false,
+			PadLevelText:           true,
+			// SortingFunc: func(keys []string) {
+			// 	sort.Strings(keys)
+			// },
+			// CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			// 	file := filepath.Base(f.File)
+			// 	return "", fmt.Sprintf("%s:%d", file, f.Line)
+			// },
+		})
+		log.SetLevel(func() log.Level {
+			if viper.GetBool("debug") {
+				return log.DebugLevel
+			}
+			return log.WarnLevel
+		}())
+
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
-		f, err := tea.LogToFile(home+"/.config/srepd/debug.log", "debug")
-		if err != nil {
-			fmt.Println("fatal:", err)
-			os.Exit(1)
-		}
+
+		f, err := os.OpenFile(home+"/.config/srepd/debug.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) //nolint:gomnd
+		cobra.CheckErr(err)
+
 		defer f.Close()
 
-		if viper.GetBool("debug") {
-			log.Printf("Debugging enabled\n")
-			settings := viper.GetViper().AllSettings()
-			keys := make([]string, 0, len(settings))
-			for k := range settings {
-				keys = append(keys, k)
+		log.SetOutput(f)
+
+		settings := viper.GetViper().AllSettings()
+		keys := make([]string, 0, len(settings))
+		for k := range settings {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			if deprecation.Deprecated(k) {
+				log.Debug(fmt.Sprintf("Found deprecated key: `%v`; you may remove this from your config.", k))
+				continue
 			}
-			sort.Strings(keys)
 
-			for _, k := range keys {
-				if deprecation.Deprecated(k) {
-					log.Printf("Found deprecated key: `%v`; you may remove this from your config.", k)
-					continue
-				}
+			var v string
 
-				var v string
-
-				v = fmt.Sprintf("%v", settings[k])
-				if strings.Contains(k, "token") {
-					v = "*****"
-				}
-
-				log.Printf("Found key: `%v`, value: `%v`\n", k, v)
-
+			v = fmt.Sprintf("%v", settings[k])
+			if strings.Contains(k, "token") {
+				v = "*****"
 			}
+
+			log.Debug(fmt.Sprintf("Found key: `%v`, value: `%v`\n", k, v))
 
 		}
 
-		launcher, err := launcher.NewClusterLauncher(viper.GetStringSlice("terminal"), viper.GetStringSlice("cluster_login_command"))
+		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"))
 		if err != nil {
-			fmt.Println("fatal:", err)
-			os.Exit(1)
+			log.Warn(err)
 		}
-		launcher.SetCollapseLoginCommand(viper.GetBool("collapse_login_command"))
 
 		m, _ := tui.InitialModel(
-			viper.GetBool("debug"),
 			viper.GetString("token"),
 			viper.GetStringSlice("teams"),
 			viper.GetString("silentuser"),
@@ -110,8 +124,7 @@ but rather a simple tool to make on-call tasks easier.`,
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err = p.Run()
 		if err != nil {
-			fmt.Println("fatal:", err)
-			os.Exit(1)
+			log.Fatal(err)
 		}
 	},
 }
@@ -121,7 +134,7 @@ but rather a simple tool to make on-call tasks easier.`,
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }
 
