@@ -93,7 +93,7 @@ To enable automatic login directly from SREPD you will need to configure the `te
 A typical linux configuration to launch a new terminal window may look something like what follows. Be sure to change to your preferred terminal or preferred ops environment (ocm-container, ocm-backplane session, osdctl session, etc)
 
 ```yaml
-terminal: gnome-terminal
+terminal: gnome-terminal --
 cluster_login_command: ocm backplane login
 ```
 
