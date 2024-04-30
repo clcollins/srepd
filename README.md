@@ -40,8 +40,9 @@ Configuration variables have the following precedence:
 * ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.  It's recommended that the "silentuser" ID is in this list.
 * editor: Your choice of editor.  Defaults to the `$EDITOR` environment variable.
 * cluster_login_cmd: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
-* shell: Your choice of shell to use inside of launched terminal windows. Defaults to `$SHELL`.
 * terminal: Your choice of terminal to use when launching external commands. Defaults to `/usr/bin/gnome-terminal`.
+
+__NOTE:__ The cluster_login_cmd and terminal accept a variable for `%%CLUSTER_ID%%` to stand in for the Cluster ID in the command. At least one of the two, most likely `cluster_login_cmd` MUST have the `%%CLUSTER_ID%%` placeholder set. See [AUTOMATIC LOGIN FEATURES](#automatic-login-features) for more details about config variables.
 
 An example srepd.yaml file might look like so:
 
@@ -52,11 +53,10 @@ An example srepd.yaml file might look like so:
 editor: vim
 
 # Cluster Login options
-cluster_login_cmd: "ocm-container"
-shell: /bin/bash
-terminal: /usr/bin/gnome-terminal --
 # Note the trailing `--` is necessary for gnome-terminal and may be necessary
 # for other terminals as well
+terminal: /usr/bin/gnome-terminal --
+cluster_login_cmd: ocm-container --clusterid %%CLUSTER_ID%%
 
 # Note that aliases, etc, are not sourced by the shell command when launching.
 # This means, for example, that `ocm-container`, as normally setup using an
@@ -93,9 +93,36 @@ To enable automatic login directly from SREPD you will need to configure the `te
 A typical linux configuration to launch a new terminal window may look something like what follows. Be sure to change to your preferred terminal or preferred ops environment (ocm-container, ocm-backplane session, osdctl session, etc)
 
 ```yaml
+# Gnome-Terminal
+# gnome-terminal requires the "--" separator between the terminal any any of its flags and the command to be run
+# eg: gnome-terminal -- ocm backplane login %%CLUSTER_ID%%
 terminal: gnome-terminal --
-cluster_login_command: ocm backplane login
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
+
+Each terminal has its own way of accepting an argument for a command to run after launching. Some examples known to work:
+
+
+```yaml
+# Contour (in this example, via Flatpak)
+# contour does not require any special arguments or separators
+terminal: flatpak run org.contourterminal.Contour
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# BlackBox (via Flatpak)
+terminal: flatpak run com.raggesilver.BlackBox --
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# Terminator
+# terminator requires the "-x" or "--execute" flag as the separator between terminal arguments and the command to be run
+terminal: terminator --execute
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
 
 ### MacOS
 Configuration for MacOS is not as straightforward because of the way that MacOS handles applications differently from Linux. We've provided a few separate ways to configure SREPD to handle automatic logins.
@@ -104,9 +131,9 @@ Configuration for MacOS is not as straightforward because of the way that MacOS 
 The following configuration will launch a new MacOS default terminal window to automatically login to a cluster. This example uses ocm-container but feel free to modify to fit your preferred workflow.
 
 ```yaml
-cluster_login_command: tell application "Terminal" to do script "ocm-container -C %%CLUSTER_ID%%"
+# MacOS Terminal
 terminal: osascript -e
-collapse_login_command: true
+cluster_login_command: tell application "Terminal" to do script "ocm-container -C %%CLUSTER_ID%%"
 ```
 
 #### iTerm2 Support
@@ -123,19 +150,22 @@ osascript \
 Then, you would add the following to your srepd config:
 
 ```yaml
+# iTerm2
 terminal: /Users/kbater/Projects/spikes/srepd
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
-### Tmux support
+### TMUX Support
+
 Alternatively to launching a whole new terminal window, if you're already using tmux you can use the following configuration to create new tmux-windows and auto-launch your environment from there:
 
 ```yaml
-cluster_login_command: ocm-container -C %%CLUSTER_ID%%
-terminal: tmux new-window
-collapse_login_command: true
+# TMUX
+terminal: tmux new-window --
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
+<a name="automatic-login-features"></a>
 ### Automatic Login Features
 The first feature of Automatic Login is the ability to replace certain strings with their cluster-specific details. When you pass `%%VARIABLE%%` in your `terminal` or `cluster_login_command` configuration strings they will dynamically be replaced with the alert-specific variable. This allows you to be able to put the specific details of these variables inside the command. The first argument of the `terminal` setting MUST NOT BE a replaceable value.
 
@@ -150,19 +180,4 @@ cluster_login_command: ocm backplane login %%CLUSTER_ID%% --multi
 
 cluster_login_command: ocm backplane login --multi
 ## effectively runs "ocm backplane login --multi abcdefg"
-```
-
-There's also a boolean flag `collapse_login_command`. This is sometimes necessary when passing the login command as an argument to another application, like when passing it to tmux or to the MacOS terminal. This is required because of the way that Go passes a list of strings into the `exec.Command` function. As an example:
-
-```yaml
-terminal: tmux new-window
-cluster_login_command: ocm-container -C %%CLUSTER_ID%%
-collapse_login_command: true
-## effectively generates the command `tmux new-window 'ocm-container -C abcdefg'` - allowing the whole cluster-login command to be passed as a single string
-## the slice would look like this: []string{"tmux", "new-window", "ocm-container -C abcdefg"}
-
-terminal: tmux new-window
-cluster_login_command: ocm-container -C
-## effectively generates the command `tmux new-window ocm-container -C abcdefg` - which passes each space-delimited string as a separate argument to the new-window tmux command.
-## the slice would look like this: []string{"tmux", "new-window", "ocm-container", "-C", "abcdefg"}
 ```

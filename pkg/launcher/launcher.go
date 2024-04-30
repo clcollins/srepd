@@ -6,37 +6,42 @@ import (
 )
 
 type ClusterLauncher struct {
+	Enabled             bool
 	terminal            []string
 	clusterLoginCommand []string
 	settings            launcherSettings
 }
 
 type launcherSettings struct {
-	collapseLoginCommand bool
+	// Future Usage Possibly
 }
 
-func NewClusterLauncher(terminal []string, clusterLoginCommand []string) (ClusterLauncher, error) {
+func NewClusterLauncher(terminal string, clusterLoginCommand string) (ClusterLauncher, error) {
+
 	launcher := ClusterLauncher{
-		terminal:            terminal,
-		clusterLoginCommand: clusterLoginCommand,
+		Enabled:             false,
+		terminal:            strings.Split(terminal, " "),
+		clusterLoginCommand: strings.Split(clusterLoginCommand, " "),
 		settings:            launcherSettings{},
+	}
+
+	err := launcher.validate()
+	if err != nil {
+
+		return ClusterLauncher{}, err
 	}
 
 	return launcher, nil
 }
 
-func (l *ClusterLauncher) SetCollapseLoginCommand(setting bool) {
-	l.settings.collapseLoginCommand = setting
-}
-
-func (l *ClusterLauncher) Validate() error {
+func (l *ClusterLauncher) validate() error {
 	errs := []error{}
 
-	if l.terminal == nil {
+	if l.terminal == nil || l.terminal[0] == "" {
 		errs = append(errs, fmt.Errorf("terminal is not set"))
 	}
 
-	if l.clusterLoginCommand == nil {
+	if l.clusterLoginCommand == nil || l.clusterLoginCommand[0] == "" {
 		errs = append(errs, fmt.Errorf("clusterLoginCommand is not set"))
 	}
 
@@ -44,13 +49,19 @@ func (l *ClusterLauncher) Validate() error {
 		errs = append(errs, fmt.Errorf("first terminal argument cannot have a replaceable"))
 	}
 
+	if (!strings.Contains(strings.Join(l.clusterLoginCommand, " "), "%%CLUSTER_ID%%")) && (!strings.Contains(strings.Join(l.terminal, " "), "%%CLUSTER_ID%%")) {
+		errs = append(errs, fmt.Errorf("clusterLoginCommand must contain %%CLUSTER_ID%%"))
+	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("login error: %v", errs)
 	}
+
+	l.Enabled = true
 	return nil
 }
 
-func (l *ClusterLauncher) BuildLoginCommand(cluster string) ([]string, error) {
+func (l *ClusterLauncher) BuildLoginCommand(cluster string) []string {
 	command := []string{}
 
 	// Handle the Terminal command
@@ -58,26 +69,9 @@ func (l *ClusterLauncher) BuildLoginCommand(cluster string) ([]string, error) {
 	// validate function
 	command = append(command, l.terminal[0])
 	command = append(command, replaceVars(l.terminal[1:], cluster)...)
+	command = append(command, replaceVars(l.clusterLoginCommand, cluster)...)
 
-	needsClusterIDAppended := true
-	for _, str := range l.clusterLoginCommand {
-		if strings.Contains(str, "%%CLUSTER_ID%%") {
-			needsClusterIDAppended = false
-		}
-	}
-	loginCmd := replaceVars(l.clusterLoginCommand, cluster)
-
-	if needsClusterIDAppended {
-		loginCmd = append(loginCmd, cluster)
-	}
-
-	if l.settings.collapseLoginCommand {
-		command = append(command, strings.Join(loginCmd, " "))
-	} else {
-		command = append(command, loginCmd...)
-	}
-
-	return command, nil
+	return command
 }
 
 func replaceVars(args []string, cluster string) []string {
