@@ -21,10 +21,6 @@ const (
 	loadingIncidentsStatus = "loading incidents..."
 )
 
-var (
-	errLoginNotEnabled = errors.New("login not enabled; check configuration for 'terminal' and 'cluster_login_command'")
-)
-
 type waitForSelectedIncidentThenDoMsg struct {
 	action tea.Cmd
 	msg    tea.Msg
@@ -254,33 +250,42 @@ func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
 	command := launcher.BuildLoginCommand(cluster)
 	c := exec.Command(command[0], command[1:]...)
 
-		log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
-		stderr, pipeErr := c.StderrPipe()
-		if pipeErr != nil {
-			log.Debug(fmt.Sprintf("tui.login(): %v", pipeErr.Error()))
+	log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
+	stderr, pipeErr := c.StderrPipe()
+	if pipeErr != nil {
+		log.Debug(fmt.Sprintf("tui.login(): %v", pipeErr.Error()))
+		return func() tea.Msg {
 			return loginFinishedMsg{err: pipeErr}
 		}
+	}
 
 	err := c.Start()
 	if err != nil {
-		debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+		log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
 		return func() tea.Msg {
 			return loginFinishedMsg{err}
 		}
+	}
 
-		out, err := io.ReadAll(stderr)
-		if err != nil {
-			log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+	out, err := io.ReadAll(stderr)
+	if err != nil {
+		log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+		return func() tea.Msg {
 			return loginFinishedMsg{err}
 		}
+	}
 
-		if len(out) > 0 {
-			log.Debug(fmt.Sprintf("tui.login(): error: %s", out))
+	if len(out) > 0 {
+		log.Debug(fmt.Sprintf("tui.login(): error: %s", out))
+		return func() tea.Msg {
 			return loginFinishedMsg{fmt.Errorf("%s", out)}
 		}
+	}
 
+	return func() tea.Msg {
 		return loginFinishedMsg{err}
 	}
+
 }
 
 type clearSelectedIncidentsMsg string
