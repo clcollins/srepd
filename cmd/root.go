@@ -53,7 +53,7 @@ but rather a simple tool to make on-call tasks easier.`,
 		bindArgsToViper(cmd)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// log.SetReportCaller(true)
+		log.SetReportCaller(false)
 		log.SetFormatter(&log.TextFormatter{
 			DisableTimestamp:       true,
 			DisableLevelTruncation: false,
