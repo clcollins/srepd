@@ -21,8 +21,26 @@ THE SOFTWARE.
 */
 package main
 
-import "github.com/clcollins/srepd/cmd"
+import (
+	"os"
+
+	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/cmd"
+)
 
 func main() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	f, err := os.OpenFile(home+"/.config/srepd/debug.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) //nolint:gomnd
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	log.SetOutput(f)
+
 	cmd.Execute()
 }

@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	log "github.com/sirupsen/logrus"
+	"github.com/charmbracelet/log"
 )
 
 const (
