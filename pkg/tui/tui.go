@@ -8,7 +8,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	log "github.com/sirupsen/logrus"
+	"github.com/charmbracelet/log"
 )
 
 const (
@@ -36,7 +36,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case errMsg:
-		log.Debug("update errMsg", fmt.Sprint(msg))
+		log.Error("update errMsg", fmt.Sprint(msg))
 		return m.errMsgHandler(msg)
 
 	case tea.WindowSizeMsg:

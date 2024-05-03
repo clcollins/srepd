@@ -30,10 +30,10 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/tui"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -51,21 +51,7 @@ but rather a simple tool to make on-call tasks easier.`,
 
 	PreRun: func(cmd *cobra.Command, args []string) {
 		bindArgsToViper(cmd)
-	},
-	Run: func(cmd *cobra.Command, args []string) {
-		log.SetReportCaller(false)
-		log.SetFormatter(&log.TextFormatter{
-			DisableTimestamp:       true,
-			DisableLevelTruncation: false,
-			PadLevelText:           true,
-			// SortingFunc: func(keys []string) {
-			// 	sort.Strings(keys)
-			// },
-			// CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-			// 	file := filepath.Base(f.File)
-			// 	return "", fmt.Sprintf("%s:%d", file, f.Line)
-			// },
-		})
+
 		log.SetLevel(func() log.Level {
 			if viper.GetBool("debug") {
 				return log.DebugLevel
@@ -73,39 +59,10 @@ but rather a simple tool to make on-call tasks easier.`,
 			return log.WarnLevel
 		}())
 
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
+		checkSettings()
 
-		f, err := os.OpenFile(home+"/.config/srepd/debug.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) //nolint:gomnd
-		cobra.CheckErr(err)
-
-		defer f.Close()
-
-		log.SetOutput(f)
-
-		settings := viper.GetViper().AllSettings()
-		keys := make([]string, 0, len(settings))
-		for k := range settings {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-
-		for _, k := range keys {
-			if deprecation.Deprecated(k) {
-				log.Debug(fmt.Sprintf("Found deprecated key: `%v`; you may remove this from your config.", k))
-				continue
-			}
-
-			var v string
-
-			v = fmt.Sprintf("%v", settings[k])
-			if strings.Contains(k, "token") {
-				v = "*****"
-			}
-
-			log.Debug(fmt.Sprintf("Found key: `%v`, value: `%v`\n", k, v))
-
-		}
+	},
+	Run: func(cmd *cobra.Command, args []string) {
 
 		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"))
 		if err != nil {
@@ -135,6 +92,33 @@ func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+// checkSettings prints the viper info passed into the program
+func checkSettings() {
+	settings := viper.GetViper().AllSettings()
+	keys := make([]string, 0, len(settings))
+	for k := range settings {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		if deprecation.Deprecated(k) {
+			log.Info(fmt.Sprintf("Found deprecated key: `%v`; you may remove this from your config.", k))
+			continue
+		}
+
+		var v string
+
+		v = fmt.Sprintf("%v", settings[k])
+		if strings.Contains(k, "token") {
+			v = "*****"
+		}
+
+		log.Debug(fmt.Sprintf("Found key: `%v`, value: `%v`", k, v))
+
 	}
 }
 

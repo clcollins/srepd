@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	log "github.com/sirupsen/logrus"
+	"github.com/charmbracelet/log"
 )
 
 // errMsgHandler is the message handler for the errMsg message

@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
-	log "github.com/sirupsen/logrus"
+	"github.com/charmbracelet/log"
 )
 
 type model struct {
