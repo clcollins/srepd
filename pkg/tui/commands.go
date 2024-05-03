@@ -170,39 +170,47 @@ type browserFinishedMsg struct {
 type openBrowserMsg string
 
 func openBrowserCmd(browser []string, url string) tea.Cmd {
-	return func() tea.Msg {
-		log.Debug("tui.openBrowserCmd(): opening browser")
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v %v", browser, url))
+	log.Debug("tui.openBrowserCmd(): opening browser")
+	log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v %v", browser, url))
 
-		var args []string
-		args = append(args, browser[1:]...)
-		args = append(args, url)
+	var args []string
+	args = append(args, browser[1:]...)
+	args = append(args, url)
 
-		c := exec.Command(browser[0], args...)
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
-		stderr, pipeErr := c.StderrPipe()
-		if pipeErr != nil {
-			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
+	c := exec.Command(browser[0], args...)
+	log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
+	stderr, pipeErr := c.StderrPipe()
+	if pipeErr != nil {
+		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
+		return func() tea.Msg {
 			return browserFinishedMsg{err: pipeErr}
 		}
+	}
 
-		err := c.Start()
-		if err != nil {
-			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+	err := c.Start()
+	if err != nil {
+		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+		return func() tea.Msg {
 			return browserFinishedMsg{err}
 		}
+	}
 
-		out, err := io.ReadAll(stderr)
-		if err != nil {
-			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+	out, err := io.ReadAll(stderr)
+	if err != nil {
+		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+		return func() tea.Msg {
 			return browserFinishedMsg{err}
 		}
+	}
 
-		if len(out) > 0 {
-			log.Debug(fmt.Sprintf("tui.openBrowserCmd(): error: %s", out))
+	if len(out) > 0 {
+		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): error: %s", out))
+		return func() tea.Msg {
 			return browserFinishedMsg{fmt.Errorf("%s", out)}
 		}
+	}
 
+	return func() tea.Msg {
 		return browserFinishedMsg{}
 	}
 }
@@ -213,30 +221,30 @@ type editorFinishedMsg struct {
 }
 
 func openEditorCmd(editor []string) tea.Cmd {
-	return func() tea.Msg {
-		log.Debug("tui.openEditorCmd(): opening editor")
-		var args []string
+	log.Debug("tui.openEditorCmd(): opening editor")
+	var args []string
 
-		file, err := os.CreateTemp(os.TempDir(), "")
+	file, err := os.CreateTemp(os.TempDir(), "")
+	if err != nil {
+		log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+		return func() tea.Msg {
+			return errMsg{error: err}
+		}
+	}
+
+	args = append(args, editor[1:]...)
+	args = append(args, file.Name())
+
+	c := exec.Command(editor[0], args...)
+
+	log.Debug(fmt.Sprintf("%+v", c))
+	return tea.ExecProcess(c, func(err error) tea.Msg {
 		if err != nil {
 			log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
 			return errMsg{error: err}
 		}
-
-		args = append(args, editor[1:]...)
-		args = append(args, file.Name())
-
-		c := exec.Command(editor[0], args...)
-
-		log.Debug(fmt.Sprintf("%+v", c))
-		return tea.ExecProcess(c, func(err error) tea.Msg {
-			if err != nil {
-				log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
-				return errMsg{error: err}
-			}
-			return editorFinishedMsg{err, file}
-		})
-	}
+		return editorFinishedMsg{err, file}
+	})
 }
 
 type loginMsg string
