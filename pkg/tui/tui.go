@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"strings"
+	"reflect"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -22,21 +22,56 @@ const (
 type errMsg struct{ error }
 
 func (m model) Init() tea.Cmd {
-	log.Debug("Init")
 	if m.err != nil {
 		return func() tea.Msg { return errMsg{m.err} }
 	}
 	return func() tea.Msg { return updateIncidentListMsg("sender: Init") }
 }
 
+type filteredMsg struct {
+	msg       tea.Msg
+	truncated bool
+}
+
+func filterMsgContent(msg tea.Msg) tea.Msg {
+	var truncatedMsg string
+	switch msg := msg.(type) {
+	default:
+		return msg
+	case renderedIncidentMsg:
+		truncatedMsg = "template rendered"
+	case updatedIncidentListMsg:
+		var ids []string
+		for _, i := range msg.incidents {
+			ids = append(ids, i.ID)
+		}
+		truncatedMsg = fmt.Sprintf("%v", ids)
+	case gotIncidentAlertsMsg:
+		var ids []string
+		for _, i := range msg.alerts {
+			ids = append(ids, i.ID)
+		}
+		truncatedMsg = fmt.Sprintf("%v", ids)
+	case gotIncidentNotesMsg:
+		var ids []string
+		for _, i := range msg.notes {
+			ids = append(ids, i.ID)
+		}
+		truncatedMsg = fmt.Sprintf("%v", ids)
+	}
+	return filteredMsg{
+		msg:       truncatedMsg,
+		truncated: true,
+	}
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug(fmt.Sprintf("Update %T", msg))
+	log.Debug("Update", reflect.TypeOf(msg), filterMsgContent(msg))
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 
 	case errMsg:
-		log.Error("update errMsg", fmt.Sprint(msg))
 		return m.errMsgHandler(msg)
 
 	case tea.WindowSizeMsg:
@@ -47,7 +82,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Command to get an incident by ID
 	case getIncidentMsg:
-		log.Debug("getIncidentMsg", fmt.Sprint(msg))
 		m.setStatus(fmt.Sprintf("getting details for incident %v...", msg))
 		cmds = append(cmds, getIncident(m.config, string(msg)))
 
@@ -56,8 +90,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-
-		log.Debug("gotIncidentMsg", msg.incident.ID)
 
 		m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
 		m.selectedIncident = msg.incident
@@ -70,16 +102,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-
-		getIDs := func(x []pagerduty.IncidentNote) []string {
-			var ids []string
-			for _, n := range x {
-				ids = append(ids, n.ID)
-			}
-			return ids
-		}
-
-		log.Debug("gotIncidentNotesMsg", strings.Join(getIDs(msg.notes), ", "))
 
 		// CANNOT refer to the m.SelectedIncident, because it may not have
 		// completed yet, and will be nil
@@ -100,16 +122,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		getIDs := func(x []pagerduty.IncidentAlert) []string {
-			var ids []string
-			for _, n := range x {
-				ids = append(ids, n.ID)
-			}
-			return ids
-		}
-
-		log.Debug("gotIncidentAlertsMsg", strings.Join(getIDs(msg.alerts), ", "))
-
 		// CANNOT refer to the m.SelectedIncident, because it may not have
 		// completed yet, and will be nil
 		switch {
@@ -126,7 +138,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Nothing directly calls this yet
 	case updateIncidentListMsg:
-		log.Debug("updateIncidentListMsg", fmt.Sprint(msg))
 		m.setStatus(loadingIncidentsStatus)
 		cmds = append(cmds, updateIncidentList(m.config))
 
@@ -134,16 +145,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-
-		getIDs := func(x []pagerduty.Incident) []string {
-			var ids []string
-			for _, n := range x {
-				ids = append(ids, n.ID)
-			}
-			return ids
-		}
-
-		log.Debug("updatedIncidentListMsg", strings.Join(getIDs(msg.incidents), ", "))
 
 		m.incidentList = msg.incidents
 
@@ -174,8 +175,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		log.Debug("editorFinishedMsg", fmt.Sprint(msg))
-
 		if m.selectedIncident == nil {
 			m.setStatus("failed to add note - no selected incident")
 			return m, nil
@@ -193,8 +192,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		log.Debug("addedIncidentNoteMsg", fmt.Sprint(msg))
-
 		if m.selectedIncident == nil {
 			m.setStatus("unable to refresh incident - no selected incident")
 			return m, nil
@@ -202,32 +199,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) })
 
 	case loginMsg:
-		log.Debug("loginMsg: " + fmt.Sprint(msg))
-		if len(m.selectedIncidentAlerts) == 0 {
-			log.Debugf("no alerts found for incident %s - requeuing", m.selectedIncident.ID)
+		var cluster string
+
+		switch len(m.selectedIncidentAlerts) {
+		case 0:
+			log.Debug("Update", reflect.TypeOf(msg), fmt.Sprintf("no alerts found for incident %s - requeuing", m.selectedIncident.ID))
 			return m, func() tea.Msg { return loginMsg("sender: loginMsg; requeue") }
-
+		case 1:
+			cluster = getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
+			m.setStatus(fmt.Sprintf("logging into cluster %s from alert %s", cluster, m.selectedIncidentAlerts[0].ID))
+		default:
+			// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
+			cluster = getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
+			m.setStatus(fmt.Sprintf("multiple alerts found - logging into cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
 		}
 
-		// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
-		cluster := getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
-		if len(m.selectedIncidentAlerts) == 1 {
-			log.Debug("found 1 alert from incident; retrieving cluster info")
-		}
-
-		log.Debug("logging into cluster ", cluster, "from first alert ", m.selectedIncidentAlerts[0].ID)
-		m.setStatus(fmt.Sprintf("logging into cluster %s", cluster))
 		cmds = append(cmds, login(cluster, m.launcher))
 
 	case loginFinishedMsg:
-		log.Debug("loginFinishedMsg", msg)
 		if msg.err != nil {
 			m.status = fmt.Sprintf("failed to login: %s", msg.err)
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
 	case openBrowserMsg:
-		log.Debug("openBrowserMsg", fmt.Sprint(msg))
 		if defaultBrowserOpenCommand == "" {
 			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 		}
@@ -245,7 +240,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// This is a catch all for any action that requires a selected incident
 	//
 	case waitForSelectedIncidentThenDoMsg:
-		log.Debug("waitForSelectedIncidentThenDoMsg: ", fmt.Sprintf("action: %+v, msg: %+v", msg.action, msg.msg))
 		if msg.action == nil {
 			m.setStatus("failed to perform action: no action included in msg")
 			return m, nil
@@ -261,11 +255,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: msg.action, msg: msg.msg} }
 		}
 
-		log.Debug("Trying to do action")
+		log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "performing action", "action", msg.action, "incident", m.selectedIncident.ID)
 		cmds = append(cmds, msg.action)
 
 	case renderIncidentMsg:
-		log.Debug("renderIncidentMsg", fmt.Sprint(msg))
 		if m.selectedIncident == nil {
 			m.setStatus("failed render incidents - no incidents provided")
 			return m, nil
@@ -282,7 +275,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewingIncident = true
 
 	case acknowledgeIncidentsMsg:
-		log.Debug("acknowledgeIncidentsMsg", fmt.Sprint(msg))
 		if msg.incidents == nil {
 			m.setStatus("failed acknowledging incidents - no incidents provided")
 			return m, nil
@@ -297,12 +289,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		log.Debug("acknowledgedIncidentsMsg", fmt.Sprint(msg))
 		m.setStatus(fmt.Sprintf("acknowledged incidents %v; refreshing Incident List ", msg))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
 	case waitForSelectedIncidentsThenAcknowledgeMsg:
-		log.Debug("waitForSelectedIncidentsThenAcknowledgeMsg", fmt.Sprint(msg))
 		if m.selectedIncident == nil {
 			time.Sleep(waitTime)
 			m.setStatus("waiting for incident info...")
@@ -313,7 +303,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case reassignIncidentsMsg:
-		log.Debug("reassignIncidentsMsg", fmt.Sprint(msg))
 		if msg.incidents == nil {
 			m.setStatus("failed reassigning incidents - no incidents provided")
 			return m, nil
@@ -325,7 +314,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case reassignedIncidentsMsg:
-		log.Debug("reassignedIncidentsMsg", fmt.Sprint(msg))
 		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", msg))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reassignedIncidentsMsg") }
 
@@ -345,7 +333,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case silenceIncidentsMsg:
-		log.Debug("silenceIncidentsMsg", fmt.Sprintf("%+v", msg))
 		if msg.incidents == nil {
 			m.setStatus("failed silencing incidents - no incidents provided")
 			return m, nil
@@ -361,7 +348,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case clearSelectedIncidentsMsg:
-		log.Debug("clearSelectedIncidentsMsg", fmt.Sprint(msg))
 		m.viewingIncident = false
 		m.selectedIncident = nil
 		m.selectedIncidentNotes = nil

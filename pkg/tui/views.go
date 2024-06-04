@@ -51,12 +51,11 @@ var (
 )
 
 func (m model) View() string {
-	log.Debug("View")
 	helpView := helpStyle.Render(m.help.View(defaultKeyMap))
 
 	switch {
 	case m.err != nil:
-		log.Debug("error")
+		log.Debug("View", "error", m.err)
 		errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
 		return (errorStyle.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + errHelpView)
 
@@ -111,7 +110,6 @@ func statusArea(s string) string {
 }
 
 func (m model) template() (string, error) {
-	log.Debug("template")
 	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
 	if err != nil {
 		// TODO: Figure out how to handle this with a proper errMsg
@@ -130,7 +128,6 @@ func (m model) template() (string, error) {
 }
 
 func summarize(i *pagerduty.Incident, a []pagerduty.IncidentAlert, n []pagerduty.IncidentNote) incidentSummary {
-	log.Debug("summarize")
 	summary := summarizeIncident(i)
 	summary.Alerts = summarizeAlerts(a)
 	summary.Notes = summarizeNotes(n)
@@ -145,7 +142,6 @@ type noteSummary struct {
 }
 
 func summarizeNotes(n []pagerduty.IncidentNote) []noteSummary {
-	log.Debug(fmt.Sprintf("summarizeNotes: %v", len(n)))
 	var s []noteSummary
 
 	for _, note := range n {
@@ -174,7 +170,6 @@ type alertSummary struct {
 }
 
 func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
-	log.Debug(fmt.Sprintf("summarizeAlerts: %v", len(a)))
 	var s []alertSummary
 
 	for _, alt := range a {
@@ -222,7 +217,6 @@ type incidentSummary struct {
 }
 
 func summarizeIncident(i *pagerduty.Incident) incidentSummary {
-	log.Debug(fmt.Sprintf("summarizeIncident: %+v", i))
 	var s incidentSummary
 
 	s.ID = i.ID

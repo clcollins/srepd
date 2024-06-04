@@ -1,17 +1,15 @@
 package tui
 
 import (
-	"fmt"
-
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
-	"github.com/charmbracelet/log"
 )
 
 type model struct {
@@ -46,7 +44,6 @@ func InitialModel(
 	editor []string,
 	launcher launcher.ClusterLauncher,
 ) (tea.Model, tea.Cmd) {
-	log.Debug("InitialModel")
 	var err error
 
 	m := model{
@@ -74,14 +71,8 @@ func InitialModel(
 }
 
 func (m *model) setStatus(msg string) {
-	var d []string
-
-	m.status = fmt.Sprint(msg)
-
-	d = append(d, "setStatus")
-	d = append(d, msg)
-
-	log.Infof("%s", d)
+	log.Info("setStatus", "status", msg)
+	m.status = msg
 }
 
 func (m *model) toggleHelp() {
@@ -89,14 +80,12 @@ func (m *model) toggleHelp() {
 }
 
 func newTableWithStyles() table.Model {
-	log.Debug("newTableWithStyles")
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(tableStyle)
 	return t
 }
 
 func newTextInput() textinput.Model {
-	log.Debug("newTextInput")
 	i := textinput.New()
 	i.Prompt = " $ "
 	i.CharLimit = 32
@@ -105,14 +94,12 @@ func newTextInput() textinput.Model {
 }
 
 func newHelp() help.Model {
-	log.Debug("newHelp")
 	h := help.New()
 	h.ShowAll = true
 	return h
 }
 
 func newIncidentViewer() viewport.Model {
-	log.Debug("newIncidentViewer")
 	vp := viewport.New(100, 100)
 	vp.Style = incidentViewerStyle
 	return vp

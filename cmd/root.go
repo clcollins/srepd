@@ -106,7 +106,7 @@ func checkSettings() {
 
 	for _, k := range keys {
 		if deprecation.Deprecated(k) {
-			log.Info(fmt.Sprintf("Found deprecated key: `%v`; you may remove this from your config.", k))
+			log.Info("Found deprecated key; you may remove this from your config", k)
 			continue
 		}
 
@@ -117,7 +117,7 @@ func checkSettings() {
 			v = "*****"
 		}
 
-		log.Debug(fmt.Sprintf("Found key: `%v`, value: `%v`", k, v))
+		log.Debug("Found key", k, v)
 
 	}
 }

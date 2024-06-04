@@ -11,9 +11,9 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
-	"github.com/charmbracelet/log"
 )
 
 const (
@@ -72,7 +72,6 @@ func updateIncidentList(p *pd.Config) tea.Cmd {
 
 		// Retrieve incidents assigned to the TeamIDs and filtered UserIDs
 		i, err := pd.GetIncidents(p.Client, opts)
-		log.Debug(fmt.Sprintf("tui.updateIncidentList(): retrieved %v incidents after filtering", len(i)))
 		return updatedIncidentListMsg{i, err}
 	}
 }
@@ -424,16 +423,15 @@ func acknowledged(a []pagerduty.Acknowledgement) string {
 }
 
 func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
-	log.Debug("doIfIncidentSelected()")
 	if m.table.SelectedRow() == nil {
-		log.Debug("doIfIncidentSelected(): selected row is nil")
+		log.Debug("doIfIncidentSelected", "selectedRow", "nil")
 		m.setStatus(nilIncidentErr)
 		m.viewingIncident = false
 		return tea.Sequence(
 			func() tea.Msg { return errMsg{errors.New(nilIncidentErr)} },
 		)
 	}
-	log.Debug("doIfIncidentSelected(): got selected row")
+	log.Debug("doIfIncidentSelected", "selectedRow", m.table.SelectedRow())
 	return tea.Sequence(
 		func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
 		cmd,

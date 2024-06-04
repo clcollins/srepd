@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"fmt"
+	"reflect"
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/key"
@@ -12,7 +12,7 @@ import (
 
 // errMsgHandler is the message handler for the errMsg message
 func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Warn("errMsgHandler")
+	log.Error("errMsgHandler", "tea.errMsg", msg)
 	m.setStatus(msg.(errMsg).Error())
 	m.err = msg.(errMsg)
 	return m, nil
@@ -21,8 +21,6 @@ func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 // windowSizeMsgHandler is the message handler for the windowSizeMsg message
 // and resizes the tui according to the new terminal window size
 func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("windowSizeMsgHandler")
-	m.setStatus(fmt.Sprintf("window size changed: %v", msg.(tea.WindowSizeMsg)))
 	windowSize = msg.(tea.WindowSizeMsg)
 	top, _, bottom, _ := mainStyle.GetMargin()
 	eighthWindow := windowSize.Width / 8
@@ -47,7 +45,6 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("keyMsgHandler", "tea.KeyMsg", fmt.Sprint(msg))
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Quit) {
 		return m, tea.Quit
 	}
@@ -72,7 +69,7 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // tableFocusMode is the main mode for the application
 func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchTableFocusMode")
+	log.Debug("switchTableFocusMode", reflect.TypeOf(msg), msg)
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -95,8 +92,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Enter):
 			m.viewingIncident = true
-			// TODO TODAY - fix this
-			log.Debug("Enter key pressed")
 			return m, doIfIncidentSelected(&m, func() tea.Msg {
 				return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return renderIncidentMsg("render") }, msg: "render"}
 			},
@@ -104,6 +99,7 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Team):
 			m.teamMode = !m.teamMode
+			log.Debug("switchTableFocusMode", "teamMode", m.teamMode)
 			cmds = append(cmds, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} })
 
 		case key.Matches(msg, defaultKeyMap.Refresh):
@@ -167,7 +163,7 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchInputFocusMode")
+	log.Debug("switchInputFocusMode", reflect.TypeOf(msg), msg)
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -190,7 +186,7 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchIncidentFocusMode")
+	log.Debug("switchIncidentFocusMode", reflect.TypeOf(msg), msg)
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
@@ -236,7 +232,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchErrorFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchErrorFocusMode")
+	log.Debug("switchErrorFocusMode", reflect.TypeOf(msg), msg)
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
