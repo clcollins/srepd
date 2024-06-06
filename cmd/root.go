@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
@@ -37,6 +38,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+//lint:ignore ST1011 The description is useful
+const pollInterval = 15
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -79,6 +83,16 @@ but rather a simple tool to make on-call tasks easier.`,
 		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
+
+		go func() {
+			for {
+				time.Sleep(pollInterval * time.Second)
+				p.Send(tui.PollIncidentsMsg{
+					PollInterval: pollInterval * time.Second,
+				})
+			}
+		}()
+
 		_, err = p.Run()
 		if err != nil {
 			log.Fatal(err)

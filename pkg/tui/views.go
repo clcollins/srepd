@@ -32,6 +32,7 @@ var (
 	borderWidth         = 1
 	mainStyle           = lipgloss.NewStyle().Margin(0, 0).Padding(0, horizontalPadding)
 	assigneeStyle       = mainStyle.Copy()
+	refreshStyle        = mainStyle.Copy()
 	statusStyle         = mainStyle.Copy()
 	assignedStringWidth = len("Showing assigned to User") + (horizontalPadding * 2 * 2) + (borderWidth * 2 * 2) + 10
 	tableContainerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(gray)
@@ -71,8 +72,21 @@ func (m model) View() string {
 			return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + m.input.View() + "\n" + helpView)
 		}
 		log.Debug("viewingTable")
-		return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + helpView)
+		return mainStyle.Render(
+			m.renderHeader() + "\n" + tableView + "\n" + m.renderFooter() + "\n" + helpView)
 	}
+}
+
+func (m model) renderFooter() string {
+	var s strings.Builder
+	s.WriteString(
+		lipgloss.JoinHorizontal(
+			0.2,
+			refreshStyle.Render(refreshArea(m.autoRefresh)),
+		),
+	)
+
+	return s.String()
 }
 
 func (m model) renderHeader() string {
@@ -108,6 +122,16 @@ func statusArea(s string) string {
 	fstring = strings.TrimSuffix(fstring, "\n")
 
 	return fmt.Sprintf(fstring, s)
+}
+
+func refreshArea(autoRefresh bool) string {
+	var fstring = "Watching for updates... "
+	if !autoRefresh {
+		fstring = fstring + " [PAUSED]"
+	}
+	fstring = strings.TrimSuffix(fstring, "\n")
+
+	return fstring
 }
 
 func (m model) template() (string, error) {

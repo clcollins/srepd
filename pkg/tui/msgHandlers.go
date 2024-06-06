@@ -55,6 +55,11 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.AutoRefresh) {
+		m.autoRefresh = !m.autoRefresh
+		return m, nil
+	}
+
 	// Default commands for the table view
 	switch {
 	case m.err != nil:

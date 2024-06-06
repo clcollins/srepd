@@ -33,7 +33,9 @@ type model struct {
 	selectedIncidentNotes  []pagerduty.IncidentNote
 	selectedIncidentAlerts []pagerduty.IncidentAlert
 
-	teamMode bool
+	autoAcknowledge bool
+	autoRefresh     bool
+	teamMode        bool
 }
 
 func InitialModel(
