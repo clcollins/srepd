@@ -10,6 +10,12 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+// setStatusMsgHandler is the message handler for the setStatusMsg message
+func (m model) setStatusMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.setStatus(msg.(setStatusMsg).Status())
+	return m, nil
+}
+
 // errMsgHandler is the message handler for the errMsg message
 func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	log.Error("errMsgHandler", "tea.errMsg", msg)
@@ -72,6 +78,18 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	log.Debug("switchTableFocusMode", reflect.TypeOf(msg), msg)
 	var cmds []tea.Cmd
 
+	// [1] is column two of the row: the incident ID
+	var row table.Row
+	var incidentID string
+	row = m.table.SelectedRow()
+	if row == nil {
+		incidentID = ""
+	} else {
+		incidentID = m.table.SelectedRow()[1]
+	}
+
+	log.Debug("switchTableFocusMode", "incidentID", incidentID)
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -90,11 +108,9 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Bottom):
 			m.table.GotoBottom()
 
-		case key.Matches(msg, defaultKeyMap.Enter):
-			m.viewingIncident = true
-			return m, doIfIncidentSelected(&m, func() tea.Msg {
-				return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return renderIncidentMsg("render") }, msg: "render"}
-			},
+		case key.Matches(msg, defaultKeyMap.Input):
+			return m, tea.Sequence(
+				m.input.Focus(),
 			)
 
 		case key.Matches(msg, defaultKeyMap.Team):
@@ -110,9 +126,17 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// and then can be acted upon.  Since tea.Sequence does not wait for completion, the
 		// "waitForSelectedIncidentsThen..." functions are used to wait for the selected incident
 		// to be retrieved from PagerDuty
+		case key.Matches(msg, defaultKeyMap.Enter):
+			m.viewingIncident = true
+			return m, doIfIncidentSelected(&m, func() tea.Msg {
+				return waitForSelectedIncidentThenDoMsg{
+					action: func() tea.Msg { return renderIncidentMsg("render") }, msg: "render",
+				}
+			})
+
 		case key.Matches(msg, defaultKeyMap.Silence):
-			return m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+			return m, doIfIncidentSelected(&m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(incidentID) },
 				func() tea.Msg {
 					return waitForSelectedIncidentThenDoMsg{
 						msg: "silence",
@@ -121,42 +145,38 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 						},
 					}
 				},
-			)
+			))
 
 		case key.Matches(msg, defaultKeyMap.Ack):
-			return m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+			return m, doIfIncidentSelected(&m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(incidentID) },
 				func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg("wait") },
-			)
+			))
 
 		case key.Matches(msg, defaultKeyMap.Note):
-			return m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+			return m, doIfIncidentSelected(&m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(incidentID) },
 				func() tea.Msg {
 					return waitForSelectedIncidentThenDoMsg{action: openEditorCmd(m.editor), msg: "add note"}
 				},
-			)
+			))
 
 		case key.Matches(msg, defaultKeyMap.Login):
-			return m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+			return m, doIfIncidentSelected(&m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(incidentID) },
 				func() tea.Msg {
 					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
 				},
-			)
+			))
 
 		case key.Matches(msg, defaultKeyMap.Open):
-			return m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+			return m, doIfIncidentSelected(&m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(incidentID) },
 				func() tea.Msg {
 					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return openBrowserMsg("incident") }, msg: ""}
 				},
-			)
+			))
 
-		case key.Matches(msg, defaultKeyMap.Input):
-			return m, tea.Sequence(
-				m.input.Focus(),
-			)
 		}
 	}
 	return m, tea.Batch(cmds...)
@@ -217,7 +237,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Login):
 			return m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
+				func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) },
 				func() tea.Msg {
 					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
 				},
