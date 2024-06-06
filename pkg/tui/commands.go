@@ -106,6 +106,11 @@ type gotIncidentMsg struct {
 }
 
 func getIncident(p *pd.Config, id string) tea.Cmd {
+	if id == "" {
+		return func() tea.Msg {
+			return setStatusMsg{"No incident selected"}
+		}
+	}
 	return func() tea.Msg {
 		ctx := context.Background()
 		i, err := p.Client.GetIncidentWithContext(ctx, id)
@@ -425,11 +430,8 @@ func acknowledged(a []pagerduty.Acknowledgement) string {
 func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
 	if m.table.SelectedRow() == nil {
 		log.Debug("doIfIncidentSelected", "selectedRow", "nil")
-		m.setStatus(nilIncidentErr)
 		m.viewingIncident = false
-		return tea.Sequence(
-			func() tea.Msg { return errMsg{errors.New(nilIncidentErr)} },
-		)
+		return func() tea.Msg { return setStatusMsg{nilIncidentMsg} }
 	}
 	log.Debug("doIfIncidentSelected", "selectedRow", m.table.SelectedRow())
 	return tea.Sequence(

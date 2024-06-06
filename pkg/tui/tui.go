@@ -16,10 +16,15 @@ const (
 	defaultInputPrompt = " $ "
 	u
 	nilNoteErr     = "incident note content is empty"
-	nilIncidentErr = "no incident selected"
+	nilIncidentMsg = "no incident selected"
 )
 
 type errMsg struct{ error }
+type setStatusMsg struct{ string }
+
+func (s setStatusMsg) Status() string {
+	return s.string
+}
 
 func (m model) Init() tea.Cmd {
 	if m.err != nil {
@@ -80,8 +85,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.keyMsgHandler(msg)
 
+	case setStatusMsg:
+		return m.setStatusMsgHandler(msg)
+
 	// Command to get an incident by ID
 	case getIncidentMsg:
+		if msg == "" {
+			return m, func() tea.Msg {
+				return setStatusMsg{"no incident selected"}
+			}
+		}
+
 		m.setStatus(fmt.Sprintf("getting details for incident %v...", msg))
 		cmds = append(cmds, getIncident(m.config, string(msg)))
 
