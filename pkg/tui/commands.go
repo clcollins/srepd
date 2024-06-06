@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,6 +22,8 @@ const (
 	loadingIncidentsStatus = "loading incidents..."
 )
 
+type errMsg struct{ error }
+type setStatusMsg struct{ string }
 type waitForSelectedIncidentThenDoMsg struct {
 	action tea.Cmd
 	msg    tea.Msg
@@ -38,6 +41,13 @@ type waitForSelectedIncidentThenRenderMsg string
 // 		getIncidentNotes(p, id),
 // 	)
 // }
+
+type TickMsg struct {
+	Tick int
+}
+type PollIncidentsMsg struct {
+	PollInterval time.Duration
+}
 
 type updateIncidentListMsg string
 type updatedIncidentListMsg struct {
@@ -157,10 +167,30 @@ func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
 	return false
 }
 
+// ShouldBeAcknowledged returns true if the incident is assigned to the given user,
+// the user has not acknowledged the incident yet, and autoAcknowledge is enabled
+func ShouldBeAcknowledged(i pagerduty.Incident, id string, autoAcknowledge bool) bool {
+	assigned := AssignedToUser(i, id)
+	acked := AcknowledgedByUser(i, id)
+	doIt := assigned && !acked && autoAcknowledge
+	log.Debug("commands.ShouldBeAcknowledged", "assigned", assigned, "acked", acked, "autoAcknowledge", autoAcknowledge, "doIt", doIt)
+	return AssignedToUser(i, id) && !AcknowledgedByUser(i, id) && autoAcknowledge
+}
+
 // AssignedToUser returns true if the incident is assigned to the given user
 func AssignedToUser(i pagerduty.Incident, id string) bool {
 	for _, a := range i.Assignments {
 		if a.Assignee.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// AcknowledgedByUser returns true if the incident has been acknowledged by the given user
+func AcknowledgedByUser(i pagerduty.Incident, id string) bool {
+	for _, a := range i.Acknowledgements {
+		if a.Acknowledger.ID == id {
 			return true
 		}
 	}
@@ -420,13 +450,25 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 	return ""
 }
 
-// acknowledged returns "A" for "acknowledged" if the incident has been acknowledged, or a dot for "triggered" otherwise
-func acknowledged(a []pagerduty.Acknowledgement) string {
-	if len(a) > 0 {
+// stateShorthand returns the state of the incident as a single character
+// A = acknowledged by user
+// a = acknowledged by someone else
+// X = stale (TODO: need to figure out how to do this)
+// dot = triggered
+func stateShorthand(i pagerduty.Incident, id string) string {
+	switch {
+	case AcknowledgedByUser(i, id):
 		return "A"
+	case acknowledged(i.Acknowledgements):
+		return "a"
+	default:
+		return dot
 	}
+}
 
-	return dot
+// acknowledged returns true if the incident has been acknowledged by anyone
+func acknowledged(a []pagerduty.Acknowledgement) bool {
+	return len(a) > 0
 }
 
 func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
