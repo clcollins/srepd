@@ -46,34 +46,36 @@ type updatedIncidentListMsg struct {
 }
 
 func updateIncidentList(p *pd.Config) tea.Cmd {
-	return func() tea.Msg {
-		opts := pd.NewListIncidentOptsFromDefaults()
-		opts.TeamIDs = getTeamsAsStrings(p)
+	return tea.Sequence(
+		func() tea.Msg { return clearSelectedIncidentsMsg("updateIncidentList") },
+		func() tea.Msg {
+			opts := pd.NewListIncidentOptsFromDefaults()
+			opts.TeamIDs = getTeamsAsStrings(p)
 
-		// Convert the list of *pagerduty.User to a slice of user IDs
-		ignoredUserIDs := func(u []*pagerduty.User) []string {
-			var l []string
-			for _, i := range u {
-				l = append(l, i.ID)
-			}
-			return l
-		}(p.IgnoredUsers)
-
-		// If the UserID from p.TeamMemberIDs is not in the ignoredUserIDs slice, add it to the opts.UserIDs slice
-		opts.UserIDs = func(a []string, i []string) []string {
-			var l []string
-			for _, u := range a {
-				if !slices.Contains(i, u) {
-					l = append(l, u)
+			// Convert the list of *pagerduty.User to a slice of user IDs
+			ignoredUserIDs := func(u []*pagerduty.User) []string {
+				var l []string
+				for _, i := range u {
+					l = append(l, i.ID)
 				}
-			}
-			return l
-		}(p.TeamsMemberIDs, ignoredUserIDs)
+				return l
+			}(p.IgnoredUsers)
 
-		// Retrieve incidents assigned to the TeamIDs and filtered UserIDs
-		i, err := pd.GetIncidents(p.Client, opts)
-		return updatedIncidentListMsg{i, err}
-	}
+			// If the UserID from p.TeamMemberIDs is not in the ignoredUserIDs slice, add it to the opts.UserIDs slice
+			opts.UserIDs = func(a []string, i []string) []string {
+				var l []string
+				for _, u := range a {
+					if !slices.Contains(i, u) {
+						l = append(l, u)
+					}
+				}
+				return l
+			}(p.TeamsMemberIDs, ignoredUserIDs)
+
+			// Retrieve incidents assigned to the TeamIDs and filtered UserIDs
+			i, err := pd.GetIncidents(p.Client, opts)
+			return updatedIncidentListMsg{i, err}
+		})
 }
 
 type renderIncidentMsg string

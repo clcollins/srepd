@@ -70,6 +70,19 @@ func InitialModel(
 	}
 }
 
+func (m *model) clearSelectedIncident(reason interface{}) {
+	if m.selectedIncident != nil {
+		log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident.ID, "cleared", false)
+		// Don't return here - we still want to clear out any notes/alerts and viewingIncident
+		// even if the incident might be nil
+	}
+	m.selectedIncident = nil
+	m.selectedIncidentNotes = nil
+	m.selectedIncidentAlerts = nil
+	m.viewingIncident = false
+	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
+}
+
 func (m *model) setStatus(msg string) {
 	log.Info("setStatus", "status", msg)
 	m.status = msg

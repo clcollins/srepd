@@ -362,10 +362,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case clearSelectedIncidentsMsg:
-		m.viewingIncident = false
-		m.selectedIncident = nil
-		m.selectedIncidentNotes = nil
-		m.selectedIncidentAlerts = nil
+		m.clearSelectedIncident(msg)
 		return m, nil
 	}
 
