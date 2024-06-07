@@ -119,6 +119,7 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} })
 
 		case key.Matches(msg, defaultKeyMap.Refresh):
+			m.clearSelectedIncident(msg.String() + " (refresh)")
 			m.setStatus(loadingIncidentsStatus)
 			cmds = append(cmds, updateIncidentList(m.config))
 
@@ -218,10 +219,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// This un-sets the selected incident and returns to the table view
 		case key.Matches(msg, defaultKeyMap.Back):
-			m.viewingIncident = false
-			m.selectedIncident = nil
-			m.selectedIncidentAlerts = nil
-			m.selectedIncidentNotes = nil
+			m.clearSelectedIncident(msg.String() + " (back)")
 
 		case key.Matches(msg, defaultKeyMap.Ack):
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []*pagerduty.Incident{m.selectedIncident}} }
