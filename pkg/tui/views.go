@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"slices"
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -238,8 +239,12 @@ func summarizeIncident(i *pagerduty.Incident) incidentSummary {
 	for _, asn := range i.Assignments {
 		s.Assigned = append(s.Assigned, asn.Assignee.Summary)
 	}
+
 	for _, ack := range i.Acknowledgements {
-		s.Acknowledged = append(s.Acknowledged, ack.Acknowledger.Summary)
+		// Suppress multiple acknowledgements by the same person being shown in the summary
+		if !slices.Contains(s.Acknowledged, ack.Acknowledger.Summary) {
+			s.Acknowledged = append(s.Acknowledged, ack.Acknowledger.Summary)
+		}
 	}
 
 	return s
