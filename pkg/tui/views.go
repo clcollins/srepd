@@ -254,13 +254,23 @@ var funcMap = template.FuncMap{
 	"Truncate": func(s string) string {
 		return fmt.Sprintf("%s ...", s[:5])
 	},
+	"ToLink": func(s, link string) string {
+		return fmt.Sprintf("[%s](%s)", s, link)
+	},
 	"ToUpper": strings.ToUpper,
+	"Last": func(i, length int) bool {
+		return i == length-1
+	},
 }
 
 const incidentTemplate = `
+{{- if .Priority -}}
+# {{ .Priority }} {{ .ID }} - {{ .Status }}
+{{- else -}}
 # {{ .ID }} - {{ .Status }}
+{{- end }}
 
-{{ if .Priority }}PRIORITY {{ .Priority }} - {{ end }}{{ .Title }} - {{ .HTMLURL }}
+{{ ToLink .Title .HTMLURL }}
 
 * Service: {{ .Service }}
 * Urgency: {{ .Urgency }}
@@ -269,20 +279,20 @@ const incidentTemplate = `
 {{ if not .Acknowledged -}}
 Assigned to:{{ range $assignee := .Assigned }}
 + *{{ $assignee }}* *(not yet acknowledged)*
-{{ end -}}
-{{ else -}}
-Acknowledged by:{{ range $ack := .Acknowledged }}
-+ **{{ $ack }}**
-{{ end -}}
-{{ end -}}
+{{ end }}
+{{- else -}}
+{{ $length := len .Acknowledged }}
+Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
+{{ if Last $i $length }}**{{ $ack }}**{{ else }}**{{ $ack }},**{{ end }}
+{{ end }}
+{{- end -}}
 
 ## Notes
 
 {{ if .Notes }}
 {{ range $note := .Notes }}
 > {{ $note.Content }}
-
-- {{ $note.User }} @ {{ $note.Created }}
+    -- {{ $note.User }} @ {{ $note.Created }}
 {{ end }}
 {{ else }}
 _none_
@@ -291,17 +301,19 @@ _none_
 ## Alerts ({{ len .Alerts }})
 
 {{ range $alert := .Alerts }}
-_{{ $alert.ID }}_{{ if $alert.Name }}- _{{ $alert.Name }}_{{ end }}
+{{ $alert.ID }} - {{ $alert.Status }}
+{{ if $alert.Name }}
+_{{- $alert.Name }}_
+{{- end }}
+{{ $alert.HTMLURL }}
 
 * Cluster: {{ $alert.Cluster }}
+* Service: {{ $alert.Service }}
+* Created: {{ $alert.Created }}
 * SOP: {{ $alert.Link }}
 
 Details :
 
-* Service: {{ $alert.Service }}
-* Status: {{ $alert.Status }}
-* Created: {{ $alert.Created }}
-* Link: {{ $alert.HTMLURL }}
 {{ range $key, $value := $alert.Details }}
 * {{ $key }}: {{ $value }} 
 {{ end }}
@@ -312,6 +324,7 @@ Details :
 func renderIncidentMarkdown(content string) (string, error) {
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(0),
 	)
 	if err != nil {
 		return "", err
