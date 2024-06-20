@@ -307,12 +307,10 @@ Details :
 func renderIncidentMarkdown(content string) (string, error) {
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(windowSize.Width),
 	)
 	if err != nil {
 		return "", err
 	}
-
 	str, err := renderer.Render(content)
 	if err != nil {
 		return str, err
