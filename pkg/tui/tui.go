@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"reflect"
+	"regexp"
+	"slices"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -14,13 +16,12 @@ import (
 const (
 	waitTime           = time.Millisecond * 1
 	defaultInputPrompt = " $ "
-	u
-	nilNoteErr     = "incident note content is empty"
-	nilIncidentMsg = "no incident selected"
+	maxStaleAge        = time.Minute * 5
+	nilNoteErr         = "incident note content is empty"
+	nilIncidentMsg     = "no incident selected"
+	staleLabelRegex    = "^(\\[STALE\\]\\s)?(.*)$"
+	staleLabelStr      = "[STALE] $2"
 )
-
-type errMsg struct{ error }
-type setStatusMsg struct{ string }
 
 func (s setStatusMsg) Status() string {
 	return s.string
@@ -71,13 +72,21 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("Update", reflect.TypeOf(msg), filterMsgContent(msg))
+	msgType := reflect.TypeOf(msg)
+	// PollIncidentsMsgs are not helpful for logging
+	if msgType != reflect.TypeOf(PollIncidentsMsg{}) {
+		log.Debug("Update", msgType, filterMsgContent(msg))
+	}
+
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 
 	case errMsg:
 		return m.errMsgHandler(msg)
+
+	case TickMsg:
+		// Pass
 
 	case tea.WindowSizeMsg:
 		return m.windowSizeMsgHandler(msg)
@@ -87,6 +96,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case setStatusMsg:
 		return m.setStatusMsgHandler(msg)
+	// Command to trigger a regular poll for new incidents
+	case PollIncidentsMsg:
+		if !m.autoRefresh {
+			return m, nil
+		}
+		m.setStatus("polling for new incidents...")
+		return m, func() tea.Msg { return updateIncidentListMsg("sender: PollIncidentsMsg") }
 
 	// Command to get an incident by ID
 	case getIncidentMsg:
@@ -160,19 +176,65 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
+		var staleIncidentList []pagerduty.Incident
+		var acknowledgeIncidentsList []pagerduty.Incident
+
+		// If m.incidentList contains incidents that are not in msg.incidents, add them to the stale list
+		for _, i := range m.incidentList {
+			idx := slices.IndexFunc(msg.incidents, func(incident pagerduty.Incident) bool {
+				return incident.ID == i.ID
+			})
+
+			updated, err := time.Parse(time.RFC3339, i.LastStatusChangeAt)
+
+			if err != nil {
+				log.Error("Update", "updatedIncidentListMsg", "failed to parse time", "incident", i.ID, "time", updated, "error", err)
+				updated = time.Now().Add(-(maxStaleAge))
+			}
+
+			age := time.Since(updated)
+			ttl := maxStaleAge - age
+
+			if idx == -1 {
+				if ttl <= 0 {
+					log.Debug("Update", "updatedIncidentListMsg", "removing stale incident", "incident", i.ID, "lastUpdated", updated, "ttl", ttl)
+				} else {
+					log.Debug("Update", "updatedIncidentListMsg", "adding stale incident", "incident", i.ID, "lastUpdated", updated, "ttl", ttl)
+
+					// Add stale label to incident title to make it clear to the user
+					m := regexp.MustCompile(staleLabelRegex)
+					i.Title = m.ReplaceAllString(i.Title, staleLabelStr)
+
+					staleIncidentList = append(staleIncidentList, i)
+				}
+			}
+		}
+
+		// Overwrite m.incidentList with current incidents
 		m.incidentList = msg.incidents
+
+		// Check if any incidents should be auto-acknowledged;
+		// This must be done before adding the stale incidents
+		for _, i := range m.incidentList {
+			if ShouldBeAcknowledged(i, m.config.CurrentUser.ID, m.autoAcknowledge) {
+				acknowledgeIncidentsList = append(acknowledgeIncidentsList, i)
+			}
+		}
+
+		// TODO: Figure out the right way to do this (eg: convert []pagerduty.Incident to []*pagerDuty.Incident)
+		// cmds = append(cmds, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: acknowledgeIncidentsList} })
+
+		// Add stale incidents to the list
+		m.incidentList = append(m.incidentList, staleIncidentList...)
 
 		var totalIncidentCount int
 		var rows []table.Row
 
-		for _, i := range msg.incidents {
+		for _, i := range m.incidentList {
 			totalIncidentCount++
-			if m.teamMode {
-				rows = append(rows, table.Row{acknowledged(i.Acknowledgements), i.ID, i.Title, i.Service.Summary})
-			} else {
-				if AssignedToUser(i, m.config.CurrentUser.ID) {
-					rows = append(rows, table.Row{acknowledged(i.Acknowledgements), i.ID, i.Title, i.Service.Summary})
-				}
+			state := stateShorthand(i, m.config.CurrentUser.ID)
+			if AssignedToUser(i, m.config.CurrentUser.ID) || m.teamMode {
+				rows = append(rows, table.Row{state, i.ID, i.Title, i.Service.Summary})
 			}
 		}
 

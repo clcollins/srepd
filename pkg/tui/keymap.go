@@ -11,29 +11,30 @@ func (k keymap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		// Each slice here is a column in the help window
 		{k.Up, k.Down, k.Enter, k.Back},
-		{k.Team, k.Refresh, k.Ack, k.Silence},
-		{k.Note, k.Login, k.Open},
+		{k.Enter, k.Ack, k.Silence, k.Note},
+		{k.Login, k.Open, k.Team, k.AutoRefresh},
 		{k.Quit, k.Help},
 	}
 }
 
 type keymap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Top     key.Binding
-	Bottom  key.Binding
-	Back    key.Binding
-	Enter   key.Binding
-	Quit    key.Binding
-	Help    key.Binding
-	Team    key.Binding
-	Refresh key.Binding
-	Note    key.Binding
-	Silence key.Binding
-	Ack     key.Binding
-	Input   key.Binding
-	Login   key.Binding
-	Open    key.Binding
+	Up          key.Binding
+	Down        key.Binding
+	Top         key.Binding
+	Bottom      key.Binding
+	Back        key.Binding
+	Enter       key.Binding
+	Quit        key.Binding
+	Help        key.Binding
+	Team        key.Binding
+	Refresh     key.Binding
+	AutoRefresh key.Binding
+	Note        key.Binding
+	Silence     key.Binding
+	Ack         key.Binding
+	Input       key.Binding
+	Login       key.Binding
+	Open        key.Binding
 }
 
 var defaultKeyMap = keymap{
@@ -77,9 +78,13 @@ var defaultKeyMap = keymap{
 		key.WithKeys("r"),
 		key.WithHelp("r", "refresh"),
 	),
+	AutoRefresh: key.NewBinding(
+		key.WithKeys("ctrl+r"),
+		key.WithHelp("ctrl+r", "toggle auto refresh"),
+	),
 	Note: key.NewBinding(
 		key.WithKeys("n"),
-		key.WithHelp("n", "add [n]ote"),
+		key.WithHelp("n", "add note"),
 	),
 	Silence: key.NewBinding(
 		key.WithKeys("ctrl+s"),
