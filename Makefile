@@ -21,15 +21,15 @@ export CGO_ENABLED=0
 
 .PHONY: build
 build:
-	go build -o build/srepd .
+	goreleaser build --snapshot  --clean --single-target
 
 .PHONY: install
 install:
 	go build -o ${GOPATH}/bin/srepd .
 
 .PHONY: install-local
-install-local:
-	go build -o ${HOME}/.local/bin/srepd .
+install-local: build
+	cp dist/*/srepd ~/.local/bin/srepd
 
 .PHONY: mod
 mod:
