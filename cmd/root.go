@@ -39,7 +39,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-//lint:ignore ST1011 The description is useful
 const pollInterval = 15
 
 // rootCmd represents the base command when called without any subcommands
@@ -80,6 +79,7 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetStringSlice("ignoredusers"),
 			viper.GetStringSlice("editor"),
 			launcher,
+			viper.GetBool("debug"),
 		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())

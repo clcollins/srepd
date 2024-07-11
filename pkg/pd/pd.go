@@ -99,7 +99,7 @@ func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
 
 }
 
-func AcknowledgeIncident(client PagerDutyClient, incidents []*pagerduty.Incident, user *pagerduty.User) ([]pagerduty.Incident, error) {
+func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User) ([]pagerduty.Incident, error) {
 	var ctx = context.Background()
 	var i []pagerduty.Incident
 
@@ -257,7 +257,7 @@ func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (
 	return u, nil
 }
 
-func ReassignIncidents(client PagerDutyClient, incidents []*pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) ([]pagerduty.Incident, error) {
+func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) ([]pagerduty.Incident, error) {
 	var ctx = context.Background()
 	var i []pagerduty.Incident
 
@@ -269,7 +269,7 @@ func ReassignIncidents(client PagerDutyClient, incidents []*pagerduty.Incident, 
 	opts := []pagerduty.ManageIncidentsOptions{}
 
 	for _, incident := range incidents {
-		if incident == nil {
+		if incident.ID == "" {
 			return i, fmt.Errorf("pd.ReassignIncidents(): incident is nil")
 		}
 		opts = append(opts, pagerduty.ManageIncidentsOptions{

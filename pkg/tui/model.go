@@ -36,6 +36,7 @@ type model struct {
 	autoAcknowledge bool
 	autoRefresh     bool
 	teamMode        bool
+	debug           bool
 }
 
 func InitialModel(
@@ -45,12 +46,14 @@ func InitialModel(
 	ignoredusers []string,
 	editor []string,
 	launcher launcher.ClusterLauncher,
+	debug bool,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
 	m := model{
 		editor:   editor,
 		launcher: launcher,
+		debug:    debug,
 		help:     newHelp(),
 		table:    newTableWithStyles(),
 		input:    newTextInput(),
@@ -110,7 +113,7 @@ func newTextInput() textinput.Model {
 
 func newHelp() help.Model {
 	h := help.New()
-	h.ShowAll = true
+	h.ShowAll = false
 	return h
 }
 

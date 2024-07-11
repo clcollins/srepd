@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"math"
 	"reflect"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -28,24 +29,75 @@ func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 // and resizes the tui according to the new terminal window size
 func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	windowSize = msg.(tea.WindowSizeMsg)
-	top, _, bottom, _ := mainStyle.GetMargin()
-	eighthWindow := windowSize.Width / 8
-	cellPadding := (horizontalPadding * 2) * 4
-	borderEdges := 2 + 10
+	rowCount := func(m model) int {
+		// This func sets the table height to a reasonable size
+		// in the case there are no incidents
+		if len(m.table.Rows()) > 0 {
+			return len(m.table.Rows())
+		}
+		return 10
+	}(m)
 
-	m.help.Width = windowSize.Width - borderEdges
+	verticalMargins := mainStyle.GetVerticalMargins()
+	horizontalMargins := mainStyle.GetHorizontalMargins()
+	verticalPadding := mainStyle.GetVerticalPadding()
+	horizontalPadding := mainStyle.GetHorizontalPadding()
+	verticalBorders := mainStyle.GetVerticalBorderSize()
+	horizontalBorders := mainStyle.GetHorizontalBorderSize()
+
+	tableVerticalMargins := tableContainerStyle.GetVerticalMargins()
+	tableHorizontalMargins := tableContainerStyle.GetHorizontalMargins()
+	tableVerticalPadding := tableContainerStyle.GetVerticalPadding()
+	tableHorizontalPadding := tableContainerStyle.GetHorizontalPadding()
+	tableVerticalBorders := tableContainerStyle.GetVerticalBorderSize()
+	tableHorizontalBorders := tableContainerStyle.GetHorizontalBorderSize()
+
+	cellVerticalPadding := tableCellStyle.GetVerticalPadding() * rowCount    // Number of rows
+	cellHorizontalPadding := tableCellStyle.GetHorizontalPadding() * 4       // Four columns
+	cellVerticalMargins := tableCellStyle.GetVerticalMargins() * rowCount    // Number of rows
+	cellHorizontalMargins := tableCellStyle.GetHorizontalMargins() * 4       // Four columns
+	cellVerticalBorders := tableCellStyle.GetVerticalBorderSize() * rowCount // Number of rows
+	cellHorizontalBorders := tableCellStyle.GetHorizontalBorderSize() * 4    // Four columns
+
+	estimatedExtraLinesFromComponents := 7 // TODO: figure out how to calculate this
+
+	horizontalScratchWidth := horizontalMargins + horizontalPadding + horizontalBorders
+	verticalScratchWidth := verticalMargins + verticalPadding + verticalBorders
+
+	tableHorizontalScratchWidth := tableHorizontalMargins + tableHorizontalPadding + tableHorizontalBorders + cellHorizontalPadding + cellHorizontalMargins + cellHorizontalBorders
+	tableVerticalScratchWidth := tableVerticalMargins + tableVerticalPadding + tableVerticalBorders + cellVerticalPadding + cellVerticalMargins + cellVerticalBorders
+
+	tableWidth := windowSize.Width - horizontalScratchWidth - tableHorizontalScratchWidth
+	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents
+
+	m.table.SetHeight(tableHeight)
+
+	// converting to floats, rounding up and converting back to int handles layout issues arising from odd numbers
+	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
+
+	log.Debug("tui.windowSizeMsgHandler",
+		"window_width", windowSize.Width,
+		"window_height", windowSize.Height,
+		"table_horizontal_scratch_width", tableHorizontalScratchWidth,
+		"table_vertical_scratch_width", tableVerticalScratchWidth,
+		"horizontal_scratch_width", horizontalScratchWidth,
+		"vertical_scratch_width", verticalScratchWidth,
+		"table_width", tableWidth,
+		"table_height", tableHeight,
+		"column_width", columnWidth,
+	)
 
 	m.table.SetColumns([]table.Column{
-		{Title: dot, Width: 1},
-		{Title: "ID", Width: eighthWindow + cellPadding - borderEdges},
-		{Title: "Summary", Width: eighthWindow * 3},
-		{Title: "Service", Width: eighthWindow * 3},
+		{Title: dot, Width: dotWidth},
+		{Title: "ID", Width: idWidth - dotWidth},
+		{Title: "Summary", Width: columnWidth},
+		{Title: "Service", Width: columnWidth},
 	})
 
-	height := windowSize.Height - top - bottom - 10
-	m.table.SetHeight(height)
-	m.incidentViewer.Width = windowSize.Width - borderEdges
-	m.incidentViewer.Height = height
+	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth
+	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth
+
+	m.help.Width = windowSize.Width - horizontalScratchWidth
 
 	return m, nil
 }
@@ -227,7 +279,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clearSelectedIncident(msg.String() + " (back)")
 
 		case key.Matches(msg, defaultKeyMap.Ack):
-			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []*pagerduty.Incident{m.selectedIncident}} }
+			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
 
 		case key.Matches(msg, defaultKeyMap.Silence):
 			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
