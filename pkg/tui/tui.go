@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	title              = "SREPD: It really whips the PDs' ACKs!"
 	waitTime           = time.Millisecond * 1
 	defaultInputPrompt = " $ "
 	maxStaleAge        = time.Minute * 5
@@ -31,7 +32,11 @@ func (m model) Init() tea.Cmd {
 	if m.err != nil {
 		return func() tea.Msg { return errMsg{m.err} }
 	}
-	return func() tea.Msg { return updateIncidentListMsg("sender: Init") }
+	return tea.Batch(
+		tea.SetWindowTitle(title),
+		func() tea.Msg { return updateIncidentListMsg("sender: Init") },
+	)
+
 }
 
 type filteredMsg struct {
