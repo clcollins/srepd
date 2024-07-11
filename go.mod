@@ -6,7 +6,7 @@ require (
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/charmbracelet/bubbles v0.18.0
 	github.com/charmbracelet/bubbletea v0.25.0
-	github.com/charmbracelet/glamour v0.6.0
+	github.com/charmbracelet/glamour v0.7.0
 	github.com/charmbracelet/lipgloss v0.10.0
 	github.com/charmbracelet/log v0.4.0
 	github.com/spf13/cobra v1.8.1
@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	github.com/alecthomas/chroma v0.10.0 // indirect
+	github.com/alecthomas/chroma/v2 v2.8.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
