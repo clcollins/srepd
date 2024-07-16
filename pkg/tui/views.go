@@ -108,7 +108,7 @@ var (
 		Header:   tableHeaderStyle,
 	}
 
-	incidentViewerStyle = lipgloss.NewStyle()
+	incidentViewerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
 
 	errorStyle = lipgloss.NewStyle().
 			Bold(true).

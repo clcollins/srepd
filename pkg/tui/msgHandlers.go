@@ -64,6 +64,9 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	horizontalScratchWidth := horizontalMargins + horizontalPadding + horizontalBorders
 	verticalScratchWidth := verticalMargins + verticalPadding + verticalBorders
 
+	incidentHorizontalScratchWidth := incidentViewerStyle.GetHorizontalMargins() + incidentViewerStyle.GetHorizontalPadding() + incidentViewerStyle.GetHorizontalBorderSize()
+	incidentVerticalScratchWidth := incidentViewerStyle.GetVerticalMargins() + incidentViewerStyle.GetVerticalPadding() + incidentViewerStyle.GetVerticalBorderSize()
+
 	tableHorizontalScratchWidth := tableHorizontalMargins + tableHorizontalPadding + tableHorizontalBorders + cellHorizontalPadding + cellHorizontalMargins + cellHorizontalBorders
 	tableVerticalScratchWidth := tableVerticalMargins + tableVerticalPadding + tableVerticalBorders + cellVerticalPadding + cellVerticalMargins + cellVerticalBorders
 
@@ -80,6 +83,8 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		"window_height", windowSize.Height,
 		"table_horizontal_scratch_width", tableHorizontalScratchWidth,
 		"table_vertical_scratch_width", tableVerticalScratchWidth,
+		"incident_horizontal_scratch_width", incidentHorizontalScratchWidth,
+		"incident_vertical_scratch_width", incidentVerticalScratchWidth,
 		"horizontal_scratch_width", horizontalScratchWidth,
 		"vertical_scratch_width", verticalScratchWidth,
 		"table_width", tableWidth,
@@ -94,8 +99,8 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		{Title: "Service", Width: columnWidth},
 	})
 
-	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth
-	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth
+	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth
+	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth - incidentVerticalScratchWidth
 
 	m.help.Width = windowSize.Width - horizontalScratchWidth
 
