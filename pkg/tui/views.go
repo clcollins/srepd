@@ -17,64 +17,152 @@ import (
 )
 
 const (
-	dot        = "•"
-	upArrow    = "↑"
-	downArrow  = "↓"
-	gray       = lipgloss.Color("240")
-	paleYellow = lipgloss.Color("229")
-	neonPurple = lipgloss.Color("57")
-	lilac      = lipgloss.Color("105")
+	dot       = "•"
+	upArrow   = "↑"
+	downArrow = "↓"
+
+	dotWidth = 1
+	idWidth  = 16
 )
 
 var (
-	windowSize          tea.WindowSizeMsg
-	horizontalPadding   = 1
-	borderWidth         = 1
-	mainStyle           = lipgloss.NewStyle().Margin(0, 0).Padding(0, horizontalPadding)
-	assigneeStyle       = mainStyle.Copy()
-	refreshStyle        = mainStyle.Copy()
-	statusStyle         = mainStyle.Copy()
-	assignedStringWidth = len("Showing assigned to User") + (horizontalPadding * 2 * 2) + (borderWidth * 2 * 2) + 10
-	tableContainerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(gray)
-	tableStyle          = table.Styles{
-		Selected: lipgloss.NewStyle().Bold(true).Foreground(paleYellow).Background(neonPurple),
-		Header:   lipgloss.NewStyle().Bold(false).Padding(0, 1).BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(gray)).BorderBottom(true),
-		Cell:     lipgloss.NewStyle().Padding(0, 1),
+	white    = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#ffffff"}
+	gray     = lipgloss.AdaptiveColor{Dark: "#e0e1dd", Light: "#e0e1dd"}
+	ltblue   = lipgloss.AdaptiveColor{Dark: "#778da9", Light: "#778da9"}
+	blue     = lipgloss.AdaptiveColor{Dark: "#415a77", Light: "#415a77"}
+	dkblue   = lipgloss.AdaptiveColor{Dark: "#1b263b", Light: "#1b263b"}
+	bgndblue = lipgloss.AdaptiveColor{Dark: "#0d1b2a", Light: "#0d1b2a"}
+	bgndred  = lipgloss.AdaptiveColor{Dark: "#a4133c", Light: "#a4133c"}
+)
+
+type pallet struct {
+	text       lipgloss.AdaptiveColor
+	background lipgloss.AdaptiveColor
+	border     lipgloss.AdaptiveColor
+}
+
+type colorModel struct {
+	normal   pallet
+	notice   pallet
+	warning  pallet
+	selected pallet
+	err      pallet
+}
+
+var srepdPallet = colorModel{
+	normal: pallet{
+		text:       ltblue,
+		background: lipgloss.AdaptiveColor{},
+		border:     blue,
+	},
+	notice: pallet{
+		text:       white,
+		background: lipgloss.AdaptiveColor{},
+		border:     lipgloss.AdaptiveColor{},
+	},
+	warning: pallet{
+		text:       white,
+		background: bgndred,
+		border:     lipgloss.AdaptiveColor{},
+	},
+	selected: pallet{
+		text:       white,
+		background: blue,
+		border:     blue,
+	},
+	err: pallet{
+		text:       white,
+		background: bgndblue,
+		border:     blue,
+	},
+}
+
+var (
+	windowSize tea.WindowSizeMsg
+
+	mainStyle = lipgloss.NewStyle().
+			Width(windowSize.Width).
+			Height(windowSize.Height).
+			Margin(0, 0).
+			Padding(0, 0).
+			Foreground(srepdPallet.normal.text).
+			Background(srepdPallet.normal.background).
+			BorderForeground(srepdPallet.normal.border).
+			BorderBackground(srepdPallet.normal.background)
+
+	assignedStringWidth = len("Showing assigned to User")
+
+	paddedStyle  = mainStyle.Copy().Padding(0, 2, 0, 1)
+	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
+
+	tableContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
+	tableCellStyle      = lipgloss.NewStyle().Padding(0, 1)
+	tableHeaderStyle    = lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.RoundedBorder(), false, false, true).Foreground(srepdPallet.notice.text).Background(srepdPallet.notice.background)
+	tableSelectedStyle  = lipgloss.NewStyle().Border(lipgloss.HiddenBorder(), false).Background(srepdPallet.selected.background).Foreground(srepdPallet.selected.text).Bold(true)
+
+	tableStyle = table.Styles{
+		Cell:     tableCellStyle,
+		Selected: tableSelectedStyle,
+		Header:   tableHeaderStyle,
 	}
-	helpStyle           = lipgloss.NewStyle().Foreground(lilac)
-	incidentViewerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(gray)).Padding(2)
-	errorStyle          = lipgloss.NewStyle().
-				Bold(true).
-				Width(64).
-				Foreground(lipgloss.AdaptiveColor{Light: "#E11C9C", Dark: "#FF62DA"}).
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.AdaptiveColor{Light: "#E11C9C", Dark: "#FF62DA"}).
-				Padding(1, 3, 1, 3)
+
+	incidentViewerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(srepdPallet.normal.border).Padding(2)
+
+	errorStyle = lipgloss.NewStyle().
+			Bold(true).
+			Width(64).
+			Border(lipgloss.RoundedBorder()).
+			Foreground(srepdPallet.err.text).
+			Background(srepdPallet.err.background).
+			BorderForeground(srepdPallet.err.border).
+			Padding(1, 3, 1, 3)
 )
 
 func (m model) View() string {
-	helpView := helpStyle.Render(m.help.View(defaultKeyMap))
+	var s strings.Builder
+
+	// errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
+	errHelpView := help.New().View(errorViewKeyMap)
+
+	s.WriteString(m.renderHeader())
 
 	switch {
 	case m.err != nil:
 		log.Debug("View", "error", m.err)
-		errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
-		return (errorStyle.Render(dot+"ERROR"+dot+"\n\n"+m.err.Error()) + "\n" + errHelpView)
+
+		s.WriteString(dot)
+		s.WriteString("ERROR")
+		s.WriteString(dot)
+		s.WriteString("\n\n")
+		s.WriteString(m.err.Error())
+		s.WriteString("\n")
+		s.WriteString(errHelpView)
+
+		return errorStyle.Render(s.String())
 
 	case m.viewingIncident:
 		log.Debug("viewingIncident")
-		return mainStyle.Render(m.renderHeader() + "\n" + m.incidentViewer.View() + "\n" + helpView)
+
+		s.WriteString(m.incidentViewer.View())
 
 	default:
-		tableView := tableContainerStyle.Render(m.table.View())
-		if m.input.Focused() {
-			log.Debug("viewingTable and input")
-			return mainStyle.Render(m.renderHeader() + "\n" + tableView + "\n" + m.input.View() + "\n" + helpView)
-		}
 		log.Debug("viewingTable")
-		return mainStyle.Render(
-			m.renderHeader() + "\n" + tableView + "\n" + m.renderFooter() + "\n" + helpView)
+
+		s.WriteString(tableContainerStyle.Render(m.table.View()))
 	}
+
+	if m.input.Focused() {
+		log.Debug("viewingTable and input")
+		s.WriteString("\n")
+		s.WriteString(m.input.View())
+	}
+
+	s.WriteString("\n")
+	s.WriteString(m.renderFooter())
+	s.WriteString("\n")
+	s.WriteString(paddedStyle.Width(windowSize.Width).Render(m.help.View(defaultKeyMap)))
+
+	return mainStyle.Render(s.String())
 }
 
 func (m model) renderFooter() string {
@@ -82,7 +170,7 @@ func (m model) renderFooter() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			refreshStyle.Render(refreshArea(m.autoRefresh)),
+			paddedStyle.Render(refreshArea(m.autoRefresh)),
 		),
 	)
 
@@ -99,14 +187,21 @@ func (m model) renderHeader() string {
 		assignedTo = "Team"
 	}
 
+	if m.debug {
+		log.Debug("viewingTable and debug")
+		s.WriteString(warningStyle.Width(windowSize.Width).Align(lipgloss.Center).Render(fmt.Sprintf("DEBUG MODE: PROMETHEUS STATS AVAILABLE AT %s", m.prometheusURL)))
+		s.WriteString("\n")
+	}
+
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			statusStyle.Width(windowSize.Width-assignedStringWidth).Render(statusArea(m.status)),
-			assigneeStyle.Render(assigneeArea(assignedTo)),
+			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()).Render(statusArea(m.status)),
+			paddedStyle.Render(assigneeArea(assignedTo)),
 		),
 	)
 
+	s.WriteString("\n")
 	return s.String()
 }
 

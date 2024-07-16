@@ -36,6 +36,8 @@ type model struct {
 	autoAcknowledge bool
 	autoRefresh     bool
 	teamMode        bool
+	debug           bool
+	prometheusURL   string
 }
 
 func InitialModel(
@@ -45,15 +47,19 @@ func InitialModel(
 	ignoredusers []string,
 	editor []string,
 	launcher launcher.ClusterLauncher,
+	debug bool,
+	prometheusURL string,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
 	m := model{
-		editor:   editor,
-		launcher: launcher,
-		help:     newHelp(),
-		table:    newTableWithStyles(),
-		input:    newTextInput(),
+		editor:        editor,
+		launcher:      launcher,
+		debug:         debug,
+		prometheusURL: prometheusURL,
+		help:          newHelp(),
+		table:         newTableWithStyles(),
+		input:         newTextInput(),
 		// INCIDENTVIEWER
 		incidentViewer: newIncidentViewer(),
 		status:         "",
@@ -110,7 +116,7 @@ func newTextInput() textinput.Model {
 
 func newHelp() help.Model {
 	h := help.New()
-	h.ShowAll = true
+	h.ShowAll = false
 	return h
 }
 
