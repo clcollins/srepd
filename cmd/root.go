@@ -81,8 +81,6 @@ but rather a simple tool to make on-call tasks easier.`,
 			log.Warn(err)
 		}
 
-		metrics := fmt.Sprintf("%s://%s:%d/%s", prometheusScheme, prometheusURL, prometheusPort, prometheusPath)
-
 		m, _ := tui.InitialModel(
 			viper.GetString("token"),
 			viper.GetStringSlice("teams"),
