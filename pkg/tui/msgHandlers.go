@@ -117,6 +117,11 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.AutoAck) {
+		m.autoAcknowledge = !m.autoAcknowledge
+		return m, nil
+	}
+
 	// Default commands for the table view
 	switch {
 	case m.err != nil:

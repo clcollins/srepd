@@ -169,19 +169,19 @@ func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
 
 // ShouldBeAcknowledged returns true if the incident is assigned to the given user,
 // the user has not acknowledged the incident yet, and autoAcknowledge is enabled
-func ShouldBeAcknowledged(i pagerduty.Incident, id string, autoAcknowledge bool) bool {
+func ShouldBeAcknowledged(p *pd.Config, i pagerduty.Incident, id string, autoAcknowledge bool) bool {
 	assigned := AssignedToUser(i, id)
 	acknowledged := AcknowledgedByUser(i, id)
-	doIt := assigned && !acknowledged && autoAcknowledge
-	if doIt {
-		log.Debug(
-			"commands.ShouldBeAcknowledged",
-			"assigned", assigned,
-			"acknowledged", acknowledged,
-			"autoAcknowledge", autoAcknowledge,
-			"doIt", doIt,
-		)
-	}
+	userIsOnCall := UserIsOnCall(p, id)
+	doIt := assigned && !acknowledged && autoAcknowledge && userIsOnCall
+	log.Debug(
+		"commands.ShouldBeAcknowledged",
+		"assigned", assigned,
+		"acknowledged", acknowledged,
+		"autoAcknowledge", autoAcknowledge,
+		"userIsOnCall", userIsOnCall,
+		"doIt", doIt,
+	)
 	return AssignedToUser(i, id) && !AcknowledgedByUser(i, id) && autoAcknowledge
 }
 
@@ -202,6 +202,43 @@ func AcknowledgedByUser(i pagerduty.Incident, id string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// UserIsOnCall returns true if the current time is between any of the current user's pagerduty.OnCalls in the next six hours
+func UserIsOnCall(p *pd.Config, id string) bool {
+	var timeLayout = "2006-01-02T15:04:05Z"
+	opts := pagerduty.ListOnCallOptions{
+		UserIDs: []string{id},
+		Since:   time.Now().String(),
+		Until:   time.Now().Add(time.Hour * 6).String(),
+	}
+
+	onCalls, err := pd.GetUserOnCalls(p.Client, id, opts)
+	if err != nil {
+		log.Debug("commands.UserIsOnCall", "error", err)
+		return false
+	}
+
+	for _, o := range onCalls {
+		log.Debug("commands.UserIsOnCall", "on-call", o)
+
+		start, err := time.Parse(timeLayout, o.Start)
+		if err != nil {
+			log.Debug("commands.UserIsOnCall", "error parsing on-call start time", err)
+			return false
+		}
+		end, err := time.Parse(timeLayout, o.End)
+		if err != nil {
+			log.Debug("commands.UserIsOnCall", "error parsing on-call end time", err)
+			return false
+		}
+
+		if start.Before(time.Now()) && end.After(time.Now()) {
+			return true
+		}
+	}
+
 	return false
 }
 

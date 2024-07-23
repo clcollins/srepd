@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -221,7 +222,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if any incidents should be auto-acknowledged;
 		// This must be done before adding the stale incidents
 		for _, i := range m.incidentList {
-			if ShouldBeAcknowledged(i, m.config.CurrentUser.ID, m.autoAcknowledge) {
+			if ShouldBeAcknowledged(m.config, i, m.config.CurrentUser.ID, m.autoAcknowledge) {
 				acknowledgeIncidentsList = append(acknowledgeIncidentsList, i)
 			}
 		}
@@ -368,10 +369,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case acknowledgedIncidentsMsg:
+		var incidentIDs []string
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		m.setStatus(fmt.Sprintf("acknowledged incidents %v; refreshing Incident List ", msg))
+		for _, i := range msg.incidents {
+			incidentIDs = append(incidentIDs, i.ID)
+		}
+		incidents := strings.Join(incidentIDs, " ")
+		m.setStatus(fmt.Sprintf("acknowledged incidents: " + incidents))
+
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
 	case waitForSelectedIncidentsThenAcknowledgeMsg:

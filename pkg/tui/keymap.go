@@ -11,8 +11,9 @@ func (k keymap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		// Each slice here is a column in the help window
 		{k.Up, k.Down, k.Enter, k.Back},
-		{k.Enter, k.Ack, k.Silence, k.Note},
-		{k.Login, k.Open, k.Team, k.AutoRefresh},
+		{k.Ack, k.Note, k.Silence},
+		{k.Login, k.Open},
+		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck},
 		{k.Quit, k.Help},
 	}
 }
@@ -32,6 +33,7 @@ type keymap struct {
 	Note        key.Binding
 	Silence     key.Binding
 	Ack         key.Binding
+	AutoAck     key.Binding
 	Input       key.Binding
 	Login       key.Binding
 	Open        key.Binding
@@ -80,7 +82,7 @@ var defaultKeyMap = keymap{
 	),
 	AutoRefresh: key.NewBinding(
 		key.WithKeys("ctrl+r"),
-		key.WithHelp("ctrl+r", "toggle auto refresh"),
+		key.WithHelp("ctrl+r", "toggle auto-refresh"),
 	),
 	Note: key.NewBinding(
 		key.WithKeys("n"),
@@ -93,6 +95,10 @@ var defaultKeyMap = keymap{
 	Ack: key.NewBinding(
 		key.WithKeys("a"),
 		key.WithHelp("a", "acknowledge"),
+	),
+	AutoAck: key.NewBinding(
+		key.WithKeys("ctrl+a"),
+		key.WithHelp("ctrl+a", "toggle auto-acknowledge"),
 	),
 	Input: key.NewBinding(
 		key.WithKeys("i"),
