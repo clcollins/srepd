@@ -37,7 +37,6 @@ type model struct {
 	autoRefresh     bool
 	teamMode        bool
 	debug           bool
-	prometheusURL   string
 }
 
 func InitialModel(
@@ -48,19 +47,17 @@ func InitialModel(
 	editor []string,
 	launcher launcher.ClusterLauncher,
 	debug bool,
-	prometheusURL string,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
 	m := model{
-		editor:        editor,
-		launcher:      launcher,
-		debug:         debug,
-		prometheusURL: prometheusURL,
-		help:          newHelp(),
-		table:         newTableWithStyles(),
-		input:         newTextInput(),
-		// INCIDENTVIEWER
+
+		editor:         editor,
+		launcher:       launcher,
+		debug:          debug,
+		help:           newHelp(),
+		table:          newTableWithStyles(),
+		input:          newTextInput(),
 		incidentViewer: newIncidentViewer(),
 		status:         "",
 	}

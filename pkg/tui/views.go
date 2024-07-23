@@ -25,16 +25,6 @@ const (
 	idWidth  = 16
 )
 
-var (
-	white    = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#ffffff"}
-	gray     = lipgloss.AdaptiveColor{Dark: "#e0e1dd", Light: "#e0e1dd"}
-	ltblue   = lipgloss.AdaptiveColor{Dark: "#778da9", Light: "#778da9"}
-	blue     = lipgloss.AdaptiveColor{Dark: "#415a77", Light: "#415a77"}
-	dkblue   = lipgloss.AdaptiveColor{Dark: "#1b263b", Light: "#1b263b"}
-	bgndblue = lipgloss.AdaptiveColor{Dark: "#0d1b2a", Light: "#0d1b2a"}
-	bgndred  = lipgloss.AdaptiveColor{Dark: "#a4133c", Light: "#a4133c"}
-)
-
 type pallet struct {
 	text       lipgloss.AdaptiveColor
 	background lipgloss.AdaptiveColor
@@ -78,6 +68,61 @@ var srepdPallet = colorModel{
 }
 
 var (
+
+	white          = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#ffffff"}
+	lightBlue      = lipgloss.AdaptiveColor{Dark: "#778da9", Light: "#778da9"}
+	blue           = lipgloss.AdaptiveColor{Dark: "#415a77", Light: "#415a77"}
+	backgroundBlue = lipgloss.AdaptiveColor{Dark: "#0d1b2a", Light: "#0d1b2a"}
+	backgroundRed  = lipgloss.AdaptiveColor{Dark: "#a4133c", Light: "#a4133c"}
+
+	// For future
+	// gray           = lipgloss.AdaptiveColor{Dark: "#e0e1dd", Light: "#e0e1dd"}
+	// darkBlue       = lipgloss.AdaptiveColor{Dark: "#1b263b", Light: "#1b263b"}
+)
+
+type pallet struct {
+	text       lipgloss.AdaptiveColor
+	background lipgloss.AdaptiveColor
+	border     lipgloss.AdaptiveColor
+}
+
+type colorModel struct {
+	normal   pallet
+	notice   pallet
+	warning  pallet
+	selected pallet
+	err      pallet
+}
+
+var srepdPallet = colorModel{
+	normal: pallet{
+		text:       lightBlue,
+		background: lipgloss.AdaptiveColor{},
+		border:     blue,
+	},
+	notice: pallet{
+		text:       white,
+		background: lipgloss.AdaptiveColor{},
+		border:     lipgloss.AdaptiveColor{},
+	},
+	warning: pallet{
+		text:       white,
+		background: backgroundRed,
+		border:     lipgloss.AdaptiveColor{},
+	},
+	selected: pallet{
+		text:       white,
+		background: blue,
+		border:     blue,
+	},
+	err: pallet{
+		text:       white,
+		background: backgroundBlue,
+		border:     blue,
+	},
+}
+
+var (
 	windowSize tea.WindowSizeMsg
 
 	mainStyle = lipgloss.NewStyle().
@@ -90,9 +135,10 @@ var (
 			BorderForeground(srepdPallet.normal.border).
 			BorderBackground(srepdPallet.normal.background)
 
-	assignedStringWidth = len("Showing assigned to User")
+	assignedStringWidth = len("Showing assigned to User") + 2
 
-	paddedStyle  = mainStyle.Copy().Padding(0, 2, 0, 1)
+	paddedStyle  = mainStyle.Padding(0, 2, 0, 1)
+
 	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
 
 	tableContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
@@ -106,7 +152,8 @@ var (
 		Header:   tableHeaderStyle,
 	}
 
-	incidentViewerStyle = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(srepdPallet.normal.border).Padding(2)
+
+	incidentViewerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
 
 	errorStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -146,13 +193,12 @@ func (m model) View() string {
 		s.WriteString(m.incidentViewer.View())
 
 	default:
-		log.Debug("viewingTable")
 
 		s.WriteString(tableContainerStyle.Render(m.table.View()))
 	}
 
 	if m.input.Focused() {
-		log.Debug("viewingTable and input")
+
 		s.WriteString("\n")
 		s.WriteString(m.input.View())
 	}
@@ -196,7 +242,9 @@ func (m model) renderHeader() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()).Render(statusArea(m.status)),
+
+			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status)),
+
 			paddedStyle.Render(assigneeArea(assignedTo)),
 		),
 	)

@@ -226,8 +226,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// TODO: Figure out the right way to do this (eg: convert []pagerduty.Incident to []*pagerDuty.Incident)
-		// cmds = append(cmds, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: acknowledgeIncidentsList} })
+		if len(acknowledgeIncidentsList) > 0 {
+			cmds = append(cmds, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: acknowledgeIncidentsList} })
+		}
 
 		// Add stale incidents to the list
 		m.incidentList = append(m.incidentList, staleIncidentList...)
@@ -380,7 +381,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg(msg) }
 		}
 		return m, func() tea.Msg {
-			return acknowledgeIncidentsMsg{incidents: []*pagerduty.Incident{m.selectedIncident}}
+			return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
 		}
 
 	case reassignIncidentsMsg:
@@ -409,7 +410,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, tea.Sequence(
-			silenceIncidents([]*pagerduty.Incident{m.selectedIncident}, []*pagerduty.User{m.config.SilentUser}),
+			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, []*pagerduty.User{m.config.SilentUser}),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
 		)
 
@@ -419,9 +420,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		var incidents []*pagerduty.Incident = msg.incidents
+		var incidents []pagerduty.Incident = msg.incidents
 		var users []*pagerduty.User
-		incidents = append(incidents, m.selectedIncident)
+		incidents = append(incidents, *m.selectedIncident)
 		users = append(users, m.config.SilentUser)
 		return m, tea.Sequence(
 			silenceIncidents(incidents, users),

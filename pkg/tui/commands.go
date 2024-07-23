@@ -171,9 +171,17 @@ func AssignedToAnyUsers(i pagerduty.Incident, ids []string) bool {
 // the user has not acknowledged the incident yet, and autoAcknowledge is enabled
 func ShouldBeAcknowledged(i pagerduty.Incident, id string, autoAcknowledge bool) bool {
 	assigned := AssignedToUser(i, id)
-	acked := AcknowledgedByUser(i, id)
-	doIt := assigned && !acked && autoAcknowledge
-	log.Debug("commands.ShouldBeAcknowledged", "assigned", assigned, "acked", acked, "autoAcknowledge", autoAcknowledge, "doIt", doIt)
+	acknowledged := AcknowledgedByUser(i, id)
+	doIt := assigned && !acknowledged && autoAcknowledge
+	if doIt {
+		log.Debug(
+			"commands.ShouldBeAcknowledged",
+			"assigned", assigned,
+			"acknowledged", acknowledged,
+			"autoAcknowledge", autoAcknowledge,
+			"doIt", doIt,
+		)
+	}
 	return AssignedToUser(i, id) && !AcknowledgedByUser(i, id) && autoAcknowledge
 }
 
@@ -335,7 +343,7 @@ func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
 type clearSelectedIncidentsMsg string
 
 type acknowledgeIncidentsMsg struct {
-	incidents []*pagerduty.Incident
+	incidents []pagerduty.Incident
 }
 type acknowledgedIncidentsMsg struct {
 	incidents []pagerduty.Incident
@@ -344,7 +352,7 @@ type acknowledgedIncidentsMsg struct {
 
 type waitForSelectedIncidentsThenAcknowledgeMsg string
 
-func acknowledgeIncidents(p *pd.Config, incidents []*pagerduty.Incident) tea.Cmd {
+func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident) tea.Cmd {
 	return func() tea.Msg {
 		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
 		if err != nil {
@@ -359,12 +367,12 @@ func acknowledgeIncidents(p *pd.Config, incidents []*pagerduty.Incident) tea.Cmd
 }
 
 type reassignIncidentsMsg struct {
-	incidents []*pagerduty.Incident
+	incidents []pagerduty.Incident
 	users     []*pagerduty.User
 }
 type reassignedIncidentsMsg []pagerduty.Incident
 
-func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, users []*pagerduty.User) tea.Cmd {
+func reassignIncidents(p *pd.Config, i []pagerduty.Incident, users []*pagerduty.User) tea.Cmd {
 	return func() tea.Msg {
 		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
 		if err != nil {
@@ -380,12 +388,12 @@ func reassignIncidents(p *pd.Config, i []*pagerduty.Incident, users []*pagerduty
 
 type silenceSelectedIncidentMsg struct{}
 type silenceIncidentsMsg struct {
-	incidents []*pagerduty.Incident
+	incidents []pagerduty.Incident
 }
 
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
 
-func silenceIncidents(i []*pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
+func silenceIncidents(i []pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
 	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage"
 	// because it's really just a reassignment
 	log.Printf("silence requested for incident(s) %v; reassigning to %v", i, u)

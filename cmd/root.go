@@ -91,7 +91,6 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetStringSlice("editor"),
 			launcher,
 			viper.GetBool("debug"),
-			metrics,
 		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
