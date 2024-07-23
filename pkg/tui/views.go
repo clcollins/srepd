@@ -25,50 +25,7 @@ const (
 	idWidth  = 16
 )
 
-type pallet struct {
-	text       lipgloss.AdaptiveColor
-	background lipgloss.AdaptiveColor
-	border     lipgloss.AdaptiveColor
-}
-
-type colorModel struct {
-	normal   pallet
-	notice   pallet
-	warning  pallet
-	selected pallet
-	err      pallet
-}
-
-var srepdPallet = colorModel{
-	normal: pallet{
-		text:       ltblue,
-		background: lipgloss.AdaptiveColor{},
-		border:     blue,
-	},
-	notice: pallet{
-		text:       white,
-		background: lipgloss.AdaptiveColor{},
-		border:     lipgloss.AdaptiveColor{},
-	},
-	warning: pallet{
-		text:       white,
-		background: bgndred,
-		border:     lipgloss.AdaptiveColor{},
-	},
-	selected: pallet{
-		text:       white,
-		background: blue,
-		border:     blue,
-	},
-	err: pallet{
-		text:       white,
-		background: bgndblue,
-		border:     blue,
-	},
-}
-
 var (
-
 	white          = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#ffffff"}
 	lightBlue      = lipgloss.AdaptiveColor{Dark: "#778da9", Light: "#778da9"}
 	blue           = lipgloss.AdaptiveColor{Dark: "#415a77", Light: "#415a77"}
@@ -137,7 +94,7 @@ var (
 
 	assignedStringWidth = len("Showing assigned to User") + 2
 
-	paddedStyle  = mainStyle.Padding(0, 2, 0, 1)
+	paddedStyle = mainStyle.Padding(0, 2, 0, 1)
 
 	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
 
@@ -151,7 +108,6 @@ var (
 		Selected: tableSelectedStyle,
 		Header:   tableHeaderStyle,
 	}
-
 
 	incidentViewerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
 
@@ -231,12 +187,6 @@ func (m model) renderHeader() string {
 
 	if m.teamMode {
 		assignedTo = "Team"
-	}
-
-	if m.debug {
-		log.Debug("viewingTable and debug")
-		s.WriteString(warningStyle.Width(windowSize.Width).Align(lipgloss.Center).Render(fmt.Sprintf("DEBUG MODE: PROMETHEUS STATS AVAILABLE AT %s", m.prometheusURL)))
-		s.WriteString("\n")
 	}
 
 	s.WriteString(
