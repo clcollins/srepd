@@ -216,7 +216,7 @@ func (m model) renderFooter() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			paddedStyle.Render(refreshArea(m.autoRefresh)),
+			paddedStyle.Render(refreshArea(m.autoRefresh, m.autoAcknowledge)),
 		),
 	)
 
@@ -267,13 +267,16 @@ func statusArea(s string) string {
 	return fmt.Sprintf(fstring, s)
 }
 
-func refreshArea(autoRefresh bool) string {
+func refreshArea(autoRefresh bool, autoAck bool) string {
 	var fstring = "Watching for updates... "
-	if !autoRefresh {
+
+	if autoRefresh && autoAck {
+		fstring = fstring + " [auto-acknowledge]"
+	} else if !autoRefresh {
 		fstring = fstring + " [PAUSED]"
 	}
-	fstring = strings.TrimSuffix(fstring, "\n")
 
+	fstring = strings.TrimSuffix(fstring, "\n")
 	return fstring
 }
 

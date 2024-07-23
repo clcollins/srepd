@@ -26,6 +26,7 @@ type PagerDutyClientInterface interface {
 	ListIncidentAlertsWithContext(ctx context.Context, id string, opts pagerduty.ListIncidentAlertsOptions) (*pagerduty.ListAlertsResponse, error)
 	ListIncidentsWithContext(ctx context.Context, opts pagerduty.ListIncidentsOptions) (*pagerduty.ListIncidentsResponse, error)
 	ListIncidentNotesWithContext(ctx context.Context, id string) ([]pagerduty.IncidentNote, error)
+	ListOnCallsWithContext(ctx context.Context, opts pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error)
 	ManageIncidentsWithContext(ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (*pagerduty.ListIncidentsResponse, error)
 }
 
@@ -255,6 +256,28 @@ func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (
 	}
 
 	return u, nil
+}
+
+func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCallOptions) ([]pagerduty.OnCall, error) {
+	var ctx = context.Background()
+	var o []pagerduty.OnCall
+
+	for {
+		response, err := client.ListOnCallsWithContext(ctx, opts)
+		if err != nil {
+			return o, fmt.Errorf("pd.GetUserOnCalls(): failed to get on-call entries for user `%v`: %v", id, err)
+		}
+
+		o = response.OnCalls
+
+		opts.Offset += opts.Limit
+
+		if !response.More {
+			break
+		}
+	}
+
+	return o, nil
 }
 
 func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) ([]pagerduty.Incident, error) {
