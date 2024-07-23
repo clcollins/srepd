@@ -51,13 +51,13 @@ func InitialModel(
 	var err error
 
 	m := model{
-		editor:   editor,
-		launcher: launcher,
-		debug:    debug,
-		help:     newHelp(),
-		table:    newTableWithStyles(),
-		input:    newTextInput(),
-		// INCIDENTVIEWER
+
+		editor:         editor,
+		launcher:       launcher,
+		debug:          debug,
+		help:           newHelp(),
+		table:          newTableWithStyles(),
+		input:          newTextInput(),
 		incidentViewer: newIncidentViewer(),
 		status:         "",
 	}

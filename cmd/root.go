@@ -24,6 +24,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -35,11 +36,16 @@ import (
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/tui"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 const pollInterval = 15
+const prometheusPort = 2112
+const prometheusPath = "/metrics"
+const prometheusURL = "localhost"
+const prometheusScheme = "http"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -57,6 +63,9 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		log.SetLevel(func() log.Level {
 			if viper.GetBool("debug") {
+				http.Handle(prometheusPath, promhttp.Handler())
+				go http.ListenAndServe(fmt.Sprintf("%s:%d", prometheusURL, prometheusPort), nil)
+
 				return log.DebugLevel
 			}
 			return log.WarnLevel
@@ -71,6 +80,8 @@ but rather a simple tool to make on-call tasks easier.`,
 		if err != nil {
 			log.Warn(err)
 		}
+
+		metrics := fmt.Sprintf("%s://%s:%d/%s", prometheusScheme, prometheusURL, prometheusPort, prometheusPath)
 
 		m, _ := tui.InitialModel(
 			viper.GetString("token"),

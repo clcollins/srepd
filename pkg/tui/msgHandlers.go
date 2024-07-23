@@ -61,6 +61,7 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	estimatedExtraLinesFromComponents := 7 // TODO: figure out how to calculate this
 
+
 	horizontalScratchWidth := horizontalMargins + horizontalPadding + horizontalBorders
 	verticalScratchWidth := verticalMargins + verticalPadding + verticalBorders
 
