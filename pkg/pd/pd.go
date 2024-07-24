@@ -103,21 +103,33 @@ func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
 func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User) ([]pagerduty.Incident, error) {
 	var ctx = context.Background()
 	var i []pagerduty.Incident
+	var email string
 
 	opts := []pagerduty.ManageIncidentsOptions{}
 
 	for _, incident := range incidents {
-		opts = append(opts, pagerduty.ManageIncidentsOptions{
-			ID:     incident.ID,
-			Status: "acknowledged",
-			Assignments: []pagerduty.Assignee{{
-				Assignee: user.APIObject,
-			}},
-		})
+		if user == nil {
+			email = ""
+			opts = append(opts, pagerduty.ManageIncidentsOptions{
+				ID:              incident.ID,
+				EscalationLevel: 1,
+			})
+		} else {
+			email = user.Email
+			opts = append(opts, pagerduty.ManageIncidentsOptions{
+				ID:     incident.ID,
+				Status: "acknowledged",
+				Assignments: []pagerduty.Assignee{
+					{
+						Assignee: user.APIObject,
+					},
+				},
+			})
+		}
 	}
 
 	for {
-		response, err := client.ManageIncidentsWithContext(ctx, user.Email, opts)
+		response, err := client.ManageIncidentsWithContext(ctx, email, opts)
 		if err != nil {
 			return i, fmt.Errorf("pd.AcknowledgeIncident(): failed to acknowledge incident(s) `%v`: %v", incidents, err)
 		}
@@ -131,7 +143,6 @@ func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident,
 		if !response.More {
 			break
 		}
-
 	}
 
 	return i, nil

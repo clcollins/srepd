@@ -61,7 +61,6 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	estimatedExtraLinesFromComponents := 7 // TODO: figure out how to calculate this
 
-
 	horizontalScratchWidth := horizontalMargins + horizontalPadding + horizontalBorders
 	verticalScratchWidth := verticalMargins + verticalPadding + verticalBorders
 
@@ -219,7 +218,13 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Ack):
 			return m, doIfIncidentSelected(&m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg("wait") },
+				func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg("Ack") },
+			))
+
+		case key.Matches(msg, defaultKeyMap.UnAck):
+			return m, doIfIncidentSelected(&m, tea.Sequence(
+				func() tea.Msg { return getIncidentMsg(incidentID) },
+				func() tea.Msg { return waitForSelectedIncidentsThenUnAcknowledgeMsg("UnAck") },
 			))
 
 		case key.Matches(msg, defaultKeyMap.Note):
