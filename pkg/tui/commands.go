@@ -382,16 +382,35 @@ type clearSelectedIncidentsMsg string
 type acknowledgeIncidentsMsg struct {
 	incidents []pagerduty.Incident
 }
+type unAcknowledgeIncidentsMsg struct {
+	incidents []pagerduty.Incident
+}
 type acknowledgedIncidentsMsg struct {
+	incidents []pagerduty.Incident
+	err       error
+}
+type unAcknowledgedIncidentsMsg struct {
 	incidents []pagerduty.Incident
 	err       error
 }
 
 type waitForSelectedIncidentsThenAcknowledgeMsg string
+type waitForSelectedIncidentsThenUnAcknowledgeMsg string
 
-func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident) tea.Cmd {
+func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident, reescalate bool) tea.Cmd {
 	return func() tea.Msg {
-		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		var u *pagerduty.User
+		var err error
+
+		if reescalate {
+			a, err := pd.AcknowledgeIncident(p.Client, incidents, u)
+			if err != nil {
+				return errMsg{err}
+			}
+			return unAcknowledgedIncidentsMsg{a, err}
+		}
+
+		u, err = p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
 		if err != nil {
 			return errMsg{err}
 		}
@@ -399,6 +418,7 @@ func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident) tea.Cmd 
 		if err != nil {
 			return errMsg{err}
 		}
+
 		return acknowledgedIncidentsMsg{a, err}
 	}
 }

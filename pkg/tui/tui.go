@@ -364,7 +364,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, tea.Sequence(
-			acknowledgeIncidents(m.config, msg.incidents),
+			acknowledgeIncidents(m.config, msg.incidents, false),
+			func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
+		)
+
+	case unAcknowledgeIncidentsMsg:
+		if msg.incidents == nil {
+			m.setStatus("failed re-escalating incidents - no incidents provided")
+			return m, nil
+		}
+
+		return m, tea.Sequence(
+			acknowledgeIncidents(m.config, msg.incidents, true),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
 		)
 
@@ -381,6 +392,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
+	case unAcknowledgedIncidentsMsg:
+		var incidentIDs []string
+		if msg.err != nil {
+			return m, func() tea.Msg { return errMsg{msg.err} }
+		}
+		for _, i := range msg.incidents {
+			incidentIDs = append(incidentIDs, i.ID)
+		}
+		incidents := strings.Join(incidentIDs, " ")
+		m.setStatus(fmt.Sprintf("re-escalated incidents: " + incidents))
+
+		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
+
 	case waitForSelectedIncidentsThenAcknowledgeMsg:
 		if m.selectedIncident == nil {
 			time.Sleep(waitTime)
@@ -389,6 +413,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, func() tea.Msg {
 			return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
+		}
+
+	case waitForSelectedIncidentsThenUnAcknowledgeMsg:
+		if m.selectedIncident == nil {
+			time.Sleep(waitTime)
+			m.setStatus("waiting for incident info...")
+			return m, func() tea.Msg { return waitForSelectedIncidentsThenUnAcknowledgeMsg(msg) }
+		}
+		return m, func() tea.Msg {
+			return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
 		}
 
 	case reassignIncidentsMsg:
