@@ -96,6 +96,7 @@ var (
 
 	paddedStyle = mainStyle.Padding(0, 2, 0, 1)
 
+	//lint:ignore U1000 - future proofing
 	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
 
 	tableContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
@@ -242,6 +243,29 @@ func (m model) template() (string, error) {
 	err = template.Execute(o, summary)
 	if err != nil {
 		// TODO: Figure out how to handle this with a proper errMsg
+		return "", err
+	}
+
+	return o.String(), nil
+}
+
+func addNoteTemplate(id string, title string, service string) (string, error) {
+	template, err := template.New("note").Parse(noteTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	o := new(bytes.Buffer)
+	err = template.Execute(o, struct {
+		ID      string
+		Title   string
+		Service string
+	}{
+		ID:      id,
+		Title:   title,
+		Service: service,
+	})
+	if err != nil {
 		return "", err
 	}
 
@@ -456,3 +480,14 @@ func renderIncidentMarkdown(content string) (string, error) {
 
 	return str, nil
 }
+
+const noteTemplate = `
+
+# Please enter the note message content above. Lines starting
+# with '#' will be ignored and an empty message aborts the note.
+#
+# Incident: {{ .ID }}
+# Summary: {{ .Title }}
+# Service: {{ .Service }}
+#
+`

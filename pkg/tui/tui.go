@@ -253,6 +253,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("showing %d/%d incidents...", len(m.table.Rows()), totalIncidentCount))
 		}
 
+	case parseTemplateForNoteMsg:
+		if m.selectedIncident == nil {
+			m.setStatus("failed to open editor - no selected incident")
+		}
+		cmds = append(cmds, parseTemplateForNote(m.selectedIncident))
+
+	case parsedTemplateForNoteMsg:
+		if msg.err != nil {
+			return m, func() tea.Msg { return errMsg{msg.err} }
+		}
+		cmds = append(cmds, openEditorCmd(m.editor, msg.content))
+
 	case editorFinishedMsg:
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }

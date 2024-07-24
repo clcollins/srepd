@@ -12,10 +12,10 @@ Features:
 * Reassign incidents to a (configured) "silent" user (ie. silence the alert)
 * Acknowledge incidents
 * Resizes nicely(-ish) when the terminal is resized
+* Un-Acknowledge incidents (re-assign to the Escalation Policy)
 
 Planned Features:
 
-* Un-Acknowledge incidents (re-assign to the Escalation Policy)
 * View arbitrary incidents
 * Assign incidents to any PagerDuty User ID
 * Edit incident titles
