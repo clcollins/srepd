@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -301,7 +302,7 @@ type editorFinishedMsg struct {
 	file *os.File
 }
 
-func openEditorCmd(editor []string) tea.Cmd {
+func openEditorCmd(editor []string, initialMsg ...string) tea.Cmd {
 	log.Debug("tui.openEditorCmd(): opening editor")
 	var args []string
 
@@ -310,6 +311,18 @@ func openEditorCmd(editor []string) tea.Cmd {
 		log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
 		return func() tea.Msg {
 			return errMsg{error: err}
+		}
+	}
+
+	if len(initialMsg) > 0 {
+		for _, msg := range initialMsg {
+			_, err = file.WriteString(msg)
+			if err != nil {
+				log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+				return func() tea.Msg {
+					return errMsg{error: err}
+				}
+			}
 		}
 	}
 
@@ -326,6 +339,19 @@ func openEditorCmd(editor []string) tea.Cmd {
 		}
 		return editorFinishedMsg{err, file}
 	})
+}
+
+type parseTemplateForNoteMsg string
+type parsedTemplateForNoteMsg struct {
+	content string
+	err     error
+}
+
+func parseTemplateForNote(p *pagerduty.Incident) tea.Cmd {
+	return func() tea.Msg {
+		content, err := addNoteTemplate(p.HTMLURL, p.Title, p.Service.Summary)
+		return parsedTemplateForNoteMsg{content, err}
+	}
 }
 
 type loginMsg string
@@ -449,28 +475,46 @@ type addedIncidentNoteMsg struct {
 	err  error
 }
 
-func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, content *os.File) tea.Cmd {
+func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, file *os.File) tea.Cmd {
 	return func() tea.Msg {
-		defer content.Close()
+		defer file.Close()
 
-		bytes, err := os.ReadFile(content.Name())
+		bytes, err := os.ReadFile(file.Name())
 		if err != nil {
 			return errMsg{err}
 		}
-		content := string(bytes[:])
+
+		note := removeCommentsFromBytes(bytes, "#")
 
 		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
 		if err != nil {
 			return errMsg{err}
 		}
 
-		if content != "" {
-			n, err := pd.PostNote(p.Client, incident.ID, u, content)
+		if note != "" {
+			n, err := pd.PostNote(p.Client, incident.ID, u, note)
 			return addedIncidentNoteMsg{n, err}
 		}
 
 		return addedIncidentNoteMsg{nil, errors.New(nilNoteErr)}
 	}
+}
+
+// removeCommentsFromBytes removes any lines beginning with any of the provided prefixes []byte and returns a string.
+func removeCommentsFromBytes(b []byte, prefixes ...string) string {
+	var content strings.Builder
+
+	lines := strings.Split(string(b[:]), "\n")
+
+	for _, c := range lines {
+		for _, a := range prefixes {
+			if !strings.HasPrefix(c, a) {
+				content.WriteString(c)
+			}
+		}
+	}
+
+	return content.String()
 }
 
 // getTeamsAsStrings returns a slice of team IDs as strings from the []*pagerduty.Teams in a *pd.Config
