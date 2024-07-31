@@ -309,7 +309,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("multiple alerts found - logging into cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
 		}
 
-		cmds = append(cmds, login(cluster, m.launcher))
+		// NOTE: It's important that **ALL** of these variables' values are NOT NIL.
+		// They can be empty strings, but the must not be nil.
+		var vars map[string]string = map[string]string{
+			"%%CLUSTER_ID%%":  cluster,
+			"%%INCIDENT_ID%%": m.selectedIncident.ID,
+		}
+
+		cmds = append(cmds, login(vars, m.launcher))
 
 	case loginFinishedMsg:
 		if msg.err != nil {

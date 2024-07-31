@@ -169,15 +169,25 @@ cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ### Automatic Login Features
 The first feature of Automatic Login is the ability to replace certain strings with their cluster-specific details. When you pass `%%VARIABLE%%` in your `terminal` or `cluster_login_command` configuration strings they will dynamically be replaced with the alert-specific variable. This allows you to be able to put the specific details of these variables inside the command. The first argument of the `terminal` setting MUST NOT BE a replaceable value.
 
-Currently, only `%%CLUSTER_ID%%` is supported. It's also important to note that if `%%CLUSTER_ID%%` does NOT appear in the `cluster_login_command` config setting that the cluster ID will be appended to the end of the cluster login command. If the replacable `%%CLUSTER_ID%%` string is present in the `cluster_login_command` setting, it will NOT be appended to the end.
+Supported Variables:
+
+* `%%CLUSTER_ID%%` - used to identify the cluster to log into. (SEE NOTE BELOW)
+* `%%INCIDENT_ID%%` - the PagerDuty Incident ID from which the cluster details have been taken.  You can, for example, use this to pass in compliance reasons, or to set a variable.
+
+Note regarding `%%CLUSTER_ID%%`: 
+
+It's also important to note that if `%%CLUSTER_ID%%` does NOT appear in the `cluster_login_command` config setting that the cluster ID will be appended to the end of the cluster login command. If the replaceable `%%CLUSTER_ID%%` string is present in the `cluster_login_command` setting, it will NOT be appended to the end.
 
 Examples:
 ```
 ## Assume the cluster ID for these examples is `abcdefg`
 
-cluster_login_command: ocm backplane login %%CLUSTER_ID%% --multi
 ## effectively runs "ocm backplane login abcdefg --multi"
+cluster_login_command: ocm backplane login %%CLUSTER_ID%% --multi
 
-cluster_login_command: ocm backplane login --multi
 ## effectively runs "ocm backplane login --multi abcdefg"
+cluster_login_command: ocm backplane login --multi
+
+## Logs into the cluster and sets the INCIDENT_ID env variable in ocm-container to the PagerDuty Incident ID
+cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID --launch-opts --env=INCIDENT_ID=%%INCIDENT_ID%%
 ```

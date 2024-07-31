@@ -25,7 +25,7 @@ func TestClusterLauncherValidation(t *testing.T) {
 			expectErr:       true,
 		},
 		{
-			name:            "Tests terminal is nill but login args are not",
+			name:            "Tests terminal is nil but login args are not",
 			terminalArg:     "",
 			loginCommandArg: "ocm backplane session",
 			expectErr:       true,
@@ -93,6 +93,20 @@ func TestLoginCommandBuild(t *testing.T) {
 			},
 		},
 		{
+			name: "validate multiple templated replacements",
+			launcher: ClusterLauncher{
+				terminal:            []string{"gnome-terminal", "--"},
+				clusterLoginCommand: []string{"ocm-container", "--cluster-id", "%%CLUSTER_ID%%", "--launch-opts", "\"-e INCIDENT_ID=%%INCIDENT_ID%%\""},
+			},
+			expectErr: true,
+			comparisonFN: func(t *testing.T, cmd []string) {
+				expected := "gnome-terminal -- ocm-container --cluster-id abcdefg --launch-opts \"-e INCIDENT_ID=PD123456\""
+				if strings.Join(cmd, " ") != expected {
+					t.Fatalf("Expected command to be %s, got: %s", expected, strings.Join(cmd, " "))
+				}
+			},
+		},
+		{
 			name: "validate that the cluster login command can be collapsed to a single string",
 			launcher: ClusterLauncher{
 				terminal:            []string{"tmux", "new-window", "-n", "%%CLUSTER_ID%%"},
@@ -134,7 +148,12 @@ func TestLoginCommandBuild(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := test.launcher.BuildLoginCommand("abcdefg")
+			vars := map[string]string{
+				"%%CLUSTER_ID%%":    "abcdefg",
+				"%%INCIDENT_ID%%":   "PD123456",
+				"%%UNHANDLED_VAR%%": "I SHOULD NOT SHOW UP",
+			}
+			cmd := test.launcher.BuildLoginCommand(vars)
 			test.comparisonFN(t, cmd)
 		})
 	}

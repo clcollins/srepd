@@ -359,16 +359,16 @@ type loginFinishedMsg struct {
 	err error
 }
 
-func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
+func login(vars map[string]string, launcher launcher.ClusterLauncher) tea.Cmd {
 	// The first element of Terminal is the command to be executed, followed by args, in order
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.
-	command := launcher.BuildLoginCommand(cluster)
+	command := launcher.BuildLoginCommand(vars)
 	c := exec.Command(command[0], command[1:]...)
 
 	log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
 	stderr, pipeErr := c.StderrPipe()
 	if pipeErr != nil {
-		log.Debug(fmt.Sprintf("tui.login(): %v", pipeErr.Error()))
+		log.Debug("tui.login():", "pipeErr", pipeErr.Error())
 		return func() tea.Msg {
 			return loginFinishedMsg{err: pipeErr}
 		}
@@ -376,7 +376,7 @@ func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
 
 	err := c.Start()
 	if err != nil {
-		log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+		log.Debug("tui.login():", "startErr", err.Error())
 		return func() tea.Msg {
 			return loginFinishedMsg{err}
 		}
@@ -384,16 +384,26 @@ func login(cluster string, launcher launcher.ClusterLauncher) tea.Cmd {
 
 	out, err := io.ReadAll(stderr)
 	if err != nil {
-		log.Debug(fmt.Sprintf("tui.login(): %v", err.Error()))
+		log.Debug("tui.login():", "loginStdErr", err.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg{err}
+		}
+	}
+
+	// c.Wait() must be run after reading any output from stderrPipe
+	err = c.Wait()
+	if err != nil {
+		log.Debug("tui.login():", "waitErr", err.Error())
 		return func() tea.Msg {
 			return loginFinishedMsg{err}
 		}
 	}
 
 	if len(out) > 0 {
-		log.Debug(fmt.Sprintf("tui.login(): error: %s", out))
+		outErr := fmt.Errorf("%s", out)
+		log.Debug("tui.login():", "outErr", outErr.Error())
 		return func() tea.Msg {
-			return loginFinishedMsg{fmt.Errorf("%s", out)}
+			return loginFinishedMsg{outErr}
 		}
 	}
 
