@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"fmt"
+	"github.com/charmbracelet/log"
 	"strings"
 )
 
@@ -59,23 +60,43 @@ func (l *ClusterLauncher) validate() error {
 	return nil
 }
 
-func (l *ClusterLauncher) BuildLoginCommand(cluster string) []string {
+func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
+	///func (l *ClusterLauncher) BuildLoginCommand() []string {
 	command := []string{}
 
 	// Handle the Terminal command
 	// The first arg should not be something replaceable, as checked in the
 	// validate function
+	log.Debug("launcher.ClusterLauncher():", "Building command from terminal", "terminal", l.terminal[0])
 	command = append(command, l.terminal[0])
-	command = append(command, replaceVars(l.terminal[1:], cluster)...)
-	command = append(command, replaceVars(l.clusterLoginCommand, cluster)...)
+
+	// If there are more than one terminal arguments, replace the vars
+	// If there's not more than one terminal argument, the "replacement"
+	// nil []string{} ends up being appended as a whitespace, so don't append
+	if len(l.terminal) > 1 {
+		command = append(command, replaceVars(l.terminal[1:], vars)...)
+	}
+	command = append(command, replaceVars(l.clusterLoginCommand, vars)...)
+	log.Debug("launcher.ClusterLauncher():", "Built command", command)
+	for x, i := range command {
+		log.Debug("launcher.ClusterLauncher():", fmt.Sprintf("Built command argument [%d]", x), i)
+	}
 
 	return command
 }
 
-func replaceVars(args []string, cluster string) []string {
-	transformedArgs := []string{}
-	for _, str := range args {
-		transformedArgs = append(transformedArgs, strings.Replace(str, "%%CLUSTER_ID%%", cluster, -1))
+func replaceVars(args []string, vars map[string]string) []string {
+	if args == nil || vars == nil {
+		return []string{}
 	}
+
+	str := strings.Join(args, " ")
+
+	for k, v := range vars {
+		log.Debug("ClusterLauncher():", "Replacing vars in string", str, k, v)
+		str = strings.Replace(str, k, v, -1)
+	}
+
+	transformedArgs := strings.Split(str, " ")
 	return transformedArgs
 }
