@@ -77,6 +77,21 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 	}
 }
 
+// The Update function is called for every message that is sent to the model,
+// and it is responsible for updating the model based on the message and returning
+// the new model and a command to execute.  These commands should be actual
+// tea.Cmds, not functions that return tea.Msgs, though that signature is also a
+// tea.Cmd, unless Update should handle the msg, or the msg is a tea.Batch or
+// tea.Sequence.
+//
+// eg, good:
+// return m, getIncident(m.config, msg.incident.ID)
+//
+// eg, ok:
+// return m, func() tea.Msg { return errMsg{msg.err} }
+//
+// eg, bad:
+// return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgType := reflect.TypeOf(msg)
 	// PollIncidentsMsgs are not helpful for logging

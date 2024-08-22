@@ -18,10 +18,81 @@ import (
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
+// This file contains the commands that are used in the Bubble Tea update function.
+// These commands are functions that return a tea.Cmd, which performs I/O with
+// another system, such as the PagerDuty API, the filesystem, or the user's terminal,
+// and shouldn't perform any actual processing themselves.
+//
+// The returned tea.Cmd is executed by the Bubble Tea runtime, and the result of the
+// command is sent back to the update function as a tea.Msg.
+//
+// See getIncident() as a good example of this pattern.
+
 const (
 	gettingUserStatus      = "getting user info..."
 	loadingIncidentsStatus = "loading incidents..."
 )
+
+// TODO: Deprecate incoming message
+// getIncidentMsg is a message that triggers the fetching of an incident
+type getIncidentMsg string
+
+// gotIncidentMsg is a message that contains the fetched incident
+type gotIncidentMsg struct {
+	incident *pagerduty.Incident
+	err      error
+}
+
+// getIncident returns a command that fetches the incident with the given ID
+// or returns a setStatusMsg with nilIncidentMsg if the provided ID is empty
+func getIncident(p *pd.Config, id string) tea.Cmd {
+	return func() tea.Msg {
+		if id == "" {
+			return setStatusMsg{nilIncidentMsg}
+		}
+		ctx := context.Background()
+		i, err := p.Client.GetIncidentWithContext(ctx, id)
+		return gotIncidentMsg{i, err}
+	}
+}
+
+// gotIncidentAlertsMsg is a message that contains the fetched incident alerts
+type gotIncidentAlertsMsg struct {
+	alerts []pagerduty.IncidentAlert
+	err    error
+}
+
+// getIncidentAlerts returns a command that fetches the alerts for the given incident
+func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
+	return func() tea.Msg {
+		if id == "" {
+			return setStatusMsg{nilIncidentMsg}
+		}
+		a, err := pd.GetAlerts(p.Client, id, pagerduty.ListIncidentAlertsOptions{})
+		return gotIncidentAlertsMsg{a, err}
+	}
+}
+
+// got IncidentNotesMsg is a message that contains the fetched incident notes
+type gotIncidentNotesMsg struct {
+	notes []pagerduty.IncidentNote
+	err   error
+}
+
+// getIncidentNotes returns a command that fetches the notes for the given incident
+func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
+	return func() tea.Msg {
+		if id == "" {
+			return setStatusMsg{nilIncidentMsg}
+		}
+		n, err := pd.GetNotes(p.Client, id)
+		return gotIncidentNotesMsg{n, err}
+	}
+}
+
+// HOUSEKEEPING: The above are commands that have complete unit tests and incoming
+// and outgoing tea.Msg types, ordered alphabetically. Below are commands that need to
+// be refactored to have unit tests and incoming and outgoing tea.Msg types, ordered
 
 type errMsg struct{ error }
 type setStatusMsg struct{ string }
@@ -29,19 +100,6 @@ type waitForSelectedIncidentThenDoMsg struct {
 	action tea.Cmd
 	msg    tea.Msg
 }
-
-//lint:ignore U1000 - future proofing
-type waitForSelectedIncidentThenRenderMsg string
-
-//lint:ignore U1000 - future proofing
-// func updateSelectedIncident(p *pd.Config, id string) tea.Msg {
-// This return won't work as is - these are not tea.Cmd functions
-// 	return tea.Sequence(
-// 		getIncident(p, id),
-// 		getIncidentAlerts(p, id),
-// 		getIncidentNotes(p, id),
-// 	)
-// }
 
 type TickMsg struct {
 	Tick int
@@ -109,50 +167,6 @@ func renderIncident(m *model) tea.Cmd {
 		}
 
 		return renderedIncidentMsg{content, err}
-	}
-}
-
-type getIncidentMsg string
-type gotIncidentMsg struct {
-	incident *pagerduty.Incident
-	err      error
-}
-
-func getIncident(p *pd.Config, id string) tea.Cmd {
-	if id == "" {
-		return func() tea.Msg {
-			return setStatusMsg{"No incident selected"}
-		}
-	}
-	return func() tea.Msg {
-		ctx := context.Background()
-		i, err := p.Client.GetIncidentWithContext(ctx, id)
-		return gotIncidentMsg{i, err}
-	}
-}
-
-type gotIncidentAlertsMsg struct {
-	alerts []pagerduty.IncidentAlert
-	err    error
-}
-
-func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
-	return func() tea.Msg {
-		a, err := pd.GetAlerts(p.Client, id, pagerduty.ListIncidentAlertsOptions{})
-		return gotIncidentAlertsMsg{a, err}
-	}
-}
-
-type gotIncidentNotesMsg struct {
-	notes []pagerduty.IncidentNote
-	err   error
-}
-
-// getIncidentNotes returns a command that fetches the notes for the given incident
-func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
-	return func() tea.Msg {
-		n, err := pd.GetNotes(p.Client, id)
-		return gotIncidentNotesMsg{n, err}
 	}
 }
 
