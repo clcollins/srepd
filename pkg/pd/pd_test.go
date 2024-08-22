@@ -1,7 +1,6 @@
 package pd
 
 import (
-	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -9,14 +8,6 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/stretchr/testify/assert"
 )
-
-type MockPagerDutyClient struct {
-	PagerDutyClient
-}
-
-func (m *MockPagerDutyClient) GetTeamWithContext(ctx context.Context, team string) (*pagerduty.Team, error) {
-	return &pagerduty.Team{Name: team}, nil
-}
 
 func TestGetTeams(t *testing.T) {
 	t.Run("GetTeams", func(t *testing.T) {
