@@ -35,9 +35,7 @@ func TestGetIncident(t *testing.T) {
 			id:     id,
 			expected: gotIncidentMsg{
 				incident: &pagerduty.Incident{
-					APIObject: pagerduty.APIObject{
-						ID: id,
-					},
+					APIObject: pagerduty.APIObject{ID: id},
 				},
 				err: nil,
 			},
@@ -56,8 +54,8 @@ func TestGetIncident(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cmd := getIncident(test.config, test.id)
-			msg := cmd()
-			assert.Equal(t, msg, test.expected)
+			actual := cmd()
+			assert.Equal(t, test.expected, actual)
 		})
 	}
 }
@@ -84,16 +82,8 @@ func TestGetIncidentAlerts(t *testing.T) {
 			id:     rand.ID("Q"),
 			expected: gotIncidentAlertsMsg{
 				alerts: []pagerduty.IncidentAlert{
-					{
-						APIObject: pagerduty.APIObject{
-							ID: "QABCDEFG1234567",
-						},
-					},
-					{
-						APIObject: pagerduty.APIObject{
-							ID: "QABCDEFG7654321",
-						},
-					},
+					{APIObject: pagerduty.APIObject{ID: "QABCDEFG1234567"}},
+					{APIObject: pagerduty.APIObject{ID: "QABCDEFG7654321"}},
 				},
 				err: nil,
 			},
@@ -112,8 +102,8 @@ func TestGetIncidentAlerts(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cmd := getIncidentAlerts(test.config, test.id)
-			msg := cmd()
-			assert.Equal(t, msg, test.expected)
+			actual := cmd()
+			assert.Equal(t, test.expected, actual)
 		})
 	}
 }
@@ -140,12 +130,8 @@ func TestGetIncidentNotes(t *testing.T) {
 			id:     rand.ID("Q"),
 			expected: gotIncidentNotesMsg{
 				notes: []pagerduty.IncidentNote{
-					{
-						ID: "QABCDEFG1234567",
-					},
-					{
-						ID: "QABCDEFG7654321",
-					},
+					{ID: "QABCDEFG1234567"},
+					{ID: "QABCDEFG7654321"},
 				},
 				err: nil,
 			},
@@ -164,8 +150,108 @@ func TestGetIncidentNotes(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cmd := getIncidentNotes(test.config, test.id)
-			msg := cmd()
-			assert.Equal(t, msg, test.expected)
+			actual := cmd()
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
+func TestUpdateIncidentList(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *pd.Config
+		expected tea.Msg
+	}{
+		{
+			name: "return updatedIncidentListMsg with non-nil error if error occurs",
+			config: &pd.Config{
+				Client:         &pd.MockPagerDutyClient{},
+				TeamsMemberIDs: []string{"err"}, // "err" signals the mock client to produce a mock error
+			},
+			expected: updatedIncidentListMsg{
+				incidents: []pagerduty.Incident(nil),
+				err:       fmt.Errorf("pd.GetIncidents(): failed to get incidents: %v", pd.ErrMockError),
+			},
+		},
+		{
+			name:   "return updatedIncidentListMsg with an incident list if no error occurs",
+			config: &pd.Config{Client: &pd.MockPagerDutyClient{}},
+			expected: updatedIncidentListMsg{
+				// These incidents are defined in the Mock for ListIncidentsWithContext
+				incidents: []pagerduty.Incident{
+					{APIObject: pagerduty.APIObject{ID: "QABCDEFG1234567"}},
+					{APIObject: pagerduty.APIObject{ID: "QABCDEFG7654321"}},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := updateIncidentList(test.config)
+			actual := cmd()
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
+func TestNewListIncidentOptsFromConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *pd.Config
+		expected pagerduty.ListIncidentsOptions
+	}{
+		{
+			name:     "return default ListIncidentsOptions if config is nil",
+			config:   nil,
+			expected: pagerduty.ListIncidentsOptions{},
+		},
+		{
+			name: "p.TeamsMembers is properly converted to ListIncidentsOptions.UserIDs",
+			config: &pd.Config{
+				TeamsMemberIDs: []string{
+					"PABC123",
+					"PDEF456",
+				},
+			},
+			expected: pagerduty.ListIncidentsOptions{
+				UserIDs: []string{"PABC123", "PDEF456"},
+			},
+		},
+		{
+			name: "p.IgnopredUsers are properly excluded from ListIncidentsOptions.UserIDs, and extra Ignored users have no effect",
+			config: &pd.Config{
+				TeamsMemberIDs: []string{
+					"PABC123",
+					"PDEF456",
+				},
+				IgnoredUsers: []*pagerduty.User{
+					{APIObject: pagerduty.APIObject{ID: "PDEF456"}},
+					{APIObject: pagerduty.APIObject{ID: "PXYZ789"}},
+				},
+			},
+			expected: pagerduty.ListIncidentsOptions{
+				UserIDs: []string{"PABC123"},
+			},
+		},
+		{
+			name: "p.Teams is properly converted to ListIncidentsOptions.TeamIDs",
+			config: &pd.Config{
+				Teams: []*pagerduty.Team{
+					{APIObject: pagerduty.APIObject{ID: "PABC123"}},
+					{APIObject: pagerduty.APIObject{ID: "PDEF456"}},
+				},
+			},
+			expected: pagerduty.ListIncidentsOptions{
+				TeamIDs: []string{"PABC123", "PDEF456"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := newListIncidentOptsFromConfig(test.config)
+			assert.Equal(t, test.expected, actual)
 		})
 	}
 }

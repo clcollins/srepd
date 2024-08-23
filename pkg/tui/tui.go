@@ -187,7 +187,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, renderIncident(&m))
 		}
 
-	// Nothing directly calls this yet
 	case updateIncidentListMsg:
 		m.setStatus(loadingIncidentsStatus)
 		cmds = append(cmds, updateIncidentList(m.config))
@@ -266,6 +265,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("showing %d/%d incident...", len(m.table.Rows()), totalIncidentCount))
 		} else {
 			m.setStatus(fmt.Sprintf("showing %d/%d incidents...", len(m.table.Rows()), totalIncidentCount))
+		}
+
+		// Check if the m.selectedIncident is still in the list
+		idx := slices.IndexFunc(m.incidentList, func(incident pagerduty.Incident) bool {
+			return incident.ID == m.selectedIncident.ID
+		})
+
+		if idx == -1 {
+			m.clearSelectedIncident("selected incident no longer in list after update")
 		}
 
 	case parseTemplateForNoteMsg:
@@ -410,7 +418,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, tea.Sequence(
 			acknowledgeIncidents(m.config, msg.incidents, true),
-			func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
+			func() tea.Msg { return clearSelectedIncidentsMsg("sender: unAcknowledgeIncidentsMsg") },
 		)
 
 	case acknowledgedIncidentsMsg:
@@ -467,7 +475,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, tea.Sequence(
 			reassignIncidents(m.config, msg.incidents, msg.users),
-			func() tea.Msg { return clearSelectedIncidentsMsg("clear incidents") },
+			func() tea.Msg { return clearSelectedIncidentsMsg("reassign incidents") },
 		)
 
 	case reassignedIncidentsMsg:

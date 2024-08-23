@@ -73,7 +73,7 @@ func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
 	}
 }
 
-// got IncidentNotesMsg is a message that contains the fetched incident notes
+// gotIncidentNotesMsg is a message that contains the fetched incident notes
 type gotIncidentNotesMsg struct {
 	notes []pagerduty.IncidentNote
 	err   error
@@ -88,6 +88,78 @@ func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 		n, err := pd.GetNotes(p.Client, id)
 		return gotIncidentNotesMsg{n, err}
 	}
+}
+
+// updateIncidentListMsg is a message that triggers the fetching of the incident list
+type updateIncidentListMsg string
+
+// updatedIncidentListMsg is a message that contains the fetched incident list
+type updatedIncidentListMsg struct {
+	incidents []pagerduty.Incident
+	err       error
+}
+
+// updateIncidentList returns a command that fetches the incident list from the PagerDuty API
+func updateIncidentList(p *pd.Config) tea.Cmd {
+	return func() tea.Msg {
+		opts := newListIncidentOptsFromConfig(p)
+		i, err := pd.GetIncidents(p.Client, opts)
+		return updatedIncidentListMsg{i, err}
+	}
+}
+
+// newListIncidentOptsFromConfig returns a ListIncidentsOptions struct
+// with the UserIDs and TeamIDs fields populated from the given Config
+func newListIncidentOptsFromConfig(p *pd.Config) pagerduty.ListIncidentsOptions {
+	var opts = pagerduty.ListIncidentsOptions{}
+
+	// If the Config is nil, return the default options
+	if p == nil {
+		return opts
+	}
+
+	// Convert the list of *pagerduty.User to a slice of user IDs
+	if p.IgnoredUsers == nil {
+		p.IgnoredUsers = []*pagerduty.User{}
+	}
+
+	ignoredUserIDs := func(u []*pagerduty.User) []string {
+		var l []string
+		for _, i := range u {
+			l = append(l, i.ID)
+		}
+		return l
+	}(p.IgnoredUsers)
+
+	// If the UserID from p.TeamMemberIDs is not in the ignoredUserIDs slice, add it to the opts.UserIDs slice
+	if p.TeamsMemberIDs == nil {
+		p.TeamsMemberIDs = []string{}
+	}
+
+	opts.UserIDs = func(a []string, i []string) []string {
+		var l []string
+		for _, u := range a {
+			if !slices.Contains(i, u) {
+				l = append(l, u)
+			}
+		}
+		return l
+	}(p.TeamsMemberIDs, ignoredUserIDs)
+
+	// Convert the list of *pagerduty.Team to a slice of team IDs
+	if p.Teams == nil {
+		p.Teams = []*pagerduty.Team{}
+	}
+
+	opts.TeamIDs = func(t []*pagerduty.Team) []string {
+		var l []string
+		for _, x := range t {
+			l = append(l, x.ID)
+		}
+		return l
+	}(p.Teams)
+
+	return opts
 }
 
 // HOUSEKEEPING: The above are commands that have complete unit tests and incoming
@@ -106,45 +178,6 @@ type TickMsg struct {
 }
 type PollIncidentsMsg struct {
 	PollInterval time.Duration
-}
-
-type updateIncidentListMsg string
-type updatedIncidentListMsg struct {
-	incidents []pagerduty.Incident
-	err       error
-}
-
-func updateIncidentList(p *pd.Config) tea.Cmd {
-	return tea.Sequence(
-		func() tea.Msg { return clearSelectedIncidentsMsg("updateIncidentList") },
-		func() tea.Msg {
-			opts := pd.NewListIncidentOptsFromDefaults()
-			opts.TeamIDs = getTeamsAsStrings(p)
-
-			// Convert the list of *pagerduty.User to a slice of user IDs
-			ignoredUserIDs := func(u []*pagerduty.User) []string {
-				var l []string
-				for _, i := range u {
-					l = append(l, i.ID)
-				}
-				return l
-			}(p.IgnoredUsers)
-
-			// If the UserID from p.TeamMemberIDs is not in the ignoredUserIDs slice, add it to the opts.UserIDs slice
-			opts.UserIDs = func(a []string, i []string) []string {
-				var l []string
-				for _, u := range a {
-					if !slices.Contains(i, u) {
-						l = append(l, u)
-					}
-				}
-				return l
-			}(p.TeamsMemberIDs, ignoredUserIDs)
-
-			// Retrieve incidents assigned to the TeamIDs and filtered UserIDs
-			i, err := pd.GetIncidents(p.Client, opts)
-			return updatedIncidentListMsg{i, err}
-		})
 }
 
 type renderIncidentMsg string
@@ -559,15 +592,6 @@ func removeCommentsFromBytes(b []byte, prefixes ...string) string {
 	}
 
 	return content.String()
-}
-
-// getTeamsAsStrings returns a slice of team IDs as strings from the []*pagerduty.Teams in a *pd.Config
-func getTeamsAsStrings(p *pd.Config) []string {
-	var teams []string
-	for _, t := range p.Teams {
-		teams = append(teams, t.ID)
-	}
-	return teams
 }
 
 func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
