@@ -29,6 +29,27 @@ func (m *MockPagerDutyClient) GetIncidentWithContext(ctx context.Context, id str
 	}, nil
 }
 
+func (m *MockPagerDutyClient) ListIncidentsWithContext(ctx context.Context, opts pagerduty.ListIncidentsOptions) (*pagerduty.ListIncidentsResponse, error) {
+	// Provided so we can mock error responses for unit tests
+	if opts.UserIDs != nil && opts.UserIDs[0] == "err" {
+		return &pagerduty.ListIncidentsResponse{}, ErrMockError
+	}
+	return &pagerduty.ListIncidentsResponse{
+		Incidents: []pagerduty.Incident{
+			{
+				APIObject: pagerduty.APIObject{
+					ID: "QABCDEFG1234567",
+				},
+			},
+			{
+				APIObject: pagerduty.APIObject{
+					ID: "QABCDEFG7654321",
+				},
+			},
+		},
+	}, nil
+}
+
 func (m *MockPagerDutyClient) ListIncidentAlertsWithContext(ctx context.Context, id string, opts pagerduty.ListIncidentAlertsOptions) (*pagerduty.ListAlertsResponse, error) {
 	if id == "err" {
 		return &pagerduty.ListAlertsResponse{}, ErrMockError

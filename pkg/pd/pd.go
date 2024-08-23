@@ -189,7 +189,7 @@ func GetIncidents(client PagerDutyClient, opts pagerduty.ListIncidentsOptions) (
 	for {
 		response, err := client.ListIncidentsWithContext(ctx, opts)
 		if err != nil {
-			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents : %v", err)
+			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents: %v", err)
 		}
 
 		i = append(i, response.Incidents...)
