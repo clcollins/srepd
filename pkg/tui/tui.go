@@ -267,13 +267,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("showing %d/%d incidents...", len(m.table.Rows()), totalIncidentCount))
 		}
 
-		// Check if the m.selectedIncident is still in the list
-		idx := slices.IndexFunc(m.incidentList, func(incident pagerduty.Incident) bool {
-			return incident.ID == m.selectedIncident.ID
-		})
+		if m.selectedIncident != nil {
+			// Check if the m.selectedIncident is still in the list
+			idx := slices.IndexFunc(m.incidentList, func(incident pagerduty.Incident) bool {
+				return incident.ID == m.selectedIncident.ID
+			})
 
-		if idx == -1 {
-			m.clearSelectedIncident("selected incident no longer in list after update")
+			if idx == -1 {
+				m.clearSelectedIncident("selected incident no longer in list after update")
+			}
 		}
 
 	case parseTemplateForNoteMsg:
