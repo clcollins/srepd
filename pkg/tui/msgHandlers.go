@@ -114,7 +114,7 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.AutoRefresh) {
 		m.autoRefresh = !m.autoRefresh
-		return m, nil
+		return m, updateIncidentList(m.config)
 	}
 
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.AutoAck) {

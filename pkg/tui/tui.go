@@ -117,13 +117,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case setStatusMsg:
 		return m.setStatusMsgHandler(msg)
+
 	// Command to trigger a regular poll for new incidents
 	case PollIncidentsMsg:
 		if !m.autoRefresh {
 			return m, nil
 		}
-		m.setStatus("polling for new incidents...")
-		return m, func() tea.Msg { return updateIncidentListMsg("sender: PollIncidentsMsg") }
+		return m, updateIncidentList(m.config)
 
 	// Command to get an incident by ID
 	case getIncidentMsg:
