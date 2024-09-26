@@ -39,7 +39,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-const pollInterval = 15
+const tickInterval = 1
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -86,10 +86,8 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		go func() {
 			for {
-				time.Sleep(pollInterval * time.Second)
-				p.Send(tui.PollIncidentsMsg{
-					PollInterval: pollInterval * time.Second,
-				})
+				time.Sleep(tickInterval * time.Second)
+				p.Send(tui.TickMsg{})
 			}
 		}()
 

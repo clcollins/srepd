@@ -174,11 +174,9 @@ type waitForSelectedIncidentThenDoMsg struct {
 }
 
 type TickMsg struct {
-	Tick int
 }
-type PollIncidentsMsg struct {
-	PollInterval time.Duration
-}
+
+type PollIncidentsMsg struct{}
 
 type renderIncidentMsg string
 
@@ -639,4 +637,16 @@ func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
 		func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
 		cmd,
 	)
+}
+
+func runScheduledJobs(m *model) []tea.Cmd {
+	var cmds []tea.Cmd
+	for _, job := range m.scheduledJobs {
+		if time.Since(job.lastRun) > job.frequency && job.jobMsg != nil {
+			log.Debug("Update: TicketMsg", "scheduledJob", job.jobMsg, "frequency", job.frequency, "lastRun", job.lastRun, "running", true)
+			cmds = append(cmds, job.jobMsg)
+			job.lastRun = time.Now()
+		}
+	}
+	return cmds
 }
