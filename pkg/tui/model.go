@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
@@ -11,6 +13,13 @@ import (
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 )
+
+var initialScheduledJobs = []*scheduledJob{
+	{
+		jobMsg:    func() tea.Msg { return PollIncidentsMsg{} },
+		frequency: time.Second * 15,
+	},
+}
 
 type model struct {
 	err error
@@ -32,6 +41,8 @@ type model struct {
 	selectedIncident       *pagerduty.Incident
 	selectedIncidentNotes  []pagerduty.IncidentNote
 	selectedIncidentAlerts []pagerduty.IncidentAlert
+
+	scheduledJobs []*scheduledJob
 
 	autoAcknowledge bool
 	autoRefresh     bool
@@ -60,6 +71,7 @@ func InitialModel(
 		input:          newTextInput(),
 		incidentViewer: newIncidentViewer(),
 		status:         "",
+		scheduledJobs:  append([]*scheduledJob{}, initialScheduledJobs...),
 	}
 
 	// This is an ugly way to handle this error

@@ -45,6 +45,12 @@ type filteredMsg struct {
 	truncated bool
 }
 
+type scheduledJob struct {
+	jobMsg    tea.Cmd
+	lastRun   time.Time
+	frequency time.Duration
+}
+
 func filterMsgContent(msg tea.Msg) tea.Msg {
 	var truncatedMsg string
 	switch msg := msg.(type) {
@@ -94,8 +100,8 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 // return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgType := reflect.TypeOf(msg)
-	// PollIncidentsMsgs are not helpful for logging
-	if msgType != reflect.TypeOf(PollIncidentsMsg{}) {
+	// TickMsg are not helpful for logging
+	if msgType != reflect.TypeOf(TickMsg{}) {
 		log.Debug("Update", msgType, filterMsgContent(msg))
 	}
 
@@ -107,7 +113,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.errMsgHandler(msg)
 
 	case TickMsg:
-		// Pass
+		return m, tea.Batch(runScheduledJobs(&m)...)
 
 	case tea.WindowSizeMsg:
 		return m.windowSizeMsgHandler(msg)
