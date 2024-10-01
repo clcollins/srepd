@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -639,4 +640,18 @@ func doIfIncidentSelected(m *model, cmd tea.Cmd) tea.Cmd {
 		func() tea.Msg { return getIncidentMsg(m.table.SelectedRow()[1]) },
 		cmd,
 	)
+}
+
+// writeJSONDataToFile writes the given json data to the given file
+// This is useful for debugging and generating test data
+// IMPORTANT: sanitize/anonymize any sensitive data
+// lint:ignore U1000 - future proofing
+func writeJSONDataToFile(d any, f string) error {
+	jsonString, err := json.Marshal(d)
+	if err != nil {
+		return err
+	}
+	os.WriteFile(f, jsonString, os.ModePerm)
+
+	return nil
 }
