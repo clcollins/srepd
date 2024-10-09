@@ -39,10 +39,10 @@ Configuration variables have the following precedence:
 
 * ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.  It's recommended that the "silentuser" ID is in this list.
 * editor: Your choice of editor.  Defaults to the `$EDITOR` environment variable.
-* cluster_login_cmd: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
+* cluster_login_command: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
 * terminal: Your choice of terminal to use when launching external commands. Defaults to `/usr/bin/gnome-terminal`.
 
-__NOTE:__ The cluster_login_cmd and terminal accept a variable for `%%CLUSTER_ID%%` to stand in for the Cluster ID in the command. At least one of the two, most likely `cluster_login_cmd` MUST have the `%%CLUSTER_ID%%` placeholder set. See [AUTOMATIC LOGIN FEATURES](#automatic-login-features) for more details about config variables.
+__NOTE:__ The cluster_login_command and terminal accept a variable for `%%CLUSTER_ID%%` to stand in for the Cluster ID in the command. At least one of the two, most likely `cluster_login_command` MUST have the `%%CLUSTER_ID%%` placeholder set. See [AUTOMATIC LOGIN FEATURES](#automatic-login-features) for more details about config variables.
 
 An example srepd.yaml file might look like so:
 
@@ -56,7 +56,7 @@ editor: vim
 # Note the trailing `--` is necessary for gnome-terminal and may be necessary
 # for other terminals as well
 terminal: /usr/bin/gnome-terminal --
-cluster_login_cmd: ocm-container --clusterid %%CLUSTER_ID%%
+cluster_login_command: ocm-container --clusterid %%CLUSTER_ID%%
 
 # Note that aliases, etc, are not sourced by the shell command when launching.
 # This means, for example, that `ocm-container`, as normally setup using an

@@ -487,6 +487,7 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher) tea.Cmd {
 	}
 
 	processErr := c.Wait()
+
 	if processErr != nil {
 		if exitError, ok := processErr.(*exec.ExitError); ok {
 			execExitErr := &execErr{
@@ -508,7 +509,8 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher) tea.Cmd {
 	if err != nil {
 		log.Warn("tui.login():", "execStdErr", err.Error())
 		return func() tea.Msg {
-			return loginFinishedMsg{err}
+			// Do not return the execStdErr as an error
+			return loginFinishedMsg{}
 		}
 	}
 
