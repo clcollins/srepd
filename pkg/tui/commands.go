@@ -478,27 +478,16 @@ type unAcknowledgedIncidentsMsg struct {
 type waitForSelectedIncidentsThenAcknowledgeMsg string
 type waitForSelectedIncidentsThenUnAcknowledgeMsg string
 
-func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident, reescalate bool) tea.Cmd {
+func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident, reEscalate bool) tea.Cmd {
 	return func() tea.Msg {
-		var u *pagerduty.User
 		var err error
 
-		if reescalate {
-			a, err := pd.AcknowledgeIncident(p.Client, incidents, u)
-			if err != nil {
-				return errMsg{err}
-			}
+		if reEscalate {
+			a, err := pd.AcknowledgeIncident(p.Client, incidents, &pagerduty.User{})
 			return unAcknowledgedIncidentsMsg{a, err}
 		}
 
-		u, err = p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
-		if err != nil {
-			return errMsg{err}
-		}
-		a, err := pd.AcknowledgeIncident(p.Client, incidents, u)
-		if err != nil {
-			return errMsg{err}
-		}
+		a, err := pd.AcknowledgeIncident(p.Client, incidents, p.CurrentUser)
 
 		return acknowledgedIncidentsMsg{a, err}
 	}
@@ -524,6 +513,24 @@ func reassignIncidents(p *pd.Config, i []pagerduty.Incident, users []*pagerduty.
 	}
 }
 
+type reEscalateIncidentsMsg struct {
+	incidents []pagerduty.Incident
+	policy    *pagerduty.EscalationPolicy
+	level     uint
+}
+
+type reEscalatedIncidentsMsg []pagerduty.Incident
+
+func reEscalateIncidents(p *pd.Config, i []pagerduty.Incident, e *pagerduty.EscalationPolicy, l uint) tea.Cmd {
+	return func() tea.Msg {
+		r, err := pd.ReEscalateIncidents(p.Client, i, e, l)
+		if err != nil {
+			return errMsg{err}
+		}
+		return reEscalatedIncidentsMsg(r)
+	}
+}
+
 type silenceSelectedIncidentMsg struct{}
 type silenceIncidentsMsg struct {
 	incidents []pagerduty.Incident
@@ -531,15 +538,15 @@ type silenceIncidentsMsg struct {
 
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
 
-func silenceIncidents(i []pagerduty.Incident, u []*pagerduty.User) tea.Cmd {
-	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage"
-	// because it's really just a reassignment
-	log.Printf("silence requested for incident(s) %v; reassigning to %v", i, u)
+func silenceIncidents(incidents []pagerduty.Incident, policy *pagerduty.EscalationPolicy, level uint) tea.Cmd {
+	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage" because it's really just a re-escalation
+	log.Printf("silence requested for incident(s) %v; reassigning to %s(%s), level %d", incidents, policy.Name, policy.ID, level)
 	return func() tea.Msg {
-		if len(i) == 0 || len(u) == 0 {
+		if len(incidents) == 0 || policy.Name == "" || level == 0 {
 			return errMsg{errSilenceIncidentInvalidArgs}
 		}
-		return reassignIncidentsMsg{i, u}
+		//
+		return reEscalateIncidentsMsg{incidents, policy, level}
 	}
 }
 

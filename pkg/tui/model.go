@@ -53,7 +53,8 @@ type model struct {
 func InitialModel(
 	token string,
 	teams []string,
-	user string,
+	escalation_policies map[string]string,
+	silentuser string,
 	ignoredusers []string,
 	editor []string,
 	launcher launcher.ClusterLauncher,
@@ -78,9 +79,15 @@ func InitialModel(
 	// We have to set the m.err here instead of how the errMsg is handled
 	// because the Init() occurs before the Update() and the errMsg is not
 	// preserved
-	pd, err := pd.NewConfig(token, teams, user, ignoredusers)
+	pd, err := pd.NewConfig(token, teams, escalation_policies, silentuser, ignoredusers)
 	m.config = pd
-	m.err = err
+
+	if err != nil {
+		log.Error("InitialModel", "error", err)
+		m.err = err
+	}
+
+	log.Debug("InitialModel", "config", m.config)
 
 	return m, func() tea.Msg {
 		return errMsg{err}

@@ -11,6 +11,75 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestAcknowledgeIncident(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "PABC123"},
+		},
+	}
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "QABCDEFG1234567"}},
+		{APIObject: pagerduty.APIObject{ID: "QABCDEFG7654321"}},
+	}
+
+	errIncidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+	}
+
+	tests := []struct {
+		name       string
+		incidents  []pagerduty.Incident
+		reEscalate bool
+		expected   tea.Msg
+	}{
+		{
+			name:       "return unAcknowledgedIncidentMsg with non-nil error if error occurs while re-escalating",
+			incidents:  errIncidents,
+			reEscalate: true,
+			expected: unAcknowledgedIncidentsMsg{
+				incidents: []pagerduty.Incident(nil),
+				err:       pd.ErrMockError,
+			},
+		},
+		{
+			name:       "return unAcknowledgedIncidentMsg with an incident list if no error occurs while re-escalating",
+			incidents:  incidents,
+			reEscalate: true,
+			expected: unAcknowledgedIncidentsMsg{
+				incidents: incidents,
+			},
+		},
+		{
+			name:       "return acknowledgedIncidentMsg with non-nil error if error occurs while acknowledging",
+			incidents:  errIncidents,
+			reEscalate: false,
+			expected: acknowledgedIncidentsMsg{
+				incidents: []pagerduty.Incident(nil),
+				err:       pd.ErrMockError,
+			},
+		},
+		{
+			name:       "return acknowledgedIncidentMsg with an incident list if no error occurs while acknowledging",
+			incidents:  incidents,
+			reEscalate: false,
+			expected: acknowledgedIncidentsMsg{
+				incidents: incidents,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := acknowledgeIncidents(mockConfig, test.incidents, test.reEscalate)
+			actual := cmd()
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
 func TestGetIncident(t *testing.T) {
 	mockConfig := &pd.Config{
 		Client: &pd.MockPagerDutyClient{},
