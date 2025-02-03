@@ -75,8 +75,9 @@ but rather a simple tool to make on-call tasks easier.`,
 		m, _ := tui.InitialModel(
 			viper.GetString("token"),
 			viper.GetStringSlice("teams"),
-			viper.GetString("silentuser"),
-			viper.GetStringSlice("ignoredusers"),
+			viper.GetStringMapString("service_escalation_policies"),
+			viper.GetString("silentuser"),        // TODO: replace this with escalationPolicy filter
+			viper.GetStringSlice("ignoredusers"), // TODO: replace this with escalationPolicy filter
 			viper.GetStringSlice("editor"),
 			launcher,
 			viper.GetBool("debug"),
@@ -132,6 +133,7 @@ func checkSettings() {
 		log.Debug("Found key", k, v)
 
 	}
+
 }
 
 // bindArgsToViper binds the command line arguments to viper

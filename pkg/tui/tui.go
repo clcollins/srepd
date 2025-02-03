@@ -25,6 +25,12 @@ const (
 	staleLabelStr      = "[STALE] $2"
 )
 
+const (
+	reEscalateDefaultPolicyLevel = 2 // Skips Nobody
+	silentDefaultPolicyKey       = "SILENT_DEFAULT"
+	silentDefaultPolicyLevel     = 1 // Nobody
+)
+
 func (s setStatusMsg) Status() string {
 	return s.string
 }
@@ -453,7 +459,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		incidents := strings.Join(incidentIDs, " ")
 		m.setStatus(fmt.Sprintf("re-escalated incidents: " + incidents))
 
-		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
+		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgedIncidentsMsg") }
 
 	case waitForSelectedIncidentsThenAcknowledgeMsg:
 		if m.selectedIncident == nil {
@@ -490,6 +496,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", msg))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reassignedIncidentsMsg") }
 
+	case reEscalateIncidentsMsg:
+		if msg.incidents == nil {
+			m.setStatus("failed re-escalating incidents - no incidents provided")
+			return m, nil
+		}
+
+		return m, tea.Sequence(
+			reEscalateIncidents(m.config, msg.incidents, msg.policy, msg.level),
+			func() tea.Msg { return clearSelectedIncidentsMsg("sender: reEscalatedIncidentsMsg") },
+		)
+
+	case reEscalatedIncidentsMsg:
+		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", msg))
+		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
+
 	case silenceSelectedIncidentMsg:
 		if m.selectedIncident == nil {
 			return m, func() tea.Msg {
@@ -500,8 +521,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		var policyKey string
+
+		_, ok := m.config.EscalationPolicies[m.selectedIncident.Service.ID]
+
+		if !ok {
+			log.Debug("Update", "silenceSelectedIncidentMsg", "no escalation policy override for service; using default", "service", m.selectedIncident.Service.ID, "policy", m.config.EscalationPolicies[silentDefaultPolicyKey].Name)
+			policyKey = silentDefaultPolicyKey
+		} else {
+			log.Debug("Update", "silenceSelectedIncidentMsg", "escalation policy override found for service", "service", m.selectedIncident.Service.ID, "policy", m.config.EscalationPolicies[m.selectedIncident.Service.ID].Name)
+			policyKey = m.selectedIncident.Service.ID
+		}
+
 		return m, tea.Sequence(
-			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, []*pagerduty.User{m.config.SilentUser}),
+			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
 		)
 
@@ -512,11 +545,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		var incidents []pagerduty.Incident = msg.incidents
-		var users []*pagerduty.User
 		incidents = append(incidents, *m.selectedIncident)
-		users = append(users, m.config.SilentUser)
 		return m, tea.Sequence(
-			silenceIncidents(incidents, users),
+			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },
 		)
 

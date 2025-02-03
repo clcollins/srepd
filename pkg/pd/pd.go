@@ -3,6 +3,7 @@ package pd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
 )
@@ -19,6 +20,7 @@ var defaultIncidentStatues = []string{"triggered", "acknowledged"}
 type PagerDutyClientInterface interface {
 	CreateIncidentNoteWithContext(ctx context.Context, id string, note pagerduty.IncidentNote) (*pagerduty.IncidentNote, error)
 	GetCurrentUserWithContext(ctx context.Context, opts pagerduty.GetCurrentUserOptions) (*pagerduty.User, error)
+	GetEscalationPolicyWithContext(ctx context.Context, id string, opts *pagerduty.GetEscalationPolicyOptions) (*pagerduty.EscalationPolicy, error)
 	GetIncidentWithContext(ctx context.Context, id string) (*pagerduty.Incident, error)
 	GetTeamWithContext(ctx context.Context, id string) (*pagerduty.Team, error)
 	ListMembersWithContext(ctx context.Context, id string, opts pagerduty.ListTeamMembersOptions) (*pagerduty.ListTeamMembersResponse, error)
@@ -43,14 +45,15 @@ type Config struct {
 	CurrentUser *pagerduty.User
 
 	// List of the users in the Teams
-	TeamsMemberIDs []string
-	Teams          []*pagerduty.Team
+	TeamsMemberIDs     []string
+	Teams              []*pagerduty.Team
+	EscalationPolicies map[string]*pagerduty.EscalationPolicy
 
 	SilentUser   *pagerduty.User
 	IgnoredUsers []*pagerduty.User
 }
 
-func NewConfig(token string, teams []string, silentUser string, ignoredUsers []string) (*Config, error) {
+func NewConfig(token string, teams []string, escalation_policies map[string]string, silentUser string, ignoredUsers []string) (*Config, error) {
 	var c Config
 	var err error
 
@@ -69,6 +72,24 @@ func NewConfig(token string, teams []string, silentUser string, ignoredUsers []s
 	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
 	if err != nil {
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
+	}
+
+	_, ok := escalation_policies["default"]
+	if !ok {
+		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `default` key")
+	}
+	_, ok = escalation_policies["silent_default"]
+	if !ok {
+		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `silent_default` key")
+	}
+
+	c.EscalationPolicies = make(map[string]*pagerduty.EscalationPolicy)
+
+	for key, value := range escalation_policies {
+		c.EscalationPolicies[strings.ToUpper(key)], err = GetEscalationPolicy(c.Client, value, pagerduty.GetEscalationPolicyOptions{})
+		if err != nil {
+			return &c, fmt.Errorf("pd.NewConfig(): failed to get escalation policy: (%s: %s) %v", key, value, err)
+		}
 	}
 
 	c.SilentUser, err = GetUser(c.Client, silentUser, pagerduty.GetUserOptions{})
@@ -102,7 +123,6 @@ func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
 
 func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User) ([]pagerduty.Incident, error) {
 	var ctx = context.Background()
-	var i []pagerduty.Incident
 	var email string
 
 	opts := []pagerduty.ManageIncidentsOptions{}
@@ -128,24 +148,7 @@ func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident,
 		}
 	}
 
-	for {
-		response, err := client.ManageIncidentsWithContext(ctx, email, opts)
-		if err != nil {
-			return i, fmt.Errorf("pd.AcknowledgeIncident(): failed to acknowledge incident(s) `%v`: %v", incidents, err)
-		}
-
-		i = append(i, response.Incidents...)
-
-		if response.More {
-			panic("pd.AcknowledgeIncident(): PagerDuty response indicated more data available")
-		}
-
-		if !response.More {
-			break
-		}
-	}
-
-	return i, nil
+	return loopManageIncidents(client, ctx, email, opts)
 }
 
 func GetAlerts(client PagerDutyClient, id string, opts pagerduty.ListIncidentAlertsOptions) ([]pagerduty.IncidentAlert, error) {
@@ -168,6 +171,18 @@ func GetAlerts(client PagerDutyClient, id string, opts pagerduty.ListIncidentAle
 	}
 
 	return a, nil
+}
+
+func GetEscalationPolicy(client PagerDutyClient, id string, opts pagerduty.GetEscalationPolicyOptions) (*pagerduty.EscalationPolicy, error) {
+	var ctx = context.Background()
+	var p *pagerduty.EscalationPolicy
+
+	p, err := client.GetEscalationPolicyWithContext(ctx, id, &opts)
+	if err != nil {
+		return p, fmt.Errorf("pd.GetEscalationPolicy(): failed to get escalation policy: %v", err)
+	}
+
+	return p, nil
 }
 
 func GetIncident(client PagerDutyClient, id string) (*pagerduty.Incident, error) {
@@ -291,9 +306,31 @@ func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCall
 	return o, nil
 }
 
+func loopManageIncidents(client PagerDutyClient, ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (incidentList []pagerduty.Incident, err error) {
+	for {
+		response, err := client.ManageIncidentsWithContext(ctx, email, opts)
+		if err != nil {
+			return incidentList, err
+		}
+
+		incidentList = append(incidentList, response.Incidents...)
+
+		// ManageIncidentsWithContext should never return a "More" response, but since it's in the ListIncidentsResponse API, check for it
+		if response.More {
+			panic("pd.loopManageIncidents(): PagerDuty response indicated more data available")
+		}
+
+		if !response.More {
+			break
+		}
+	}
+
+	return incidentList, err
+}
+
+// ReassignIncidents reassigns a list of incidents to a list of users
 func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) ([]pagerduty.Incident, error) {
 	var ctx = context.Background()
-	var i []pagerduty.Incident
 
 	a := []pagerduty.Assignee{}
 	for _, user := range users {
@@ -304,7 +341,7 @@ func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, u
 
 	for _, incident := range incidents {
 		if incident.ID == "" {
-			return i, fmt.Errorf("pd.ReassignIncidents(): incident is nil")
+			return nil, fmt.Errorf("pd.ReassignIncidents(): incident is nil")
 		}
 		opts = append(opts, pagerduty.ManageIncidentsOptions{
 			ID:          incident.ID,
@@ -312,29 +349,28 @@ func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, u
 		})
 	}
 
-	// This loop is likely unnecessary, as the "More" response is probably not used by PagerDuty here
-	// but I'm including it in case we need to use it in the future, and raising a panic if we receive
-	// a "More" response so we can fix the code
+	return loopManageIncidents(client, ctx, user.Email, opts)
+}
 
-	for {
-		response, err := client.ManageIncidentsWithContext(ctx, user.Email, opts)
-		if err != nil {
-			return i, err
+// ReEscalateIncidents re-escalates a list of incidents to an escalation policy at a specific level
+func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident, policy *pagerduty.EscalationPolicy, level uint) ([]pagerduty.Incident, error) {
+	var ctx = context.Background()
+
+	opts := []pagerduty.ManageIncidentsOptions{}
+
+	for _, incident := range incidents {
+		if incident.ID == "" {
+			return nil, fmt.Errorf("pd.Re-escalateIncident(): incident is nil")
 		}
 
-		if response.More {
-			// If we ever do get a "More" response, we we need to handle it, so panic to call attention to the problem
-			panic("pd.ReassignIncidents(): PagerDuty response indicated more data available")
-		}
-
-		i = append(i, response.Incidents...)
-
-		if !response.More {
-			break
-		}
+		opts = append(opts, pagerduty.ManageIncidentsOptions{
+			ID:               incident.ID,
+			EscalationPolicy: &pagerduty.APIReference{ID: policy.ID, Type: "escalation_policy"},
+			EscalationLevel:  level,
+		})
 	}
 
-	return i, nil
+	return loopManageIncidents(client, ctx, "", opts)
 }
 
 func PostNote(client PagerDutyClient, id string, user *pagerduty.User, content string) (*pagerduty.IncidentNote, error) {

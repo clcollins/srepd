@@ -83,3 +83,29 @@ func (m *MockPagerDutyClient) ListIncidentNotesWithContext(ctx context.Context, 
 		},
 	}, nil
 }
+
+func (m *MockPagerDutyClient) ManageIncidentsWithContext(ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (*pagerduty.ListIncidentsResponse, error) {
+	var response = &pagerduty.ListIncidentsResponse{}
+
+	for _, opt := range opts {
+		// Provided so we can mock error responses for unit tests
+		if opt.ID == "err" {
+			return response, ErrMockError
+		}
+	}
+
+	response.Incidents = []pagerduty.Incident{
+		{
+			APIObject: pagerduty.APIObject{
+				ID: "QABCDEFG1234567",
+			},
+		},
+		{
+			APIObject: pagerduty.APIObject{
+				ID: "QABCDEFG7654321",
+			},
+		},
+	}
+
+	return response, nil
+}
