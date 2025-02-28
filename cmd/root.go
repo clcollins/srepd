@@ -41,6 +41,13 @@ import (
 
 const tickInterval = 1
 
+// Must not be aliases - must be real commands or links
+const (
+	defaultClusterLoginCmd = "ocm backplane login %%CLUSTER_ID%%"
+	defaultEditor          = "vim"
+	defaultTerminal        = "gnome-terminal"
+)
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "srepd",
@@ -76,7 +83,6 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetString("token"),
 			viper.GetStringSlice("teams"),
 			viper.GetStringMapString("service_escalation_policies"),
-			viper.GetString("silentuser"),        // TODO: replace this with escalationPolicy filter
 			viper.GetStringSlice("ignoredusers"), // TODO: replace this with escalationPolicy filter
 			viper.GetStringSlice("editor"),
 			launcher,
@@ -141,7 +147,7 @@ func bindArgsToViper(cmd *cobra.Command) {
 	viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
 	viper.BindPFlag("editor", cmd.Flags().Lookup("editor"))
 	viper.BindPFlag("terminal", cmd.Flags().Lookup("terminal"))
-	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("clusterLoginCommand"))
+	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("cluster-login-command"))
 }
 
 type cliFlag struct {
@@ -162,18 +168,17 @@ func (f cliFlag) BoolValue() bool {
 }
 
 func init() {
-	// Must not be aliases - must be real commands or links
-	const (
-		defaultEditor          = "vim"
-		defaultTerminal        = "gnome-terminal"
-		defaultClusterLoginCmd = "ocm backplane login"
-	)
-
 	var flags = []cliFlag{
 		{"bool", "debug", "d", "false", "Enable debug logging (~/.config/srepd/debug.log)"},
-		{"string", "editor", "e", defaultEditor, "Editor to use for notes"},
-		{"string", "terminal", "t", defaultTerminal, "Terminal to use for exec commands"},
-		{"string", "clusterLoginCmd", "c", defaultClusterLoginCmd, "Cluster login command"},
+		// TODO - For some reason the parsed cluster-login-command flag does not work (the "%%" is stripped out)
+		// Commenting out the config options for now, as the config file is the preferred method
+		// {"string", "token", "T", "", "PagerDuty API token"},
+		// {"stringSlice", "teams", "t", []string{}, "Teams to filter on"},
+		// {"stringMapString", "service-escalation-policies", "s", map[string]string{}, "Service to Escalation Policy mapping"},
+		// {"stringSlice", "ignoredusers", "i", []string{}, "Users to ignore"},
+		// {"string", "editor", "e", defaultEditor, "Editor to use for notes"},
+		// {"string", "terminal", "t", defaultTerminal, "Terminal to use for exec commands"},
+		// {"stringSlice", "cluster-login-command", "c", defaultClusterLoginCmd, "Cluster login command"},
 	}
 
 	cobra.OnInitialize(initConfig)
@@ -184,6 +189,8 @@ func init() {
 			rootCmd.Flags().BoolP(f.name, f.shorthand, f.BoolValue(), f.usage)
 		case "string":
 			rootCmd.Flags().StringP(f.name, f.shorthand, f.StringValue(), f.usage)
+		case "stringSlice":
+			rootCmd.Flags().StringSliceP(f.name, f.shorthand, []string{f.StringValue()}, f.usage)
 		}
 	}
 }

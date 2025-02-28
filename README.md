@@ -9,7 +9,7 @@ Features:
 * Retrieve and list incidents assigned to the current user, and their team(s)
 * Vew a summary of an incident, including alerts and notes
 * Add a note to an incident
-* Reassign incidents to a (configured) "silent" user (ie. silence the alert)
+* Reassign incidents to a (configured) "silent" escalation policy (ie. silence the alert)
 * Acknowledge incidents
 * Resizes nicely(-ish) when the terminal is resized
 * Un-Acknowledge incidents (re-assign to the Escalation Policy)
@@ -33,11 +33,23 @@ Configuration variables have the following precedence:
 
 * token: A PagerDuty Oauth Token
 * teams: A list of PagerDuty team IDs to gather incidents for
-* silentuser: A PagerDuty user ID to receive "silenced" alerts (or to troll, you do you)
+* service_escalation_policies: A string map defining the default escalation policy, "silence" policy, and optional per-service "silence" polices. The "DEFAULT" and "SILENT_DEFAULT" keys are required. Optional keys are PagerDuty service IDs.  All values are PageDuty escalation policy IDs.
+
+Example service_escalation_policies configuration:
+
+```text
+# In this example, the Default escalation policy in use by the team is P123456, and re-escalating alerts will be assigned to that policy.
+# Alerts that are "silenced" will be re-assigned to escalation policy P654321.
+# Any alerts for service PABC123 will be silenced by re-assigning to escalation policy PXYZ890 instead of the SILENT_DEFAULT policy.
+service_escalation_policies:
+  DEFAULT: P123456
+  SILENT_DEFAULT: P654321
+  PABC123: PXYZ890
+```
 
 **Optional Values**
 
-* ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.  It's recommended that the "silentuser" ID is in this list.
+* ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.
 * editor: Your choice of editor.  Defaults to the `$EDITOR` environment variable.
 * cluster_login_cmd: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
 * terminal: Your choice of terminal to use when launching external commands. Defaults to `/usr/bin/gnome-terminal`.
@@ -50,12 +62,15 @@ An example srepd.yaml file might look like so:
 ---
 # Editor will always be overridden by the ENV variable
 # unless the ENV is not set for some reason
+# type: string
 editor: vim
 
 # Cluster Login options
 # Note the trailing `--` is necessary for gnome-terminal and may be necessary
 # for other terminals as well
+# type: string
 terminal: /usr/bin/gnome-terminal --
+# type: string
 cluster_login_cmd: ocm-container --clusterid %%CLUSTER_ID%%
 
 # Note that aliases, etc, are not sourced by the shell command when launching.
@@ -66,16 +81,23 @@ cluster_login_cmd: ocm-container --clusterid %%CLUSTER_ID%%
 # terminal: "flatpak run org.contourterminal.Contour"
 
 # PagerDutyOauthToken
+# type: string
 token: <pagerDuty Oauth Token>
 
 # Teams are PagerDuty team IDs to retrieve incidents
+# type: []string
 teams:
   - <pagerDuty Team ID>
 
-# Silent User is a PagerDuty User ID to assign issues to "silence" them
-silentuser: <pagerDuty User ID>
+# Service Escalation Policies are a map of services to escalation policies, including the required "DEFAULT" and "SILENT_DEFAULT" keys.  Optional PagerDuty Service keys and PagerDuty Escalation Policies may be defined to customize how silenced serivces are assigned.
+# type: map[string]string
+service_escalation_policies:
+  DEFAULT: P123456
+  SILENT_DEFAULT: P654321
+  PABC123: PXYZ890
 
 # Ignore Users is a list of PagerDuty User IDs to ignore when gathering incidents
+# type: []string
 ignoredusers:
   - <pagerDuty User ID>
   - <pagerDuty User ID>
