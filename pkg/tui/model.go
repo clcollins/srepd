@@ -54,7 +54,6 @@ func InitialModel(
 	token string,
 	teams []string,
 	escalation_policies map[string]string,
-	silentuser string,
 	ignoredusers []string,
 	editor []string,
 	launcher launcher.ClusterLauncher,
@@ -79,7 +78,7 @@ func InitialModel(
 	// We have to set the m.err here instead of how the errMsg is handled
 	// because the Init() occurs before the Update() and the errMsg is not
 	// preserved
-	pd, err := pd.NewConfig(token, teams, escalation_policies, silentuser, ignoredusers)
+	pd, err := pd.NewConfig(token, teams, escalation_policies, ignoredusers)
 	m.config = pd
 
 	if err != nil {

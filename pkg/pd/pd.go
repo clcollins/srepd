@@ -39,7 +39,7 @@ type PagerDutyClient interface {
 }
 
 // Config is a struct that holds the PagerDuty client used for all the PagerDuty calls, and the config info for
-// teams, silent user, and ignored users
+// teams, and ignored users
 type Config struct {
 	Client      PagerDutyClient
 	CurrentUser *pagerduty.User
@@ -49,11 +49,10 @@ type Config struct {
 	Teams              []*pagerduty.Team
 	EscalationPolicies map[string]*pagerduty.EscalationPolicy
 
-	SilentUser   *pagerduty.User
 	IgnoredUsers []*pagerduty.User
 }
 
-func NewConfig(token string, teams []string, escalation_policies map[string]string, silentUser string, ignoredUsers []string) (*Config, error) {
+func NewConfig(token string, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
 	var c Config
 	var err error
 
@@ -90,11 +89,6 @@ func NewConfig(token string, teams []string, escalation_policies map[string]stri
 		if err != nil {
 			return &c, fmt.Errorf("pd.NewConfig(): failed to get escalation policy: (%s: %s) %v", key, value, err)
 		}
-	}
-
-	c.SilentUser, err = GetUser(c.Client, silentUser, pagerduty.GetUserOptions{})
-	if err != nil {
-		return &c, fmt.Errorf("pd.NewConfig(): failed to get silent user: %v", err)
 	}
 
 	for _, i := range ignoredUsers {
