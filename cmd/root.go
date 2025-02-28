@@ -25,14 +25,11 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/spf13/cobra"
@@ -40,13 +37,6 @@ import (
 )
 
 const tickInterval = 1
-
-// Must not be aliases - must be real commands or links
-const (
-	defaultClusterLoginCmd = "ocm backplane login %%CLUSTER_ID%%"
-	defaultEditor          = "vim"
-	defaultTerminal        = "gnome-terminal"
-)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -69,7 +59,10 @@ but rather a simple tool to make on-call tasks easier.`,
 			return log.WarnLevel
 		}())
 
-		checkSettings()
+		err := validateConfig()
+		if err != nil {
+			log.Fatal(err)
+		}
 
 	},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -114,40 +107,9 @@ func Execute() {
 	}
 }
 
-// checkSettings prints the viper info passed into the program
-func checkSettings() {
-	settings := viper.GetViper().AllSettings()
-	keys := make([]string, 0, len(settings))
-	for k := range settings {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		if deprecation.Deprecated(k) {
-			log.Info("Found deprecated key; you may remove this from your config", k)
-			continue
-		}
-
-		var v string
-
-		v = fmt.Sprintf("%v", settings[k])
-		if strings.Contains(k, "token") {
-			v = "*****"
-		}
-
-		log.Debug("Found key", k, v)
-
-	}
-
-}
-
 // bindArgsToViper binds the command line arguments to viper
 func bindArgsToViper(cmd *cobra.Command) {
 	viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
-	viper.BindPFlag("editor", cmd.Flags().Lookup("editor"))
-	viper.BindPFlag("terminal", cmd.Flags().Lookup("terminal"))
-	viper.BindPFlag("cluster_login_command", cmd.Flags().Lookup("cluster-login-command"))
 }
 
 type cliFlag struct {
@@ -169,16 +131,16 @@ func (f cliFlag) BoolValue() bool {
 
 func init() {
 	var flags = []cliFlag{
-		{"bool", "debug", "d", "false", "Enable debug logging (~/.config/srepd/debug.log)"},
+		{"bool", "debug", "d", "false", "enable debug logging (~/.config/srepd/debug.log)"},
 		// TODO - For some reason the parsed cluster-login-command flag does not work (the "%%" is stripped out)
 		// Commenting out the config options for now, as the config file is the preferred method
 		// {"string", "token", "T", "", "PagerDuty API token"},
-		// {"stringSlice", "teams", "t", []string{}, "Teams to filter on"},
-		// {"stringMapString", "service-escalation-policies", "s", map[string]string{}, "Service to Escalation Policy mapping"},
-		// {"stringSlice", "ignoredusers", "i", []string{}, "Users to ignore"},
-		// {"string", "editor", "e", defaultEditor, "Editor to use for notes"},
-		// {"string", "terminal", "t", defaultTerminal, "Terminal to use for exec commands"},
-		// {"stringSlice", "cluster-login-command", "c", defaultClusterLoginCmd, "Cluster login command"},
+		// {"stringSlice", "teams", "t", []string{}, "teams to filter on"},
+		// {"stringMapString", "service-escalation-policies", "s", map[string]string{}, "service to escalation policy mapping"},
+		// {"stringSlice", "ignoredusers", "i", []string{}, "users to ignore"},
+		// {"string", "editor", "e", defaultEditor, "editor to use for notes"},
+		// {"string", "terminal", "t", defaultTerminal, "terminal to use for exec commands"},
+		// {"stringSlice", "cluster-login-command", "c", defaultClusterLoginCmd, "cluster login command"},
 	}
 
 	cobra.OnInitialize(initConfig)

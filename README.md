@@ -2,7 +2,7 @@
 
 A PagerDuty terminal user interface focused on common SRE tasks
 
-**Note: This project is still in Alpha phase and there are bugs to be squashed.**
+**Note: This project is still in Beta phase and there are bugs to be squashed.**
 
 Features:
 
