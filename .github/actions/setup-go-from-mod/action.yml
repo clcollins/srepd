@@ -1,0 +1,14 @@
+name: Setup Go From go.mod
+description: Setup Go based on the version specified in go.mod
+runs:
+  using: "composite"
+  steps:
+    - name: Extract Go version
+      shell: bash
+      run: |
+        echo "GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_ENV
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
