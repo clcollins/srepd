@@ -1,5 +1,10 @@
 # SREPD
 
+[![Go Version](https://img.shields.io/github/go-mod/go-version/clcollins/srepd)](https://golang.org)
+[![Build Status](https://github.com/clcollins/srepd/actions/workflows/ci.yml/badge.svg)](https://github.com/clcollins/srepd/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/clcollins/srepd)](https://goreportcard.com/report/github.com/clcollins/srepd)
+[![License](https://img.shields.io/github/license/clcollins/srepd)](https://github.com/clcollins/srepd/blob/main/LICENSE)
+
 A PagerDuty terminal user interface focused on common SRE tasks
 
 **Note: This project is still in Beta phase and there are bugs to be squashed.**
