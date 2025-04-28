@@ -7,9 +7,9 @@ GOENV=GOOS=${GOOS} GOARCH=${GOARCH} CGO_ENABLED=0 GOFLAGS=
 GOPATH := $(shell go env GOPATH)
 HOME?=$(shell mktemp -d)
 
-GOLANGCI_LINT_VERSION=v1.51.2
-GORELEASER_VERSION=v1.24.0
-export GITHUB_TOKEN?=$(shell jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token)
+GOLANGCI_LINT_VERSION=v2.1.5
+
+GORELEASER_VERSION=v2.8.2
 
 # Ensure go modules are enabled:
 export GO111MODULE=on
@@ -46,16 +46,20 @@ coverage:
 # Installed using instructions from: https://golangci-lint.run/usage/install/#linux-and-windows
 getlint:
 	@mkdir -p $(GOPATH)/bin
-	@ls $(GOPATH)/bin/golangci-lint 1>/dev/null || (echo "Installing golangci-lint..." && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin $(GOLANGCI_LINT_VERSION))
+	@ls $(GOPATH)/bin/golangci-lint 1>/dev/null 2>&1 || (echo "Installing golangci-lint..." && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin $(GOLANGCI_LINT_VERSION))
 
 .PHONY: lint
 lint: getlint
 	$(GOPATH)/bin/golangci-lint run --timeout 5m
 
+.PHONY: ensure-goreleaser
 ensure-goreleaser:
-	@ls $(GOPATH)/bin/goreleaser 1>/dev/null || go install github.com/goreleaser/goreleaser@${GORELEASER_VERSION}
+	@ls $(GOPATH)/bin/goreleaser 1>/dev/null 2>&1 || go install github.com/goreleaser/goreleaser/v2@${GORELEASER_VERSION}
 
+.PHONY: release
 release: ensure-goreleaser
+	GITHUB_TOKEN=$$(jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token) && \
+	export GITHUB_TOKEN && \
 	goreleaser release --clean
 
 .PHONY: fmt
