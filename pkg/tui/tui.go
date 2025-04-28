@@ -348,7 +348,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// NOTE: It's important that **ALL** of these variables' values are NOT NIL.
 		// They can be empty strings, but the must not be nil.
-		var vars map[string]string = map[string]string{
+		var vars = map[string]string{
 			"%%CLUSTER_ID%%":  cluster,
 			"%%INCIDENT_ID%%": m.selectedIncident.ID,
 		}
@@ -444,7 +444,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			incidentIDs = append(incidentIDs, i.ID)
 		}
 		incidents := strings.Join(incidentIDs, " ")
-		m.setStatus(fmt.Sprintf("acknowledged incidents: " + incidents))
+		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidents))
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
@@ -457,7 +457,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			incidentIDs = append(incidentIDs, i.ID)
 		}
 		incidents := strings.Join(incidentIDs, " ")
-		m.setStatus(fmt.Sprintf("re-escalated incidents: " + incidents))
+		m.setStatus(fmt.Sprintf("re-escalated incidents: %s", incidents))
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgedIncidentsMsg") }
 
@@ -544,7 +544,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		var incidents []pagerduty.Incident = msg.incidents
+		var incidents = msg.incidents
 		incidents = append(incidents, *m.selectedIncident)
 		return m, tea.Sequence(
 			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),

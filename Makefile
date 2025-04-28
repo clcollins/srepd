@@ -4,7 +4,7 @@ GOOS?=linux
 TESTOPTS ?=
 GOARCH?=amd64
 GOENV=GOOS=${GOOS} GOARCH=${GOARCH} CGO_ENABLED=0 GOFLAGS=
-GOPATH := $(shell go env GOPATH)
+GOPATH := $(shell go env GOPATH | awk -F: '{print $1}')
 HOME?=$(shell mktemp -d)
 
 GOLANGCI_LINT_VERSION=v2.1.5
@@ -50,6 +50,7 @@ getlint:
 
 .PHONY: lint
 lint: getlint
+	$(GOPATH)/bin/golangci-lint --version
 	$(GOPATH)/bin/golangci-lint run --timeout 5m
 
 .PHONY: ensure-goreleaser

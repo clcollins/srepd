@@ -103,8 +103,8 @@ var configCmd = &cobra.Command{
 		case cmd.Flag("create").Value.String() == "true" && cmd.Flag("validate").Value.String() == "true":
 			return errors.New("cannot use both --create and --validate flags together")
 		default:
-			cmd.Usage()
-			return nil
+			err := cmd.Usage()
+			return err
 		}
 	},
 }
@@ -156,7 +156,7 @@ func validateConfig() error {
 
 	for k, v := range requiredKeys {
 		if _, ok := settings[k]; !ok {
-			errs = append(errs, fmt.Errorf("Missing required key: "+k))
+			errs = append(errs, fmt.Errorf("missing required key: %s ", k))
 			log.Error("Missing required key", "key_name", k, "key_description", v)
 		}
 	}
@@ -175,13 +175,13 @@ func validateConfig() error {
 
 		for k, v := range requiredEscalationPolicyKeys {
 			if _, ok := serviceEscalationPolicies[strings.ToLower(k)]; !ok {
-				errs = append(errs, fmt.Errorf("'service_escalation_policies' missing required key: "+k))
+				errs = append(errs, fmt.Errorf("'service_escalation_policies' missing required key: %s", k))
 				log.Error("Missing required key", "key_name", k, "key_description", v)
 			}
 		}
 	}
 
-	for k, _ := range optionalKeys {
+	for k := range optionalKeys {
 		_, ok := settings[k]
 		if !ok {
 			log.Warn("missing optional key: " + k + "; using default value " + defaultOptionalKeys[k])
