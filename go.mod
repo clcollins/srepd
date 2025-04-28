@@ -1,6 +1,6 @@
 module github.com/clcollins/srepd
 
-go 1.21.2
+go 1.24.2
 
 require (
 	github.com/PagerDuty/go-pagerduty v1.8.0
