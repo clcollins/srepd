@@ -38,7 +38,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	log.SetOutput(f)
 

@@ -559,7 +559,7 @@ type addedIncidentNoteMsg struct {
 
 func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, file *os.File) tea.Cmd {
 	return func() tea.Msg {
-		defer file.Close()
+		defer file.Close() //nolint:errcheck
 
 		bytes, err := os.ReadFile(file.Name())
 		if err != nil {

@@ -94,7 +94,7 @@ func replaceVars(args []string, vars map[string]string) []string {
 
 	for k, v := range vars {
 		log.Debug("ClusterLauncher():", "Replacing vars in string", str, k, v)
-		str = strings.Replace(str, k, v, -1)
+		str = strings.ReplaceAll(str, k, v)
 	}
 
 	transformedArgs := strings.Split(str, " ")

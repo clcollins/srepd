@@ -109,7 +109,10 @@ func Execute() {
 
 // bindArgsToViper binds the command line arguments to viper
 func bindArgsToViper(cmd *cobra.Command) {
-	viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
+	err := viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 type cliFlag struct {
