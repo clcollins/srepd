@@ -52,9 +52,11 @@ getlint:
 lint: getlint
 	$(GOPATH)/bin/golangci-lint run --timeout 5m
 
+.PHONY: ensure-goreleaser
 ensure-goreleaser:
 	@ls $(GOPATH)/bin/goreleaser 1>/dev/null || go install github.com/goreleaser/goreleaser@${GORELEASER_VERSION}
 
+.PHONY: release
 release: ensure-goreleaser
 	goreleaser release --clean
 
