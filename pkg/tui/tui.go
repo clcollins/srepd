@@ -521,17 +521,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		var policyKey string
-
-		_, ok := m.config.EscalationPolicies[m.selectedIncident.Service.ID]
-
-		if !ok {
-			log.Debug("Update", "silenceSelectedIncidentMsg", "no escalation policy override for service; using default", "service", m.selectedIncident.Service.ID, "policy", m.config.EscalationPolicies[silentDefaultPolicyKey].Name)
-			policyKey = silentDefaultPolicyKey
-		} else {
-			log.Debug("Update", "silenceSelectedIncidentMsg", "escalation policy override found for service", "service", m.selectedIncident.Service.ID, "policy", m.config.EscalationPolicies[m.selectedIncident.Service.ID].Name)
-			policyKey = m.selectedIncident.Service.ID
-		}
+		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
 
 		return m, tea.Sequence(
 			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
@@ -544,8 +534,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		var incidents = msg.incidents
-		incidents = append(incidents, *m.selectedIncident)
+		incidents := append(msg.incidents, *m.selectedIncident)
 		return m, tea.Sequence(
 			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },

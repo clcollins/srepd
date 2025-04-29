@@ -612,6 +612,16 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 	return ""
 }
 
+// getEscalationPolicyKey is a helper function to determine the escalation policy key
+func getEscalationPolicyKey(serviceID string, policies map[string]*pagerduty.EscalationPolicy) string {
+	if policy, ok := policies[serviceID]; ok {
+		log.Debug("Update", "getEscalationPolicyKey", "escalation policy override found for service", "service", serviceID, "policy", policy.Name)
+		return serviceID
+	}
+	log.Debug("Update", "getEscalationPolicyKey", "no escalation policy override for service; using default", "service", serviceID, "policy", silentDefaultPolicyKey)
+	return silentDefaultPolicyKey
+}
+
 // stateShorthand returns the state of the incident as a single character
 // A = acknowledged by user
 // a = acknowledged by someone else
