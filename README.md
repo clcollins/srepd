@@ -30,11 +30,11 @@ Planned Features:
 
 SREPD uses the [Viper](https://github.com/spf13/viper) configuration setup, and will read required values from `~/.config/srepd/srepd.yaml`.
 
-Configuration variables have the following precedence: 
+Configuration variables have the following precedence:
 
 `command line arguments > environment variables > config file values`
 
-**Required Values**
+### Required Values
 
 * token: A PagerDuty Oauth Token
 * teams: A list of PagerDuty team IDs to gather incidents for
@@ -52,18 +52,18 @@ service_escalation_policies:
   PABC123: PXYZ890
 ```
 
-**Optional Values**
+### Optional Values
 
 * ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.
 * editor: Your choice of editor.  Defaults to the `$EDITOR` environment variable.
-* cluster_login_cmd: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
+* cluster_login_command: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
 * terminal: Your choice of terminal to use when launching external commands. Defaults to `/usr/bin/gnome-terminal`.
 
-__NOTE:__ The cluster_login_cmd and terminal accept a variable for `%%CLUSTER_ID%%` to stand in for the Cluster ID in the command. At least one of the two, most likely `cluster_login_cmd` MUST have the `%%CLUSTER_ID%%` placeholder set. See [AUTOMATIC LOGIN FEATURES](#automatic-login-features) for more details about config variables.
+**NOTE:** The cluster_login_command and terminal accept a variable for `%%CLUSTER_ID%%` to stand in for the Cluster ID in the command. At least one of the two, most likely `cluster_login_command` MUST have the `%%CLUSTER_ID%%` placeholder set. See [AUTOMATIC LOGIN FEATURES](#automatic-login-features) for more details about config variables.
 
 An example srepd.yaml file might look like so:
 
-```
+```yaml
 ---
 # Editor will always be overridden by the ENV variable
 # unless the ENV is not set for some reason
@@ -117,6 +117,7 @@ The easiest way to get started with SREPD, after adding the required config file
 To enable automatic login directly from SREPD you will need to configure the `terminal` and `cluster_login_command` settings in the srepd config file.
 
 ### Linux
+
 A typical linux configuration to launch a new terminal window may look something like what follows. Be sure to change to your preferred terminal or preferred ops environment (ocm-container, ocm-backplane session, osdctl session, etc)
 
 ```yaml
@@ -128,7 +129,6 @@ cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
 Each terminal has its own way of accepting an argument for a command to run after launching. Some examples known to work:
-
 
 ```yaml
 # Contour (in this example, via Flatpak)
@@ -150,11 +150,12 @@ terminal: terminator --execute
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
-
 ### MacOS
+
 Configuration for MacOS is not as straightforward because of the way that MacOS handles applications differently from Linux. We've provided a few separate ways to configure SREPD to handle automatic logins.
 
 #### Default MacOS terminal
+
 The following configuration will launch a new MacOS default terminal window to automatically login to a cluster. This example uses ocm-container but feel free to modify to fit your preferred workflow.
 
 ```yaml
@@ -164,6 +165,7 @@ cluster_login_command: tell application "Terminal" to do script "ocm-container -
 ```
 
 #### iTerm2 Support
+
 iTerm2 is even more special in the fact that you can't tell it to 'do script' like you can with the default Terminal on MacOS. You will need to create a separate shell script to invoke from SREPD that will then run the osascript command needed to create a new iTerm2 window/tab and call the login script.
 
 ```bash
@@ -192,8 +194,8 @@ terminal: tmux new-window --
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
-<a name="automatic-login-features"></a>
 ### Automatic Login Features
+
 The first feature of Automatic Login is the ability to replace certain strings with their cluster-specific details. When you pass `%%VARIABLE%%` in your `terminal` or `cluster_login_command` configuration strings they will dynamically be replaced with the alert-specific variable. This allows you to be able to put the specific details of these variables inside the command. The first argument of the `terminal` setting MUST NOT BE a replaceable value.
 
 Supported Variables:
@@ -206,7 +208,8 @@ Note regarding `%%CLUSTER_ID%%`:
 It's also important to note that if `%%CLUSTER_ID%%` does NOT appear in the `cluster_login_command` config setting that the cluster ID will be appended to the end of the cluster login command. If the replaceable `%%CLUSTER_ID%%` string is present in the `cluster_login_command` setting, it will NOT be appended to the end.
 
 Examples:
-```
+
+```text
 ## Assume the cluster ID for these examples is `abcdefg`
 
 ## effectively runs "ocm backplane login abcdefg --multi"

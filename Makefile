@@ -18,18 +18,15 @@ export GOPROXY=https://proxy.golang.org
 # Disable CGO so that we always generate static binaries:
 export CGO_ENABLED=0
 
+default: build
 
 .PHONY: build
 build:
-	goreleaser build --snapshot  --clean --single-target
+	$(GOENV) go build -o build/$(PROJECT_NAME) .
 
 .PHONY: install
-install:
-	go build -o ${GOPATH}/bin/srepd .
-
-.PHONY: install-local
-install-local: build
-	cp dist/*/srepd ~/.local/bin/srepd
+install: build
+	cp build/srepd ~/.local/bin/$(PROJECT_NAME)
 
 .PHONY: mod
 mod:
