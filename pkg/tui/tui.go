@@ -377,7 +377,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	// This is a catch all for any action that requires a selected incident
-	//
 	case waitForSelectedIncidentThenDoMsg:
 		if msg.action == nil {
 			m.setStatus("failed to perform action: no action included in msg")
@@ -388,14 +387,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Re-queue the message if the selected incident is not yet available
 		if m.selectedIncident == nil {
-			time.Sleep(waitTime)
 			m.setStatus("waiting for incident info...")
-			return m, func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: msg.action, msg: msg.msg} }
+			return m, func() tea.Msg { return msg }
 		}
 
+		// Perform the action once the selected incident is available
 		log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "performing action", "action", msg.action, "incident", m.selectedIncident.ID)
-		cmds = append(cmds, msg.action)
+		return m, msg.action
 
 	case renderIncidentMsg:
 		if m.selectedIncident == nil {
@@ -461,26 +461,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgedIncidentsMsg") }
 
-	case waitForSelectedIncidentsThenAcknowledgeMsg:
-		if m.selectedIncident == nil {
-			time.Sleep(waitTime)
-			m.setStatus("waiting for incident info...")
-			return m, func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg(msg) }
-		}
-		return m, func() tea.Msg {
-			return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
-		}
-
-	case waitForSelectedIncidentsThenUnAcknowledgeMsg:
-		if m.selectedIncident == nil {
-			time.Sleep(waitTime)
-			m.setStatus("waiting for incident info...")
-			return m, func() tea.Msg { return waitForSelectedIncidentsThenUnAcknowledgeMsg(msg) }
-		}
-		return m, func() tea.Msg {
-			return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
-		}
-
 	case reassignIncidentsMsg:
 		if msg.incidents == nil {
 			m.setStatus("failed reassigning incidents - no incidents provided")
@@ -521,17 +501,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		var policyKey string
-
-		_, ok := m.config.EscalationPolicies[m.selectedIncident.Service.ID]
-
-		if !ok {
-			log.Debug("Update", "silenceSelectedIncidentMsg", "no escalation policy override for service; using default", "service", m.selectedIncident.Service.ID, "policy", m.config.EscalationPolicies[silentDefaultPolicyKey].Name)
-			policyKey = silentDefaultPolicyKey
-		} else {
-			log.Debug("Update", "silenceSelectedIncidentMsg", "escalation policy override found for service", "service", m.selectedIncident.Service.ID, "policy", m.config.EscalationPolicies[m.selectedIncident.Service.ID].Name)
-			policyKey = m.selectedIncident.Service.ID
-		}
+		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
 
 		return m, tea.Sequence(
 			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
@@ -544,8 +514,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		var incidents = msg.incidents
-		incidents = append(incidents, *m.selectedIncident)
+		incidents := append(msg.incidents, *m.selectedIncident)
 		return m, tea.Sequence(
 			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },
