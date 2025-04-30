@@ -218,13 +218,27 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Ack):
 			return m, doIfIncidentSelected(&m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg("Ack") },
+				func() tea.Msg {
+					return waitForSelectedIncidentThenDoMsg{
+						msg: "acknowledge",
+						action: func() tea.Msg {
+							return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
+						},
+					}
+				},
 			))
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
 			return m, doIfIncidentSelected(&m, tea.Sequence(
 				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg { return waitForSelectedIncidentsThenUnAcknowledgeMsg("UnAck") },
+				func() tea.Msg {
+					return waitForSelectedIncidentThenDoMsg{
+						msg: "un-acknowledge",
+						action: func() tea.Msg {
+							return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
+						},
+					}
+				},
 			))
 
 		case key.Matches(msg, defaultKeyMap.Note):

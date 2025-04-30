@@ -475,9 +475,6 @@ type unAcknowledgedIncidentsMsg struct {
 	err       error
 }
 
-type waitForSelectedIncidentsThenAcknowledgeMsg string
-type waitForSelectedIncidentsThenUnAcknowledgeMsg string
-
 func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident, reEscalate bool) tea.Cmd {
 	return func() tea.Msg {
 		var err error

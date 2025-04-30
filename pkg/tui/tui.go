@@ -377,7 +377,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	// This is a catch all for any action that requires a selected incident
-	//
 	case waitForSelectedIncidentThenDoMsg:
 		if msg.action == nil {
 			m.setStatus("failed to perform action: no action included in msg")
@@ -388,14 +387,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Re-queue the message if the selected incident is not yet available
 		if m.selectedIncident == nil {
-			time.Sleep(waitTime)
 			m.setStatus("waiting for incident info...")
-			return m, func() tea.Msg { return waitForSelectedIncidentThenDoMsg{action: msg.action, msg: msg.msg} }
+			return m, func() tea.Msg { return msg }
 		}
 
+		// Perform the action once the selected incident is available
 		log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "performing action", "action", msg.action, "incident", m.selectedIncident.ID)
-		cmds = append(cmds, msg.action)
+		return m, msg.action
 
 	case renderIncidentMsg:
 		if m.selectedIncident == nil {
@@ -460,26 +460,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("re-escalated incidents: %s", incidents))
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgedIncidentsMsg") }
-
-	case waitForSelectedIncidentsThenAcknowledgeMsg:
-		if m.selectedIncident == nil {
-			time.Sleep(waitTime)
-			m.setStatus("waiting for incident info...")
-			return m, func() tea.Msg { return waitForSelectedIncidentsThenAcknowledgeMsg(msg) }
-		}
-		return m, func() tea.Msg {
-			return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
-		}
-
-	case waitForSelectedIncidentsThenUnAcknowledgeMsg:
-		if m.selectedIncident == nil {
-			time.Sleep(waitTime)
-			m.setStatus("waiting for incident info...")
-			return m, func() tea.Msg { return waitForSelectedIncidentsThenUnAcknowledgeMsg(msg) }
-		}
-		return m, func() tea.Msg {
-			return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}}
-		}
 
 	case reassignIncidentsMsg:
 		if msg.incidents == nil {
