@@ -25,13 +25,16 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/tui"
+	"github.com/coreos/go-systemd/journal"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -136,7 +139,7 @@ func (f cliFlag) BoolValue() bool {
 
 func init() {
 	var flags = []cliFlag{
-		{"bool", "debug", "d", "false", "enable debug logging (~/.config/srepd/debug.log)"},
+		{"bool", "debug", "d", "false", "enable debug logging"},
 		// TODO - For some reason the parsed cluster-login-command flag does not work (the "%%" is stripped out)
 		// Commenting out the config options for now, as the config file is the preferred method
 		// {"string", "token", "T", "", "PagerDuty API token"},
@@ -148,7 +151,7 @@ func init() {
 		// {"stringSlice", "cluster-login-command", "c", defaultClusterLoginCmd, "cluster login command"},
 	}
 
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(initConfig, configureLogging)
 
 	for _, f := range flags {
 		switch f.flagType {
@@ -189,4 +192,59 @@ func initConfig() {
 			fmt.Fprintln(os.Stderr, "Config file error: "+err.Error())
 		}
 	}
+}
+
+func configureLogging() {
+	log.SetPrefix("srepd")
+
+	switch runtime.GOOS {
+	case "linux":
+		// Check if running under systemd
+		if journal.Enabled() {
+			log.SetOutput(journalWriter{})
+			log.Info("Logging to systemd journal")
+			return
+		}
+
+		// Fallback to /var/log/srepd.log for non-systemd Linux
+		logFile := "/var/log/srepd.log"
+		setupFileLogging(logFile)
+		log.Info("Logging to /var/log/srepd.log")
+
+	case "darwin":
+		// macOS: Log to ~/Library/Logs/srepd.log
+		home, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal("Failed to get user home directory:", err)
+		}
+		logFile := home + "/Library/Logs/srepd.log"
+		setupFileLogging(logFile)
+		log.Info("Logging to ~/Library/Logs/srepd.log")
+
+	default:
+		// Default fallback for other OSes
+		log.SetOutput(os.Stderr)
+		log.Warn("Unsupported OS: logging to stderr")
+	}
+}
+
+// setupFileLogging configures logging to a file
+func setupFileLogging(filePath string) {
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal("Failed to open log file:", err)
+	}
+	log.SetOutput(file)
+}
+
+// journalWriter implements io.Writer for systemd journal
+type journalWriter struct{}
+
+func (jw journalWriter) Write(p []byte) (n int, err error) {
+	message := strings.TrimSpace(string(p))
+	err = journal.Send(message, journal.PriInfo, nil)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
