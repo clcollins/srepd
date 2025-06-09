@@ -607,12 +607,32 @@ var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid argume
 
 func silenceIncidents(incidents []pagerduty.Incident, policy *pagerduty.EscalationPolicy, level uint) tea.Cmd {
 	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage" because it's really just a re-escalation
-	log.Printf("silence requested for incident(s) %v; reassigning to %s(%s), level %d", incidents, policy.Name, policy.ID, level)
-	return func() tea.Msg {
-		if len(incidents) == 0 || policy.Name == "" || level == 0 {
+	if policy == nil {
+		log.Debug("silenceIncidents: nil escalation policy provided")
+		return func() tea.Msg {
 			return errMsg{errSilenceIncidentInvalidArgs}
 		}
-		//
+	}
+
+	if len(incidents) == 0 {
+		log.Debug("silenceIncidents: no incidents provided")
+		return func() tea.Msg {
+			return errMsg{errSilenceIncidentInvalidArgs}
+		}
+	}
+
+	if policy.Name == "" || policy.ID == "" || level == 0 {
+		log.Debug("silenceIncidents: invalid arguments", "incident(s) count: %d; policy: %s(%s), level: %d", len(incidents), policy.Name, policy.ID, level)
+		return func() tea.Msg {
+			return errMsg{errSilenceIncidentInvalidArgs}
+		}
+	}
+
+	incidentIDs := getIDsFromIncidents(incidents)
+
+	log.Printf("silence requested for incident(s) %v; reassigning to %s(%s), level %d", incidentIDs, policy.Name, policy.ID, level)
+
+	return func() tea.Msg {
 		return reEscalateIncidentsMsg{incidents, policy, level}
 	}
 }
@@ -733,4 +753,12 @@ func runScheduledJobs(m *model) []tea.Cmd {
 		}
 	}
 	return cmds
+}
+
+func getIDsFromIncidents(incidents []pagerduty.Incident) []string {
+	var ids []string
+	for _, i := range incidents {
+		ids = append(ids, i.ID)
+	}
+	return ids
 }
