@@ -2,9 +2,13 @@ package launcher
 
 import (
 	"fmt"
-	"github.com/charmbracelet/log"
 	"strings"
+
+	"github.com/charmbracelet/log"
 )
+
+const clusterLoginCommandFlag = "cluster_login_command"
+const terminalFlag = "terminal"
 
 type ClusterLauncher struct {
 	Enabled             bool
@@ -37,19 +41,19 @@ func (l *ClusterLauncher) validate() error {
 	errs := []error{}
 
 	if l.terminal == nil || l.terminal[0] == "" {
-		errs = append(errs, fmt.Errorf("terminal is not set"))
+		errs = append(errs, fmt.Errorf("%s is not set", terminalFlag))
 	}
 
 	if l.clusterLoginCommand == nil || l.clusterLoginCommand[0] == "" {
-		errs = append(errs, fmt.Errorf("clusterLoginCommand is not set"))
+		errs = append(errs, fmt.Errorf("%s is not set", clusterLoginCommandFlag))
 	}
 
 	if len(l.terminal) > 0 && strings.Contains(l.terminal[0], "%%") {
-		errs = append(errs, fmt.Errorf("first terminal argument cannot have a replaceable"))
+		errs = append(errs, fmt.Errorf("first terminal argument cannot have a replaceable value"))
 	}
 
 	if (!strings.Contains(strings.Join(l.clusterLoginCommand, " "), "%%CLUSTER_ID%%")) && (!strings.Contains(strings.Join(l.terminal, " "), "%%CLUSTER_ID%%")) {
-		errs = append(errs, fmt.Errorf("clusterLoginCommand must contain %%CLUSTER_ID%%"))
+		errs = append(errs, fmt.Errorf("%s must contain %%CLUSTER_ID%%", clusterLoginCommandFlag))
 	}
 
 	if len(errs) > 0 {
@@ -67,7 +71,7 @@ func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
 	// Handle the Terminal command
 	// The first arg should not be something replaceable, as checked in the
 	// validate function
-	log.Debug("launcher.ClusterLauncher():", "Building command from terminal", "terminal", l.terminal[0])
+	log.Debug("launcher.ClusterLauncher(): building command from terminal", "terminal", l.terminal[0])
 	command = append(command, l.terminal[0])
 
 	// If there are more than one terminal arguments, replace the vars
@@ -77,9 +81,9 @@ func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
 		command = append(command, replaceVars(l.terminal[1:], vars)...)
 	}
 	command = append(command, replaceVars(l.clusterLoginCommand, vars)...)
-	log.Debug("launcher.ClusterLauncher():", "Built command", command)
+	log.Debug("launcher.ClusterLauncher(): built command", "command", command)
 	for x, i := range command {
-		log.Debug("launcher.ClusterLauncher():", fmt.Sprintf("Built command argument [%d]", x), i)
+		log.Debug("launcher.ClusterLauncher(): build command argument", fmt.Sprintf("[%d]", x), i)
 	}
 
 	return command
@@ -96,6 +100,8 @@ func replaceVars(args []string, vars map[string]string) []string {
 		log.Debug("ClusterLauncher():", "Replacing vars in string", str, k, v)
 		str = strings.ReplaceAll(str, k, v)
 	}
+
+	log.Debug("launcher.replaceVars(): Replaced vars in string", "string", str)
 
 	transformedArgs := strings.Split(str, " ")
 	return transformedArgs

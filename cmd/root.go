@@ -72,7 +72,8 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"))
 		if err != nil {
-			log.Warn(err)
+			fmt.Println(err)
+			log.Fatal(err)
 		}
 
 		m, _ := tui.InitialModel(
@@ -96,6 +97,7 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		_, err = p.Run()
 		if err != nil {
+			fmt.Println(err)
 			log.Fatal(err)
 		}
 	},

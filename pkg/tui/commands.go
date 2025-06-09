@@ -33,6 +33,27 @@ const (
 	loadingIncidentsStatus = "loading incidents..."
 )
 
+type execErr struct {
+	Err        error
+	ExitErr    *exec.ExitError
+	ExecStdErr string
+}
+
+func (ee *execErr) Error() string {
+	// Podman will return errors with the same formatting as this program
+	// so strip out `Error: ` prefix and `\n` suffixes, since ocm-container
+	// will just put them back
+	s := ee.ExecStdErr
+	s = strings.TrimPrefix(s, "Error: ")
+	s = strings.TrimPrefix(s, "error: ")
+	s = strings.TrimSuffix(s, "\n")
+	return s
+}
+
+func (ee *execErr) Code() int {
+	return ee.ExitErr.ExitCode()
+}
+
 // TODO: Deprecate incoming message
 // getIncidentMsg is a message that triggers the fetching of an incident
 type getIncidentMsg string
@@ -411,51 +432,100 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher) tea.Cmd {
 	c := exec.Command(command[0], command[1:]...)
 
 	log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
-	stderr, pipeErr := c.StderrPipe()
-	if pipeErr != nil {
-		log.Debug("tui.login():", "pipeErr", pipeErr.Error())
+
+	var stdOut io.ReadCloser
+	var stdOutPipeErr error
+	stdOut, stdOutPipeErr = c.StdoutPipe()
+	if stdOutPipeErr != nil {
+		log.Warn("tui.login():", "stdOutPipeErr", stdOutPipeErr.Error())
 		return func() tea.Msg {
-			return loginFinishedMsg{err: pipeErr}
+			return loginFinishedMsg{stdOutPipeErr}
 		}
 	}
 
-	err := c.Start()
+	var stdErr io.ReadCloser
+	var stdErrPipeErr error
+	stdErr, stdErrPipeErr = c.StderrPipe()
+	if stdErrPipeErr != nil {
+		log.Warn("tui.login():", "stdErrErr", stdErrPipeErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg{stdErrPipeErr}
+		}
+	}
+
+	startCmdErr := c.Start()
+	if startCmdErr != nil {
+		log.Warn("tui.login():", "startCmdErr", startCmdErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg{startCmdErr}
+		}
+	}
+
+	var out []byte
+	var stdOutReadErr error
+	out, stdOutReadErr = io.ReadAll(stdOut)
+	if stdOutReadErr != nil {
+		log.Warn("tui.login():", "stdOutReadErr", stdOutReadErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg{stdOutReadErr}
+		}
+	}
+
+	var errOut []byte
+	var stdErrReadErr error
+	errOut, stdErrReadErr = io.ReadAll(stdErr)
+	if stdErrReadErr != nil {
+		log.Warn("tui.login():", "stdErrReadErr", stdErrReadErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg{stdErrReadErr}
+		}
+	}
+
+	var err error
+	if len(errOut) > 0 {
+		err = errors.New(string(errOut))
+	}
+
+	processErr := c.Wait()
+
+	if processErr != nil {
+		if exitError, ok := processErr.(*exec.ExitError); ok {
+			execExitErr := &execErr{
+				Err:        processErr,
+				ExitErr:    exitError,
+				ExecStdErr: string(errOut),
+			}
+			log.Warn("tui.login():", "processErr", execExitErr)
+			return func() tea.Msg {
+				return loginFinishedMsg{execExitErr}
+			}
+		}
+		log.Warn("tui.login():", "processErr", processErr.Error())
+		return func() tea.Msg {
+			return loginFinishedMsg{processErr}
+		}
+	}
+
 	if err != nil {
-		log.Debug("tui.login():", "startErr", err.Error())
+		log.Warn("tui.login():", "execStdErr", err.Error())
 		return func() tea.Msg {
-			return loginFinishedMsg{err}
+			// Do not return the execStdErr as an error
+			return loginFinishedMsg{}
 		}
 	}
 
-	out, err := io.ReadAll(stderr)
-	if err != nil {
-		log.Debug("tui.login():", "loginStdErr", err.Error())
-		return func() tea.Msg {
-			return loginFinishedMsg{err}
-		}
-	}
-
-	// c.Wait() must be run after reading any output from stderrPipe
-	err = c.Wait()
-	if err != nil {
-		log.Debug("tui.login():", "waitErr", err.Error())
-		return func() tea.Msg {
-			return loginFinishedMsg{err}
-		}
-	}
-
+	var stdOutAsErr error
 	if len(out) > 0 {
-		outErr := fmt.Errorf("%s", out)
-		log.Debug("tui.login():", "outErr", outErr.Error())
+		stdOutAsErr = errors.New(string(out))
+		log.Warn("tui.login():", "stdOutAsErr", stdOutAsErr.Error())
 		return func() tea.Msg {
-			return loginFinishedMsg{outErr}
+			return loginFinishedMsg{stdOutAsErr}
 		}
 	}
 
 	return func() tea.Msg {
-		return loginFinishedMsg{err}
+		return loginFinishedMsg{}
 	}
-
 }
 
 type clearSelectedIncidentsMsg string
