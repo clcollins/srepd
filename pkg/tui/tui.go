@@ -436,28 +436,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case acknowledgedIncidentsMsg:
-		var incidentIDs []string
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		for _, i := range msg.incidents {
-			incidentIDs = append(incidentIDs, i.ID)
-		}
-		incidents := strings.Join(incidentIDs, " ")
-		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidents))
+		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
+		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidentIDs))
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
 	case unAcknowledgedIncidentsMsg:
-		var incidentIDs []string
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		for _, i := range msg.incidents {
-			incidentIDs = append(incidentIDs, i.ID)
-		}
-		incidents := strings.Join(incidentIDs, " ")
-		m.setStatus(fmt.Sprintf("re-escalated incidents: %s", incidents))
+		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
+		m.setStatus(fmt.Sprintf("re-escalated incidents: %s", incidentIDs))
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgedIncidentsMsg") }
 
@@ -473,7 +465,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case reassignedIncidentsMsg:
-		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", msg))
+		incidentIDs := getIDsFromIncidents(msg)
+		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", incidentIDs))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reassignedIncidentsMsg") }
 
 	case reEscalateIncidentsMsg:
@@ -488,7 +481,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case reEscalatedIncidentsMsg:
-		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", msg))
+		incidentIDs := getIDsFromIncidents(msg)
+		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", incidentIDs))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
 
 	case silenceSelectedIncidentMsg:
