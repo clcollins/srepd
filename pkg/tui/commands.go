@@ -545,9 +545,6 @@ type unAcknowledgedIncidentsMsg struct {
 	err       error
 }
 
-type waitForSelectedIncidentsThenAcknowledgeMsg string
-type waitForSelectedIncidentsThenUnAcknowledgeMsg string
-
 func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident, reEscalate bool) tea.Cmd {
 	return func() tea.Msg {
 		var err error
@@ -680,6 +677,16 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 	}
 	log.Debug("tui.getDetailFieldFromAlert(): alert body \"details\" is nil")
 	return ""
+}
+
+// getEscalationPolicyKey is a helper function to determine the escalation policy key
+func getEscalationPolicyKey(serviceID string, policies map[string]*pagerduty.EscalationPolicy) string {
+	if policy, ok := policies[serviceID]; ok {
+		log.Debug("Update", "getEscalationPolicyKey", "escalation policy override found for service", "service", serviceID, "policy", policy.Name)
+		return serviceID
+	}
+	log.Debug("Update", "getEscalationPolicyKey", "no escalation policy override for service; using default", "service", serviceID, "policy", silentDefaultPolicyKey)
+	return silentDefaultPolicyKey
 }
 
 // stateShorthand returns the state of the incident as a single character

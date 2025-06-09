@@ -324,3 +324,36 @@ func TestNewListIncidentOptsFromConfig(t *testing.T) {
 		})
 	}
 }
+func TestGetEscalationPolicyKey(t *testing.T) {
+	mockPolicies := map[string]*pagerduty.EscalationPolicy{
+		"service1": {Name: "Policy1"},
+		"service2": {Name: "Policy2"},
+	}
+
+	tests := []struct {
+		name           string
+		serviceID      string
+		policies       map[string]*pagerduty.EscalationPolicy
+		expectedPolicy string
+	}{
+		{
+			name:           "return serviceID if policy exists for the service",
+			serviceID:      "service1",
+			policies:       mockPolicies,
+			expectedPolicy: "service1",
+		},
+		{
+			name:           "return silentDefaultPolicyKey if no policy exists for the service",
+			serviceID:      "unknownService",
+			policies:       mockPolicies,
+			expectedPolicy: silentDefaultPolicyKey,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := getEscalationPolicyKey(test.serviceID, test.policies)
+			assert.Equal(t, test.expectedPolicy, actual)
+		})
+	}
+}
