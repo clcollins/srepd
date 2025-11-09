@@ -83,6 +83,11 @@ type gotIncidentAlertsMsg struct {
 	err    error
 }
 
+// getIncidentAlertsMsg is a message that triggers the fetching of alerts for an incident
+type getIncidentAlertsMsg struct {
+	id string
+}
+
 // getIncidentAlerts returns a command that fetches the alerts for the given incident
 func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
 	return func() tea.Msg {
@@ -98,6 +103,11 @@ func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
 type gotIncidentNotesMsg struct {
 	notes []pagerduty.IncidentNote
 	err   error
+}
+
+// getIncidentNotesMsg is a message that triggers the fetching of notes for an incident
+type getIncidentNotesMsg struct {
+	id string
 }
 
 // getIncidentNotes returns a command that fetches the notes for the given incident

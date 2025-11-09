@@ -145,7 +145,7 @@ func (m model) View() string {
 		return errorStyle.Render(s.String())
 
 	case m.viewingIncident:
-		s.WriteString(m.incidentViewer.View())
+		s.WriteString(tableContainerStyle.Render(m.incidentViewer.View()))
 
 	default:
 		s.WriteString(tableContainerStyle.Render(m.table.View()))

@@ -122,6 +122,13 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Commands for any focus mode
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
+		return m, tea.Sequence(
+			m.input.Focus(),
+		)
+	}
+
 	// Default commands for the table view
 	switch {
 	case m.err != nil:
@@ -175,11 +182,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Bottom):
 			m.table.GotoBottom()
 
-		case key.Matches(msg, defaultKeyMap.Input):
-			return m, tea.Sequence(
-				m.input.Focus(),
-			)
-
 		case key.Matches(msg, defaultKeyMap.Team):
 			m.teamMode = !m.teamMode
 			log.Debug("switchTableFocusMode", "teamMode", m.teamMode)
@@ -195,12 +197,23 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// "waitForSelectedIncidentsThen..." functions are used to wait for the selected incident
 		// to be retrieved from PagerDuty
 		case key.Matches(msg, defaultKeyMap.Enter):
+			m.selectedIncident = &pagerduty.Incident{
+				APIObject: pagerduty.APIObject{
+					ID:      incidentID,
+					Summary: "Loading incident details...",
+				},
+			}
+
 			m.viewingIncident = true
-			return m, doIfIncidentSelected(&m, func() tea.Msg {
-				return waitForSelectedIncidentThenDoMsg{
-					action: func() tea.Msg { return renderIncidentMsg("render") }, msg: "render",
-				}
-			})
+			return m, tea.Sequence(
+				func() tea.Msg { return renderIncidentMsg("Render incident: " + incidentID) },
+				func() tea.Msg { return getIncidentMsg(incidentID) },
+			)
+			// return m, doIfIncidentSelected(&m, func() tea.Msg {
+			// 	return waitForSelectedIncidentThenDoMsg{
+			// 		action: func() tea.Msg { return renderIncidentMsg("render") }, msg: "render",
+			// 	}
+			// })
 
 		case key.Matches(msg, defaultKeyMap.Silence):
 			return m, doIfIncidentSelected(&m, tea.Sequence(
@@ -319,12 +332,20 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) }
 
 		case key.Matches(msg, defaultKeyMap.Login):
-			return m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
-				},
-			)
+			return m, func() tea.Msg { return loginMsg("login") }
+
+		case key.Matches(msg, defaultKeyMap.Ack):
+			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
+
+		case key.Matches(msg, defaultKeyMap.UnAck):
+			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
+
+		case key.Matches(msg, defaultKeyMap.Note):
+			return m, func() tea.Msg { return parseTemplateForNoteMsg("add note") }
+
+		case key.Matches(msg, defaultKeyMap.Open):
+			return m, func() tea.Msg { return openBrowserMsg("incident") }
+
 		}
 	}
 
