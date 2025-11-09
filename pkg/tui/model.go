@@ -42,6 +42,11 @@ type model struct {
 	selectedIncidentNotes  []pagerduty.IncidentNote
 	selectedIncidentAlerts []pagerduty.IncidentAlert
 
+	// Loading state tracking - enables progressive rendering and action guards
+	incidentDataLoaded   bool
+	incidentNotesLoaded  bool
+	incidentAlertsLoaded bool
+
 	scheduledJobs []*scheduledJob
 
 	autoAcknowledge bool
@@ -103,6 +108,10 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	m.selectedIncidentNotes = nil
 	m.selectedIncidentAlerts = nil
 	m.viewingIncident = false
+	// Clear loading flags
+	m.incidentDataLoaded = false
+	m.incidentNotesLoaded = false
+	m.incidentAlertsLoaded = false
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 

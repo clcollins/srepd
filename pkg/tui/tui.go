@@ -163,6 +163,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
 		m.selectedIncident = msg.incident
+		m.incidentDataLoaded = true
 		if m.viewingIncident {
 			return m, func() tea.Msg { return renderIncidentMsg("refresh") }
 		}
@@ -182,6 +183,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.selectedIncidentNotes = msg.notes
+		m.incidentNotesLoaded = true
 		if m.viewingIncident {
 			cmds = append(cmds, renderIncident(&m))
 		}
@@ -201,6 +203,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.selectedIncidentAlerts = msg.alerts
+		m.incidentAlertsLoaded = true
 		if m.viewingIncident {
 			cmds = append(cmds, renderIncident(&m))
 		}
