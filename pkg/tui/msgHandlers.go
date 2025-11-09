@@ -209,11 +209,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				func() tea.Msg { return renderIncidentMsg("Render incident: " + incidentID) },
 				func() tea.Msg { return getIncidentMsg(incidentID) },
 			)
-			// return m, doIfIncidentSelected(&m, func() tea.Msg {
-			// 	return waitForSelectedIncidentThenDoMsg{
-			// 		action: func() tea.Msg { return renderIncidentMsg("render") }, msg: "render",
-			// 	}
-			// })
 
 		case key.Matches(msg, defaultKeyMap.Silence):
 			return m, doIfIncidentSelected(&m, tea.Sequence(

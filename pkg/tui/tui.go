@@ -156,24 +156,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Set the selected incident to the incident returned from the getIncident command
 	case gotIncidentMsg:
 		if msg.err != nil {
+			m.selectedIncident = nil
+			m.viewingIncident = false
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
 		m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
 		m.selectedIncident = msg.incident
-		// return m, tea.Batch(
-		// 	getIncidentAlerts(m.config, msg.incident.ID),
-		// 	getIncidentNotes(m.config, msg.incident.ID),
-		// )
-
-	case getIncidentAlertsMsg:
-		if msg.id == "" {
-			return m, func() tea.Msg {
-				return errMsg{fmt.Errorf(nilIncidentMsg)}
-			}
+		if m.viewingIncident {
+			return m, func() tea.Msg { return renderIncidentMsg("refresh") }
 		}
-		m.setStatus(fmt.Sprintf("getting alerts for incident %s...", msg.id))
-
 
 	case gotIncidentNotesMsg:
 		if msg.err != nil {
