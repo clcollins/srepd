@@ -14,6 +14,17 @@ import (
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
+// cachedIncidentData stores fetched incident data for reuse
+type cachedIncidentData struct {
+	incident     *pagerduty.Incident
+	notes        []pagerduty.IncidentNote
+	alerts       []pagerduty.IncidentAlert
+	dataLoaded   bool
+	notesLoaded  bool
+	alertsLoaded bool
+	lastFetched  time.Time
+}
+
 var initialScheduledJobs = []*scheduledJob{
 	{
 		jobMsg:    func() tea.Msg { return PollIncidentsMsg{} },
@@ -47,6 +58,9 @@ type model struct {
 	incidentNotesLoaded  bool
 	incidentAlertsLoaded bool
 
+	// Incident data cache - stores fetched data for reuse and pre-fetching
+	incidentCache map[string]*cachedIncidentData
+
 	scheduledJobs []*scheduledJob
 
 	autoAcknowledge bool
@@ -76,6 +90,7 @@ func InitialModel(
 		input:          newTextInput(),
 		incidentViewer: newIncidentViewer(),
 		status:         "",
+		incidentCache:  make(map[string]*cachedIncidentData),
 		scheduledJobs:  append([]*scheduledJob{}, initialScheduledJobs...),
 	}
 

@@ -106,8 +106,15 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 // return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgType := reflect.TypeOf(msg)
-	// TickMsg are not helpful for logging
-	if msgType != reflect.TypeOf(TickMsg{}) {
+	// TickMsg and arrow key messages are not helpful for logging
+	shouldLog := msgType != reflect.TypeOf(TickMsg{})
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && shouldLog {
+		// Skip logging for arrow keys used in scrolling
+		if keyMsg.Type == tea.KeyUp || keyMsg.Type == tea.KeyDown {
+			shouldLog = false
+		}
+	}
+	if shouldLog {
 		log.Debug("Update", msgType, filterMsgContent(msg))
 	}
 
@@ -164,6 +171,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
 		m.selectedIncident = msg.incident
 		m.incidentDataLoaded = true
+
+		// Update cache with fetched incident data
+		if cached, exists := m.incidentCache[msg.incident.ID]; exists {
+			log.Debug("Update", "gotIncidentMsg", "refreshing cached incident data", "incident", msg.incident.ID)
+			cached.incident = msg.incident
+			cached.dataLoaded = true
+			cached.lastFetched = time.Now()
+		} else {
+			log.Debug("Update", "gotIncidentMsg", "caching new incident data", "incident", msg.incident.ID)
+			m.incidentCache[msg.incident.ID] = &cachedIncidentData{
+				incident:    msg.incident,
+				dataLoaded:  true,
+				lastFetched: time.Now(),
+			}
+		}
+
 		if m.viewingIncident {
 			return m, func() tea.Msg { return renderIncidentMsg("refresh") }
 		}
@@ -184,6 +207,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.selectedIncidentNotes = msg.notes
 		m.incidentNotesLoaded = true
+
+		// Update cache with fetched notes
+		if cached, exists := m.incidentCache[msg.incidentID]; exists {
+			log.Debug("Update", "gotIncidentNotesMsg", "refreshing cached notes", "incident", msg.incidentID, "count", len(msg.notes))
+			cached.notes = msg.notes
+			cached.notesLoaded = true
+		} else {
+			log.Debug("Update", "gotIncidentNotesMsg", "caching new notes", "incident", msg.incidentID, "count", len(msg.notes))
+			m.incidentCache[msg.incidentID] = &cachedIncidentData{
+				notes:       msg.notes,
+				notesLoaded: true,
+			}
+		}
+
 		if m.viewingIncident {
 			cmds = append(cmds, renderIncident(&m))
 		}
@@ -204,6 +241,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.selectedIncidentAlerts = msg.alerts
 		m.incidentAlertsLoaded = true
+
+		// Update cache with fetched alerts
+		if cached, exists := m.incidentCache[msg.incidentID]; exists {
+			log.Debug("Update", "gotIncidentAlertsMsg", "refreshing cached alerts", "incident", msg.incidentID, "count", len(msg.alerts))
+			cached.alerts = msg.alerts
+			cached.alertsLoaded = true
+		} else {
+			log.Debug("Update", "gotIncidentAlertsMsg", "caching new alerts", "incident", msg.incidentID, "count", len(msg.alerts))
+			m.incidentCache[msg.incidentID] = &cachedIncidentData{
+				alerts:       msg.alerts,
+				alertsLoaded: true,
+			}
+		}
+
 		if m.viewingIncident {
 			cmds = append(cmds, renderIncident(&m))
 		}
@@ -254,6 +305,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Overwrite m.incidentList with current incidents
 		m.incidentList = msg.incidents
 
+		// Pre-fetch incident data for all incidents in the list
+		for _, i := range m.incidentList {
+			// Check if incident is already cached
+			if _, exists := m.incidentCache[i.ID]; !exists {
+				// Not cached - pre-fetch all data in the background
+				cmds = append(cmds,
+					getIncident(m.config, i.ID),
+					getIncidentAlerts(m.config, i.ID),
+					getIncidentNotes(m.config, i.ID),
+				)
+			}
+		}
+
 		// Check if any incidents should be auto-acknowledged;
 		// This must be done before adding the stale incidents
 		for _, i := range m.incidentList {
@@ -268,6 +332,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Add stale incidents to the list
 		m.incidentList = append(m.incidentList, staleIncidentList...)
+
+		// Clean up cache - remove entries for incidents no longer in the list
+		// (including STALE incidents, but excluding those that have aged out)
+		incidentIDs := make(map[string]bool)
+		for _, i := range m.incidentList {
+			incidentIDs[i.ID] = true
+		}
+		for id := range m.incidentCache {
+			if !incidentIDs[id] {
+				delete(m.incidentCache, id)
+				log.Debug("Update", "updatedIncidentListMsg", "removing cached data for incident no longer in list", "incident", id)
+			}
+		}
 
 		var totalIncidentCount int
 		var rows []table.Row

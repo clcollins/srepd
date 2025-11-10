@@ -79,8 +79,9 @@ func getIncident(p *pd.Config, id string) tea.Cmd {
 
 // gotIncidentAlertsMsg is a message that contains the fetched incident alerts
 type gotIncidentAlertsMsg struct {
-	alerts []pagerduty.IncidentAlert
-	err    error
+	incidentID string
+	alerts     []pagerduty.IncidentAlert
+	err        error
 }
 
 // getIncidentAlerts returns a command that fetches the alerts for the given incident
@@ -90,14 +91,15 @@ func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
 			return setStatusMsg{nilIncidentMsg}
 		}
 		a, err := pd.GetAlerts(p.Client, id, pagerduty.ListIncidentAlertsOptions{})
-		return gotIncidentAlertsMsg{a, err}
+		return gotIncidentAlertsMsg{incidentID: id, alerts: a, err: err}
 	}
 }
 
 // gotIncidentNotesMsg is a message that contains the fetched incident notes
 type gotIncidentNotesMsg struct {
-	notes []pagerduty.IncidentNote
-	err   error
+	incidentID string
+	notes      []pagerduty.IncidentNote
+	err        error
 }
 
 // getIncidentNotes returns a command that fetches the notes for the given incident
@@ -107,7 +109,7 @@ func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 			return setStatusMsg{nilIncidentMsg}
 		}
 		n, err := pd.GetNotes(p.Client, id)
-		return gotIncidentNotesMsg{n, err}
+		return gotIncidentNotesMsg{incidentID: id, notes: n, err: err}
 	}
 }
 

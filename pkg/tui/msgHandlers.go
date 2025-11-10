@@ -197,18 +197,53 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// "waitForSelectedIncidentsThen..." functions are used to wait for the selected incident
 		// to be retrieved from PagerDuty
 		case key.Matches(msg, defaultKeyMap.Enter):
-			m.selectedIncident = &pagerduty.Incident{
-				APIObject: pagerduty.APIObject{
-					ID:      incidentID,
-					Summary: "Loading incident details...",
-				},
+			// Check if we have cached data for this incident
+			if cached, exists := m.incidentCache[incidentID]; exists {
+				// Use cached data immediately
+				if cached.incident != nil {
+					m.selectedIncident = cached.incident
+					m.incidentDataLoaded = cached.dataLoaded
+				} else {
+					m.selectedIncident = &pagerduty.Incident{
+						APIObject: pagerduty.APIObject{
+							ID:      incidentID,
+							Summary: "Loading incident details...",
+						},
+					}
+					m.incidentDataLoaded = false
+				}
+
+				if cached.notes != nil {
+					m.selectedIncidentNotes = cached.notes
+					m.incidentNotesLoaded = cached.notesLoaded
+				} else {
+					m.incidentNotesLoaded = false
+				}
+
+				if cached.alerts != nil {
+					m.selectedIncidentAlerts = cached.alerts
+					m.incidentAlertsLoaded = cached.alertsLoaded
+				} else {
+					m.incidentAlertsLoaded = false
+				}
+			} else {
+				// No cache - show loading placeholder
+				m.selectedIncident = &pagerduty.Incident{
+					APIObject: pagerduty.APIObject{
+						ID:      incidentID,
+						Summary: "Loading incident details...",
+					},
+				}
+				m.incidentDataLoaded = false
+				m.incidentNotesLoaded = false
+				m.incidentAlertsLoaded = false
 			}
-			// Mark all data as not loaded yet - will be set as each arrives
-			m.incidentDataLoaded = false
-			m.incidentNotesLoaded = false
-			m.incidentAlertsLoaded = false
 
 			m.viewingIncident = true
+			// Reset viewport to top when opening incident
+			m.incidentViewer.GotoTop()
+			// Render with whatever data we have (cached or loading placeholder)
+			// Then refresh from PagerDuty in the background
 			return m, tea.Sequence(
 				func() tea.Msg { return renderIncidentMsg("Render incident: " + incidentID) },
 				func() tea.Msg { return getIncidentMsg(incidentID) },

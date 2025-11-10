@@ -84,6 +84,7 @@ func TestLoadingStateTracking(t *testing.T) {
 				incidentDataLoaded:   tt.initialDataLoaded,
 				incidentNotesLoaded:  tt.initialNotesLoaded,
 				incidentAlertsLoaded: tt.initialAlertsLoaded,
+				incidentCache:        make(map[string]*cachedIncidentData),
 			}
 
 			if tt.setupSelectedIncident {
@@ -169,6 +170,7 @@ func TestActionGuards(t *testing.T) {
 				selectedIncident: &pagerduty.Incident{
 					APIObject: pagerduty.APIObject{ID: "Q123"},
 				},
+				incidentCache: make(map[string]*cachedIncidentData),
 			}
 
 			initialStatus := m.status
@@ -239,6 +241,7 @@ func TestProgressiveRendering(t *testing.T) {
 				selectedIncident:     incident,
 				incidentNotesLoaded:  tt.incidentNotesLoaded,
 				incidentAlertsLoaded: tt.incidentAlertsLoaded,
+				incidentCache:        make(map[string]*cachedIncidentData),
 			}
 
 			content, err := m.template()

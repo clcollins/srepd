@@ -194,35 +194,63 @@ func initConfig() {
 	}
 }
 
+// LogDestination represents where logs should be written
+type LogDestination int
+
+const (
+	LogToJournal LogDestination = iota
+	LogToFile
+	LogToStderr
+)
+
+// determineLogDestination returns the appropriate log destination based on OS and config
+func determineLogDestination(goos string, logToJournal bool, journalEnabled bool) (LogDestination, string) {
+	switch goos {
+	case "linux":
+		if logToJournal {
+			if journalEnabled {
+				return LogToJournal, ""
+			}
+			return LogToFile, "/var/log/srepd.log"
+		}
+		// User explicitly wants file logging
+		return LogToFile, "~/.config/srepd/debug.log"
+
+	case "darwin":
+		return LogToFile, "~/Library/Logs/srepd.log"
+
+	default:
+		return LogToStderr, ""
+	}
+}
+
 func configureLogging() {
 	log.SetPrefix("srepd")
 
-	switch runtime.GOOS {
-	case "linux":
-		// Check if running under systemd
-		if journal.Enabled() {
-			log.SetOutput(journalWriter{})
-			log.Info("Logging to systemd journal")
-			return
+	// Check if user wants to log to journal (default: true)
+	viper.SetDefault("log_to_journal", true)
+	logToJournal := viper.GetBool("log_to_journal")
+
+	dest, logPath := determineLogDestination(runtime.GOOS, logToJournal, journal.Enabled())
+
+	switch dest {
+	case LogToJournal:
+		log.SetOutput(journalWriter{})
+		log.Info("Logging to systemd journal")
+
+	case LogToFile:
+		// Expand home directory if needed
+		if strings.HasPrefix(logPath, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				log.Fatal("Failed to get user home directory:", err)
+			}
+			logPath = home + logPath[1:]
 		}
+		setupFileLogging(logPath)
+		log.Info("Logging to " + logPath)
 
-		// Fallback to /var/log/srepd.log for non-systemd Linux
-		logFile := "/var/log/srepd.log"
-		setupFileLogging(logFile)
-		log.Info("Logging to /var/log/srepd.log")
-
-	case "darwin":
-		// macOS: Log to ~/Library/Logs/srepd.log
-		home, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatal("Failed to get user home directory:", err)
-		}
-		logFile := home + "/Library/Logs/srepd.log"
-		setupFileLogging(logFile)
-		log.Info("Logging to ~/Library/Logs/srepd.log")
-
-	default:
-		// Default fallback for other OSes
+	case LogToStderr:
 		log.SetOutput(os.Stderr)
 		log.Warn("Unsupported OS: logging to stderr")
 	}
