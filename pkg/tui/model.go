@@ -92,6 +92,7 @@ func InitialModel(
 		status:         "",
 		incidentCache:  make(map[string]*cachedIncidentData),
 		scheduledJobs:  append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:    true, // Start watching for updates on startup
 	}
 
 	// This is an ugly way to handle this error
