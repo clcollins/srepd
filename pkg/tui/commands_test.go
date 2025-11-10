@@ -363,3 +363,46 @@ func TestGetEscalationPolicyKey(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenBrowserCmd(t *testing.T) {
+	tests := []struct {
+		name          string
+		browser       []string
+		url           string
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:        "successful command execution",
+			browser:     []string{"echo", "browser"},
+			url:         "https://example.com",
+			expectError: false,
+		},
+		{
+			name:          "command not found returns error",
+			browser:       []string{"nonexistent-browser-command-xyz"},
+			url:           "https://example.com",
+			expectError:   true,
+			errorContains: "not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := openBrowserCmd(tt.browser, tt.url)
+			result := cmd()
+
+			msg, ok := result.(browserFinishedMsg)
+			assert.True(t, ok, "Expected browserFinishedMsg type")
+
+			if tt.expectError {
+				assert.NotNil(t, msg.err, "Expected error but got nil")
+				if tt.errorContains != "" {
+					assert.Contains(t, msg.err.Error(), tt.errorContains, "Error message mismatch")
+				}
+			} else {
+				assert.Nil(t, msg.err, "Expected no error but got: %v", msg.err)
+			}
+		})
+	}
+}

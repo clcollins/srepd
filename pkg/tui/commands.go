@@ -329,13 +329,6 @@ func openBrowserCmd(browser []string, url string) tea.Cmd {
 
 	c := exec.Command(browser[0], args...)
 	log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
-	stderr, pipeErr := c.StderrPipe()
-	if pipeErr != nil {
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
-		return func() tea.Msg {
-			return browserFinishedMsg{err: pipeErr}
-		}
-	}
 
 	err := c.Start()
 	if err != nil {
@@ -345,20 +338,8 @@ func openBrowserCmd(browser []string, url string) tea.Cmd {
 		}
 	}
 
-	out, err := io.ReadAll(stderr)
-	if err != nil {
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
-		return func() tea.Msg {
-			return browserFinishedMsg{err}
-		}
-	}
-
-	if len(out) > 0 {
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): error: %s", out))
-		return func() tea.Msg {
-			return browserFinishedMsg{fmt.Errorf("%s", out)}
-		}
-	}
+	// Browser opened successfully - don't wait for it or check stderr
+	// Browsers write warnings/info to stderr that aren't actual errors
 
 	return func() tea.Msg {
 		return browserFinishedMsg{}

@@ -356,28 +356,17 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.clearSelectedIncident(msg.String() + " (back)")
 
-		case key.Matches(msg, defaultKeyMap.Ack):
-			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
-
-		case key.Matches(msg, defaultKeyMap.Silence):
-			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
-
 		case key.Matches(msg, defaultKeyMap.Refresh):
 			return m, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) }
-
-		case key.Matches(msg, defaultKeyMap.Login):
-			// Login requires Service.Summary for cluster ID extraction
-			if !m.incidentDataLoaded {
-				m.setStatus("Loading incident details, please wait...")
-				return m, nil
-			}
-			return m, func() tea.Msg { return loginMsg("login") }
 
 		case key.Matches(msg, defaultKeyMap.Ack):
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
 			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{*m.selectedIncident}} }
+
+		case key.Matches(msg, defaultKeyMap.Silence):
+			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
 			// Note template requires full incident data (HTMLURL, Title, Service.Summary)
@@ -386,6 +375,14 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return parseTemplateForNoteMsg("add note") }
+
+		case key.Matches(msg, defaultKeyMap.Login):
+			// Login requires alerts to extract cluster_id
+			if !m.incidentAlertsLoaded {
+				m.setStatus("Loading incident alerts, please wait...")
+				return m, nil
+			}
+			return m, func() tea.Msg { return loginMsg("login") }
 
 		case key.Matches(msg, defaultKeyMap.Open):
 			// Browser open requires HTMLURL from full incident data

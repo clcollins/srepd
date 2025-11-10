@@ -105,11 +105,12 @@ func TestLoadingStateTracking(t *testing.T) {
 
 func TestActionGuards(t *testing.T) {
 	tests := []struct {
-		name               string
-		keyMsg             tea.KeyMsg
-		incidentDataLoaded bool
-		expectedAction     bool
-		expectedStatus     string
+		name                 string
+		keyMsg               tea.KeyMsg
+		incidentDataLoaded   bool
+		incidentAlertsLoaded bool
+		expectedAction       bool
+		expectedStatus       string
 	}{
 		{
 			name:               "Note action blocked when data not loaded",
@@ -126,18 +127,18 @@ func TestActionGuards(t *testing.T) {
 			expectedStatus:     "",
 		},
 		{
-			name:               "Login action blocked when data not loaded",
-			keyMsg:             tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}},
-			incidentDataLoaded: false,
-			expectedAction:     false,
-			expectedStatus:     "Loading incident details, please wait...",
+			name:                 "Login action blocked when alerts not loaded",
+			keyMsg:               tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}},
+			incidentAlertsLoaded: false,
+			expectedAction:       false,
+			expectedStatus:       "Loading incident alerts, please wait...",
 		},
 		{
-			name:               "Login action allowed when data loaded",
-			keyMsg:             tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}},
-			incidentDataLoaded: true,
-			expectedAction:     true,
-			expectedStatus:     "",
+			name:                 "Login action allowed when alerts loaded",
+			keyMsg:               tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}},
+			incidentAlertsLoaded: true,
+			expectedAction:       true,
+			expectedStatus:       "",
 		},
 		{
 			name:               "Open action blocked when data not loaded",
@@ -165,8 +166,9 @@ func TestActionGuards(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := model{
-				viewingIncident:    true,
-				incidentDataLoaded: tt.incidentDataLoaded,
+				viewingIncident:      true,
+				incidentDataLoaded:   tt.incidentDataLoaded,
+				incidentAlertsLoaded: tt.incidentAlertsLoaded,
 				selectedIncident: &pagerduty.Incident{
 					APIObject: pagerduty.APIObject{ID: "Q123"},
 				},
@@ -184,8 +186,9 @@ func TestActionGuards(t *testing.T) {
 			} else if tt.keyMsg.Runes[0] != 'a' { // Skip acknowledge since it generates a different message
 				// Action should be allowed - command returned
 				assert.NotNil(t, cmd, "Expected command when action is allowed")
-				// Status should not be the "waiting" message
-				assert.NotEqual(t, "Loading incident details, please wait...", m.status, "Should not show waiting message")
+				// Status should not be the "waiting" messages
+				assert.NotEqual(t, "Loading incident details, please wait...", m.status, "Should not show data waiting message")
+				assert.NotEqual(t, "Loading incident alerts, please wait...", m.status, "Should not show alerts waiting message")
 			}
 
 			// Reset status for next iteration
