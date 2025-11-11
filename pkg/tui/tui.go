@@ -183,8 +183,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Only update selected incident if this is the one we're viewing
-		if m.selectedIncident != nil && msg.incident.ID == m.selectedIncident.ID {
+		// Only update selected incident if no incident is selected or this matches the selected one
+		// Skip if we're viewing a different incident (don't let background pre-fetch overwrite it)
+		if m.selectedIncident == nil || msg.incident.ID == m.selectedIncident.ID {
 			m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
 			m.selectedIncident = msg.incident
 			m.incidentDataLoaded = true
@@ -212,8 +213,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Only update selected incident notes if this is the incident we're viewing
-		if m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+		// Only update selected incident notes if no incident is selected or this matches the selected one
+		// Skip if we're viewing a different incident (don't let background pre-fetch overwrite it)
+		if m.selectedIncident == nil || msg.incidentID == m.selectedIncident.ID {
 			switch {
 			case len(msg.notes) == 1:
 				m.setStatus(fmt.Sprintf("got %d note for incident", len(msg.notes)))
@@ -247,8 +249,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Only update selected incident alerts if this is the incident we're viewing
-		if m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+		// Only update selected incident alerts if no incident is selected or this matches the selected one
+		// Skip if we're viewing a different incident (don't let background pre-fetch overwrite it)
+		if m.selectedIncident == nil || msg.incidentID == m.selectedIncident.ID {
 			switch {
 			case len(msg.alerts) == 1:
 				m.setStatus(fmt.Sprintf("got %d alert for incident", len(msg.alerts)))
