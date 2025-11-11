@@ -168,10 +168,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
-		m.selectedIncident = msg.incident
-		m.incidentDataLoaded = true
-
 		// Update cache with fetched incident data
 		if cached, exists := m.incidentCache[msg.incident.ID]; exists {
 			log.Debug("Update", "gotIncidentMsg", "refreshing cached incident data", "incident", msg.incident.ID)
@@ -187,26 +183,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.viewingIncident {
-			return m, func() tea.Msg { return renderIncidentMsg("refresh") }
+		// Only update selected incident if this is the one we're viewing
+		if m.selectedIncident != nil && msg.incident.ID == m.selectedIncident.ID {
+			m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
+			m.selectedIncident = msg.incident
+			m.incidentDataLoaded = true
+
+			if m.viewingIncident {
+				return m, func() tea.Msg { return renderIncidentMsg("refresh") }
+			}
 		}
 
 	case gotIncidentNotesMsg:
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-
-		// CANNOT refer to the m.SelectedIncident, because it may not have
-		// completed yet, and will be nil
-		switch {
-		case len(msg.notes) == 1:
-			m.setStatus(fmt.Sprintf("got %d note for incident", len(msg.notes)))
-		case len(msg.notes) > 1:
-			m.setStatus(fmt.Sprintf("got %d notes for incident", len(msg.notes)))
-		}
-
-		m.selectedIncidentNotes = msg.notes
-		m.incidentNotesLoaded = true
 
 		// Update cache with fetched notes
 		if cached, exists := m.incidentCache[msg.incidentID]; exists {
@@ -221,26 +212,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.viewingIncident {
-			cmds = append(cmds, renderIncident(&m))
+		// Only update selected incident notes if this is the incident we're viewing
+		if m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+			switch {
+			case len(msg.notes) == 1:
+				m.setStatus(fmt.Sprintf("got %d note for incident", len(msg.notes)))
+			case len(msg.notes) > 1:
+				m.setStatus(fmt.Sprintf("got %d notes for incident", len(msg.notes)))
+			}
+
+			m.selectedIncidentNotes = msg.notes
+			m.incidentNotesLoaded = true
+
+			if m.viewingIncident {
+				cmds = append(cmds, renderIncident(&m))
+			}
 		}
 
 	case gotIncidentAlertsMsg:
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-
-		// CANNOT refer to the m.SelectedIncident, because it may not have
-		// completed yet, and will be nil
-		switch {
-		case len(msg.alerts) == 1:
-			m.setStatus(fmt.Sprintf("got %d alert for incident", len(msg.alerts)))
-		case len(msg.alerts) > 1:
-			m.setStatus(fmt.Sprintf("got %d alerts for incident", len(msg.alerts)))
-		}
-
-		m.selectedIncidentAlerts = msg.alerts
-		m.incidentAlertsLoaded = true
 
 		// Update cache with fetched alerts
 		if cached, exists := m.incidentCache[msg.incidentID]; exists {
@@ -255,8 +247,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.viewingIncident {
-			cmds = append(cmds, renderIncident(&m))
+		// Only update selected incident alerts if this is the incident we're viewing
+		if m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+			switch {
+			case len(msg.alerts) == 1:
+				m.setStatus(fmt.Sprintf("got %d alert for incident", len(msg.alerts)))
+			case len(msg.alerts) > 1:
+				m.setStatus(fmt.Sprintf("got %d alerts for incident", len(msg.alerts)))
+			}
+
+			m.selectedIncidentAlerts = msg.alerts
+			m.incidentAlertsLoaded = true
+
+			if m.viewingIncident {
+				cmds = append(cmds, renderIncident(&m))
+			}
 		}
 
 	case updateIncidentListMsg:
