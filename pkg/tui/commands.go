@@ -79,8 +79,9 @@ func getIncident(p *pd.Config, id string) tea.Cmd {
 
 // gotIncidentAlertsMsg is a message that contains the fetched incident alerts
 type gotIncidentAlertsMsg struct {
-	alerts []pagerduty.IncidentAlert
-	err    error
+	incidentID string
+	alerts     []pagerduty.IncidentAlert
+	err        error
 }
 
 // getIncidentAlerts returns a command that fetches the alerts for the given incident
@@ -90,14 +91,15 @@ func getIncidentAlerts(p *pd.Config, id string) tea.Cmd {
 			return setStatusMsg{nilIncidentMsg}
 		}
 		a, err := pd.GetAlerts(p.Client, id, pagerduty.ListIncidentAlertsOptions{})
-		return gotIncidentAlertsMsg{a, err}
+		return gotIncidentAlertsMsg{incidentID: id, alerts: a, err: err}
 	}
 }
 
 // gotIncidentNotesMsg is a message that contains the fetched incident notes
 type gotIncidentNotesMsg struct {
-	notes []pagerduty.IncidentNote
-	err   error
+	incidentID string
+	notes      []pagerduty.IncidentNote
+	err        error
 }
 
 // getIncidentNotes returns a command that fetches the notes for the given incident
@@ -107,7 +109,7 @@ func getIncidentNotes(p *pd.Config, id string) tea.Cmd {
 			return setStatusMsg{nilIncidentMsg}
 		}
 		n, err := pd.GetNotes(p.Client, id)
-		return gotIncidentNotesMsg{n, err}
+		return gotIncidentNotesMsg{incidentID: id, notes: n, err: err}
 	}
 }
 
@@ -327,13 +329,6 @@ func openBrowserCmd(browser []string, url string) tea.Cmd {
 
 	c := exec.Command(browser[0], args...)
 	log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
-	stderr, pipeErr := c.StderrPipe()
-	if pipeErr != nil {
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", pipeErr.Error()))
-		return func() tea.Msg {
-			return browserFinishedMsg{err: pipeErr}
-		}
-	}
 
 	err := c.Start()
 	if err != nil {
@@ -343,20 +338,8 @@ func openBrowserCmd(browser []string, url string) tea.Cmd {
 		}
 	}
 
-	out, err := io.ReadAll(stderr)
-	if err != nil {
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
-		return func() tea.Msg {
-			return browserFinishedMsg{err}
-		}
-	}
-
-	if len(out) > 0 {
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): error: %s", out))
-		return func() tea.Msg {
-			return browserFinishedMsg{fmt.Errorf("%s", out)}
-		}
-	}
+	// Browser opened successfully - don't wait for it or check stderr
+	// Browsers write warnings/info to stderr that aren't actual errors
 
 	return func() tea.Msg {
 		return browserFinishedMsg{}
@@ -607,12 +590,32 @@ var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid argume
 
 func silenceIncidents(incidents []pagerduty.Incident, policy *pagerduty.EscalationPolicy, level uint) tea.Cmd {
 	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage" because it's really just a re-escalation
-	log.Printf("silence requested for incident(s) %v; reassigning to %s(%s), level %d", incidents, policy.Name, policy.ID, level)
-	return func() tea.Msg {
-		if len(incidents) == 0 || policy.Name == "" || level == 0 {
+	if policy == nil {
+		log.Debug("silenceIncidents: nil escalation policy provided")
+		return func() tea.Msg {
 			return errMsg{errSilenceIncidentInvalidArgs}
 		}
-		//
+	}
+
+	if len(incidents) == 0 {
+		log.Debug("silenceIncidents: no incidents provided")
+		return func() tea.Msg {
+			return errMsg{errSilenceIncidentInvalidArgs}
+		}
+	}
+
+	if policy.Name == "" || policy.ID == "" || level == 0 {
+		log.Debug("silenceIncidents: invalid arguments", "incident(s) count: %d; policy: %s(%s), level: %d", len(incidents), policy.Name, policy.ID, level)
+		return func() tea.Msg {
+			return errMsg{errSilenceIncidentInvalidArgs}
+		}
+	}
+
+	incidentIDs := getIDsFromIncidents(incidents)
+
+	log.Printf("silence requested for incident(s) %v; reassigning to %s(%s), level %d", incidentIDs, policy.Name, policy.ID, level)
+
+	return func() tea.Msg {
 		return reEscalateIncidentsMsg{incidents, policy, level}
 	}
 }
@@ -733,4 +736,12 @@ func runScheduledJobs(m *model) []tea.Cmd {
 		}
 	}
 	return cmds
+}
+
+func getIDsFromIncidents(incidents []pagerduty.Incident) []string {
+	var ids []string
+	for _, i := range incidents {
+		ids = append(ids, i.ID)
+	}
+	return ids
 }

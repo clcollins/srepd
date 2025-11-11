@@ -133,6 +133,7 @@ func TestGetIncidentAlerts(t *testing.T) {
 	mockConfig := &pd.Config{
 		Client: &pd.MockPagerDutyClient{},
 	}
+	testID := rand.ID("Q")
 	tests := []struct {
 		name     string
 		config   *pd.Config
@@ -148,8 +149,9 @@ func TestGetIncidentAlerts(t *testing.T) {
 		{
 			name:   "return gotIncidentAlertsMsg if incident id is provided",
 			config: mockConfig,
-			id:     rand.ID("Q"),
+			id:     testID,
 			expected: gotIncidentAlertsMsg{
+				incidentID: testID,
 				alerts: []pagerduty.IncidentAlert{
 					{APIObject: pagerduty.APIObject{ID: "QABCDEFG1234567"}},
 					{APIObject: pagerduty.APIObject{ID: "QABCDEFG7654321"}},
@@ -162,8 +164,9 @@ func TestGetIncidentAlerts(t *testing.T) {
 			config: mockConfig,
 			id:     "err", // "err" signals the mock client to produce a mock error
 			expected: gotIncidentAlertsMsg{
-				alerts: nil,
-				err:    fmt.Errorf("pd.GetAlerts(): failed to get alerts for incident `%v`: %v", "err", pd.ErrMockError),
+				incidentID: "err",
+				alerts:     nil,
+				err:        fmt.Errorf("pd.GetAlerts(): failed to get alerts for incident `%v`: %v", "err", pd.ErrMockError),
 			},
 		},
 	}
@@ -181,6 +184,7 @@ func TestGetIncidentNotes(t *testing.T) {
 	mockConfig := &pd.Config{
 		Client: &pd.MockPagerDutyClient{},
 	}
+	testID := rand.ID("Q")
 	tests := []struct {
 		name     string
 		config   *pd.Config
@@ -196,8 +200,9 @@ func TestGetIncidentNotes(t *testing.T) {
 		{
 			name:   "return gotIncidentNotesMsg if incident id is provided",
 			config: mockConfig,
-			id:     rand.ID("Q"),
+			id:     testID,
 			expected: gotIncidentNotesMsg{
+				incidentID: testID,
 				notes: []pagerduty.IncidentNote{
 					{ID: "QABCDEFG1234567"},
 					{ID: "QABCDEFG7654321"},
@@ -210,8 +215,9 @@ func TestGetIncidentNotes(t *testing.T) {
 			config: mockConfig,
 			id:     "err", // "err" signals the mock client to produce a mock error
 			expected: gotIncidentNotesMsg{
-				notes: []pagerduty.IncidentNote{},
-				err:   fmt.Errorf("pd.GetNotes(): failed to get incident notes `%v`: %v", "err", pd.ErrMockError),
+				incidentID: "err",
+				notes:      []pagerduty.IncidentNote{},
+				err:        fmt.Errorf("pd.GetNotes(): failed to get incident notes `%v`: %v", "err", pd.ErrMockError),
 			},
 		},
 	}
@@ -354,6 +360,49 @@ func TestGetEscalationPolicyKey(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			actual := getEscalationPolicyKey(test.serviceID, test.policies)
 			assert.Equal(t, test.expectedPolicy, actual)
+		})
+	}
+}
+
+func TestOpenBrowserCmd(t *testing.T) {
+	tests := []struct {
+		name          string
+		browser       []string
+		url           string
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:        "successful command execution",
+			browser:     []string{"echo", "browser"},
+			url:         "https://example.com",
+			expectError: false,
+		},
+		{
+			name:          "command not found returns error",
+			browser:       []string{"nonexistent-browser-command-xyz"},
+			url:           "https://example.com",
+			expectError:   true,
+			errorContains: "not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := openBrowserCmd(tt.browser, tt.url)
+			result := cmd()
+
+			msg, ok := result.(browserFinishedMsg)
+			assert.True(t, ok, "Expected browserFinishedMsg type")
+
+			if tt.expectError {
+				assert.NotNil(t, msg.err, "Expected error but got nil")
+				if tt.errorContains != "" {
+					assert.Contains(t, msg.err.Error(), tt.errorContains, "Error message mismatch")
+				}
+			} else {
+				assert.Nil(t, msg.err, "Expected no error but got: %v", msg.err)
+			}
 		})
 	}
 }

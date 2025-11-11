@@ -14,6 +14,17 @@ import (
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
+// cachedIncidentData stores fetched incident data for reuse
+type cachedIncidentData struct {
+	incident     *pagerduty.Incident
+	notes        []pagerduty.IncidentNote
+	alerts       []pagerduty.IncidentAlert
+	dataLoaded   bool
+	notesLoaded  bool
+	alertsLoaded bool
+	lastFetched  time.Time
+}
+
 var initialScheduledJobs = []*scheduledJob{
 	{
 		jobMsg:    func() tea.Msg { return PollIncidentsMsg{} },
@@ -41,6 +52,14 @@ type model struct {
 	selectedIncident       *pagerduty.Incident
 	selectedIncidentNotes  []pagerduty.IncidentNote
 	selectedIncidentAlerts []pagerduty.IncidentAlert
+
+	// Loading state tracking - enables progressive rendering and action guards
+	incidentDataLoaded   bool
+	incidentNotesLoaded  bool
+	incidentAlertsLoaded bool
+
+	// Incident data cache - stores fetched data for reuse and pre-fetching
+	incidentCache map[string]*cachedIncidentData
 
 	scheduledJobs []*scheduledJob
 
@@ -71,7 +90,9 @@ func InitialModel(
 		input:          newTextInput(),
 		incidentViewer: newIncidentViewer(),
 		status:         "",
+		incidentCache:  make(map[string]*cachedIncidentData),
 		scheduledJobs:  append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:    true, // Start watching for updates on startup
 	}
 
 	// This is an ugly way to handle this error
@@ -103,6 +124,10 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	m.selectedIncidentNotes = nil
 	m.selectedIncidentAlerts = nil
 	m.viewingIncident = false
+	// Clear loading flags
+	m.incidentDataLoaded = false
+	m.incidentNotesLoaded = false
+	m.incidentAlertsLoaded = false
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 

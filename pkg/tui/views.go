@@ -145,12 +145,9 @@ func (m model) View() string {
 		return errorStyle.Render(s.String())
 
 	case m.viewingIncident:
-		log.Debug("viewingIncident")
-
-		s.WriteString(m.incidentViewer.View())
+		s.WriteString(tableContainerStyle.Render(m.incidentViewer.View()))
 
 	default:
-
 		s.WriteString(tableContainerStyle.Render(m.table.View()))
 	}
 
@@ -239,7 +236,30 @@ func (m model) template() (string, error) {
 	}
 
 	o := new(bytes.Buffer)
-	summary := summarize(m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes)
+
+	// Progressive rendering: show what we have, mark missing parts as loading
+	var alerts []pagerduty.IncidentAlert
+	var notes []pagerduty.IncidentNote
+
+	if m.incidentAlertsLoaded {
+		alerts = m.selectedIncidentAlerts
+	} else {
+		// Alerts not loaded yet - will show "Loading alerts..." in template
+		alerts = nil
+	}
+
+	if m.incidentNotesLoaded {
+		notes = m.selectedIncidentNotes
+	} else {
+		// Notes not loaded yet - will show "Loading notes..." in template
+		notes = nil
+	}
+
+	summary := summarize(m.selectedIncident, alerts, notes)
+	// Add loading state info to summary for template to use
+	summary.AlertsLoading = !m.incidentAlertsLoaded
+	summary.NotesLoading = !m.incidentNotesLoaded
+
 	err = template.Execute(o, summary)
 	if err != nil {
 		// TODO: Figure out how to handle this with a proper errMsg
@@ -359,6 +379,9 @@ type incidentSummary struct {
 	Alerts           []alertSummary
 	Notes            []noteSummary
 	Clusters         []string
+	// Progressive rendering flags
+	AlertsLoading    bool
+	NotesLoading     bool
 }
 
 func summarizeIncident(i *pagerduty.Incident) incidentSummary {
@@ -433,7 +456,9 @@ Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
 
 ## Notes
 
-{{ if .Notes }}
+{{ if .NotesLoading }}
+_Loading notes..._
+{{ else if .Notes }}
 {{ range $note := .Notes }}
 > {{ $note.Content }}
     -- {{ $note.User }} @ {{ $note.Created }}
@@ -442,8 +467,11 @@ Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
 _none_
 {{ end }}
 
-## Alerts ({{ len .Alerts }})
+## Alerts{{ if not .AlertsLoading }} ({{ len .Alerts }}){{ end }}
 
+{{ if .AlertsLoading }}
+_Loading alerts..._
+{{ else }}
 {{ range $alert := .Alerts }}
 {{ $alert.ID }} - {{ $alert.Status }}
 {{ if $alert.Name }}
@@ -459,9 +487,10 @@ _{{- $alert.Name }}_
 Details :
 
 {{ range $key, $value := $alert.Details }}
-* {{ $key }}: {{ $value }} 
+* {{ $key }}: {{ $value }}
 {{ end }}
 
+{{ end }}
 {{ end }}
 `
 

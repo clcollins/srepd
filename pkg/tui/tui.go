@@ -106,8 +106,15 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 // return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgType := reflect.TypeOf(msg)
-	// TickMsg are not helpful for logging
-	if msgType != reflect.TypeOf(TickMsg{}) {
+	// TickMsg and arrow key messages are not helpful for logging
+	shouldLog := msgType != reflect.TypeOf(TickMsg{})
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && shouldLog {
+		// Skip logging for arrow keys used in scrolling
+		if keyMsg.Type == tea.KeyUp || keyMsg.Type == tea.KeyDown {
+			shouldLog = false
+		}
+	}
+	if shouldLog {
 		log.Debug("Update", msgType, filterMsgContent(msg))
 	}
 
@@ -146,38 +153,82 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.setStatus(fmt.Sprintf("getting details for incident %v...", msg))
-		cmds = append(cmds, getIncident(m.config, string(msg)))
+		id := string(msg)
+		cmds = append(cmds, 
+			getIncident(m.config, id),
+			getIncidentAlerts(m.config, id),
+			getIncidentNotes(m.config, id),
+		)
 
 	// Set the selected incident to the incident returned from the getIncident command
 	case gotIncidentMsg:
 		if msg.err != nil {
+			m.selectedIncident = nil
+			m.viewingIncident = false
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
-		m.selectedIncident = msg.incident
-		return m, tea.Batch(
-			getIncidentAlerts(m.config, msg.incident.ID),
-			getIncidentNotes(m.config, msg.incident.ID),
-		)
+		// Update cache with fetched incident data
+		if cached, exists := m.incidentCache[msg.incident.ID]; exists {
+			log.Debug("Update", "gotIncidentMsg", "refreshing cached incident data", "incident", msg.incident.ID)
+			cached.incident = msg.incident
+			cached.dataLoaded = true
+			cached.lastFetched = time.Now()
+		} else {
+			log.Debug("Update", "gotIncidentMsg", "caching new incident data", "incident", msg.incident.ID)
+			m.incidentCache[msg.incident.ID] = &cachedIncidentData{
+				incident:    msg.incident,
+				dataLoaded:  true,
+				lastFetched: time.Now(),
+			}
+		}
+
+		// Only update selected incident if no incident is selected or this matches the selected one
+		// Skip if we're viewing a different incident (don't let background pre-fetch overwrite it)
+		if m.selectedIncident == nil || msg.incident.ID == m.selectedIncident.ID {
+			m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
+			m.selectedIncident = msg.incident
+			m.incidentDataLoaded = true
+
+			if m.viewingIncident {
+				return m, func() tea.Msg { return renderIncidentMsg("refresh") }
+			}
+		}
 
 	case gotIncidentNotesMsg:
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		// CANNOT refer to the m.SelectedIncident, because it may not have
-		// completed yet, and will be nil
-		switch {
-		case len(msg.notes) == 1:
-			m.setStatus(fmt.Sprintf("got %d note for incident", len(msg.notes)))
-		case len(msg.notes) > 1:
-			m.setStatus(fmt.Sprintf("got %d notes for incident", len(msg.notes)))
+		// Update cache with fetched notes
+		if cached, exists := m.incidentCache[msg.incidentID]; exists {
+			log.Debug("Update", "gotIncidentNotesMsg", "refreshing cached notes", "incident", msg.incidentID, "count", len(msg.notes))
+			cached.notes = msg.notes
+			cached.notesLoaded = true
+		} else {
+			log.Debug("Update", "gotIncidentNotesMsg", "caching new notes", "incident", msg.incidentID, "count", len(msg.notes))
+			m.incidentCache[msg.incidentID] = &cachedIncidentData{
+				notes:       msg.notes,
+				notesLoaded: true,
+			}
 		}
 
-		m.selectedIncidentNotes = msg.notes
-		if m.viewingIncident {
-			cmds = append(cmds, renderIncident(&m))
+		// Only update selected incident notes if no incident is selected or this matches the selected one
+		// Skip if we're viewing a different incident (don't let background pre-fetch overwrite it)
+		if m.selectedIncident == nil || msg.incidentID == m.selectedIncident.ID {
+			switch {
+			case len(msg.notes) == 1:
+				m.setStatus(fmt.Sprintf("got %d note for incident", len(msg.notes)))
+			case len(msg.notes) > 1:
+				m.setStatus(fmt.Sprintf("got %d notes for incident", len(msg.notes)))
+			}
+
+			m.selectedIncidentNotes = msg.notes
+			m.incidentNotesLoaded = true
+
+			if m.viewingIncident {
+				cmds = append(cmds, renderIncident(&m))
+			}
 		}
 
 	case gotIncidentAlertsMsg:
@@ -185,18 +236,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		// CANNOT refer to the m.SelectedIncident, because it may not have
-		// completed yet, and will be nil
-		switch {
-		case len(msg.alerts) == 1:
-			m.setStatus(fmt.Sprintf("got %d alert for incident", len(msg.alerts)))
-		case len(msg.alerts) > 1:
-			m.setStatus(fmt.Sprintf("got %d alerts for incident", len(msg.alerts)))
+		// Update cache with fetched alerts
+		if cached, exists := m.incidentCache[msg.incidentID]; exists {
+			log.Debug("Update", "gotIncidentAlertsMsg", "refreshing cached alerts", "incident", msg.incidentID, "count", len(msg.alerts))
+			cached.alerts = msg.alerts
+			cached.alertsLoaded = true
+		} else {
+			log.Debug("Update", "gotIncidentAlertsMsg", "caching new alerts", "incident", msg.incidentID, "count", len(msg.alerts))
+			m.incidentCache[msg.incidentID] = &cachedIncidentData{
+				alerts:       msg.alerts,
+				alertsLoaded: true,
+			}
 		}
 
-		m.selectedIncidentAlerts = msg.alerts
-		if m.viewingIncident {
-			cmds = append(cmds, renderIncident(&m))
+		// Only update selected incident alerts if no incident is selected or this matches the selected one
+		// Skip if we're viewing a different incident (don't let background pre-fetch overwrite it)
+		if m.selectedIncident == nil || msg.incidentID == m.selectedIncident.ID {
+			switch {
+			case len(msg.alerts) == 1:
+				m.setStatus(fmt.Sprintf("got %d alert for incident", len(msg.alerts)))
+			case len(msg.alerts) > 1:
+				m.setStatus(fmt.Sprintf("got %d alerts for incident", len(msg.alerts)))
+			}
+
+			m.selectedIncidentAlerts = msg.alerts
+			m.incidentAlertsLoaded = true
+
+			if m.viewingIncident {
+				cmds = append(cmds, renderIncident(&m))
+			}
 		}
 
 	case updateIncidentListMsg:
@@ -245,6 +313,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Overwrite m.incidentList with current incidents
 		m.incidentList = msg.incidents
 
+		// Pre-fetch incident data for all incidents in the list
+		for _, i := range m.incidentList {
+			// Check if incident is already cached
+			if _, exists := m.incidentCache[i.ID]; !exists {
+				// Not cached - pre-fetch all data in the background
+				cmds = append(cmds,
+					getIncident(m.config, i.ID),
+					getIncidentAlerts(m.config, i.ID),
+					getIncidentNotes(m.config, i.ID),
+				)
+			}
+		}
+
 		// Check if any incidents should be auto-acknowledged;
 		// This must be done before adding the stale incidents
 		for _, i := range m.incidentList {
@@ -259,6 +340,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Add stale incidents to the list
 		m.incidentList = append(m.incidentList, staleIncidentList...)
+
+		// Clean up cache - remove entries for incidents no longer in the list
+		// (including STALE incidents, but excluding those that have aged out)
+		incidentIDs := make(map[string]bool)
+		for _, i := range m.incidentList {
+			incidentIDs[i.ID] = true
+		}
+		for id := range m.incidentCache {
+			if !incidentIDs[id] {
+				delete(m.incidentCache, id)
+				log.Debug("Update", "updatedIncidentListMsg", "removing cached data for incident no longer in list", "incident", id)
+			}
+		}
 
 		var totalIncidentCount int
 		var rows []table.Row
@@ -366,15 +460,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 		}
 		c := []string{defaultBrowserOpenCommand}
-		return m, func() tea.Msg { return openBrowserCmd(c, m.selectedIncident.HTMLURL) }
+		return m, openBrowserCmd(c, m.selectedIncident.HTMLURL)
 
 	case browserFinishedMsg:
 		if msg.err != nil {
+			m.setStatus(fmt.Sprintf("failed to open browser: %s", msg.err))
 			return m, func() tea.Msg { return errMsg{msg.err} }
-		} else {
-			m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
-			return m, nil
 		}
+		m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
+		return m, nil
 
 	// This is a catch all for any action that requires a selected incident
 	case waitForSelectedIncidentThenDoMsg:
@@ -400,6 +494,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case renderIncidentMsg:
 		if m.selectedIncident == nil {
 			m.setStatus("failed render incidents - no incidents provided")
+			m.viewingIncident = false
 			return m, nil
 		}
 
@@ -436,28 +531,47 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case acknowledgedIncidentsMsg:
-		var incidentIDs []string
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		for _, i := range msg.incidents {
-			incidentIDs = append(incidentIDs, i.ID)
-		}
-		incidents := strings.Join(incidentIDs, " ")
-		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidents))
+		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
+		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidentIDs))
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
 	case unAcknowledgedIncidentsMsg:
-		var incidentIDs []string
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		for _, i := range msg.incidents {
-			incidentIDs = append(incidentIDs, i.ID)
+		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
+		m.setStatus(fmt.Sprintf("un-acknowledged incidents: %s", incidentIDs))
+
+		// After un-acknowledging, re-escalate each incident to its escalation policy to page current on-call
+		// Group incidents by escalation policy
+		policyGroups := make(map[string][]pagerduty.Incident)
+		for _, incident := range msg.incidents {
+			policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
+			policyGroups[policyKey] = append(policyGroups[policyKey], incident)
 		}
-		incidents := strings.Join(incidentIDs, " ")
-		m.setStatus(fmt.Sprintf("re-escalated incidents: %s", incidents))
+
+		// Create re-escalate messages for each policy group
+		var cmds []tea.Cmd
+		for policyKey, incidents := range policyGroups {
+			policy := m.config.EscalationPolicies[policyKey]
+			if policy != nil && policy.ID != "" {
+				cmds = append(cmds, func() tea.Msg {
+					return reEscalateIncidentsMsg{
+						incidents: incidents,
+						policy:    policy,
+						level:     reEscalateDefaultPolicyLevel,
+					}
+				})
+			}
+		}
+
+		if len(cmds) > 0 {
+			return m, tea.Batch(cmds...)
+		}
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgedIncidentsMsg") }
 
@@ -473,7 +587,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case reassignedIncidentsMsg:
-		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", msg))
+		incidentIDs := getIDsFromIncidents(msg)
+		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", incidentIDs))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reassignedIncidentsMsg") }
 
 	case reEscalateIncidentsMsg:
@@ -488,7 +603,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case reEscalatedIncidentsMsg:
-		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", msg))
+		incidentIDs := getIDsFromIncidents(msg)
+		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", incidentIDs))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
 
 	case silenceSelectedIncidentMsg:
