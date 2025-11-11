@@ -460,15 +460,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 		}
 		c := []string{defaultBrowserOpenCommand}
-		return m, func() tea.Msg { return openBrowserCmd(c, m.selectedIncident.HTMLURL) }
+		return m, openBrowserCmd(c, m.selectedIncident.HTMLURL)
 
 	case browserFinishedMsg:
 		if msg.err != nil {
+			m.setStatus(fmt.Sprintf("failed to open browser: %s", msg.err))
 			return m, func() tea.Msg { return errMsg{msg.err} }
-		} else {
-			m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
-			return m, nil
 		}
+		m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
+		return m, nil
 
 	// This is a catch all for any action that requires a selected incident
 	case waitForSelectedIncidentThenDoMsg:
