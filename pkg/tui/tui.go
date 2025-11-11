@@ -544,7 +544,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
-		m.setStatus(fmt.Sprintf("re-escalated incidents: %s", incidentIDs))
+		m.setStatus(fmt.Sprintf("un-acknowledged incidents: %s", incidentIDs))
+
+		// After un-acknowledging, re-escalate each incident to its escalation policy to page current on-call
+		// Group incidents by escalation policy
+		policyGroups := make(map[string][]pagerduty.Incident)
+		for _, incident := range msg.incidents {
+			policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
+			policyGroups[policyKey] = append(policyGroups[policyKey], incident)
+		}
+
+		// Create re-escalate messages for each policy group
+		var cmds []tea.Cmd
+		for policyKey, incidents := range policyGroups {
+			policy := m.config.EscalationPolicies[policyKey]
+			if policy != nil && policy.ID != "" {
+				cmds = append(cmds, func() tea.Msg {
+					return reEscalateIncidentsMsg{
+						incidents: incidents,
+						policy:    policy,
+						level:     reEscalateDefaultPolicyLevel,
+					}
+				})
+			}
+		}
+
+		if len(cmds) > 0 {
+			return m, tea.Batch(cmds...)
+		}
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgedIncidentsMsg") }
 
