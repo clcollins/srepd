@@ -509,24 +509,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewingIncident = true
 
 	case acknowledgeIncidentsMsg:
-		if msg.incidents == nil {
-			m.setStatus("failed acknowledging incidents - no incidents provided")
-			return m, nil
+		// If incidents are provided in the message, use those
+		// Otherwise, use the selected incident from the model
+		incidents := msg.incidents
+		if incidents == nil {
+			if m.selectedIncident == nil {
+				m.setStatus("failed acknowledging incidents - no incidents provided and no incident selected")
+				return m, nil
+			}
+			incidents = []pagerduty.Incident{*m.selectedIncident}
 		}
 
 		return m, tea.Sequence(
-			acknowledgeIncidents(m.config, msg.incidents, false),
+			acknowledgeIncidents(m.config, incidents, false),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
 		)
 
 	case unAcknowledgeIncidentsMsg:
-		if msg.incidents == nil {
-			m.setStatus("failed re-escalating incidents - no incidents provided")
-			return m, nil
+		// If incidents are provided in the message, use those
+		// Otherwise, use the selected incident from the model
+		incidents := msg.incidents
+		if incidents == nil {
+			if m.selectedIncident == nil {
+				m.setStatus("failed re-escalating incidents - no incidents provided and no incident selected")
+				return m, nil
+			}
+			incidents = []pagerduty.Incident{*m.selectedIncident}
 		}
 
 		return m, tea.Sequence(
-			acknowledgeIncidents(m.config, msg.incidents, true),
+			acknowledgeIncidents(m.config, incidents, true),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: unAcknowledgeIncidentsMsg") },
 		)
 
@@ -630,7 +642,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		incidents := append(msg.incidents, *m.selectedIncident)
+		incidents := msg.incidents
+		if m.selectedIncident != nil {
+			incidents = append(msg.incidents, *m.selectedIncident)
+		}
 		return m, tea.Sequence(
 			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },
