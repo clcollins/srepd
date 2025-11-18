@@ -45,7 +45,7 @@ tidy: ## Tidy up go modules
 	go mod tidy
 
 .PHONY: test
-test: ## Run tests
+test: lint ## Run tests (after linting)
 	@echo "Running tests..."
 	go test ./... -v $(TESTOPTS)
 
