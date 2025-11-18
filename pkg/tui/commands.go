@@ -251,7 +251,13 @@ func ShouldBeAcknowledged(p *pd.Config, i pagerduty.Incident, id string, autoAck
 		"userIsOnCall", userIsOnCall,
 		"doIt", doIt,
 	)
-	return AssignedToUser(i, id) && !AcknowledgedByUser(i, id) && autoAcknowledge
+	return doIt
+}
+
+// ShouldBeAcknowledgedCached checks if an incident should be auto-acknowledged using a cached userIsOnCall result.
+// This avoids repeated calls to UserIsOnCall() when checking multiple incidents in the same update cycle.
+func ShouldBeAcknowledgedCached(i pagerduty.Incident, id string, userIsOnCall bool) bool {
+	return AssignedToUser(i, id) && !AcknowledgedByUser(i, id) && userIsOnCall
 }
 
 // AssignedToUser returns true if the incident is assigned to the given user
@@ -523,22 +529,9 @@ type acknowledgedIncidentsMsg struct {
 	incidents []pagerduty.Incident
 	err       error
 }
-type unAcknowledgedIncidentsMsg struct {
-	incidents []pagerduty.Incident
-	err       error
-}
-
-func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident, reEscalate bool) tea.Cmd {
+func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident) tea.Cmd {
 	return func() tea.Msg {
-		var err error
-
-		if reEscalate {
-			a, err := pd.AcknowledgeIncident(p.Client, incidents, &pagerduty.User{})
-			return unAcknowledgedIncidentsMsg{a, err}
-		}
-
-		a, err := pd.AcknowledgeIncident(p.Client, incidents, p.CurrentUser)
-
+		a, err := pd.AcknowledgeIncident(p.Client, incidents, p.CurrentUser, p.CurrentUser)
 		return acknowledgedIncidentsMsg{a, err}
 	}
 }
@@ -573,7 +566,7 @@ type reEscalatedIncidentsMsg []pagerduty.Incident
 
 func reEscalateIncidents(p *pd.Config, i []pagerduty.Incident, e *pagerduty.EscalationPolicy, l uint) tea.Cmd {
 	return func() tea.Msg {
-		r, err := pd.ReEscalateIncidents(p.Client, i, e, l)
+		r, err := pd.ReEscalateIncidents(p.Client, i, p.CurrentUser, e, l)
 		if err != nil {
 			return errMsg{err}
 		}

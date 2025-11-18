@@ -346,29 +346,41 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
+	// Track if we handled the key ourselves
+	handledKey := false
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, defaultKeyMap.Help):
 			m.toggleHelp()
+			handledKey = true
 
 		// This un-sets the selected incident and returns to the table view
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.clearSelectedIncident(msg.String() + " (back)")
+			m.table.Focus()  // Ensure table regains focus immediately
+			// Return immediately - no need to process anything else or update viewport
+			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Refresh):
+			handledKey = true
 			return m, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) }
 
 		case key.Matches(msg, defaultKeyMap.Ack):
+			handledKey = true
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
+			handledKey = true
 			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Silence):
+			handledKey = true
 			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
+			handledKey = true
 			// Note template requires full incident data (HTMLURL, Title, Service.Summary)
 			if !m.incidentDataLoaded {
 				m.setStatus("Loading incident details, please wait...")
@@ -377,6 +389,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return parseTemplateForNoteMsg("add note") }
 
 		case key.Matches(msg, defaultKeyMap.Login):
+			handledKey = true
 			// Login requires alerts to extract cluster_id
 			if !m.incidentAlertsLoaded {
 				m.setStatus("Loading incident alerts, please wait...")
@@ -385,6 +398,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return loginMsg("login") }
 
 		case key.Matches(msg, defaultKeyMap.Open):
+			handledKey = true
 			// Browser open requires HTMLURL from full incident data
 			if !m.incidentDataLoaded {
 				m.setStatus("Loading incident details, please wait...")
@@ -395,8 +409,12 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	m.incidentViewer, cmd = m.incidentViewer.Update(msg)
-	cmds = append(cmds, cmd)
+	// Only pass the message to the viewport if we didn't handle it as a key command
+	// This prevents the viewport from consuming ESC and other navigation keys
+	if !handledKey {
+		m.incidentViewer, cmd = m.incidentViewer.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 
 	return m, tea.Batch(cmds...)
 }

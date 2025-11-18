@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/log"
 )
 
 const (
@@ -115,21 +116,26 @@ func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
 
 }
 
-func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User) ([]pagerduty.Incident, error) {
+func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, currentUser *pagerduty.User) ([]pagerduty.Incident, error) {
 	var ctx = context.Background()
 	var email string
 
 	opts := []pagerduty.ManageIncidentsOptions{}
 
+	// Use currentUser's email for API call authentication
+	if currentUser != nil {
+		email = currentUser.Email
+	}
+
 	for _, incident := range incidents {
 		if user == nil {
-			email = ""
+			// Un-acknowledge: set escalation level without assignment
 			opts = append(opts, pagerduty.ManageIncidentsOptions{
 				ID:              incident.ID,
 				EscalationLevel: 1,
 			})
 		} else {
-			email = user.Email
+			// Acknowledge: assign to specific user
 			opts = append(opts, pagerduty.ManageIncidentsOptions{
 				ID:     incident.ID,
 				Status: "acknowledged",
@@ -302,8 +308,10 @@ func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCall
 
 func loopManageIncidents(client PagerDutyClient, ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (incidentList []pagerduty.Incident, err error) {
 	for {
+		log.Debug("pd.loopManageIncidents", "email", email, "opts_count", len(opts))
 		response, err := client.ManageIncidentsWithContext(ctx, email, opts)
 		if err != nil {
+			log.Error("pd.loopManageIncidents", "error", err, "email", email)
 			return incidentList, err
 		}
 
@@ -347,7 +355,7 @@ func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, u
 }
 
 // ReEscalateIncidents re-escalates a list of incidents to an escalation policy at a specific level
-func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident, policy *pagerduty.EscalationPolicy, level uint) ([]pagerduty.Incident, error) {
+func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, policy *pagerduty.EscalationPolicy, level uint) ([]pagerduty.Incident, error) {
 	var ctx = context.Background()
 
 	opts := []pagerduty.ManageIncidentsOptions{}
@@ -364,7 +372,7 @@ func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident,
 		})
 	}
 
-	return loopManageIncidents(client, ctx, "", opts)
+	return loopManageIncidents(client, ctx, user.Email, opts)
 }
 
 func PostNote(client PagerDutyClient, id string, user *pagerduty.User, content string) (*pagerduty.IncidentNote, error) {

@@ -30,41 +30,21 @@ func TestAcknowledgeIncident(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		incidents  []pagerduty.Incident
-		reEscalate bool
-		expected   tea.Msg
+		name      string
+		incidents []pagerduty.Incident
+		expected  tea.Msg
 	}{
 		{
-			name:       "return unAcknowledgedIncidentMsg with non-nil error if error occurs while re-escalating",
-			incidents:  errIncidents,
-			reEscalate: true,
-			expected: unAcknowledgedIncidentsMsg{
-				incidents: []pagerduty.Incident(nil),
-				err:       pd.ErrMockError,
-			},
-		},
-		{
-			name:       "return unAcknowledgedIncidentMsg with an incident list if no error occurs while re-escalating",
-			incidents:  incidents,
-			reEscalate: true,
-			expected: unAcknowledgedIncidentsMsg{
-				incidents: incidents,
-			},
-		},
-		{
-			name:       "return acknowledgedIncidentMsg with non-nil error if error occurs while acknowledging",
-			incidents:  errIncidents,
-			reEscalate: false,
+			name:      "return acknowledgedIncidentMsg with non-nil error if error occurs while acknowledging",
+			incidents: errIncidents,
 			expected: acknowledgedIncidentsMsg{
 				incidents: []pagerduty.Incident(nil),
 				err:       pd.ErrMockError,
 			},
 		},
 		{
-			name:       "return acknowledgedIncidentMsg with an incident list if no error occurs while acknowledging",
-			incidents:  incidents,
-			reEscalate: false,
+			name:      "return acknowledgedIncidentMsg with an incident list if no error occurs while acknowledging",
+			incidents: incidents,
 			expected: acknowledgedIncidentsMsg{
 				incidents: incidents,
 			},
@@ -73,7 +53,7 @@ func TestAcknowledgeIncident(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := acknowledgeIncidents(mockConfig, test.incidents, test.reEscalate)
+			cmd := acknowledgeIncidents(mockConfig, test.incidents)
 			actual := cmd()
 			assert.Equal(t, test.expected, actual)
 		})
