@@ -579,7 +579,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, tea.Sequence(
-			acknowledgeIncidents(m.config, incidents, false),
+			acknowledgeIncidents(m.config, incidents),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
 		)
 

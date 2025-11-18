@@ -364,18 +364,23 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Refresh):
+			handledKey = true
 			return m, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) }
 
 		case key.Matches(msg, defaultKeyMap.Ack):
+			handledKey = true
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
+			handledKey = true
 			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Silence):
+			handledKey = true
 			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
+			handledKey = true
 			// Note template requires full incident data (HTMLURL, Title, Service.Summary)
 			if !m.incidentDataLoaded {
 				m.setStatus("Loading incident details, please wait...")
@@ -384,6 +389,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return parseTemplateForNoteMsg("add note") }
 
 		case key.Matches(msg, defaultKeyMap.Login):
+			handledKey = true
 			// Login requires alerts to extract cluster_id
 			if !m.incidentAlertsLoaded {
 				m.setStatus("Loading incident alerts, please wait...")
@@ -392,6 +398,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return loginMsg("login") }
 
 		case key.Matches(msg, defaultKeyMap.Open):
+			handledKey = true
 			// Browser open requires HTMLURL from full incident data
 			if !m.incidentDataLoaded {
 				m.setStatus("Loading incident details, please wait...")
