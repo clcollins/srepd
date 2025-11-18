@@ -191,7 +191,7 @@ func (m model) renderHeader() string {
 		lipgloss.JoinHorizontal(
 			0.2,
 
-			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status)),
+			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status, m.polling, m.spinner.View())),
 
 			paddedStyle.Render(assigneeArea(assignedTo)),
 		),
@@ -208,11 +208,15 @@ func assigneeArea(s string) string {
 	return fstring
 }
 
-func statusArea(s string) string {
-	var fstring = "> %s"
+func statusArea(s string, polling bool, spinnerView string) string {
+	prefix := ">"
+	if polling {
+		prefix = spinnerView
+	}
+	fstring := "%s %s"
 	fstring = strings.TrimSuffix(fstring, "\n")
 
-	return fmt.Sprintf(fstring, s)
+	return fmt.Sprintf(fstring, prefix, s)
 }
 
 func refreshArea(autoRefresh bool, autoAck bool) string {

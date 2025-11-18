@@ -42,28 +42,43 @@ func TestStatusArea(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
+		polling  bool
+		spinner  string
 		expected string
 	}{
 		{
-			name:     "formats simple status",
+			name:     "formats simple status when not polling",
 			input:    "Loading...",
+			polling:  false,
+			spinner:  "",
 			expected: "> Loading...",
+		},
+		{
+			name:     "formats status with spinner when polling",
+			input:    "loading incidents...",
+			polling:  true,
+			spinner:  "⠋",
+			expected: "⠋ loading incidents...",
 		},
 		{
 			name:     "formats status with numbers",
 			input:    "showing 2/5 incidents",
+			polling:  false,
+			spinner:  "",
 			expected: "> showing 2/5 incidents",
 		},
 		{
 			name:     "formats empty status",
 			input:    "",
+			polling:  false,
+			spinner:  "",
 			expected: "> ",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := statusArea(test.input)
+			result := statusArea(test.input, test.polling, test.spinner)
 			assert.Equal(t, test.expected, result)
 		})
 	}

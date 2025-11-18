@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
@@ -42,6 +43,7 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		tea.SetWindowTitle(title),
 		func() tea.Msg { return updateIncidentListMsg("sender: Init") },
+		m.spinner.Tick,
 	)
 
 }
@@ -106,8 +108,8 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 // return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgType := reflect.TypeOf(msg)
-	// TickMsg and arrow key messages are not helpful for logging
-	shouldLog := msgType != reflect.TypeOf(TickMsg{})
+	// TickMsg, spinner.TickMsg, and arrow key messages are not helpful for logging
+	shouldLog := msgType != reflect.TypeOf(TickMsg{}) && msgType != reflect.TypeOf(spinner.TickMsg{})
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && shouldLog {
 		// Skip logging for arrow keys used in scrolling
 		if keyMsg.Type == tea.KeyUp || keyMsg.Type == tea.KeyDown {
@@ -164,6 +166,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		return m.errMsgHandler(msg)
 
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
 	case TickMsg:
 		return m, tea.Batch(runScheduledJobs(&m)...)
 
@@ -181,7 +188,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.autoRefresh {
 			return m, nil
 		}
-		return m, updateIncidentList(m.config)
+		return m, func() tea.Msg { return updateIncidentListMsg("sender: PollIncidentsMsg") }
 
 	// Command to get an incident by ID
 	case getIncidentMsg:
@@ -305,10 +312,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case updateIncidentListMsg:
+		m.polling = true
 		m.setStatus(loadingIncidentsStatus)
 		cmds = append(cmds, updateIncidentList(m.config))
 
 	case updatedIncidentListMsg:
+		m.polling = false
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}

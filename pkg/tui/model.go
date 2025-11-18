@@ -5,10 +5,12 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
@@ -45,6 +47,7 @@ type model struct {
 	viewingIncident bool
 	incidentViewer  viewport.Model
 	help            help.Model
+	spinner         spinner.Model
 
 	status string
 
@@ -67,6 +70,7 @@ type model struct {
 	autoRefresh     bool
 	teamMode        bool
 	debug           bool
+	polling         bool
 }
 
 func InitialModel(
@@ -89,6 +93,7 @@ func InitialModel(
 		table:          newTableWithStyles(),
 		input:          newTextInput(),
 		incidentViewer: newIncidentViewer(),
+		spinner:        newSpinner(),
 		status:         "",
 		incidentCache:  make(map[string]*cachedIncidentData),
 		scheduledJobs:  append([]*scheduledJob{}, initialScheduledJobs...),
@@ -164,4 +169,11 @@ func newIncidentViewer() viewport.Model {
 	vp := viewport.New(100, 100)
 	vp.Style = incidentViewerStyle
 	return vp
+}
+
+func newSpinner() spinner.Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
+	return s
 }
