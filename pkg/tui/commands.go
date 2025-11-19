@@ -215,7 +215,7 @@ func renderIncident(m *model) tea.Cmd {
 			return errMsg{err}
 		}
 
-		content, err := renderIncidentMarkdown(t)
+		content, err := renderIncidentMarkdown(t, m.incidentViewer.Width)
 		if err != nil {
 			return errMsg{err}
 		}
