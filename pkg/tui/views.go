@@ -494,10 +494,17 @@ Details :
 {{ end }}
 `
 
-func renderIncidentMarkdown(content string) (string, error) {
+func renderIncidentMarkdown(content string, width int) (string, error) {
+	// Glamour adds its own padding/margins, so we need to subtract some space
+	// to prevent content from extending beyond the viewport
+	adjustedWidth := width - 4
+	if adjustedWidth < 40 {
+		adjustedWidth = 40 // Minimum reasonable width
+	}
+
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(0),
+		glamour.WithWordWrap(adjustedWidth),
 	)
 	if err != nil {
 		return "", err
