@@ -523,11 +523,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// If the user has closed the incident view (via ESC), abort the action
-		// instead of waiting forever for an incident that will never be set
-		if m.selectedIncident == nil && !m.viewingIncident {
-			log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "aborting action - incident view closed", "msg", msg.msg)
-			m.setStatus("action cancelled - incident view closed")
+		// If the user has closed the incident view (via ESC) AND there's no highlighted row in the table,
+		// abort the action instead of waiting forever for an incident that will never be set
+		if m.selectedIncident == nil && !m.viewingIncident && m.table.SelectedRow() == nil {
+			log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "aborting action - no incident selected or highlighted", "msg", msg.msg)
+			m.setStatus("action cancelled - no incident selected")
 			return m, nil
 		}
 
@@ -568,14 +568,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case acknowledgeIncidentsMsg:
 		// If incidents are provided in the message, use those
-		// Otherwise, use the selected incident from the model
+		// Otherwise, use the highlighted incident from the table, or the selected incident if viewing one
 		incidents := msg.incidents
 		if incidents == nil {
-			if m.selectedIncident == nil {
-				m.setStatus("failed acknowledging incidents - no incidents provided and no incident selected")
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				incident = m.selectedIncident
+			}
+			if incident == nil {
+				m.setStatus("failed acknowledging incidents - no incident highlighted or selected")
 				return m, nil
 			}
-			incidents = []pagerduty.Incident{*m.selectedIncident}
+			incidents = []pagerduty.Incident{*incident}
 		}
 
 		return m, tea.Sequence(
@@ -585,32 +589,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case unAcknowledgeIncidentsMsg:
 		// If incidents are provided in the message, use those
-		// Otherwise, use the selected incident from the model
+		// Otherwise, use the highlighted incident from the table, or the selected incident if viewing one
 		incidents := msg.incidents
 		if incidents == nil {
-			if m.selectedIncident == nil {
-				m.setStatus("failed re-escalating incidents - no incidents provided and no incident selected")
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				incident = m.selectedIncident
+			}
+			if incident == nil {
+				m.setStatus("failed re-escalating incidents - no incident highlighted or selected")
 				return m, nil
 			}
-			incidents = []pagerduty.Incident{*m.selectedIncident}
+			incidents = []pagerduty.Incident{*incident}
 		}
 
 		// Skip un-acknowledge step - go directly to re-escalation
 		// Re-escalation will reassign to the current on-call at the escalation level
-		// Group incidents by escalation policy
+		// Group incidents by their current escalation policy ID
 		policyGroups := make(map[string][]pagerduty.Incident)
 		for _, incident := range incidents {
-			policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
-			policyGroups[policyKey] = append(policyGroups[policyKey], incident)
+			// Use the incident's actual escalation policy, not a service-based lookup
+			if incident.EscalationPolicy.ID != "" {
+				policyGroups[incident.EscalationPolicy.ID] = append(policyGroups[incident.EscalationPolicy.ID], incident)
+			} else {
+				log.Warn("tui.unAcknowledgeIncidentsMsg", "incident has no escalation policy", "incident_id", incident.ID)
+			}
 		}
 
 		// Create re-escalate commands for each policy group
 		var cmds []tea.Cmd
-		for policyKey, incidents := range policyGroups {
-			policy := m.config.EscalationPolicies[policyKey]
-			if policy != nil && policy.ID != "" {
-				cmds = append(cmds, reEscalateIncidents(m.config, incidents, policy, reEscalateDefaultPolicyLevel))
-			}
+		for policyID, incidents := range policyGroups {
+			// Fetch the full escalation policy details for this policy ID
+			cmd := fetchEscalationPolicyAndReEscalate(m.config, incidents, policyID, reEscalateDefaultPolicyLevel)
+			cmds = append(cmds, cmd)
 		}
 
 		// Add clear selected incidents after re-escalation
@@ -665,19 +676,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
 
 	case silenceSelectedIncidentMsg:
-		if m.selectedIncident == nil {
-			return m, func() tea.Msg {
-				return waitForSelectedIncidentThenDoMsg{
-					msg:    "silence",
-					action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
-				}
-			}
+		incident := m.getHighlightedIncident()
+		if incident == nil {
+			incident = m.selectedIncident
+		}
+		if incident == nil {
+			m.setStatus("failed silencing incident - no incident highlighted or selected")
+			return m, nil
 		}
 
-		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
+		policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
 
 		return m, tea.Sequence(
-			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
+			silenceIncidents([]pagerduty.Incident{*incident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
 		)
 

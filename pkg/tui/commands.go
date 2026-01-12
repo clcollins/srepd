@@ -574,6 +574,24 @@ func reEscalateIncidents(p *pd.Config, i []pagerduty.Incident, e *pagerduty.Esca
 	}
 }
 
+func fetchEscalationPolicyAndReEscalate(p *pd.Config, incidents []pagerduty.Incident, policyID string, level uint) tea.Cmd {
+	return func() tea.Msg {
+		// Fetch the full escalation policy details
+		policy, err := pd.GetEscalationPolicy(p.Client, policyID, pagerduty.GetEscalationPolicyOptions{})
+		if err != nil {
+			log.Error("tui.fetchEscalationPolicyAndReEscalate", "failed to fetch escalation policy", "policy_id", policyID, "error", err)
+			return errMsg{err}
+		}
+
+		// Now re-escalate with the fetched policy
+		r, err := pd.ReEscalateIncidents(p.Client, incidents, p.CurrentUser, policy, level)
+		if err != nil {
+			return errMsg{err}
+		}
+		return reEscalatedIncidentsMsg(r)
+	}
+}
+
 type silenceSelectedIncidentMsg struct{}
 type silenceIncidentsMsg struct {
 	incidents []pagerduty.Incident

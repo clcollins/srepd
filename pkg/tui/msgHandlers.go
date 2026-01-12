@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 
@@ -250,68 +251,58 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			)
 
 		case key.Matches(msg, defaultKeyMap.Silence):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{
-						msg: "silence",
-						action: func() tea.Msg {
-							return silenceSelectedIncidentMsg{}
-						},
-					}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Ack):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{
-						msg: "acknowledge",
-						action: func() tea.Msg {
-							return acknowledgeIncidentsMsg{}
-						},
-					}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			return m, func() tea.Msg { return acknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{
-						msg: "un-acknowledge",
-						action: func() tea.Msg {
-							return unAcknowledgeIncidentsMsg{}
-						},
-					}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					msg := "add note"
-					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return parseTemplateForNoteMsg(msg) }, msg: msg}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				m.setStatus("failed to find incident")
+				return m, nil
+			}
+			return m, parseTemplateForNote(incident)
 
 		case key.Matches(msg, defaultKeyMap.Login):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
-				},
-			))
+			return m, doIfIncidentSelected(&m, func() tea.Msg {
+				return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
+			})
 
 		case key.Matches(msg, defaultKeyMap.Open):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return openBrowserMsg("incident") }, msg: ""}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				m.setStatus("failed to find incident")
+				return m, nil
+			}
+			if defaultBrowserOpenCommand == "" {
+				return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
+			}
+			c := []string{defaultBrowserOpenCommand}
+			return m, openBrowserCmd(c, incident.HTMLURL)
 
 		}
 	}

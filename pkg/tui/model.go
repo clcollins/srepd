@@ -131,6 +131,27 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 
+// getHighlightedIncident returns the incident object for the currently highlighted table row
+// by looking it up in m.incidentList. Returns nil if no row is highlighted or incident not found.
+func (m *model) getHighlightedIncident() *pagerduty.Incident {
+	row := m.table.SelectedRow()
+	if row == nil {
+		return nil
+	}
+
+	incidentID := row[1] // Column [1] is the incident ID
+
+	// Look up the incident in the incident list
+	for i := range m.incidentList {
+		if m.incidentList[i].ID == incidentID {
+			return &m.incidentList[i]
+		}
+	}
+
+	log.Debug("getHighlightedIncident", "incident not found in list", incidentID)
+	return nil
+}
+
 func (m *model) setStatus(msg string) {
 	log.Info("setStatus", "status", msg)
 	m.status = msg
