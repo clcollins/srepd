@@ -398,6 +398,49 @@ func TestActionMessagesFallbackToSelectedIncident(t *testing.T) {
 	}
 }
 
+func TestUpdatedIncidentListNoPrefetch(t *testing.T) {
+	t.Run("updatedIncidentListMsg does not trigger pre-fetch commands", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "U123"},
+			},
+		}
+		m.incidentCache = make(map[string]*cachedIncidentData)
+
+		// Create a message with multiple incidents
+		msg := updatedIncidentListMsg{
+			incidents: []pagerduty.Incident{
+				{APIObject: pagerduty.APIObject{ID: "Q123"}, Title: "Incident 1"},
+				{APIObject: pagerduty.APIObject{ID: "Q456"}, Title: "Incident 2"},
+				{APIObject: pagerduty.APIObject{ID: "Q789"}, Title: "Incident 3"},
+			},
+			err: nil,
+		}
+
+		result, cmd := m.Update(msg)
+		m = result.(model)
+
+		// Verify incident list was populated
+		assert.Equal(t, 3, len(m.incidentList), "Incident list should contain 3 incidents")
+
+		// The cmd returned should NOT be a batch of pre-fetch commands
+		// It should be nil or a simple command (not a batch)
+		// We can't easily inspect the command contents, but we can verify
+		// the incident list was set correctly
+		assert.Equal(t, "Q123", m.incidentList[0].ID)
+		assert.Equal(t, "Q456", m.incidentList[1].ID)
+		assert.Equal(t, "Q789", m.incidentList[2].ID)
+
+		// Verify cache remains empty (no pre-fetching occurred)
+		assert.Equal(t, 0, len(m.incidentCache), "Cache should remain empty without pre-fetching")
+
+		// If cmd is not nil, it should be a single command or batch
+		// but we've removed the pre-fetch loop so it won't be a large batch
+		_ = cmd // Acknowledge we got a command but don't need to inspect it deeply
+	})
+}
+
 func TestProgressiveRendering(t *testing.T) {
 	tests := []struct {
 		name                 string

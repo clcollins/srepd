@@ -350,18 +350,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Overwrite m.incidentList with current incidents
 		m.incidentList = msg.incidents
 
-		// Pre-fetch incident data for all incidents in the list
-		for _, i := range m.incidentList {
-			// Check if incident is already cached
-			if _, exists := m.incidentCache[i.ID]; !exists {
-				// Not cached - pre-fetch all data in the background
-				cmds = append(cmds,
-					getIncident(m.config, i.ID),
-					getIncidentAlerts(m.config, i.ID),
-					getIncidentNotes(m.config, i.ID),
-				)
-			}
-		}
+		// Note: We no longer pre-fetch all incident details, alerts, and notes here.
+		// This was inefficient because:
+		// 1. Most incidents are never viewed or acted upon
+		// 2. The incident list already contains sufficient data for most actions
+		// 3. getHighlightedIncident() uses data from m.incidentList directly
+		// 4. Details/alerts/notes are now fetched on-demand when actually needed:
+		//    - When user presses Enter to view an incident
+		//    - When user presses 'l' to login (needs alerts)
+		// This reduces unnecessary API calls from O(n) to O(1) per incident list update.
 
 		// Check if any incidents should be auto-acknowledged;
 		// This must be done before adding the stale incidents
