@@ -10,11 +10,11 @@ func (k keymap) FullHelp() [][]key.Binding {
 	// TODO: Return a pop-over window here instead
 	return [][]key.Binding{
 		// Each slice here is a column in the help window
-		{k.Up, k.Down, k.Enter, k.Back},
-		{k.Ack, k.UnAck, k.Note, k.Silence},
-		{k.Login, k.Open},
-		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck},
-		{k.Quit, k.Help},
+		{k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
+		{k.Ack, k.Login, k.Open, k.Note},
+		{k.UnAck, k.Silence},
+		{k.Team, k.Refresh},
+		{k.AutoRefresh, k.AutoAck, k.Quit, k.Help},
 	}
 }
 
@@ -38,6 +38,39 @@ type keymap struct {
 	Input       key.Binding
 	Login       key.Binding
 	Open        key.Binding
+}
+
+type inputKeymap struct {
+	Quit  key.Binding
+	Back  key.Binding
+	Enter key.Binding
+}
+
+func (k inputKeymap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Back, k.Enter, k.Quit}
+}
+
+func (k inputKeymap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Back, k.Enter},
+		{k.Quit},
+	}
+}
+
+// inputModeKeyMap contains only the keys that work in input mode
+var inputModeKeyMap = inputKeymap{
+	Quit: key.NewBinding(
+		key.WithKeys("ctrl+c", "ctrl+q"),
+		key.WithHelp("ctrl+q/ctrl+c", "quit"),
+	),
+	Back: key.NewBinding(
+		key.WithKeys("esc"),
+		key.WithHelp("esc", "back"),
+	),
+	Enter: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "n/a"),
+	),
 }
 
 var defaultKeyMap = keymap{
@@ -106,8 +139,8 @@ var defaultKeyMap = keymap{
 		key.WithHelp("ctrl+a", "toggle auto-acknowledge"),
 	),
 	Input: key.NewBinding(
-		key.WithKeys("i"),
-		key.WithHelp("i", "input"),
+		key.WithKeys("i", ":"),
+		key.WithHelp("i/:", "input"),
 	),
 	Login: key.NewBinding(
 		key.WithKeys("l"),

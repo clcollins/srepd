@@ -160,7 +160,15 @@ func (m model) View() string {
 	s.WriteString("\n")
 	s.WriteString(m.renderFooter())
 	s.WriteString("\n")
-	s.WriteString(paddedStyle.Width(windowSize.Width).Render(m.help.View(defaultKeyMap)))
+
+	// Choose the appropriate keymap based on focus mode
+	var helpKeyMap help.KeyMap
+	if m.input.Focused() {
+		helpKeyMap = inputModeKeyMap
+	} else {
+		helpKeyMap = defaultKeyMap
+	}
+	s.WriteString(paddedStyle.Width(windowSize.Width).Render(m.help.View(helpKeyMap)))
 
 	return mainStyle.Render(s.String())
 }
@@ -191,7 +199,7 @@ func (m model) renderHeader() string {
 		lipgloss.JoinHorizontal(
 			0.2,
 
-			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status)),
+			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status, m.apiInProgress, m.spinner.View())),
 
 			paddedStyle.Render(assigneeArea(assignedTo)),
 		),
@@ -208,11 +216,18 @@ func assigneeArea(s string) string {
 	return fstring
 }
 
-func statusArea(s string) string {
-	var fstring = "> %s"
+func statusArea(s string, showSpinner bool, spinnerView string) string {
+	if showSpinner {
+		// Apply normal text color to the status text to prevent spinner color bleed
+		statusStyle := lipgloss.NewStyle().Foreground(srepdPallet.normal.text)
+		return fmt.Sprintf("%s %s", spinnerView, statusStyle.Render(s))
+	}
+
+	var prefix = ">"
+	var fstring = "%s %s"
 	fstring = strings.TrimSuffix(fstring, "\n")
 
-	return fmt.Sprintf(fstring, s)
+	return fmt.Sprintf(fstring, prefix, s)
 }
 
 func refreshArea(autoRefresh bool, autoAck bool) string {

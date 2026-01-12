@@ -311,25 +311,35 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	log.Debug("switchInputFocusMode", reflect.TypeOf(msg), msg)
-	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, defaultKeyMap.Help):
-			m.toggleHelp()
+		case key.Matches(msg, defaultKeyMap.Quit):
+			// Ctrl+q/Ctrl+c quits the application
+			return m, tea.Quit
 
 		case key.Matches(msg, defaultKeyMap.Back):
+			// Esc exits input mode
 			m.input.Blur()
 			m.table.Focus()
-			m.input.Prompt = defaultInputPrompt
+			m.input.Reset() // Clear the input text
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Enter):
+			// For now, do nothing on Enter
+			// Future: process the input command
+			return m, nil
 
+		default:
+			// Pass ALL other keypresses (including 'h') to the input component
+			// This allows text entry and disables all other key bindings
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			return m, cmd
 		}
 	}
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {

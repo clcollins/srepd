@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
@@ -41,6 +42,7 @@ func (m model) Init() tea.Cmd {
 	}
 	return tea.Batch(
 		tea.SetWindowTitle(title),
+		m.spinner.Tick,
 		func() tea.Msg { return updateIncidentListMsg("sender: Init") },
 	)
 
@@ -164,6 +166,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		return m.errMsgHandler(msg)
 
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
 	case TickMsg:
 		return m, tea.Batch(runScheduledJobs(&m)...)
 
@@ -181,7 +188,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.autoRefresh {
 			return m, nil
 		}
-		return m, updateIncidentList(m.config)
+		m.apiInProgress = true
+		return m, tea.Batch(m.spinner.Tick, updateIncidentList(m.config))
 
 	// Command to get an incident by ID
 	case getIncidentMsg:
@@ -193,7 +201,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.setStatus(fmt.Sprintf("getting details for incident %v...", msg))
 		id := string(msg)
-		cmds = append(cmds, 
+		m.apiInProgress = true
+		cmds = append(cmds,
+			m.spinner.Tick,
 			getIncident(m.config, id),
 			getIncidentAlerts(m.config, id),
 			getIncidentNotes(m.config, id),
@@ -306,12 +316,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case updateIncidentListMsg:
 		m.setStatus(loadingIncidentsStatus)
-		cmds = append(cmds, updateIncidentList(m.config))
+		m.apiInProgress = true
+		cmds = append(cmds, m.spinner.Tick, updateIncidentList(m.config))
 
 	case updatedIncidentListMsg:
 		if msg.err != nil {
+			m.apiInProgress = false
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
+
+		m.apiInProgress = false
 
 		var staleIncidentList []pagerduty.Incident
 		var acknowledgeIncidentsList []pagerduty.Incident
@@ -579,7 +593,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			incidents = []pagerduty.Incident{*incident}
 		}
 
+		m.apiInProgress = true
 		return m, tea.Sequence(
+			m.spinner.Tick,
 			acknowledgeIncidents(m.config, incidents),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
 		)
@@ -625,12 +641,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, func() tea.Msg { return clearSelectedIncidentsMsg("sender: unAcknowledgeIncidentsMsg") })
 
 		if len(cmds) > 0 {
+			m.apiInProgress = true
+			cmds = append([]tea.Cmd{m.spinner.Tick}, cmds...)
 			return m, tea.Sequence(cmds...)
 		}
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgeIncidentsMsg") }
 
 	case acknowledgedIncidentsMsg:
+		m.apiInProgress = false
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
@@ -668,6 +687,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case reEscalatedIncidentsMsg:
+		m.apiInProgress = false
 		incidentIDs := getIDsFromIncidents(msg)
 		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", incidentIDs))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
@@ -684,7 +704,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
 
+		m.apiInProgress = true
 		return m, tea.Sequence(
+			m.spinner.Tick,
 			silenceIncidents([]pagerduty.Incident{*incident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
 		)
