@@ -34,7 +34,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	f, err := os.OpenFile(home+"/.config/srepd/debug.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) //nolint:gomnd
+	// Open log file, truncating if it exists to prevent unbounded growth
+	// TODO: Implement proper log rotation
+	f, err := os.OpenFile(home+"/.config/srepd/debug.log", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gomnd
 	if err != nil {
 		log.Fatal(err)
 	}
