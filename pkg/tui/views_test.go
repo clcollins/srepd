@@ -40,30 +40,45 @@ func TestAssigneeArea(t *testing.T) {
 
 func TestStatusArea(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected string
+		name        string
+		input       string
+		showSpinner bool
+		spinnerView string
+		expected    string
 	}{
 		{
-			name:     "formats simple status",
-			input:    "Loading...",
-			expected: "> Loading...",
+			name:        "formats simple status without spinner",
+			input:       "Loading...",
+			showSpinner: false,
+			spinnerView: "",
+			expected:    "> Loading...",
 		},
 		{
-			name:     "formats status with numbers",
-			input:    "showing 2/5 incidents",
-			expected: "> showing 2/5 incidents",
+			name:        "formats status with numbers without spinner",
+			input:       "showing 2/5 incidents",
+			showSpinner: false,
+			spinnerView: "",
+			expected:    "> showing 2/5 incidents",
 		},
 		{
-			name:     "formats empty status",
-			input:    "",
-			expected: "> ",
+			name:        "formats empty status without spinner",
+			input:       "",
+			showSpinner: false,
+			spinnerView: "",
+			expected:    "> ",
+		},
+		{
+			name:        "formats status with spinner",
+			input:       "Loading...",
+			showSpinner: true,
+			spinnerView: "⣾",
+			expected:    "⣾ Loading...",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := statusArea(test.input)
+			result := statusArea(test.input, test.showSpinner, test.spinnerView)
 			assert.Equal(t, test.expected, result)
 		})
 	}

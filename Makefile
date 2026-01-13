@@ -32,7 +32,7 @@ build: ## Build the application
 .PHONY: install
 install: ## Install the application to $(GOPATH)/bin
 	@echo "Installing the application..."
-	go build -o ${BIN_DIR}/srepd .
+	go build -ldflags "-X github.com/clcollins/srepd/pkg/tui.GitSHA=$$(git rev-parse --short HEAD)" -o ${BIN_DIR}/srepd .
 
 .PHONY: install-local
 install-local: build ## Install the application locally to ~/.local/bin

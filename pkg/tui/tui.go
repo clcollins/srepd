@@ -3,12 +3,12 @@ package tui
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
@@ -18,11 +18,9 @@ const (
 	title              = "SREPD: It really whips the PDs' ACKs!"
 	waitTime           = time.Millisecond * 1
 	defaultInputPrompt = " $ "
-	maxStaleAge        = time.Minute * 5
+	maxStaleAge        = time.Minute * 5 // How long resolved incidents stay in action log
 	nilNoteErr         = "incident note content is empty"
 	nilIncidentMsg     = "no incident selected"
-	staleLabelRegex    = "^(\\[STALE\\]\\s)?(.*)$"
-	staleLabelStr      = "[STALE] $2"
 )
 
 const (
@@ -41,6 +39,7 @@ func (m model) Init() tea.Cmd {
 	}
 	return tea.Batch(
 		tea.SetWindowTitle(title),
+		m.spinner.Tick,
 		func() tea.Msg { return updateIncidentListMsg("sender: Init") },
 	)
 
@@ -106,14 +105,23 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 // return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgType := reflect.TypeOf(msg)
-	// TickMsg and arrow key messages are not helpful for logging
-	shouldLog := msgType != reflect.TypeOf(TickMsg{})
+	// Reduce logging for high-frequency messages to prevent I/O overhead
+	shouldLog := true
+
+	// Skip logging for very frequent messages
+	switch msgType {
+	case reflect.TypeOf(TickMsg{}),
+		reflect.TypeOf(spinner.TickMsg{}):
+		shouldLog = false
+	}
+
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && shouldLog {
-		// Skip logging for arrow keys used in scrolling
+		// Skip logging for arrow keys and other navigation used in scrolling
 		if keyMsg.Type == tea.KeyUp || keyMsg.Type == tea.KeyDown {
 			shouldLog = false
 		}
 	}
+
 	if shouldLog {
 		log.Debug("Update", msgType, filterMsgContent(msg))
 	}
@@ -129,7 +137,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Drop terminal response sequences (OSC, CSI, etc.)
 		if strings.Contains(keyStr, "rgb:") ||        // Color queries: ]11;rgb:1d1d/1d1d/2020
 			strings.Contains(keyStr, ":1d1d/") ||     // Partial color responses
-			strings.Contains(keyStr, "gb:1d1d/") ||   // Truncated color responses
+			strings.Contains(keyStr, "gb:1d1d/") ||   // Truncated color responses (missing 'r')
+			strings.Contains(keyStr, "b:1c1c/") ||    // Another partial rgb: response
+			strings.Contains(keyStr, "1c/1f1f") ||    // Bare color hex values
+			strings.Contains(keyStr, "/1f1f") ||      // Fragment of hex color
+			strings.Contains(keyStr, "1c1c/") ||      // Fragment of hex color
 			strings.Contains(keyStr, "alt+]") ||      // OSC start sequence
 			strings.Contains(keyStr, "alt+\\") ||     // OSC/DCS end sequence
 			strings.Contains(keyStr, "CSI") ||        // Control Sequence Introducer
@@ -139,13 +151,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			(strings.HasPrefix(keyStr, "[") && strings.HasSuffix(keyStr, "R")) || // CPR: [row;colR
 			(strings.HasPrefix(keyStr, "]11;") || strings.HasPrefix(keyStr, "11;")) { // OSC 11 fragments
 			// Drop these fake key messages - they're terminal responses, not user input
-			log.Debug("Update", "filtered terminal escape sequence", keyStr)
+			// Don't log them - they're noise
 			return m, nil
 		}
 
 		// All real user keypresses get priority handling
 		// This ensures the UI is always responsive even when async messages are queued
-		log.Debug("Update", "priority key handling", keyMsg.String())
 		return m.keyMsgHandler(keyMsg)
 	}
 
@@ -153,7 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// These are private bubble tea types, so we check the string representation
 	msgStr := fmt.Sprintf("%T", msg)
 	if strings.Contains(msgStr, "unknownCSISequenceMsg") {
-		log.Debug("Update", "filtered unknown CSI sequence", msg)
+		// Don't log these - they're noise from terminal queries
 		return m, nil
 	}
 
@@ -163,6 +174,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		return m.errMsgHandler(msg)
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 
 	case TickMsg:
 		return m, tea.Batch(runScheduledJobs(&m)...)
@@ -181,7 +197,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.autoRefresh {
 			return m, nil
 		}
-		return m, updateIncidentList(m.config)
+		m.apiInProgress = true
+		return m, tea.Batch(m.spinner.Tick, updateIncidentList(m.config))
 
 	// Command to get an incident by ID
 	case getIncidentMsg:
@@ -193,7 +210,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.setStatus(fmt.Sprintf("getting details for incident %v...", msg))
 		id := string(msg)
-		cmds = append(cmds, 
+		m.apiInProgress = true
+		cmds = append(cmds,
+			m.spinner.Tick,
 			getIncident(m.config, id),
 			getIncidentAlerts(m.config, id),
 			getIncidentNotes(m.config, id),
@@ -229,8 +248,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedIncident = msg.incident
 			m.incidentDataLoaded = true
 
+			// Stop spinner if all incident data is loaded (details, notes, alerts)
+			if m.incidentDataLoaded && m.incidentNotesLoaded && m.incidentAlertsLoaded {
+				m.apiInProgress = false
+			}
+
+			// Re-render if we're viewing the incident to show updated details progressively
 			if m.viewingIncident {
-				return m, func() tea.Msg { return renderIncidentMsg("refresh") }
+				return m, func() tea.Msg { return renderIncidentMsg("incident details arrived") }
 			}
 		}
 
@@ -265,8 +290,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedIncidentNotes = msg.notes
 			m.incidentNotesLoaded = true
 
-			// Don't auto-render here - wait for explicit render request
-			// This prevents redundant template renders when alerts/notes arrive separately
+			// Stop spinner if all incident data is loaded (details, notes, alerts)
+			if m.incidentDataLoaded && m.incidentNotesLoaded && m.incidentAlertsLoaded {
+				m.apiInProgress = false
+			}
+
+			// Re-render if we're viewing the incident to show the notes progressively
+			if m.viewingIncident && m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+				return m, func() tea.Msg { return renderIncidentMsg("notes arrived") }
+			}
 		}
 
 	case gotIncidentAlertsMsg:
@@ -300,49 +332,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedIncidentAlerts = msg.alerts
 			m.incidentAlertsLoaded = true
 
-			// Don't auto-render here - wait for explicit render request
-			// This prevents redundant template renders when alerts/notes arrive separately
+			// Stop spinner if all incident data is loaded (details, notes, alerts)
+			if m.incidentDataLoaded && m.incidentNotesLoaded && m.incidentAlertsLoaded {
+				m.apiInProgress = false
+			}
+
+			// Re-render if we're viewing the incident to show the alerts progressively
+			if m.viewingIncident && m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+				return m, func() tea.Msg { return renderIncidentMsg("alerts arrived") }
+			}
 		}
 
 	case updateIncidentListMsg:
 		m.setStatus(loadingIncidentsStatus)
-		cmds = append(cmds, updateIncidentList(m.config))
+		m.apiInProgress = true
+		cmds = append(cmds, m.spinner.Tick, updateIncidentList(m.config))
 
 	case updatedIncidentListMsg:
 		if msg.err != nil {
+			m.apiInProgress = false
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 
-		var staleIncidentList []pagerduty.Incident
+		m.apiInProgress = false
+
 		var acknowledgeIncidentsList []pagerduty.Incident
 
-		// If m.incidentList contains incidents that are not in msg.incidents, add them to the stale list
+		// If m.incidentList contains incidents that are not in msg.incidents, they've been resolved
+		// Add them to the action log with key "R" instead of keeping them in the main table
 		for _, i := range m.incidentList {
 			idx := slices.IndexFunc(msg.incidents, func(incident pagerduty.Incident) bool {
 				return incident.ID == i.ID
 			})
 
-			updated, err := time.Parse(time.RFC3339, i.LastStatusChangeAt)
-
-			if err != nil {
-				log.Error("Update", "updatedIncidentListMsg", "failed to parse time", "incident", i.ID, "time", updated, "error", err)
-				updated = time.Now().Add(-(maxStaleAge))
-			}
-
-			age := time.Since(updated)
-			ttl := maxStaleAge - age
-
+			// If incident not in current list, it's been resolved
 			if idx == -1 {
-				if ttl <= 0 {
-					log.Debug("Update", "updatedIncidentListMsg", "removing stale incident", "incident", i.ID, "lastUpdated", updated, "ttl", ttl)
-				} else {
-					log.Debug("Update", "updatedIncidentListMsg", "adding stale incident", "incident", i.ID, "lastUpdated", updated, "ttl", ttl)
+				// Check if it's already in the action log to avoid duplicates
+				alreadyLogged := false
+				for _, entry := range m.actionLog {
+					if entry.id == i.ID && entry.key == "%R" {
+						alreadyLogged = true
+						break
+					}
+				}
 
-					// Add stale label to incident title to make it clear to the user
-					m := regexp.MustCompile(staleLabelRegex)
-					i.Title = m.ReplaceAllString(i.Title, staleLabelStr)
-
-					staleIncidentList = append(staleIncidentList, i)
+				if !alreadyLogged {
+					log.Debug("Update", "updatedIncidentListMsg", "adding resolved incident to action log", "incident", i.ID)
+					m.addActionLogEntry("%R", i.ID, i.Title, i.Service.Summary)
 				}
 			}
 		}
@@ -350,18 +386,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Overwrite m.incidentList with current incidents
 		m.incidentList = msg.incidents
 
-		// Pre-fetch incident data for all incidents in the list
-		for _, i := range m.incidentList {
-			// Check if incident is already cached
-			if _, exists := m.incidentCache[i.ID]; !exists {
-				// Not cached - pre-fetch all data in the background
-				cmds = append(cmds,
-					getIncident(m.config, i.ID),
-					getIncidentAlerts(m.config, i.ID),
-					getIncidentNotes(m.config, i.ID),
-				)
-			}
-		}
+		// Age out resolved incidents from action log that are older than maxStaleAge
+		m.ageOutResolvedIncidents(maxStaleAge)
+
+		// Note: We no longer pre-fetch all incident details, alerts, and notes here.
+		// This was inefficient because:
+		// 1. Most incidents are never viewed or acted upon
+		// 2. The incident list already contains sufficient data for most actions
+		// 3. getHighlightedIncident() uses data from m.incidentList directly
+		// 4. Details/alerts/notes are now fetched on-demand when actually needed:
+		//    - When user presses Enter to view an incident
+		//    - When user presses 'l' to login (needs alerts)
+		// This reduces unnecessary API calls from O(n) to O(1) per incident list update.
 
 		// Check if any incidents should be auto-acknowledged;
 		// This must be done before adding the stale incidents
@@ -380,11 +416,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Add stale incidents to the list
-		m.incidentList = append(m.incidentList, staleIncidentList...)
-
 		// Clean up cache - remove entries for incidents no longer in the list
-		// (including STALE incidents, but excluding those that have aged out)
 		incidentIDs := make(map[string]bool)
 		for _, i := range m.incidentList {
 			incidentIDs[i.ID] = true
@@ -464,6 +496,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("unable to refresh incident - no selected incident")
 			return m, nil
 		}
+
+		// Log note addition to action log
+		m.addActionLogEntry("n", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
+
 		cmds = append(cmds, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) })
 
 	case loginMsg:
@@ -498,6 +534,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case openBrowserMsg:
+		if m.selectedIncident == nil {
+			m.setStatus("no incident selected")
+			return m, nil
+		}
 		if defaultBrowserOpenCommand == "" {
 			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 		}
@@ -509,7 +549,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("failed to open browser: %s", msg.err))
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
+		if m.selectedIncident != nil {
+			m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
+		} else {
+			m.setStatus("opened incident in browser - check browser window")
+		}
 		return m, nil
 
 	// This is a catch all for any action that requires a selected incident
@@ -523,11 +567,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// If the user has closed the incident view (via ESC), abort the action
-		// instead of waiting forever for an incident that will never be set
-		if m.selectedIncident == nil && !m.viewingIncident {
-			log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "aborting action - incident view closed", "msg", msg.msg)
-			m.setStatus("action cancelled - incident view closed")
+		// If the user has closed the incident view (via ESC) AND there's no highlighted row in the table,
+		// abort the action instead of waiting forever for an incident that will never be set
+		if m.selectedIncident == nil && !m.viewingIncident && m.table.SelectedRow() == nil {
+			log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "aborting action - no incident selected or highlighted", "msg", msg.msg)
+			m.setStatus("action cancelled - no incident selected")
 			return m, nil
 		}
 
@@ -560,7 +604,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// This prevents late-arriving render messages from reopening the incident view
 		// after the user has already closed it with ESC
 		if m.selectedIncident != nil {
+			wasViewingBefore := m.viewingIncident
 			m.incidentViewer.SetContent(msg.content)
+			// Only go to top on first render, not on progressive updates
+			if !wasViewingBefore {
+				m.incidentViewer.GotoTop()
+			}
 			m.viewingIncident = true
 		} else {
 			log.Debug("renderedIncidentMsg", "action", "discarding render - incident was closed")
@@ -568,66 +617,87 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case acknowledgeIncidentsMsg:
 		// If incidents are provided in the message, use those
-		// Otherwise, use the selected incident from the model
+		// Otherwise, use the highlighted incident from the table, or the selected incident if viewing one
 		incidents := msg.incidents
 		if incidents == nil {
-			if m.selectedIncident == nil {
-				m.setStatus("failed acknowledging incidents - no incidents provided and no incident selected")
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				incident = m.selectedIncident
+			}
+			if incident == nil {
+				m.setStatus("failed acknowledging incidents - no incident highlighted or selected")
 				return m, nil
 			}
-			incidents = []pagerduty.Incident{*m.selectedIncident}
+			incidents = []pagerduty.Incident{*incident}
 		}
 
+		m.apiInProgress = true
 		return m, tea.Sequence(
+			m.spinner.Tick,
 			acknowledgeIncidents(m.config, incidents),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: acknowledgeIncidentsMsg") },
 		)
 
 	case unAcknowledgeIncidentsMsg:
 		// If incidents are provided in the message, use those
-		// Otherwise, use the selected incident from the model
+		// Otherwise, use the highlighted incident from the table, or the selected incident if viewing one
 		incidents := msg.incidents
 		if incidents == nil {
-			if m.selectedIncident == nil {
-				m.setStatus("failed re-escalating incidents - no incidents provided and no incident selected")
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				incident = m.selectedIncident
+			}
+			if incident == nil {
+				m.setStatus("failed re-escalating incidents - no incident highlighted or selected")
 				return m, nil
 			}
-			incidents = []pagerduty.Incident{*m.selectedIncident}
+			incidents = []pagerduty.Incident{*incident}
 		}
 
 		// Skip un-acknowledge step - go directly to re-escalation
 		// Re-escalation will reassign to the current on-call at the escalation level
-		// Group incidents by escalation policy
+		// Group incidents by their current escalation policy ID
 		policyGroups := make(map[string][]pagerduty.Incident)
 		for _, incident := range incidents {
-			policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
-			policyGroups[policyKey] = append(policyGroups[policyKey], incident)
+			// Use the incident's actual escalation policy, not a service-based lookup
+			if incident.EscalationPolicy.ID != "" {
+				policyGroups[incident.EscalationPolicy.ID] = append(policyGroups[incident.EscalationPolicy.ID], incident)
+			} else {
+				log.Warn("tui.unAcknowledgeIncidentsMsg", "incident has no escalation policy", "incident_id", incident.ID)
+			}
 		}
 
 		// Create re-escalate commands for each policy group
 		var cmds []tea.Cmd
-		for policyKey, incidents := range policyGroups {
-			policy := m.config.EscalationPolicies[policyKey]
-			if policy != nil && policy.ID != "" {
-				cmds = append(cmds, reEscalateIncidents(m.config, incidents, policy, reEscalateDefaultPolicyLevel))
-			}
+		for policyID, incidents := range policyGroups {
+			// Fetch the full escalation policy details for this policy ID
+			cmd := fetchEscalationPolicyAndReEscalate(m.config, incidents, policyID, reEscalateDefaultPolicyLevel)
+			cmds = append(cmds, cmd)
 		}
 
 		// Add clear selected incidents after re-escalation
 		cmds = append(cmds, func() tea.Msg { return clearSelectedIncidentsMsg("sender: unAcknowledgeIncidentsMsg") })
 
 		if len(cmds) > 0 {
+			m.apiInProgress = true
+			cmds = append([]tea.Cmd{m.spinner.Tick}, cmds...)
 			return m, tea.Sequence(cmds...)
 		}
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: unAcknowledgeIncidentsMsg") }
 
 	case acknowledgedIncidentsMsg:
+		m.apiInProgress = false
 		if msg.err != nil {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
 		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidentIDs))
+
+		// Log each acknowledgement to action log
+		for _, incident := range msg.incidents {
+			m.addActionLogEntry("a", incident.ID, incident.Title, incident.Service.Summary)
+		}
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
@@ -660,24 +730,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case reEscalatedIncidentsMsg:
+		m.apiInProgress = false
 		incidentIDs := getIDsFromIncidents(msg)
 		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", incidentIDs))
+
+		// Log each re-escalation to action log
+		for _, incident := range msg {
+			m.addActionLogEntry("^e", incident.ID, incident.Title, incident.Service.Summary)
+		}
+
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
 
 	case silenceSelectedIncidentMsg:
-		if m.selectedIncident == nil {
-			return m, func() tea.Msg {
-				return waitForSelectedIncidentThenDoMsg{
-					msg:    "silence",
-					action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
-				}
-			}
+		incident := m.getHighlightedIncident()
+		if incident == nil {
+			incident = m.selectedIncident
+		}
+		if incident == nil {
+			m.setStatus("failed silencing incident - no incident highlighted or selected")
+			return m, nil
 		}
 
-		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
+		// Log silence action immediately
+		m.addActionLogEntry("^s", incident.ID, incident.Title, incident.Service.Summary)
 
+		policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
+
+		m.apiInProgress = true
 		return m, tea.Sequence(
-			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
+			m.spinner.Tick,
+			silenceIncidents([]pagerduty.Incident{*incident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
 		)
 
@@ -691,6 +773,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.selectedIncident != nil {
 			incidents = append(msg.incidents, *m.selectedIncident)
 		}
+
+		// Log each silence action
+		for _, incident := range incidents {
+			m.addActionLogEntry("^s", incident.ID, incident.Title, incident.Service.Summary)
+		}
+
 		return m, tea.Sequence(
 			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },

@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 )
@@ -96,6 +95,8 @@ var (
 
 	paddedStyle = mainStyle.Padding(0, 2, 0, 1)
 
+	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#5C5C5C"})
+
 	//lint:ignore U1000 - future proofing
 	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
 
@@ -108,6 +109,13 @@ var (
 		Cell:     tableCellStyle,
 		Selected: tableSelectedStyle,
 		Header:   tableHeaderStyle,
+	}
+
+	// Action log table styles - no borders, no header, no selection highlight
+	actionLogTableStyle = table.Styles{
+		Cell:     tableCellStyle,
+		Selected: tableCellStyle, // Same as cell style = no highlight
+		Header:   lipgloss.NewStyle(), // Empty style = no header
 	}
 
 	incidentViewerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
@@ -149,18 +157,58 @@ func (m model) View() string {
 
 	default:
 		s.WriteString(tableContainerStyle.Render(m.table.View()))
-	}
-
-	if m.input.Focused() {
-
 		s.WriteString("\n")
-		s.WriteString(m.input.View())
+		// Render refresh status line immediately below main table
+		s.WriteString(m.renderFooter())
+		s.WriteString("\n")
+		// Input field always reserves a line (empty if not focused)
+		if m.input.Focused() {
+			s.WriteString(m.input.View())
+		} else {
+			s.WriteString("") // Preserve empty line when input not focused
+		}
+		// Only render action log if it's toggled on
+		if m.showActionLog {
+			s.WriteString("\n")
+			// Render action log table without borders, just with padding to maintain spacing
+			s.WriteString(paddedStyle.Render(m.actionLogTable.View()))
+		}
 	}
 
+	// Choose the appropriate keymap based on focus mode
+	var helpKeyMap help.KeyMap
+	if m.input.Focused() {
+		helpKeyMap = inputModeKeyMap
+	} else {
+		helpKeyMap = defaultKeyMap
+	}
+
+	// Render help separately so we can count its lines
+	helpView := paddedStyle.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
+
+	// Calculate how many newlines needed to push help and bottom status to terminal bottom
+	// Count lines in the rendered output so far
+	contentLines := strings.Count(s.String(), "\n") + 1 // +1 because first line doesn't have \n
+
+	// Count help lines
+	helpLines := strings.Count(helpView, "\n") + 1
+
+	// Calculate how many lines we need to add to reach the bottom
+	// -1 for the bottom status line itself, -helpLines for the help text
+	linesToBottom := windowSize.Height - contentLines - helpLines - 1
+
+	if linesToBottom > 0 {
+		for i := 0; i < linesToBottom; i++ {
+			s.WriteString("\n")
+		}
+	}
+
+	// Add help one line above bottom status
+	s.WriteString(helpView)
 	s.WriteString("\n")
-	s.WriteString(m.renderFooter())
-	s.WriteString("\n")
-	s.WriteString(paddedStyle.Width(windowSize.Width).Render(m.help.View(defaultKeyMap)))
+
+	// Add bottom status line at terminal bottom
+	s.WriteString(m.renderBottomStatus())
 
 	return mainStyle.Render(s.String())
 }
@@ -191,13 +239,52 @@ func (m model) renderHeader() string {
 		lipgloss.JoinHorizontal(
 			0.2,
 
-			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status)),
+			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status, m.apiInProgress, m.spinner.View())),
 
 			paddedStyle.Render(assigneeArea(assignedTo)),
 		),
 	)
 
 	s.WriteString("\n")
+	return s.String()
+}
+
+func (m model) renderActionLogHeader() string {
+	headerText := "Action Log"
+	// Center the header text horizontally
+	// Using windowSize.Width and paddedStyle to match the main UI width
+	centeredHeader := lipgloss.NewStyle().
+		Width(windowSize.Width).
+		Align(lipgloss.Center).
+		Render(headerText)
+	return paddedStyle.Render(centeredHeader)
+}
+
+func (m model) renderBottomStatus() string {
+	var s strings.Builder
+	var selectedID string
+
+	// Show highlighted incident from table, or selected incident if viewing one
+	incident := m.getHighlightedIncident()
+	if incident == nil {
+		incident = m.selectedIncident
+	}
+	if incident != nil {
+		selectedID = incident.ID
+	} else {
+		selectedID = ""
+	}
+
+	versionWidth := len(GitSHA) + 2
+
+	s.WriteString(
+		lipgloss.JoinHorizontal(
+			0.2,
+			mutedStyle.Width(windowSize.Width-versionWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
+			mutedStyle.Padding(0, 2, 0, 1).Render(GitSHA),
+		),
+	)
+
 	return s.String()
 }
 
@@ -208,11 +295,18 @@ func assigneeArea(s string) string {
 	return fstring
 }
 
-func statusArea(s string) string {
-	var fstring = "> %s"
+func statusArea(s string, showSpinner bool, spinnerView string) string {
+	if showSpinner {
+		// Apply normal text color to the status text to prevent spinner color bleed
+		statusStyle := lipgloss.NewStyle().Foreground(srepdPallet.normal.text)
+		return fmt.Sprintf("%s %s", spinnerView, statusStyle.Render(s))
+	}
+
+	var prefix = ">"
+	var fstring = "%s %s"
 	fstring = strings.TrimSuffix(fstring, "\n")
 
-	return fmt.Sprintf(fstring, s)
+	return fmt.Sprintf(fstring, prefix, s)
 }
 
 func refreshArea(autoRefresh bool, autoAck bool) string {
@@ -494,22 +588,15 @@ Details :
 {{ end }}
 `
 
-func renderIncidentMarkdown(content string, width int) (string, error) {
-	// Glamour adds its own padding/margins, so we need to subtract some space
-	// to prevent content from extending beyond the viewport
-	adjustedWidth := width - 4
-	if adjustedWidth < 40 {
-		adjustedWidth = 40 // Minimum reasonable width
+func renderIncidentMarkdown(m *model, content string) (string, error) {
+	// If no renderer available, return plain content
+	if m.markdownRenderer == nil {
+		return content, nil
 	}
 
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(adjustedWidth),
-	)
-	if err != nil {
-		return "", err
-	}
-	str, err := renderer.Render(content)
+	// Reuse the cached renderer - it was created with a reasonable default width
+	// and glamour's word wrapping will handle variations reasonably well
+	str, err := m.markdownRenderer.Render(content)
 	if err != nil {
 		return str, err
 	}

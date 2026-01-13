@@ -34,13 +34,72 @@ func main() {
 		log.Fatal(err)
 	}
 
-	f, err := os.OpenFile(home+"/.config/srepd/debug.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) //nolint:gomnd
+	// Open log file, truncating if it exists to prevent unbounded growth
+	// TODO: Implement proper log rotation
+	f, err := os.OpenFile(home+"/.config/srepd/debug.log", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gomnd
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f.Close() //nolint:errcheck
 
-	log.SetOutput(f)
+	// Use async writer to prevent log I/O from blocking the UI
+	asyncWriter := newAsyncWriter(f, 1000) // Buffer up to 1000 log messages
+	defer asyncWriter.Close()
+
+	log.SetOutput(asyncWriter)
 
 	cmd.Execute()
+}
+
+// asyncWriter wraps an io.Writer and writes asynchronously via a channel
+type asyncWriter struct {
+	out    chan []byte
+	done   chan struct{}
+	closed bool
+}
+
+func newAsyncWriter(w *os.File, bufferSize int) *asyncWriter {
+	aw := &asyncWriter{
+		out:  make(chan []byte, bufferSize),
+		done: make(chan struct{}),
+	}
+
+	// Start background goroutine to write logs
+	go func() {
+		for msg := range aw.out {
+			w.Write(msg) //nolint:errcheck
+		}
+		close(aw.done)
+	}()
+
+	return aw
+}
+
+func (aw *asyncWriter) Write(p []byte) (n int, err error) {
+	if aw.closed {
+		return 0, os.ErrClosed
+	}
+
+	// Make a copy since the caller might reuse the buffer
+	msg := make([]byte, len(p))
+	copy(msg, p)
+
+	// Non-blocking send - if buffer is full, drop the message
+	// This prevents blocking the UI if logging falls behind
+	select {
+	case aw.out <- msg:
+		return len(p), nil
+	default:
+		// Buffer full - drop message to avoid blocking
+		return len(p), nil
+	}
+}
+
+func (aw *asyncWriter) Close() error {
+	if !aw.closed {
+		aw.closed = true
+		close(aw.out)
+		<-aw.done // Wait for goroutine to finish
+	}
+	return nil
 }

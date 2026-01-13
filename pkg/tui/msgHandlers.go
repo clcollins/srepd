@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 
@@ -71,9 +72,21 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	tableVerticalScratchWidth := tableVerticalMargins + tableVerticalPadding + tableVerticalBorders + cellVerticalPadding + cellVerticalMargins + cellVerticalBorders
 
 	tableWidth := windowSize.Width - horizontalScratchWidth - tableHorizontalScratchWidth
-	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents
+	// Reserve lines for input field (1 line) and action log when visible (11 lines for 5-row table + spacing)
+	// Additional 10 lines for general spacing
+	inputReservedLines := 1
+	additionalSpacing := 10
+	actionLogReservedLines := 0
+	if m.showActionLog {
+		actionLogReservedLines = 11
+	}
+	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents - actionLogReservedLines - inputReservedLines - additionalSpacing
 
 	m.table.SetHeight(tableHeight)
+
+	// Action log table setup - fixed 6 rows
+	actionLogHeight := 6
+	m.actionLogTable.SetHeight(actionLogHeight)
 
 	// converting to floats, rounding up and converting back to int handles layout issues arising from odd numbers
 	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
@@ -99,8 +112,24 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		{Title: "Service", Width: columnWidth},
 	})
 
+	// Action log table columns: mirror main table layout exactly
+	// Same 4 columns as main table, but no headers and keypress in first column instead of dot
+	// Keypress needs 2 chars (for "^e" etc), so take 1 char from the action column
+	keyPressWidth := 2
+	m.actionLogTable.SetColumns([]table.Column{
+		{Title: "", Width: keyPressWidth},      // Keypress column (2 chars for "^e" etc)
+		{Title: "", Width: idWidth - dotWidth}, // ID column (same as main table)
+		{Title: "", Width: columnWidth},        // Summary column (same as main table)
+		{Title: "", Width: columnWidth - 1},    // Action column (1 char less to compensate for wider keypress)
+	})
+
 	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth
-	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth - incidentVerticalScratchWidth
+	// Account for header (2 lines), footer (1 line), help (~2 lines), bottom status (1 line), and spacing
+	reservedLines := 7 // header + footer + help + bottom status + borders/padding
+	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth - incidentVerticalScratchWidth - reservedLines
+	if m.incidentViewer.Height < 10 {
+		m.incidentViewer.Height = 10 // Minimum height
+	}
 
 	m.help.Width = windowSize.Width - horizontalScratchWidth
 
@@ -119,6 +148,11 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.AutoAck) {
 		m.autoAcknowledge = !m.autoAcknowledge
+		return m, nil
+	}
+
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.ToggleActionLog) {
+		m.showActionLog = !m.showActionLog
 		return m, nil
 	}
 
@@ -149,7 +183,6 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // tableFocusMode is the main mode for the application
 func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchTableFocusMode", reflect.TypeOf(msg), msg)
 	var cmds []tea.Cmd
 
 	// [1] is column two of the row: the incident ID
@@ -161,8 +194,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	} else {
 		incidentID = m.table.SelectedRow()[1]
 	}
-
-	log.Debug("switchTableFocusMode", "incidentID", incidentID)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -250,68 +281,58 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			)
 
 		case key.Matches(msg, defaultKeyMap.Silence):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{
-						msg: "silence",
-						action: func() tea.Msg {
-							return silenceSelectedIncidentMsg{}
-						},
-					}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Ack):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{
-						msg: "acknowledge",
-						action: func() tea.Msg {
-							return acknowledgeIncidentsMsg{}
-						},
-					}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			return m, func() tea.Msg { return acknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{
-						msg: "un-acknowledge",
-						action: func() tea.Msg {
-							return unAcknowledgeIncidentsMsg{}
-						},
-					}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					msg := "add note"
-					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return parseTemplateForNoteMsg(msg) }, msg: msg}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				m.setStatus("failed to find incident")
+				return m, nil
+			}
+			return m, parseTemplateForNote(incident)
 
 		case key.Matches(msg, defaultKeyMap.Login):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
-				},
-			))
+			return m, doIfIncidentSelected(&m, func() tea.Msg {
+				return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
+			})
 
 		case key.Matches(msg, defaultKeyMap.Open):
-			return m, doIfIncidentSelected(&m, tea.Sequence(
-				func() tea.Msg { return getIncidentMsg(incidentID) },
-				func() tea.Msg {
-					return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return openBrowserMsg("incident") }, msg: ""}
-				},
-			))
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			incident := m.getHighlightedIncident()
+			if incident == nil {
+				m.setStatus("failed to find incident")
+				return m, nil
+			}
+			if defaultBrowserOpenCommand == "" {
+				return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
+			}
+			c := []string{defaultBrowserOpenCommand}
+			return m, openBrowserCmd(c, incident.HTMLURL)
 
 		}
 	}
@@ -319,30 +340,37 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchInputFocusMode", reflect.TypeOf(msg), msg)
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, defaultKeyMap.Help):
-			m.toggleHelp()
+		case key.Matches(msg, defaultKeyMap.Quit):
+			// Ctrl+q/Ctrl+c quits the application
+			return m, tea.Quit
 
 		case key.Matches(msg, defaultKeyMap.Back):
+			// Esc exits input mode
 			m.input.Blur()
 			m.table.Focus()
-			m.input.Prompt = defaultInputPrompt
+			m.input.Reset() // Clear the input text
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Enter):
+			// For now, do nothing on Enter
+			// Future: process the input command
+			return m, nil
 
+		default:
+			// Pass ALL other keypresses (including 'h') to the input component
+			// This allows text entry and disables all other key bindings
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			return m, cmd
 		}
 	}
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchIncidentFocusMode", reflect.TypeOf(msg), msg)
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 

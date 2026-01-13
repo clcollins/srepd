@@ -215,7 +215,7 @@ func renderIncident(m *model) tea.Cmd {
 			return errMsg{err}
 		}
 
-		content, err := renderIncidentMarkdown(t, m.incidentViewer.Width)
+		content, err := renderIncidentMarkdown(m, t)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -574,6 +574,24 @@ func reEscalateIncidents(p *pd.Config, i []pagerduty.Incident, e *pagerduty.Esca
 	}
 }
 
+func fetchEscalationPolicyAndReEscalate(p *pd.Config, incidents []pagerduty.Incident, policyID string, level uint) tea.Cmd {
+	return func() tea.Msg {
+		// Fetch the full escalation policy details
+		policy, err := pd.GetEscalationPolicy(p.Client, policyID, pagerduty.GetEscalationPolicyOptions{})
+		if err != nil {
+			log.Error("tui.fetchEscalationPolicyAndReEscalate", "failed to fetch escalation policy", "policy_id", policyID, "error", err)
+			return errMsg{err}
+		}
+
+		// Now re-escalate with the fetched policy
+		r, err := pd.ReEscalateIncidents(p.Client, incidents, p.CurrentUser, policy, level)
+		if err != nil {
+			return errMsg{err}
+		}
+		return reEscalatedIncidentsMsg(r)
+	}
+}
+
 type silenceSelectedIncidentMsg struct{}
 type silenceIncidentsMsg struct {
 	incidents []pagerduty.Incident
@@ -668,20 +686,16 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 		if a.Body["details"].(map[string]interface{})[f] != nil {
 			return a.Body["details"].(map[string]interface{})[f].(string)
 		}
-		log.Debug(fmt.Sprintf("tui.getDetailFieldFromAlert(): alert body \"details\" does not contain field %s", f))
 		return ""
 	}
-	log.Debug("tui.getDetailFieldFromAlert(): alert body \"details\" is nil")
 	return ""
 }
 
 // getEscalationPolicyKey is a helper function to determine the escalation policy key
 func getEscalationPolicyKey(serviceID string, policies map[string]*pagerduty.EscalationPolicy) string {
-	if policy, ok := policies[serviceID]; ok {
-		log.Debug("Update", "getEscalationPolicyKey", "escalation policy override found for service", "service", serviceID, "policy", policy.Name)
+	if _, ok := policies[serviceID]; ok {
 		return serviceID
 	}
-	log.Debug("Update", "getEscalationPolicyKey", "no escalation policy override for service; using default", "service", serviceID, "policy", silentDefaultPolicyKey)
 	return silentDefaultPolicyKey
 }
 
