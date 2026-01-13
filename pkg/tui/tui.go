@@ -108,14 +108,23 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 // return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgType := reflect.TypeOf(msg)
-	// TickMsg and arrow key messages are not helpful for logging
-	shouldLog := msgType != reflect.TypeOf(TickMsg{})
+	// Reduce logging for high-frequency messages to prevent I/O overhead
+	shouldLog := true
+
+	// Skip logging for very frequent messages
+	switch msgType {
+	case reflect.TypeOf(TickMsg{}),
+		reflect.TypeOf(spinner.TickMsg{}):
+		shouldLog = false
+	}
+
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && shouldLog {
-		// Skip logging for arrow keys used in scrolling
+		// Skip logging for arrow keys and other navigation used in scrolling
 		if keyMsg.Type == tea.KeyUp || keyMsg.Type == tea.KeyDown {
 			shouldLog = false
 		}
 	}
+
 	if shouldLog {
 		log.Debug("Update", msgType, filterMsgContent(msg))
 	}
@@ -147,7 +156,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// All real user keypresses get priority handling
 		// This ensures the UI is always responsive even when async messages are queued
-		log.Debug("Update", "priority key handling", keyMsg.String())
 		return m.keyMsgHandler(keyMsg)
 	}
 
