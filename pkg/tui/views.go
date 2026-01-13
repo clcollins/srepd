@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 )
@@ -559,22 +558,15 @@ Details :
 {{ end }}
 `
 
-func renderIncidentMarkdown(content string, width int) (string, error) {
-	// Glamour adds its own padding/margins, so we need to subtract some space
-	// to prevent content from extending beyond the viewport
-	adjustedWidth := width - 4
-	if adjustedWidth < 40 {
-		adjustedWidth = 40 // Minimum reasonable width
+func renderIncidentMarkdown(m *model, content string) (string, error) {
+	// If no renderer available, return plain content
+	if m.markdownRenderer == nil {
+		return content, nil
 	}
 
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(adjustedWidth),
-	)
-	if err != nil {
-		return "", err
-	}
-	str, err := renderer.Render(content)
+	// Reuse the cached renderer - it was created with a reasonable default width
+	// and glamour's word wrapping will handle variations reasonably well
+	str, err := m.markdownRenderer.Render(content)
 	if err != nil {
 		return str, err
 	}

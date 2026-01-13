@@ -155,7 +155,6 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // tableFocusMode is the main mode for the application
 func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchTableFocusMode", reflect.TypeOf(msg), msg)
 	var cmds []tea.Cmd
 
 	// [1] is column two of the row: the incident ID
@@ -167,8 +166,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	} else {
 		incidentID = m.table.SelectedRow()[1]
 	}
-
-	log.Debug("switchTableFocusMode", "incidentID", incidentID)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -315,8 +312,6 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchInputFocusMode", reflect.TypeOf(msg), msg)
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -348,7 +343,6 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Debug("switchIncidentFocusMode", reflect.TypeOf(msg), msg)
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 

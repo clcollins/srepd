@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
@@ -41,14 +42,15 @@ type model struct {
 	editor   []string
 	launcher launcher.ClusterLauncher
 
-	table table.Model
-	input textinput.Model
+	table           table.Model
+	input           textinput.Model
 	// This is a hack since viewport.Model doesn't have a Focused() method
 	viewingIncident bool
 	incidentViewer  viewport.Model
 	help            help.Model
 	spinner         spinner.Model
 	apiInProgress   bool
+	markdownRenderer *glamour.TermRenderer
 
 	status string
 
@@ -88,21 +90,33 @@ func InitialModel(
 	s.Spinner = spinner.MiniDot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
+	// Create markdown renderer once - reusing it is much faster than creating new ones
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(100), // Default width, will be adjusted on window resize
+	)
+	if err != nil {
+		log.Error("InitialModel", "failed to create markdown renderer", err)
+		// Continue without renderer - rendering will fall back to plain text
+		renderer = nil
+	}
+
 	m := model{
 
-		editor:         editor,
-		launcher:       launcher,
-		debug:          debug,
-		help:           newHelp(),
-		table:          newTableWithStyles(),
-		input:          newTextInput(),
-		incidentViewer: newIncidentViewer(),
-		spinner:        s,
-		apiInProgress:  false,
-		status:         "",
-		incidentCache:  make(map[string]*cachedIncidentData),
-		scheduledJobs:  append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:    true, // Start watching for updates on startup
+		editor:           editor,
+		launcher:         launcher,
+		debug:            debug,
+		help:             newHelp(),
+		table:            newTableWithStyles(),
+		input:            newTextInput(),
+		incidentViewer:   newIncidentViewer(),
+		spinner:          s,
+		markdownRenderer: renderer,
+		apiInProgress:    false,
+		status:           "",
+		incidentCache:    make(map[string]*cachedIncidentData),
+		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:      true, // Start watching for updates on startup
 	}
 
 	// This is an ugly way to handle this error
