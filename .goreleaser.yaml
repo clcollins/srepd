@@ -11,6 +11,8 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
+    ldflags:
+      - -X github.com/clcollins/srepd/pkg/tui.GitSHA={{.ShortCommit}}
     goos:
       - linux
       - darwin

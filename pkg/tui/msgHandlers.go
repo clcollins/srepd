@@ -101,7 +101,12 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	})
 
 	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth
-	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth - incidentVerticalScratchWidth
+	// Account for header (2 lines), footer (1 line), help (~2 lines), bottom status (1 line), and spacing
+	reservedLines := 7 // header + footer + help + bottom status + borders/padding
+	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth - incidentVerticalScratchWidth - reservedLines
+	if m.incidentViewer.Height < 10 {
+		m.incidentViewer.Height = 10 // Minimum height
+	}
 
 	m.help.Width = windowSize.Width - horizontalScratchWidth
 

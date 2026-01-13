@@ -96,6 +96,8 @@ var (
 
 	paddedStyle = mainStyle.Padding(0, 2, 0, 1)
 
+	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#5C5C5C"})
+
 	//lint:ignore U1000 - future proofing
 	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
 
@@ -168,7 +170,27 @@ func (m model) View() string {
 	} else {
 		helpKeyMap = defaultKeyMap
 	}
-	s.WriteString(paddedStyle.Width(windowSize.Width).Render(m.help.View(helpKeyMap)))
+
+	// Render help separately so we can count its lines
+	helpView := paddedStyle.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
+	s.WriteString(helpView)
+
+	// Calculate how many newlines needed to push bottom status to terminal bottom
+	// Count lines in the rendered output before help
+	contentLines := strings.Count(s.String(), "\n") + 1 // +1 because first line doesn't have \n
+
+	// Calculate how many lines we need to add to reach the bottom
+	// -1 for the bottom status line itself
+	linesToBottom := windowSize.Height - contentLines - 1
+
+	if linesToBottom > 0 {
+		for i := 0; i < linesToBottom; i++ {
+			s.WriteString("\n")
+		}
+	}
+
+	// Add bottom status line at terminal bottom
+	s.WriteString(m.renderBottomStatus())
 
 	return mainStyle.Render(s.String())
 }
@@ -206,6 +228,34 @@ func (m model) renderHeader() string {
 	)
 
 	s.WriteString("\n")
+	return s.String()
+}
+
+func (m model) renderBottomStatus() string {
+	var s strings.Builder
+	var selectedID string
+
+	// Show highlighted incident from table, or selected incident if viewing one
+	incident := m.getHighlightedIncident()
+	if incident == nil {
+		incident = m.selectedIncident
+	}
+	if incident != nil {
+		selectedID = incident.ID
+	} else {
+		selectedID = ""
+	}
+
+	versionWidth := len(GitSHA) + 2
+
+	s.WriteString(
+		lipgloss.JoinHorizontal(
+			0.2,
+			mutedStyle.Width(windowSize.Width-versionWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
+			mutedStyle.Padding(0, 2, 0, 1).Render(GitSHA),
+		),
+	)
+
 	return s.String()
 }
 
