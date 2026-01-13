@@ -189,6 +189,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.apiInProgress = true
+
+		// If viewing an incident, also refresh its data
+		if m.viewingIncident && m.selectedIncident != nil {
+			return m, tea.Batch(
+				m.spinner.Tick,
+				updateIncidentList(m.config),
+				func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) },
+			)
+		}
+
 		return m, tea.Batch(m.spinner.Tick, updateIncidentList(m.config))
 
 	// Command to get an incident by ID
@@ -239,8 +249,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedIncident = msg.incident
 			m.incidentDataLoaded = true
 
+			// Re-render if we're viewing the incident to show updated details progressively
 			if m.viewingIncident {
-				return m, func() tea.Msg { return renderIncidentMsg("refresh") }
+				return m, func() tea.Msg { return renderIncidentMsg("incident details arrived") }
 			}
 		}
 
@@ -275,8 +286,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedIncidentNotes = msg.notes
 			m.incidentNotesLoaded = true
 
-			// Don't auto-render here - wait for explicit render request
-			// This prevents redundant template renders when alerts/notes arrive separately
+			// Re-render if we're viewing the incident to show the notes progressively
+			if m.viewingIncident && m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+				return m, func() tea.Msg { return renderIncidentMsg("notes arrived") }
+			}
 		}
 
 	case gotIncidentAlertsMsg:
@@ -310,8 +323,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedIncidentAlerts = msg.alerts
 			m.incidentAlertsLoaded = true
 
-			// Don't auto-render here - wait for explicit render request
-			// This prevents redundant template renders when alerts/notes arrive separately
+			// Re-render if we're viewing the incident to show the alerts progressively
+			if m.viewingIncident && m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
+				return m, func() tea.Msg { return renderIncidentMsg("alerts arrived") }
+			}
 		}
 
 	case updateIncidentListMsg:
@@ -572,6 +587,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// after the user has already closed it with ESC
 		if m.selectedIncident != nil {
 			m.incidentViewer.SetContent(msg.content)
+			m.incidentViewer.GotoTop()
 			m.viewingIncident = true
 		} else {
 			log.Debug("renderedIncidentMsg", "action", "discarding render - incident was closed")
