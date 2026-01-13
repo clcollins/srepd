@@ -72,9 +72,21 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	tableVerticalScratchWidth := tableVerticalMargins + tableVerticalPadding + tableVerticalBorders + cellVerticalPadding + cellVerticalMargins + cellVerticalBorders
 
 	tableWidth := windowSize.Width - horizontalScratchWidth - tableHorizontalScratchWidth
-	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents
+	// Reserve lines for input field (1 line) and action log when visible (11 lines for 5-row table + spacing)
+	// Additional 10 lines for general spacing
+	inputReservedLines := 1
+	additionalSpacing := 10
+	actionLogReservedLines := 0
+	if m.showActionLog {
+		actionLogReservedLines = 11
+	}
+	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents - actionLogReservedLines - inputReservedLines - additionalSpacing
 
 	m.table.SetHeight(tableHeight)
+
+	// Action log table setup - fixed 6 rows
+	actionLogHeight := 6
+	m.actionLogTable.SetHeight(actionLogHeight)
 
 	// converting to floats, rounding up and converting back to int handles layout issues arising from odd numbers
 	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
@@ -98,6 +110,17 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		{Title: "ID", Width: idWidth - dotWidth},
 		{Title: "Summary", Width: columnWidth},
 		{Title: "Service", Width: columnWidth},
+	})
+
+	// Action log table columns: mirror main table layout exactly
+	// Same 4 columns as main table, but no headers and keypress in first column instead of dot
+	// Keypress needs 2 chars (for "^e" etc), so take 1 char from the action column
+	keyPressWidth := 2
+	m.actionLogTable.SetColumns([]table.Column{
+		{Title: "", Width: keyPressWidth},      // Keypress column (2 chars for "^e" etc)
+		{Title: "", Width: idWidth - dotWidth}, // ID column (same as main table)
+		{Title: "", Width: columnWidth},        // Summary column (same as main table)
+		{Title: "", Width: columnWidth - 1},    // Action column (1 char less to compensate for wider keypress)
 	})
 
 	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth
@@ -125,6 +148,11 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.AutoAck) {
 		m.autoAcknowledge = !m.autoAcknowledge
+		return m, nil
+	}
+
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.ToggleActionLog) {
+		m.showActionLog = !m.showActionLog
 		return m, nil
 	}
 

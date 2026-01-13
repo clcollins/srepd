@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -19,11 +18,9 @@ const (
 	title              = "SREPD: It really whips the PDs' ACKs!"
 	waitTime           = time.Millisecond * 1
 	defaultInputPrompt = " $ "
-	maxStaleAge        = time.Minute * 5
+	maxStaleAge        = time.Minute * 5 // How long resolved incidents stay in action log
 	nilNoteErr         = "incident note content is empty"
 	nilIncidentMsg     = "no incident selected"
-	staleLabelRegex    = "^(\\[STALE\\]\\s)?(.*)$"
-	staleLabelStr      = "[STALE] $2"
 )
 
 const (
@@ -359,42 +356,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.apiInProgress = false
 
-		var staleIncidentList []pagerduty.Incident
 		var acknowledgeIncidentsList []pagerduty.Incident
 
-		// If m.incidentList contains incidents that are not in msg.incidents, add them to the stale list
+		// If m.incidentList contains incidents that are not in msg.incidents, they've been resolved
+		// Add them to the action log with key "R" instead of keeping them in the main table
 		for _, i := range m.incidentList {
 			idx := slices.IndexFunc(msg.incidents, func(incident pagerduty.Incident) bool {
 				return incident.ID == i.ID
 			})
 
-			updated, err := time.Parse(time.RFC3339, i.LastStatusChangeAt)
-
-			if err != nil {
-				log.Error("Update", "updatedIncidentListMsg", "failed to parse time", "incident", i.ID, "time", updated, "error", err)
-				updated = time.Now().Add(-(maxStaleAge))
-			}
-
-			age := time.Since(updated)
-			ttl := maxStaleAge - age
-
+			// If incident not in current list, it's been resolved
 			if idx == -1 {
-				if ttl <= 0 {
-					log.Debug("Update", "updatedIncidentListMsg", "removing stale incident", "incident", i.ID, "lastUpdated", updated, "ttl", ttl)
-				} else {
-					log.Debug("Update", "updatedIncidentListMsg", "adding stale incident", "incident", i.ID, "lastUpdated", updated, "ttl", ttl)
+				// Check if it's already in the action log to avoid duplicates
+				alreadyLogged := false
+				for _, entry := range m.actionLog {
+					if entry.id == i.ID && entry.key == "%R" {
+						alreadyLogged = true
+						break
+					}
+				}
 
-					// Add stale label to incident title to make it clear to the user
-					m := regexp.MustCompile(staleLabelRegex)
-					i.Title = m.ReplaceAllString(i.Title, staleLabelStr)
-
-					staleIncidentList = append(staleIncidentList, i)
+				if !alreadyLogged {
+					log.Debug("Update", "updatedIncidentListMsg", "adding resolved incident to action log", "incident", i.ID)
+					m.addActionLogEntry("%R", i.ID, i.Title, i.Service.Summary)
 				}
 			}
 		}
 
 		// Overwrite m.incidentList with current incidents
 		m.incidentList = msg.incidents
+
+		// Age out resolved incidents from action log that are older than maxStaleAge
+		m.ageOutResolvedIncidents(maxStaleAge)
 
 		// Note: We no longer pre-fetch all incident details, alerts, and notes here.
 		// This was inefficient because:
@@ -423,11 +416,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Add stale incidents to the list
-		m.incidentList = append(m.incidentList, staleIncidentList...)
-
 		// Clean up cache - remove entries for incidents no longer in the list
-		// (including STALE incidents, but excluding those that have aged out)
 		incidentIDs := make(map[string]bool)
 		for _, i := range m.incidentList {
 			incidentIDs[i.ID] = true
@@ -507,6 +496,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("unable to refresh incident - no selected incident")
 			return m, nil
 		}
+
+		// Log note addition to action log
+		m.addActionLogEntry("n", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
+
 		cmds = append(cmds, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) })
 
 	case loginMsg:
@@ -541,6 +534,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case openBrowserMsg:
+		if m.selectedIncident == nil {
+			m.setStatus("no incident selected")
+			return m, nil
+		}
 		if defaultBrowserOpenCommand == "" {
 			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 		}
@@ -552,7 +549,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("failed to open browser: %s", msg.err))
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
-		m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
+		if m.selectedIncident != nil {
+			m.setStatus(fmt.Sprintf("opened incident %s in browser - check browser window", m.selectedIncident.ID))
+		} else {
+			m.setStatus("opened incident in browser - check browser window")
+		}
 		return m, nil
 
 	// This is a catch all for any action that requires a selected incident
@@ -693,6 +694,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
 		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidentIDs))
 
+		// Log each acknowledgement to action log
+		for _, incident := range msg.incidents {
+			m.addActionLogEntry("a", incident.ID, incident.Title, incident.Service.Summary)
+		}
+
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
 
 
@@ -727,6 +733,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiInProgress = false
 		incidentIDs := getIDsFromIncidents(msg)
 		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", incidentIDs))
+
+		// Log each re-escalation to action log
+		for _, incident := range msg {
+			m.addActionLogEntry("^e", incident.ID, incident.Title, incident.Service.Summary)
+		}
+
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
 
 	case silenceSelectedIncidentMsg:
@@ -738,6 +750,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("failed silencing incident - no incident highlighted or selected")
 			return m, nil
 		}
+
+		// Log silence action immediately
+		m.addActionLogEntry("^s", incident.ID, incident.Title, incident.Service.Summary)
 
 		policyKey := getEscalationPolicyKey(incident.Service.ID, m.config.EscalationPolicies)
 
@@ -758,6 +773,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.selectedIncident != nil {
 			incidents = append(msg.incidents, *m.selectedIncident)
 		}
+
+		// Log each silence action
+		for _, incident := range incidents {
+			m.addActionLogEntry("^s", incident.ID, incident.Title, incident.Service.Summary)
+		}
+
 		return m, tea.Sequence(
 			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
 			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },

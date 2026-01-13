@@ -14,30 +14,31 @@ func (k keymap) FullHelp() [][]key.Binding {
 		{k.Ack, k.Login, k.Open, k.Note},
 		{k.UnAck, k.Silence},
 		{k.Team, k.Refresh},
-		{k.AutoRefresh, k.AutoAck, k.Quit, k.Help},
+		{k.AutoRefresh, k.AutoAck, k.ToggleActionLog, k.Quit, k.Help},
 	}
 }
 
 type keymap struct {
-	Up          key.Binding
-	Down        key.Binding
-	Top         key.Binding
-	Bottom      key.Binding
-	Back        key.Binding
-	Enter       key.Binding
-	Quit        key.Binding
-	Help        key.Binding
-	Team        key.Binding
-	Refresh     key.Binding
-	AutoRefresh key.Binding
-	Note        key.Binding
-	Silence     key.Binding
-	Ack         key.Binding
-	UnAck       key.Binding
-	AutoAck     key.Binding
-	Input       key.Binding
-	Login       key.Binding
-	Open        key.Binding
+	Up              key.Binding
+	Down            key.Binding
+	Top             key.Binding
+	Bottom          key.Binding
+	Back            key.Binding
+	Enter           key.Binding
+	Quit            key.Binding
+	Help            key.Binding
+	Team            key.Binding
+	Refresh         key.Binding
+	AutoRefresh     key.Binding
+	Note            key.Binding
+	Silence         key.Binding
+	Ack             key.Binding
+	UnAck           key.Binding
+	AutoAck         key.Binding
+	ToggleActionLog key.Binding
+	Input           key.Binding
+	Login           key.Binding
+	Open            key.Binding
 }
 
 type inputKeymap struct {
@@ -137,6 +138,10 @@ var defaultKeyMap = keymap{
 	AutoAck: key.NewBinding(
 		key.WithKeys("ctrl+a"),
 		key.WithHelp("ctrl+a", "toggle auto-acknowledge"),
+	),
+	ToggleActionLog: key.NewBinding(
+		key.WithKeys("ctrl+l"),
+		key.WithHelp("ctrl+l", "toggle action log"),
 	),
 	Input: key.NewBinding(
 		key.WithKeys("i", ":"),

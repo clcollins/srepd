@@ -111,6 +111,13 @@ var (
 		Header:   tableHeaderStyle,
 	}
 
+	// Action log table styles - no borders, no header, no selection highlight
+	actionLogTableStyle = table.Styles{
+		Cell:     tableCellStyle,
+		Selected: tableCellStyle, // Same as cell style = no highlight
+		Header:   lipgloss.NewStyle(), // Empty style = no header
+	}
+
 	incidentViewerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
 
 	errorStyle = lipgloss.NewStyle().
@@ -150,17 +157,23 @@ func (m model) View() string {
 
 	default:
 		s.WriteString(tableContainerStyle.Render(m.table.View()))
-	}
-
-	if m.input.Focused() {
-
 		s.WriteString("\n")
-		s.WriteString(m.input.View())
+		// Render refresh status line immediately below main table
+		s.WriteString(m.renderFooter())
+		s.WriteString("\n")
+		// Input field always reserves a line (empty if not focused)
+		if m.input.Focused() {
+			s.WriteString(m.input.View())
+		} else {
+			s.WriteString("") // Preserve empty line when input not focused
+		}
+		// Only render action log if it's toggled on
+		if m.showActionLog {
+			s.WriteString("\n")
+			// Render action log table without borders, just with padding to maintain spacing
+			s.WriteString(paddedStyle.Render(m.actionLogTable.View()))
+		}
 	}
-
-	s.WriteString("\n")
-	s.WriteString(m.renderFooter())
-	s.WriteString("\n")
 
 	// Choose the appropriate keymap based on focus mode
 	var helpKeyMap help.KeyMap
@@ -172,21 +185,27 @@ func (m model) View() string {
 
 	// Render help separately so we can count its lines
 	helpView := paddedStyle.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
-	s.WriteString(helpView)
 
-	// Calculate how many newlines needed to push bottom status to terminal bottom
-	// Count lines in the rendered output before help
+	// Calculate how many newlines needed to push help and bottom status to terminal bottom
+	// Count lines in the rendered output so far
 	contentLines := strings.Count(s.String(), "\n") + 1 // +1 because first line doesn't have \n
 
+	// Count help lines
+	helpLines := strings.Count(helpView, "\n") + 1
+
 	// Calculate how many lines we need to add to reach the bottom
-	// -1 for the bottom status line itself
-	linesToBottom := windowSize.Height - contentLines - 1
+	// -1 for the bottom status line itself, -helpLines for the help text
+	linesToBottom := windowSize.Height - contentLines - helpLines - 1
 
 	if linesToBottom > 0 {
 		for i := 0; i < linesToBottom; i++ {
 			s.WriteString("\n")
 		}
 	}
+
+	// Add help one line above bottom status
+	s.WriteString(helpView)
+	s.WriteString("\n")
 
 	// Add bottom status line at terminal bottom
 	s.WriteString(m.renderBottomStatus())
@@ -228,6 +247,17 @@ func (m model) renderHeader() string {
 
 	s.WriteString("\n")
 	return s.String()
+}
+
+func (m model) renderActionLogHeader() string {
+	headerText := "Action Log"
+	// Center the header text horizontally
+	// Using windowSize.Width and paddedStyle to match the main UI width
+	centeredHeader := lipgloss.NewStyle().
+		Width(windowSize.Width).
+		Align(lipgloss.Center).
+		Render(headerText)
+	return paddedStyle.Render(centeredHeader)
 }
 
 func (m model) renderBottomStatus() string {
