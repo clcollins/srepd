@@ -7,14 +7,18 @@ func (k keymap) ShortHelp() []key.Binding {
 }
 
 func (k keymap) FullHelp() [][]key.Binding {
-	// TODO: Return a pop-over window here instead
+	// Column layout:
+	// Col 1: Navigation + Help
+	// Col 2: Primary incident actions
+	// Col 3: Settings & toggles, Quit at bottom
+
 	return [][]key.Binding{
-		// Each slice here is a column in the help window
-		{k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
-		{k.Ack, k.Login, k.Open, k.Note},
-		{k.UnAck, k.Silence},
-		{k.Team, k.Refresh},
-		{k.AutoRefresh, k.AutoAck, k.ToggleActionLog, k.Quit, k.Help},
+		// Column 1: Help at top, navigation
+		{k.Help, k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
+		// Column 2: Primary incident actions
+		{k.Ack, k.Note, k.Login, k.Open, k.UnAck, k.Silence},
+		// Column 3: Settings & toggles, Quit at bottom
+		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.ToggleActionLog, k.Quit},
 	}
 }
 

@@ -111,12 +111,15 @@ var (
 		Header:   tableHeaderStyle,
 	}
 
-	// Action log table styles - no borders, no header, no selection highlight
+	// Action log table styles - header with border like main table, no selection highlight
 	actionLogTableStyle = table.Styles{
 		Cell:     tableCellStyle,
 		Selected: tableCellStyle, // Same as cell style = no highlight
-		Header:   lipgloss.NewStyle(), // Empty style = no header
+		Header:   tableHeaderStyle, // Same header style as main table (with border)
 	}
+
+	// Action log container style - border like main table
+	actionLogContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
 
 	incidentViewerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
 
@@ -170,8 +173,8 @@ func (m model) View() string {
 		// Only render action log if it's toggled on
 		if m.showActionLog {
 			s.WriteString("\n")
-			// Render action log table without borders, just with padding to maintain spacing
-			s.WriteString(paddedStyle.Render(m.actionLogTable.View()))
+			// Render action log table with border like main table
+			s.WriteString(actionLogContainerStyle.Render(m.actionLogTable.View()))
 		}
 	}
 
@@ -264,13 +267,9 @@ func (m model) renderBottomStatus() string {
 	var s strings.Builder
 	var selectedID string
 
-	// Show highlighted incident from table, or selected incident if viewing one
-	incident := m.getHighlightedIncident()
-	if incident == nil {
-		incident = m.selectedIncident
-	}
-	if incident != nil {
-		selectedID = incident.ID
+	// Show selected incident (always synced to highlighted row)
+	if m.selectedIncident != nil {
+		selectedID = m.selectedIncident.ID
 	} else {
 		selectedID = ""
 	}
