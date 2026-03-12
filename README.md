@@ -229,7 +229,7 @@ When using `ocm-container` as your cluster login command, srepd automatically pa
 The following environment variables are automatically set:
 
 * `PAGERDUTY_INCIDENT` - The PagerDuty incident ID
-* `ALERT_DETAILS` - Base64-encoded JSON containing the full incident object and all associated alerts
+* `ALERT_DETAILS` - Base64 URL-encoded JSON containing the full incident object, all associated alerts, and incident notes
 
 Example usage inside ocm-container:
 
@@ -237,11 +237,16 @@ Example usage inside ocm-container:
 # View the incident ID
 echo $PAGERDUTY_INCIDENT
 
-# Decode and view the full alert details
+# Decode and view the full alert details (note: using base64 -d with URL encoding)
 echo $ALERT_DETAILS | base64 -d | jq .
 
 # Extract specific alert information
 echo $ALERT_DETAILS | base64 -d | jq '.alerts[0].body.details.cluster_id'
+
+# View incident notes
+echo $ALERT_DETAILS | base64 -d | jq '.notes'
 ```
+
+**Note:** The `ALERT_DETAILS` variable uses base64 URL encoding (RFC 4648) without padding to avoid parsing issues with `=` characters.
 
 These environment variables are automatically added when you use the login feature (press `l` on an incident). No additional configuration is required.
