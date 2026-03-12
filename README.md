@@ -221,3 +221,27 @@ cluster_login_command: ocm backplane login --multi
 ## Logs into the cluster and sets the INCIDENT_ID env variable in ocm-container to the PagerDuty Incident ID
 cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID --launch-opts --env=INCIDENT_ID=%%INCIDENT_ID%%
 ```
+
+### Automatic PagerDuty Environment Variables
+
+When using `ocm-container` as your cluster login command, srepd automatically passes PagerDuty incident and alert information as environment variables to the container. This allows you to access incident details and alert data from within the ocm-container session without manual configuration.
+
+The following environment variables are automatically set:
+
+* `PAGERDUTY_INCIDENT` - The PagerDuty incident ID
+* `ALERT_DETAILS` - Base64-encoded JSON containing the full incident object and all associated alerts
+
+Example usage inside ocm-container:
+
+```bash
+# View the incident ID
+echo $PAGERDUTY_INCIDENT
+
+# Decode and view the full alert details
+echo $ALERT_DETAILS | base64 -d | jq .
+
+# Extract specific alert information
+echo $ALERT_DETAILS | base64 -d | jq '.alerts[0].body.details.cluster_id'
+```
+
+These environment variables are automatically added when you use the login feature (press `l` on an incident). No additional configuration is required.

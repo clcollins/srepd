@@ -525,7 +525,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"%%INCIDENT_ID%%": m.selectedIncident.ID,
 		}
 
-		cmds = append(cmds, login(vars, m.launcher))
+		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts))
 
 	case loginFinishedMsg:
 		if msg.err != nil {

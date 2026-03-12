@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -383,6 +385,79 @@ func TestOpenBrowserCmd(t *testing.T) {
 			} else {
 				assert.Nil(t, msg.err, "Expected no error but got: %v", msg.err)
 			}
+		})
+	}
+}
+
+func TestLoginEnvironmentVariables(t *testing.T) {
+	// Note: This test validates that the login function correctly builds environment
+	// variables for ocm-container, but we can't easily test the actual command execution
+	// without mocking the exec.Command. Instead, we'll validate the command building logic
+	// by checking that the launcher is called correctly.
+
+	// This is more of an integration test that would need to be run manually or with
+	// a mock launcher, but we can at least test the alertData serialization
+	tests := []struct {
+		name     string
+		incident *pagerduty.Incident
+		alerts   []pagerduty.IncidentAlert
+	}{
+		{
+			name: "with incident and alerts",
+			incident: &pagerduty.Incident{
+				APIObject: pagerduty.APIObject{ID: "PD123"},
+				Title:     "Test Incident",
+			},
+			alerts: []pagerduty.IncidentAlert{
+				{APIObject: pagerduty.APIObject{ID: "ALERT1"}},
+				{APIObject: pagerduty.APIObject{ID: "ALERT2"}},
+			},
+		},
+		{
+			name:     "with nil incident and empty alerts",
+			incident: nil,
+			alerts:   []pagerduty.IncidentAlert{},
+		},
+		{
+			name: "with incident and no alerts",
+			incident: &pagerduty.Incident{
+				APIObject: pagerduty.APIObject{ID: "PD456"},
+			},
+			alerts: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test that alertData can be properly serialized
+			data := alertData{
+				Incident: tt.incident,
+				Alerts:   tt.alerts,
+			}
+
+			jsonData, err := json.Marshal(data)
+			assert.NoError(t, err, "Failed to marshal alertData")
+			assert.NotNil(t, jsonData, "JSON data should not be nil")
+
+			// Test that it can be base64 encoded
+			encoded := base64.StdEncoding.EncodeToString(jsonData)
+			assert.NotEmpty(t, encoded, "Base64 encoding should not be empty")
+
+			// Test that it can be decoded back
+			decoded, err := base64.StdEncoding.DecodeString(encoded)
+			assert.NoError(t, err, "Failed to decode base64")
+
+			var decodedData alertData
+			err = json.Unmarshal(decoded, &decodedData)
+			assert.NoError(t, err, "Failed to unmarshal decoded data")
+
+			// Verify the data matches
+			if tt.incident != nil {
+				assert.Equal(t, tt.incident.ID, decodedData.Incident.ID)
+			} else {
+				assert.Nil(t, decodedData.Incident)
+			}
+			assert.Equal(t, len(tt.alerts), len(decodedData.Alerts))
 		})
 	}
 }

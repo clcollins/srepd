@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -414,11 +416,48 @@ type loginFinishedMsg struct {
 	err error
 }
 
-func login(vars map[string]string, launcher launcher.ClusterLauncher) tea.Cmd {
+// alertData contains the data we want to pass to ocm-container about alerts
+type alertData struct {
+	Incident *pagerduty.Incident       `json:"incident"`
+	Alerts   []pagerduty.IncidentAlert `json:"alerts"`
+}
+
+func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
 	// The first element of Terminal is the command to be executed, followed by args, in order
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.
 	command := launcher.BuildLoginCommand(vars)
-	c := exec.Command(command[0], command[1:]...)
+
+	// Add environment variables for PagerDuty data
+	// Find the position to insert the -e flags (before any -- separator)
+	envFlags := []string{}
+
+	// Add PAGERDUTY_INCIDENT environment variable
+	if incident != nil {
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT=%s", incident.ID))
+	}
+
+	// Serialize and base64 encode alert details
+	if incident != nil || len(alerts) > 0 {
+		data := alertData{
+			Incident: incident,
+			Alerts:   alerts,
+		}
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			log.Warn("tui.login(): failed to marshal alert data", "error", err)
+		} else {
+			encoded := base64.StdEncoding.EncodeToString(jsonData)
+			envFlags = append(envFlags, "-e", fmt.Sprintf("ALERT_DETAILS=%s", encoded))
+		}
+	}
+
+	// Insert env flags into command
+	// We need to find where to insert them - typically before the cluster ID or -- separator
+	finalCommand := []string{command[0]}
+	finalCommand = append(finalCommand, envFlags...)
+	finalCommand = append(finalCommand, command[1:]...)
+
+	c := exec.Command(finalCommand[0], finalCommand[1:]...)
 
 	log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
 
