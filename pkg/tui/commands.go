@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -414,12 +416,110 @@ type loginFinishedMsg struct {
 	err error
 }
 
-func login(vars map[string]string, launcher launcher.ClusterLauncher) tea.Cmd {
+// alertData contains the data we want to pass to ocm-container about alerts
+type alertData struct {
+	Incident *pagerduty.Incident       `json:"incident"`
+	Alerts   []pagerduty.IncidentAlert `json:"alerts"`
+	Notes    []pagerduty.IncidentNote  `json:"notes"`
+}
+
+func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
 	// The first element of Terminal is the command to be executed, followed by args, in order
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.
 	command := launcher.BuildLoginCommand(vars)
-	c := exec.Command(command[0], command[1:]...)
 
+	// Add environment variables for PagerDuty data
+	// Find the position to insert the -e flags (before any -- separator)
+	envFlags := []string{}
+
+	// Add PAGERDUTY_INCIDENT environment variable
+	if incident != nil {
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT=%s", incident.ID))
+	}
+
+	// Serialize and base64 encode alert details
+	if incident != nil || len(alerts) > 0 || len(notes) > 0 {
+		data := alertData{
+			Incident: incident,
+			Alerts:   alerts,
+			Notes:    notes,
+		}
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			log.Warn("tui.login(): failed to marshal alert data", "error", err)
+		} else {
+			// Use RawURLEncoding which doesn't add padding (no = characters)
+			// This avoids issues with ocm-container's env var parsing which splits on =
+			encoded := base64.RawURLEncoding.EncodeToString(jsonData)
+			envFlags = append(envFlags, "-e", fmt.Sprintf("ALERT_DETAILS=%s", encoded))
+		}
+	}
+
+	// Insert env flags into command
+	// We need to find the position after any terminal separator (like "--") but before ocm-container
+	// Typical command structure: ["gnome-terminal", "--", "ocm-container", "--cluster-id", "ABC123"]
+	// We want: ["gnome-terminal", "--", "ocm-container", "-e", "VAR=val", "--cluster-id", "ABC123"]
+
+	finalCommand := []string{}
+	separatorFound := false
+	insertPosition := -1
+
+	// Find the position right after "--" separator or at the start of the actual command
+	for i, arg := range command {
+		if arg == "--" {
+			separatorFound = true
+			insertPosition = i + 1
+			break
+		}
+	}
+
+	// If no separator found, look for the actual command (ocm-container, ocm, etc)
+	if !separatorFound {
+		for i, arg := range command {
+			// Skip the first element (terminal command) and find the first non-flag argument
+			if i > 0 && !strings.HasPrefix(arg, "-") {
+				insertPosition = i
+				break
+			}
+		}
+	}
+
+	// Build the final command
+	log.Debug("tui.login(): building final command", "insertPosition", insertPosition, "separatorFound", separatorFound, "commandLen", len(command))
+
+	if insertPosition > 0 && len(envFlags) > 0 {
+		// Insert env flags at the correct position
+		finalCommand = append(finalCommand, command[:insertPosition]...)
+		log.Debug("tui.login(): added prefix", "finalCommand", finalCommand)
+
+		// Check if the next argument is the actual command (like "ocm-container")
+		// If so, add it first, then the env flags
+		if insertPosition < len(command) && !strings.HasPrefix(command[insertPosition], "-") {
+			log.Debug("tui.login(): found command at insertPosition", "command", command[insertPosition])
+			finalCommand = append(finalCommand, command[insertPosition])
+			finalCommand = append(finalCommand, envFlags...)
+			log.Debug("tui.login(): added command and env flags", "finalCommand", finalCommand)
+			if insertPosition+1 < len(command) {
+				finalCommand = append(finalCommand, command[insertPosition+1:]...)
+				log.Debug("tui.login(): added remaining args", "finalCommand", finalCommand)
+			}
+		} else {
+			// Otherwise just insert the env flags here
+			log.Debug("tui.login(): inserting env flags directly")
+			finalCommand = append(finalCommand, envFlags...)
+			finalCommand = append(finalCommand, command[insertPosition:]...)
+		}
+	} else {
+		// No separator found or no env flags, use command as-is
+		log.Debug("tui.login(): using command as-is", "reason", fmt.Sprintf("insertPosition=%d, envFlagsLen=%d", insertPosition, len(envFlags)))
+		finalCommand = command
+	}
+
+	c := exec.Command(finalCommand[0], finalCommand[1:]...)
+
+	log.Debug("tui.login(): original command", "command", command)
+	log.Debug("tui.login(): env flags", "envFlags", envFlags)
+	log.Debug("tui.login(): final command", "finalCommand", finalCommand)
 	log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
 
 	var stdOut io.ReadCloser
