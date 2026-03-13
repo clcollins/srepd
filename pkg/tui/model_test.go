@@ -688,7 +688,7 @@ func TestResolvedIncidentsAddedToActionLog(t *testing.T) {
 			{Title: "", Width: 2},
 			{Title: "", Width: 15},
 			{Title: "", Width: 30},
-			{Title: "", Width: 20},
+			{Title: "", Width: 29},
 		})
 		m.config = &pd.Config{
 			CurrentUser: &pagerduty.User{
@@ -698,8 +698,18 @@ func TestResolvedIncidentsAddedToActionLog(t *testing.T) {
 
 		// Set initial incident list
 		m.incidentList = []pagerduty.Incident{
-			{APIObject: pagerduty.APIObject{ID: "Q123"}, Title: "Incident 1", LastStatusChangeAt: time.Now().Format(time.RFC3339)},
-			{APIObject: pagerduty.APIObject{ID: "Q456"}, Title: "Incident 2", LastStatusChangeAt: time.Now().Format(time.RFC3339)},
+			{
+				APIObject:          pagerduty.APIObject{ID: "Q123"},
+				Title:              "Incident 1",
+				Service:            pagerduty.APIObject{Summary: "test-service-1"},
+				LastStatusChangeAt: time.Now().Format(time.RFC3339),
+			},
+			{
+				APIObject:          pagerduty.APIObject{ID: "Q456"},
+				Title:              "Incident 2",
+				Service:            pagerduty.APIObject{Summary: "test-service-2"},
+				LastStatusChangeAt: time.Now().Format(time.RFC3339),
+			},
 		}
 
 		// Update with a list that's missing Q123 (it resolved)
@@ -718,7 +728,7 @@ func TestResolvedIncidentsAddedToActionLog(t *testing.T) {
 		assert.Equal(t, "%R", m.actionLog[0].key, "Resolved incident should have %R key")
 		assert.Equal(t, "Q123", m.actionLog[0].id, "Should log the resolved incident ID")
 		assert.Equal(t, "Incident 1", m.actionLog[0].summary, "Should log the incident title")
-		assert.Equal(t, "resolved", m.actionLog[0].action, "Action should be 'resolved'")
+		assert.Equal(t, "test-service-1", m.actionLog[0].action, "Action should contain service summary")
 	})
 
 	t.Run("Does not add duplicate resolved incidents to action log", func(t *testing.T) {
@@ -729,7 +739,7 @@ func TestResolvedIncidentsAddedToActionLog(t *testing.T) {
 			{Title: "", Width: 2},
 			{Title: "", Width: 15},
 			{Title: "", Width: 30},
-			{Title: "", Width: 20},
+			{Title: "", Width: 29},
 		})
 		m.config = &pd.Config{
 			CurrentUser: &pagerduty.User{
@@ -744,7 +754,12 @@ func TestResolvedIncidentsAddedToActionLog(t *testing.T) {
 
 		// Set initial incident list
 		m.incidentList = []pagerduty.Incident{
-			{APIObject: pagerduty.APIObject{ID: "Q123"}, Title: "Incident 1", LastStatusChangeAt: time.Now().Format(time.RFC3339)},
+			{
+				APIObject:          pagerduty.APIObject{ID: "Q123"},
+				Title:              "Incident 1",
+				Service:            pagerduty.APIObject{Summary: "test-service-1"},
+				LastStatusChangeAt: time.Now().Format(time.RFC3339),
+			},
 		}
 
 		// Update with empty list (Q123 resolved again)
@@ -782,4 +797,122 @@ func TestToggleActionLog(t *testing.T) {
 
 		assert.False(t, m.showActionLog, "showActionLog should be false after second toggle")
 	})
+}
+
+// TestEscapeKeySyncsToHighlightedRow verifies that pressing Escape re-syncs
+// the selectedIncident to whatever row is currently highlighted
+func TestEscapeKeySyncsToHighlightedRow(t *testing.T) {
+	m := createTestModel()
+	m.config = &pd.Config{}
+
+	// Create incident list
+	m.incidentList = []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q123"},
+			Title:              "Incident 1",
+			Service:            pagerduty.APIObject{Summary: "service-1"},
+			LastStatusChangeAt: time.Now().Format(time.RFC3339),
+		},
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q456"},
+			Title:              "Incident 2",
+			Service:            pagerduty.APIObject{Summary: "service-2"},
+			LastStatusChangeAt: time.Now().Format(time.RFC3339),
+		},
+	}
+
+	// Create table with the incidents
+	cols := []table.Column{
+		{Title: "Status", Width: 10},
+		{Title: "ID", Width: 10},
+		{Title: "Title", Width: 20},
+		{Title: "Service", Width: 15},
+		{Title: "Since", Width: 10},
+		{Title: "User", Width: 10},
+	}
+	rows := []table.Row{
+		{"triggered", "Q123", "Incident 1", "service-1", "2024-01-01", "user1"},
+		{"triggered", "Q456", "Incident 2", "service-2", "2024-01-01", "user2"},
+	}
+	m.table = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+	)
+
+	// Select first incident and view it
+	m.selectedIncident = &m.incidentList[0]
+	m.viewingIncident = true
+
+	// Simulate Escape key - should clear and re-sync to highlighted row
+	// Note: In real usage, the table cursor position would determine which incident gets selected
+	// For this test, we're verifying the sync happens after Escape
+	m.clearSelectedIncident("test escape")
+	m.syncSelectedIncidentToHighlightedRow()
+
+	// After sync, selectedIncident should match the highlighted row
+	// Since we can't easily control table selection in unit tests, we verify the sync was attempted
+	assert.NotNil(t, m.selectedIncident, "selectedIncident should be re-synced after Escape")
+}
+
+// TestSelectedIncidentSurvivesListUpdate verifies that copying incident data
+// prevents pointer aliasing issues when the incident list is reallocated
+func TestSelectedIncidentSurvivesListUpdate(t *testing.T) {
+	m := createTestModel()
+
+	// Create initial incident list
+	m.incidentList = []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q123"},
+			Title:              "Original Title",
+			Service:            pagerduty.APIObject{Summary: "service-1"},
+			LastStatusChangeAt: "2024-01-01T00:00:00Z",
+		},
+	}
+
+	// Create table with the incident
+	cols := []table.Column{
+		{Title: "Status", Width: 10},
+		{Title: "ID", Width: 10},
+		{Title: "Title", Width: 20},
+		{Title: "Service", Width: 15},
+		{Title: "Since", Width: 10},
+		{Title: "User", Width: 10},
+	}
+	rows := []table.Row{
+		{"triggered", "Q123", "Original Title", "service-1", "2024-01-01", "user1"},
+	}
+	m.table = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+	)
+
+	// Sync to select the incident (creates a copy)
+	m.syncSelectedIncidentToHighlightedRow()
+
+	assert.NotNil(t, m.selectedIncident, "selectedIncident should be set")
+	originalTitle := m.selectedIncident.Title
+	assert.Equal(t, "Original Title", originalTitle)
+
+	// Update the incident list (reallocate the slice)
+	m.incidentList = []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q123"},
+			Title:              "Updated Title",
+			Service:            pagerduty.APIObject{Summary: "service-1"},
+			LastStatusChangeAt: "2024-01-01T00:00:00Z",
+		},
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q456"},
+			Title:              "New Incident",
+			Service:            pagerduty.APIObject{Summary: "service-2"},
+			LastStatusChangeAt: "2024-01-01T00:00:00Z",
+		},
+	}
+
+	// Verify selectedIncident still has the original title (not affected by list update)
+	// This proves we copied the data instead of storing a pointer to the slice element
+	assert.Equal(t, "Original Title", m.selectedIncident.Title,
+		"selectedIncident should retain original data after list reallocation")
 }

@@ -73,14 +73,18 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	tableWidth := windowSize.Width - horizontalScratchWidth - tableHorizontalScratchWidth
 	// Reserve lines for input field (1 line) and action log when visible (11 lines for 5-row table + spacing)
-	// Additional 10 lines for general spacing
+	// Additional spacing for help (needs ~12 lines when expanded with 10-item columns)
 	inputReservedLines := 1
-	additionalSpacing := 10
+	additionalSpacing := 15
 	actionLogReservedLines := 0
 	if m.showActionLog {
 		actionLogReservedLines = 11
 	}
 	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents - actionLogReservedLines - inputReservedLines - additionalSpacing
+	// Ensure table height is never negative (can happen with very small terminal windows)
+	if tableHeight < 1 {
+		tableHeight = 1
+	}
 
 	m.table.SetHeight(tableHeight)
 
@@ -112,16 +116,18 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		{Title: "Service", Width: columnWidth},
 	})
 
-	// Action log table columns: mirror main table layout exactly
-	// Same 4 columns as main table, but no headers and keypress in first column instead of dot
-	// Keypress needs 2 chars (for "^e" etc), so take 1 char from the action column
-	keyPressWidth := 2
+	// Action log table columns: total width must match main table
+	// First column needs width 2 to accommodate 2-char sequences like "^e", "%R"
+	// We compensate by taking 1 from the last column
+	// Total: 2 + 15 + columnWidth + (columnWidth-1) = 16 + 2*columnWidth = same as main table
 	m.actionLogTable.SetColumns([]table.Column{
-		{Title: "", Width: keyPressWidth},      // Keypress column (2 chars for "^e" etc)
-		{Title: "", Width: idWidth - dotWidth}, // ID column (same as main table)
-		{Title: "", Width: columnWidth},        // Summary column (same as main table)
-		{Title: "", Width: columnWidth - 1},    // Action column (1 char less to compensate for wider keypress)
+		{Title: " " + dot, Width: 2},           // Keypress column - space + dot like main table
+		{Title: "ID", Width: idWidth - dotWidth}, // ID column (same as main table)
+		{Title: "Summary", Width: columnWidth}, // Summary column (same as main table)
+		{Title: "Service", Width: columnWidth - 1}, // Action column (1 less to compensate)
 	})
+	// Set explicit width to force table to respect column widths and not auto-size
+	m.actionLogTable.SetWidth(tableWidth)
 
 	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth
 	// Account for header (2 lines), footer (1 line), help (~2 lines), bottom status (1 line), and spacing
@@ -203,15 +209,19 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Up):
 			m.table.MoveUp(1)
+			m.syncSelectedIncidentToHighlightedRow()
 
 		case key.Matches(msg, defaultKeyMap.Down):
 			m.table.MoveDown(1)
+			m.syncSelectedIncidentToHighlightedRow()
 
 		case key.Matches(msg, defaultKeyMap.Top):
 			m.table.GotoTop()
+			m.syncSelectedIncidentToHighlightedRow()
 
 		case key.Matches(msg, defaultKeyMap.Bottom):
 			m.table.GotoBottom()
+			m.syncSelectedIncidentToHighlightedRow()
 
 		case key.Matches(msg, defaultKeyMap.Team):
 			m.teamMode = !m.teamMode
@@ -302,16 +312,11 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
-			if m.table.SelectedRow() == nil {
-				m.setStatus("no incident highlighted")
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
 				return m, nil
 			}
-			incident := m.getHighlightedIncident()
-			if incident == nil {
-				m.setStatus("failed to find incident")
-				return m, nil
-			}
-			return m, parseTemplateForNote(incident)
+			return m, parseTemplateForNote(m.selectedIncident)
 
 		case key.Matches(msg, defaultKeyMap.Login):
 			return m, doIfIncidentSelected(&m, func() tea.Msg {
@@ -319,20 +324,24 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 
 		case key.Matches(msg, defaultKeyMap.Open):
-			if m.table.SelectedRow() == nil {
-				m.setStatus("no incident highlighted")
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
 				return m, nil
 			}
-			incident := m.getHighlightedIncident()
-			if incident == nil {
-				m.setStatus("failed to find incident")
+			// HTMLURL should be in stub data from incident list, but check to be safe
+			if m.selectedIncident.HTMLURL == "" {
+				m.setStatus("incident URL not available")
 				return m, nil
 			}
 			if defaultBrowserOpenCommand == "" {
 				return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 			}
+
+			// TEMPORARY: Log open action to action log for testing
+			m.addActionLogEntry("o", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
+
 			c := []string{defaultBrowserOpenCommand}
-			return m, openBrowserCmd(c, incident.HTMLURL)
+			return m, openBrowserCmd(c, m.selectedIncident.HTMLURL)
 
 		}
 	}
@@ -388,6 +397,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.clearSelectedIncident(msg.String() + " (back)")
 			m.table.Focus()  // Ensure table regains focus immediately
+			m.syncSelectedIncidentToHighlightedRow()  // Re-establish selection to current cursor position
 			// Return immediately - no need to process anything else or update viewport
 			return m, nil
 

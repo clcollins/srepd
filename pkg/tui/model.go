@@ -169,25 +169,101 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 
-// getHighlightedIncident returns the incident object for the currently highlighted table row
-// by looking it up in m.incidentList. Returns nil if no row is highlighted or incident not found.
-func (m *model) getHighlightedIncident() *pagerduty.Incident {
+// syncSelectedIncidentToHighlightedRow updates m.selectedIncident to match the currently
+// highlighted table row. Sets to nil if no row is highlighted. Uses cached data if available,
+// otherwise uses stub data from m.incidentList.
+func (m *model) syncSelectedIncidentToHighlightedRow() {
 	row := m.table.SelectedRow()
 	if row == nil {
-		return nil
+		// Clear selection regardless of viewing state
+		// If user scrolls table out of bounds, selection should be nil
+		m.selectedIncident = nil
+		m.incidentDataLoaded = false
+		m.incidentNotesLoaded = false
+		m.incidentAlertsLoaded = false
+		log.Debug("syncSelectedIncidentToHighlightedRow", "no row highlighted", "cleared selection")
+		return
 	}
 
 	incidentID := row[1] // Column [1] is the incident ID
 
-	// Look up the incident in the incident list
+	// If already viewing this incident, don't change anything
+	if m.selectedIncident != nil && m.selectedIncident.ID == incidentID {
+		return
+	}
+
+	// Find incident in list
 	for i := range m.incidentList {
 		if m.incidentList[i].ID == incidentID {
-			return &m.incidentList[i]
+			// Check if we have cached full data
+			if cached, exists := m.incidentCache[incidentID]; exists && cached.incident != nil {
+				// Check if cache is fresh relative to incident list data
+				listIncident := &m.incidentList[i]
+				if cached.incident.LastStatusChangeAt != listIncident.LastStatusChangeAt {
+					// Cache is stale relative to list - use list data but keep cached notes/alerts
+					log.Debug("syncSelectedIncidentToHighlightedRow", "cache stale, using updated list data", "incident", incidentID)
+					incidentCopy := m.incidentList[i]
+					m.selectedIncident = &incidentCopy
+					m.incidentDataLoaded = false
+					// Keep cached notes/alerts if available
+					if cached.notesLoaded {
+						m.selectedIncidentNotes = cached.notes
+						m.incidentNotesLoaded = true
+					} else {
+						m.selectedIncidentNotes = nil
+						m.incidentNotesLoaded = false
+					}
+					if cached.alertsLoaded {
+						m.selectedIncidentAlerts = cached.alerts
+						m.incidentAlertsLoaded = true
+					} else {
+						m.selectedIncidentAlerts = nil
+						m.incidentAlertsLoaded = false
+					}
+				} else {
+					// Cache is fresh - use it
+					log.Debug("syncSelectedIncidentToHighlightedRow", "using cached data", "incident", incidentID)
+					// Create copy to avoid pointer issues
+					incidentCopy := *cached.incident
+					m.selectedIncident = &incidentCopy
+					m.incidentDataLoaded = cached.dataLoaded
+					m.incidentNotesLoaded = cached.notesLoaded
+					m.incidentAlertsLoaded = cached.alertsLoaded
+					if cached.notes != nil {
+						m.selectedIncidentNotes = cached.notes
+					} else {
+						m.selectedIncidentNotes = nil
+					}
+					if cached.alerts != nil {
+						m.selectedIncidentAlerts = cached.alerts
+					} else {
+						m.selectedIncidentAlerts = nil
+					}
+				}
+			} else {
+				// Use stub data from incidentList
+				log.Debug("syncSelectedIncidentToHighlightedRow", "using stub data", "incident", incidentID)
+				// Create a copy to avoid pointer aliasing when slice is reallocated
+				incidentCopy := m.incidentList[i]
+				m.selectedIncident = &incidentCopy
+				m.incidentDataLoaded = false
+				m.incidentNotesLoaded = false
+				m.incidentAlertsLoaded = false
+				m.selectedIncidentNotes = nil
+				m.selectedIncidentAlerts = nil
+			}
+			return
 		}
 	}
 
-	log.Debug("getHighlightedIncident", "incident not found in list", incidentID)
-	return nil
+	// Incident not found in list
+	log.Debug("syncSelectedIncidentToHighlightedRow", "incident not found in list", incidentID)
+	if !m.viewingIncident {
+		m.selectedIncident = nil
+		m.incidentDataLoaded = false
+		m.incidentNotesLoaded = false
+		m.incidentAlertsLoaded = false
+	}
 }
 
 func (m *model) setStatus(msg string) {
@@ -201,6 +277,7 @@ func (m *model) toggleHelp() {
 
 // addActionLogEntry adds an action to the action log, maintaining only the last 5 entries
 func (m *model) addActionLogEntry(key, id, summary, action string) {
+	log.Debug("addActionLogEntry", "key", key, "id", id, "summary", summary, "action", action)
 	entry := actionLogEntry{
 		key:       key,
 		id:        id,
