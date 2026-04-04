@@ -267,11 +267,7 @@ func TestGetHighlightedIncident(t *testing.T) {
 			m.incidentList = tt.incidentList
 
 			// Set up table rows to match incident list
-			if tt.hasSelectedRow && len(tt.incidentList) > 0 {
-				// Manually set the cursor to simulate a selected row
-				// We'll use the test directly by creating a mock selected row
-				// Since we can't easily mock the table.SelectedRow(), we'll test by
-				// setting up the incident list and verifying the lookup logic
+			if tt.hasSelectedRow && len(tt.incidentList) > 0 { //nolint:staticcheck // placeholder for future selected row simulation
 			}
 
 			// For this test, we'll directly test the lookup logic

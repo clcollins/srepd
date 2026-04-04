@@ -44,7 +44,7 @@ func main() {
 
 	// Use async writer to prevent log I/O from blocking the UI
 	asyncWriter := newAsyncWriter(f, 1000) // Buffer up to 1000 log messages
-	defer asyncWriter.Close()
+	defer asyncWriter.Close() //nolint:errcheck
 
 	log.SetOutput(asyncWriter)
 
