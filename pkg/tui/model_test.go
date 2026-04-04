@@ -266,10 +266,6 @@ func TestGetHighlightedIncident(t *testing.T) {
 			m := createTestModel()
 			m.incidentList = tt.incidentList
 
-			// Set up table rows to match incident list
-			if tt.hasSelectedRow && len(tt.incidentList) > 0 { //nolint:staticcheck // placeholder for future selected row simulation
-			}
-
 			// For this test, we'll directly test the lookup logic
 			// by simulating what getHighlightedIncident does
 			var result *pagerduty.Incident
