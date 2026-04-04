@@ -448,9 +448,10 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 		if err != nil {
 			log.Warn("tui.login(): failed to marshal alert data", "error", err)
 		} else {
-			// Use RawURLEncoding which doesn't add padding (no = characters)
-			// This avoids issues with ocm-container's env var parsing which splits on =
-			encoded := base64.RawURLEncoding.EncodeToString(jsonData)
+			// Use RawStdEncoding: standard base64 alphabet (+/) without padding (no = characters)
+			// No padding avoids issues with ocm-container's env var parsing which splits on =
+			// Standard alphabet ensures `echo $ALERT_DETAILS | base64 -d` works in the container
+			encoded := base64.RawStdEncoding.EncodeToString(jsonData)
 			envFlags = append(envFlags, "-e", fmt.Sprintf("ALERT_DETAILS=%s", encoded))
 		}
 	}

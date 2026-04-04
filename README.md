@@ -247,6 +247,6 @@ echo $ALERT_DETAILS | base64 -d | jq '.alerts[0].body.details.cluster_id'
 echo $ALERT_DETAILS | base64 -d | jq '.notes'
 ```
 
-**Note:** The `ALERT_DETAILS` variable uses base64 URL encoding (RFC 4648) without padding to avoid parsing issues with `=` characters.
+**Note:** The `ALERT_DETAILS` variable uses standard base64 encoding without padding to avoid parsing issues with `=` characters in ocm-container's env var handling.
 
 These environment variables are automatically added when you use the login feature (press `l` on an incident). No additional configuration is required.

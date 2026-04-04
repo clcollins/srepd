@@ -458,14 +458,14 @@ func TestLoginEnvironmentVariables(t *testing.T) {
 			assert.NoError(t, err, "Failed to marshal alertData")
 			assert.NotNil(t, jsonData, "JSON data should not be nil")
 
-			// Test that it can be base64 URL encoded (without padding)
-			encoded := base64.RawURLEncoding.EncodeToString(jsonData)
+			// Test that it can be base64 encoded (standard alphabet, without padding)
+			encoded := base64.RawStdEncoding.EncodeToString(jsonData)
 			assert.NotEmpty(t, encoded, "Base64 encoding should not be empty")
 			// Verify no padding characters
-			assert.NotContains(t, encoded, "=", "RawURLEncoding should not contain = padding")
+			assert.NotContains(t, encoded, "=", "RawStdEncoding should not contain = padding")
 
 			// Test that it can be decoded back
-			decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+			decoded, err := base64.RawStdEncoding.DecodeString(encoded)
 			assert.NoError(t, err, "Failed to decode base64")
 
 			var decodedData alertData
