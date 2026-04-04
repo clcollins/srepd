@@ -252,17 +252,6 @@ func (m model) renderHeader() string {
 	return s.String()
 }
 
-func (m model) renderActionLogHeader() string {
-	headerText := "Action Log"
-	// Center the header text horizontally
-	// Using windowSize.Width and paddedStyle to match the main UI width
-	centeredHeader := lipgloss.NewStyle().
-		Width(windowSize.Width).
-		Align(lipgloss.Center).
-		Render(headerText)
-	return paddedStyle.Render(centeredHeader)
-}
-
 func (m model) renderBottomStatus() string {
 	var s strings.Builder
 	var selectedID string
