@@ -908,3 +908,53 @@ func TestSelectedIncidentSurvivesListUpdate(t *testing.T) {
 	assert.Equal(t, "Original Title", m.selectedIncident.Title,
 		"selectedIncident should retain original data after list reallocation")
 }
+
+func TestWindowSizeMsgHandler_SmallWindow(t *testing.T) {
+	tests := []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{"standard 80x24 terminal", 80, 24},
+		{"tiny window", 40, 10},
+		{"minimum height", 20, 1},
+		{"zero height", 80, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := model{
+				table:          newTableWithStyles(),
+				actionLogTable: newActionLogTable(),
+				incidentViewer: newIncidentViewer(),
+				help:           newHelp(),
+				incidentCache:  make(map[string]*cachedIncidentData),
+			}
+
+			// First call sets columns (simulates initial startup WindowSizeMsg)
+			normalSize := tea.WindowSizeMsg{Width: 120, Height: 50}
+			result, _ := m.windowSizeMsgHandler(normalSize)
+			m = result.(model)
+
+			// Incidents arrive and populate the table
+			m.table.SetRows([]table.Row{
+				{".", "P123ABC", "Test incident", "test-service"},
+				{".", "P456DEF", "Another incident", "test-service-2"},
+				{".", "P789GHI", "Third incident", "test-service-3"},
+			})
+
+			// Second call with small window: columns are already set, so
+			// table.SetHeight will subtract a 2-line header from the height.
+			// Before the fix, this panicked with "slice bounds out of range"
+			// when the resulting viewport height went negative.
+			msg := tea.WindowSizeMsg{Width: tt.width, Height: tt.height}
+			assert.NotPanics(t, func() {
+				result, _ = m.windowSizeMsgHandler(msg)
+			})
+
+			m = result.(model)
+			assert.GreaterOrEqual(t, m.table.Height(), 1,
+				"viewport height must be positive to avoid panic in visibleLines")
+		})
+	}
+}

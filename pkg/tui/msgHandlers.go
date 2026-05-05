@@ -81,9 +81,11 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		actionLogReservedLines = 11
 	}
 	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents - actionLogReservedLines - inputReservedLines - additionalSpacing
-	// Ensure table height is never negative (can happen with very small terminal windows)
-	if tableHeight < 1 {
-		tableHeight = 1
+	// table.SetHeight subtracts the rendered header height (2 lines: text + bottom border)
+	// from the value we pass, so the minimum must exceed the header height to keep the
+	// internal viewport height positive and avoid a panic in viewport.visibleLines
+	if tableHeight < 4 {
+		tableHeight = 4
 	}
 
 	m.table.SetHeight(tableHeight)
