@@ -484,6 +484,101 @@ func TestLoginEnvironmentVariables(t *testing.T) {
 	}
 }
 
+func TestGetDetailFieldFromAlert_NilBody(t *testing.T) {
+	// Alert with nil Body map should return ""
+	alert := pagerduty.IncidentAlert{
+		Body: nil,
+	}
+	result := getDetailFieldFromAlert("cluster_id", alert)
+	assert.Equal(t, "", result)
+}
+
+func TestGetDetailFieldFromAlert_EmptyBody(t *testing.T) {
+	// Alert with empty Body map (no "details" key) should return ""
+	alert := pagerduty.IncidentAlert{
+		Body: map[string]interface{}{},
+	}
+	result := getDetailFieldFromAlert("cluster_id", alert)
+	assert.Equal(t, "", result)
+}
+
+func TestGetDetailFieldFromAlert_MissingDetails(t *testing.T) {
+	// Body exists but has no "details" key
+	alert := pagerduty.IncidentAlert{
+		Body: map[string]interface{}{
+			"other_key": "some_value",
+		},
+	}
+	result := getDetailFieldFromAlert("cluster_id", alert)
+	assert.Equal(t, "", result)
+}
+
+func TestGetDetailFieldFromAlert_DetailsNotMap(t *testing.T) {
+	// Body["details"] is a string, not a map
+	alert := pagerduty.IncidentAlert{
+		Body: map[string]interface{}{
+			"details": "this is a string, not a map",
+		},
+	}
+	result := getDetailFieldFromAlert("cluster_id", alert)
+	assert.Equal(t, "", result)
+}
+
+func TestGetDetailFieldFromAlert_FieldNotString(t *testing.T) {
+	// Field exists in details but is an int, not a string
+	alert := pagerduty.IncidentAlert{
+		Body: map[string]interface{}{
+			"details": map[string]interface{}{
+				"cluster_id": 12345,
+			},
+		},
+	}
+	result := getDetailFieldFromAlert("cluster_id", alert)
+	assert.Equal(t, "", result)
+}
+
+func TestGetDetailFieldFromAlert_FieldIsBool(t *testing.T) {
+	// Field exists in details but is a bool, not a string
+	alert := pagerduty.IncidentAlert{
+		Body: map[string]interface{}{
+			"details": map[string]interface{}{
+				"active": true,
+			},
+		},
+	}
+	result := getDetailFieldFromAlert("active", alert)
+	assert.Equal(t, "", result)
+}
+
+func TestGetDetailFieldFromAlert_MissingField(t *testing.T) {
+	// Details map exists but requested field is not present
+	alert := pagerduty.IncidentAlert{
+		Body: map[string]interface{}{
+			"details": map[string]interface{}{
+				"alert_name": "TestAlert",
+			},
+		},
+	}
+	result := getDetailFieldFromAlert("cluster_id", alert)
+	assert.Equal(t, "", result)
+}
+
+func TestGetDetailFieldFromAlert_HappyPath(t *testing.T) {
+	// Valid structure with string field returns the value
+	alert := pagerduty.IncidentAlert{
+		Body: map[string]interface{}{
+			"details": map[string]interface{}{
+				"cluster_id": "abc-123-def",
+				"alert_name": "TestAlert",
+				"link":       "https://example.com/sop",
+			},
+		},
+	}
+	assert.Equal(t, "abc-123-def", getDetailFieldFromAlert("cluster_id", alert))
+	assert.Equal(t, "TestAlert", getDetailFieldFromAlert("alert_name", alert))
+	assert.Equal(t, "https://example.com/sop", getDetailFieldFromAlert("link", alert))
+}
+
 func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 	// This test validates that environment variables are inserted at the correct
 	// position in the command - after the terminal separator but as arguments to
