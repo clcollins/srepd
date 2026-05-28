@@ -630,6 +630,7 @@ type acknowledgedIncidentsMsg struct {
 	incidents []pagerduty.Incident
 	err       error
 }
+
 func acknowledgeIncidents(p *pd.Config, incidents []pagerduty.Incident) tea.Cmd {
 	return func() tea.Msg {
 		a, err := pd.AcknowledgeIncident(p.Client, incidents, p.CurrentUser, p.CurrentUser)

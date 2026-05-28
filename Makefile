@@ -45,9 +45,9 @@ tidy: ## Tidy up go modules
 	go mod tidy
 
 .PHONY: test
-test: lint ## Run tests (after linting)
+test: ## Run unit tests
 	@echo "Running tests..."
-	go test ./... -v $(TESTOPTS)
+	go test ./... -v -count=1 $(TESTOPTS)
 
 .PHONY: coverage
 coverage: ## Generate test coverage report
@@ -70,9 +70,19 @@ vet: ## Run go vet to catch common mistakes
 	@echo "Running go vet..."
 	go vet ./...
 
-.PHONY: check
-check: fmt lint vet ## Run all code checks (fmt, lint, vet)
-	@echo "Running all code checks..."
+.PHONY: fmt
+fmt: ## Format the code
+	@echo "Formatting the code..."
+	gofmt -s -l -w cmd pkg
+
+.PHONY: fmt-check
+fmt-check: ## Check code formatting (CI-friendly, exits non-zero if unformatted)
+	@echo "Checking code formatting..."
+	@test -z "$$(gofmt -s -l cmd pkg)" || (echo "The following files are not formatted:"; gofmt -s -l cmd pkg; exit 1)
+
+.PHONY: test-all
+test-all: fmt-check vet lint test ## Run all checks (fmt, vet, lint, test)
+	@echo "All checks passed."
 
 .PHONY: ensure-goreleaser
 ensure-goreleaser: ## Ensure goreleaser is installed
@@ -85,11 +95,6 @@ release: ensure-goreleaser ## Create a release using goreleaser
 	GITHUB_TOKEN=$$(jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token) && \
 	export GITHUB_TOKEN && \
 	goreleaser release --clean
-
-.PHONY: fmt
-fmt: ## Format the code
-	@echo "Formatting the code..."
-	gofmt -s -l -w cmd pkg
 
 .PHONY: clean
 clean: ## Clean up build artifacts

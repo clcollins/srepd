@@ -51,16 +51,16 @@ type model struct {
 	editor   []string
 	launcher launcher.ClusterLauncher
 
-	table           table.Model
-	actionLogTable  table.Model
-	actionLog       []actionLogEntry
-	input           textinput.Model
+	table          table.Model
+	actionLogTable table.Model
+	actionLog      []actionLogEntry
+	input          textinput.Model
 	// This is a hack since viewport.Model doesn't have a Focused() method
-	viewingIncident bool
-	incidentViewer  viewport.Model
-	help            help.Model
-	spinner         spinner.Model
-	apiInProgress   bool
+	viewingIncident  bool
+	incidentViewer   viewport.Model
+	help             help.Model
+	spinner          spinner.Model
+	apiInProgress    bool
 	markdownRenderer *glamour.TermRenderer
 
 	status string
@@ -80,11 +80,11 @@ type model struct {
 
 	scheduledJobs []*scheduledJob
 
-	autoAcknowledge  bool
-	autoRefresh      bool
-	teamMode         bool
-	showActionLog    bool
-	debug            bool
+	autoAcknowledge bool
+	autoRefresh     bool
+	teamMode        bool
+	showActionLog   bool
+	debug           bool
 }
 
 func InitialModel(

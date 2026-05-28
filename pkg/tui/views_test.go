@@ -314,10 +314,10 @@ func TestSummarizeIncident(t *testing.T) {
 
 func TestAddNoteTemplate(t *testing.T) {
 	tests := []struct {
-		name        string
-		id          string
-		title       string
-		service     string
+		name             string
+		id               string
+		title            string
+		service          string
 		expectedContains []string
 	}{
 		{
