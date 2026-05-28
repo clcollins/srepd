@@ -1,6 +1,7 @@
 package pd
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -8,6 +9,27 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/stretchr/testify/assert"
 )
+
+// MockManageIncidentsMoreClient is a specialized mock that returns More=true
+// from ManageIncidentsWithContext, to test the unexpected pagination handling.
+type MockManageIncidentsMoreClient struct {
+	MockPagerDutyClient
+}
+
+func (m *MockManageIncidentsMoreClient) ManageIncidentsWithContext(ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (*pagerduty.ListIncidentsResponse, error) {
+	return &pagerduty.ListIncidentsResponse{
+		APIListObject: pagerduty.APIListObject{
+			More: true,
+		},
+		Incidents: []pagerduty.Incident{
+			{
+				APIObject: pagerduty.APIObject{
+					ID: "QABCDEFG1234567",
+				},
+			},
+		},
+	}, nil
+}
 
 func TestGetTeams(t *testing.T) {
 	t.Run("GetTeams", func(t *testing.T) {
@@ -36,4 +58,50 @@ func TestGetTeams(t *testing.T) {
 		// assert.Len(t, teams, 1)
 		// assert.Equal(t, "team1", teams[0].Name)
 	})
+}
+
+func TestLoopManageIncidents_Success(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	ctx := context.Background()
+	opts := []pagerduty.ManageIncidentsOptions{
+		{ID: "INCIDENT1", Status: "acknowledged"},
+	}
+
+	incidents, err := loopManageIncidents(mockClient, ctx, "user@example.com", opts)
+
+	assert.NoError(t, err)
+	assert.Len(t, incidents, 2)
+	assert.Equal(t, "QABCDEFG1234567", incidents[0].ID)
+	assert.Equal(t, "QABCDEFG7654321", incidents[1].ID)
+}
+
+func TestLoopManageIncidents_APIError(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	ctx := context.Background()
+	// The mock returns ErrMockError when any option has ID "err"
+	opts := []pagerduty.ManageIncidentsOptions{
+		{ID: "err"},
+	}
+
+	incidents, err := loopManageIncidents(mockClient, ctx, "user@example.com", opts)
+
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrMockError))
+	assert.Empty(t, incidents)
+}
+
+func TestLoopManageIncidents_UnexpectedMore(t *testing.T) {
+	mockClient := new(MockManageIncidentsMoreClient)
+	ctx := context.Background()
+	opts := []pagerduty.ManageIncidentsOptions{
+		{ID: "INCIDENT1", Status: "acknowledged"},
+	}
+
+	// After the fix, this should return an error instead of panicking
+	incidents, err := loopManageIncidents(mockClient, ctx, "user@example.com", opts)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected pagination response")
+	// Even though there's an error, the incidents from the response should still be nil
+	assert.Nil(t, incidents)
 }

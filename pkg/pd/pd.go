@@ -306,28 +306,20 @@ func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCall
 	return o, nil
 }
 
-func loopManageIncidents(client PagerDutyClient, ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (incidentList []pagerduty.Incident, err error) {
-	for {
-		log.Debug("pd.loopManageIncidents", "email", email, "opts_count", len(opts))
-		response, err := client.ManageIncidentsWithContext(ctx, email, opts)
-		if err != nil {
-			log.Error("pd.loopManageIncidents", "error", err, "email", email)
-			return incidentList, err
-		}
-
-		incidentList = append(incidentList, response.Incidents...)
-
-		// ManageIncidentsWithContext should never return a "More" response, but since it's in the ListIncidentsResponse API, check for it
-		if response.More {
-			panic("pd.loopManageIncidents(): PagerDuty response indicated more data available")
-		}
-
-		if !response.More {
-			break
-		}
+func loopManageIncidents(client PagerDutyClient, ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) ([]pagerduty.Incident, error) {
+	log.Debug("pd.loopManageIncidents", "email", email, "opts_count", len(opts))
+	response, err := client.ManageIncidentsWithContext(ctx, email, opts)
+	if err != nil {
+		log.Error("pd.loopManageIncidents", "error", err, "email", email)
+		return nil, err
 	}
 
-	return incidentList, err
+	// ManageIncidentsWithContext should never return a "More" response, but since it's in the ListIncidentsResponse API, check for it
+	if response.More {
+		return nil, fmt.Errorf("pd.loopManageIncidents(): unexpected pagination response from ManageIncidents API")
+	}
+
+	return response.Incidents, nil
 }
 
 // ReassignIncidents reassigns a list of incidents to a list of users
