@@ -22,15 +22,15 @@ func createTestModel() model {
 
 func TestLoadingStateTracking(t *testing.T) {
 	tests := []struct {
-		name                     string
-		msg                      tea.Msg
-		initialDataLoaded        bool
-		initialNotesLoaded       bool
-		initialAlertsLoaded      bool
-		expectedDataLoaded       bool
-		expectedNotesLoaded      bool
-		expectedAlertsLoaded     bool
-		setupSelectedIncident    bool
+		name                  string
+		msg                   tea.Msg
+		initialDataLoaded     bool
+		initialNotesLoaded    bool
+		initialAlertsLoaded   bool
+		expectedDataLoaded    bool
+		expectedNotesLoaded   bool
+		expectedAlertsLoaded  bool
+		setupSelectedIncident bool
 	}{
 		{
 			name: "gotIncidentMsg sets incidentDataLoaded to true",
@@ -83,15 +83,15 @@ func TestLoadingStateTracking(t *testing.T) {
 			setupSelectedIncident: true,
 		},
 		{
-			name:                     "clearSelectedIncidentsMsg clears all loading flags",
-			msg:                      clearSelectedIncidentsMsg("test"),
-			initialDataLoaded:        true,
-			initialNotesLoaded:       true,
-			initialAlertsLoaded:      true,
-			expectedDataLoaded:       false,
-			expectedNotesLoaded:      false,
-			expectedAlertsLoaded:     false,
-			setupSelectedIncident:    true,
+			name:                  "clearSelectedIncidentsMsg clears all loading flags",
+			msg:                   clearSelectedIncidentsMsg("test"),
+			initialDataLoaded:     true,
+			initialNotesLoaded:    true,
+			initialAlertsLoaded:   true,
+			expectedDataLoaded:    false,
+			expectedNotesLoaded:   false,
+			expectedAlertsLoaded:  false,
+			setupSelectedIncident: true,
 		},
 	}
 

@@ -135,19 +135,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		keyStr := keyMsg.String()
 
 		// Drop terminal response sequences (OSC, CSI, etc.)
-		if strings.Contains(keyStr, "rgb:") ||        // Color queries: ]11;rgb:1d1d/1d1d/2020
-			strings.Contains(keyStr, ":1d1d/") ||     // Partial color responses
-			strings.Contains(keyStr, "gb:1d1d/") ||   // Truncated color responses (missing 'r')
-			strings.Contains(keyStr, "b:1c1c/") ||    // Another partial rgb: response
-			strings.Contains(keyStr, "1c/1f1f") ||    // Bare color hex values
-			strings.Contains(keyStr, "/1f1f") ||      // Fragment of hex color
-			strings.Contains(keyStr, "1c1c/") ||      // Fragment of hex color
-			strings.Contains(keyStr, "alt+]") ||      // OSC start sequence
-			strings.Contains(keyStr, "alt+\\") ||     // OSC/DCS end sequence
-			strings.Contains(keyStr, "CSI") ||        // Control Sequence Introducer
-			keyStr == "OP" ||                         // SS3 sequence (function keys)
-			keyStr == "[A" || keyStr == "[B" ||       // Broken arrow key sequences
-			keyStr == "[C" || keyStr == "[D" ||       // (should be handled by bubbletea)
+		if strings.Contains(keyStr, "rgb:") || // Color queries: ]11;rgb:1d1d/1d1d/2020
+			strings.Contains(keyStr, ":1d1d/") || // Partial color responses
+			strings.Contains(keyStr, "gb:1d1d/") || // Truncated color responses (missing 'r')
+			strings.Contains(keyStr, "b:1c1c/") || // Another partial rgb: response
+			strings.Contains(keyStr, "1c/1f1f") || // Bare color hex values
+			strings.Contains(keyStr, "/1f1f") || // Fragment of hex color
+			strings.Contains(keyStr, "1c1c/") || // Fragment of hex color
+			strings.Contains(keyStr, "alt+]") || // OSC start sequence
+			strings.Contains(keyStr, "alt+\\") || // OSC/DCS end sequence
+			strings.Contains(keyStr, "CSI") || // Control Sequence Introducer
+			keyStr == "OP" || // SS3 sequence (function keys)
+			keyStr == "[A" || keyStr == "[B" || // Broken arrow key sequences
+			keyStr == "[C" || keyStr == "[D" || // (should be handled by bubbletea)
 			(strings.HasPrefix(keyStr, "[") && strings.HasSuffix(keyStr, "R")) || // CPR: [row;colR
 			(strings.HasPrefix(keyStr, "]11;") || strings.HasPrefix(keyStr, "11;")) { // OSC 11 fragments
 			// Drop these fake key messages - they're terminal responses, not user input
@@ -722,7 +722,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
-
 
 	case reassignIncidentsMsg:
 		if msg.incidents == nil {

@@ -16,9 +16,12 @@ import (
 // This ensures when new keybindings are added to handlers, they're also added to help.
 func TestKeymapCompleteness(t *testing.T) {
 	tests := []struct {
-		name             string
-		functionName     string
-		keymap           interface{ ShortHelp() []key.Binding; FullHelp() [][]key.Binding }
+		name         string
+		functionName string
+		keymap       interface {
+			ShortHelp() []key.Binding
+			FullHelp() [][]key.Binding
+		}
 		keymapSourceName string // The name of the keymap variable used in key.Matches calls
 	}{
 		{
@@ -76,7 +79,7 @@ func TestKeymapCompleteness(t *testing.T) {
 			for _, keyField := range matchedKeys {
 				assert.True(t, helpKeys[keyField],
 					"Key binding '%s' is used in %s via key.Matches but not present in help display. "+
-					"Please add it to the keymap's ShortHelp() or FullHelp() method.",
+						"Please add it to the keymap's ShortHelp() or FullHelp() method.",
 					keyField, tt.functionName)
 			}
 		})

@@ -114,7 +114,7 @@ var (
 	// Action log table styles - header with border like main table, no selection highlight
 	actionLogTableStyle = table.Styles{
 		Cell:     tableCellStyle,
-		Selected: tableCellStyle, // Same as cell style = no highlight
+		Selected: tableCellStyle,   // Same as cell style = no highlight
 		Header:   tableHeaderStyle, // Same header style as main table (with border)
 	}
 
@@ -462,8 +462,8 @@ type incidentSummary struct {
 	Notes            []noteSummary
 	Clusters         []string
 	// Progressive rendering flags
-	AlertsLoading    bool
-	NotesLoading     bool
+	AlertsLoading bool
+	NotesLoading  bool
 }
 
 func summarizeIncident(i *pagerduty.Incident) incidentSummary {

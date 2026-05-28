@@ -123,9 +123,9 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// We compensate by taking 1 from the last column
 	// Total: 2 + 15 + columnWidth + (columnWidth-1) = 16 + 2*columnWidth = same as main table
 	m.actionLogTable.SetColumns([]table.Column{
-		{Title: " " + dot, Width: 2},           // Keypress column - space + dot like main table
-		{Title: "ID", Width: idWidth - dotWidth}, // ID column (same as main table)
-		{Title: "Summary", Width: columnWidth}, // Summary column (same as main table)
+		{Title: " " + dot, Width: 2},               // Keypress column - space + dot like main table
+		{Title: "ID", Width: idWidth - dotWidth},   // ID column (same as main table)
+		{Title: "Summary", Width: columnWidth},     // Summary column (same as main table)
 		{Title: "Service", Width: columnWidth - 1}, // Action column (1 less to compensate)
 	})
 	// Set explicit width to force table to respect column widths and not auto-size
@@ -398,8 +398,8 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// This un-sets the selected incident and returns to the table view
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.clearSelectedIncident(msg.String() + " (back)")
-			m.table.Focus()  // Ensure table regains focus immediately
-			m.syncSelectedIncidentToHighlightedRow()  // Re-establish selection to current cursor position
+			m.table.Focus()                          // Ensure table regains focus immediately
+			m.syncSelectedIncidentToHighlightedRow() // Re-establish selection to current cursor position
 			// Return immediately - no need to process anything else or update viewport
 			return m, nil
 
