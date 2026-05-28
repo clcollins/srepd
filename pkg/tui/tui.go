@@ -457,7 +457,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Capture the currently highlighted incident ID before rebuilding rows
 		var highlightedID string
-		if currentRow := m.table.SelectedRow(); currentRow != nil && len(currentRow) > 1 {
+		if currentRow := m.table.SelectedRow(); len(currentRow) > 1 {
 			highlightedID = currentRow[1]
 		}
 
