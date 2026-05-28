@@ -51,9 +51,9 @@ func TestTableMode_NoteKeyWithNoSelectedIncident(t *testing.T) {
 
 	incidents := []pagerduty.Incident{
 		{
-			APIObject: pagerduty.APIObject{ID: "Q111", HTMLURL: "https://example.pagerduty.com/incidents/Q111"},
-			Title:     "Test Alert",
-			Service:   pagerduty.APIObject{ID: "SVC1", Summary: "test-service"},
+			APIObject:          pagerduty.APIObject{ID: "Q111", HTMLURL: "https://example.pagerduty.com/incidents/Q111"},
+			Title:              "Test Alert",
+			Service:            pagerduty.APIObject{ID: "SVC1", Summary: "test-service"},
 			LastStatusChangeAt: time.Now().Format(time.RFC3339),
 		},
 	}
@@ -81,9 +81,9 @@ func TestTableMode_NoteKeyWithSelectedIncident(t *testing.T) {
 
 	incidents := []pagerduty.Incident{
 		{
-			APIObject: pagerduty.APIObject{ID: "Q222", HTMLURL: "https://example.pagerduty.com/incidents/Q222"},
-			Title:     "Another Alert",
-			Service:   pagerduty.APIObject{ID: "SVC2", Summary: "another-service"},
+			APIObject:          pagerduty.APIObject{ID: "Q222", HTMLURL: "https://example.pagerduty.com/incidents/Q222"},
+			Title:              "Another Alert",
+			Service:            pagerduty.APIObject{ID: "SVC2", Summary: "another-service"},
 			LastStatusChangeAt: time.Now().Format(time.RFC3339),
 		},
 	}
