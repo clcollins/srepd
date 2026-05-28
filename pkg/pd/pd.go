@@ -4,17 +4,24 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/log"
 )
 
 const (
-	defaultPageLimit = 100
-	defaultOffset    = 0
+	defaultPageLimit  = 100
+	defaultOffset     = 0
+	defaultAPITimeout = 30 * time.Second
 )
 
 var defaultIncidentStatues = []string{"triggered", "acknowledged"}
+
+// contextWithTimeout returns a context with the default API timeout and its cancel func.
+func contextWithTimeout() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), defaultAPITimeout)
+}
 
 // PagerDutyClientInterface is an interface that defines the methods used by the pd package and makes it easier to mock
 // calls to PagerDuty in tests
@@ -59,7 +66,10 @@ func NewConfig(token string, teams []string, escalation_policies map[string]stri
 
 	c.Client = newClient(token)
 
-	c.CurrentUser, err = c.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	c.CurrentUser, err = c.Client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
 	if err != nil {
 		return &c, fmt.Errorf("pd.NewConfig(): failed to retrieve PagerDuty user: %v", err)
 	}
@@ -117,7 +127,8 @@ func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
 }
 
 func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, currentUser *pagerduty.User) ([]pagerduty.Incident, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var email string
 
 	opts := []pagerduty.ManageIncidentsOptions{}
@@ -152,7 +163,8 @@ func AcknowledgeIncident(client PagerDutyClient, incidents []pagerduty.Incident,
 }
 
 func GetAlerts(client PagerDutyClient, id string, opts pagerduty.ListIncidentAlertsOptions) ([]pagerduty.IncidentAlert, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var a []pagerduty.IncidentAlert
 
 	for {
@@ -174,7 +186,8 @@ func GetAlerts(client PagerDutyClient, id string, opts pagerduty.ListIncidentAle
 }
 
 func GetEscalationPolicy(client PagerDutyClient, id string, opts pagerduty.GetEscalationPolicyOptions) (*pagerduty.EscalationPolicy, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var p *pagerduty.EscalationPolicy
 
 	p, err := client.GetEscalationPolicyWithContext(ctx, id, &opts)
@@ -186,7 +199,8 @@ func GetEscalationPolicy(client PagerDutyClient, id string, opts pagerduty.GetEs
 }
 
 func GetIncident(client PagerDutyClient, id string) (*pagerduty.Incident, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var i *pagerduty.Incident
 
 	i, err := client.GetIncidentWithContext(ctx, id)
@@ -198,7 +212,8 @@ func GetIncident(client PagerDutyClient, id string) (*pagerduty.Incident, error)
 }
 
 func GetIncidents(client PagerDutyClient, opts pagerduty.ListIncidentsOptions) ([]pagerduty.Incident, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var i []pagerduty.Incident
 
 	for {
@@ -220,7 +235,8 @@ func GetIncidents(client PagerDutyClient, opts pagerduty.ListIncidentsOptions) (
 }
 
 func GetNotes(client PagerDutyClient, id string) ([]pagerduty.IncidentNote, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var n []pagerduty.IncidentNote
 
 	n, err := client.ListIncidentNotesWithContext(ctx, id)
@@ -232,7 +248,8 @@ func GetNotes(client PagerDutyClient, id string) ([]pagerduty.IncidentNote, erro
 }
 
 func GetTeams(client PagerDutyClient, teams []string) ([]*pagerduty.Team, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var t []*pagerduty.Team
 
 	for _, i := range teams {
@@ -247,7 +264,8 @@ func GetTeams(client PagerDutyClient, teams []string) ([]*pagerduty.Team, error)
 }
 
 func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts pagerduty.ListTeamMembersOptions) ([]string, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var u []string
 
 	for _, team := range teams {
@@ -273,7 +291,8 @@ func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts page
 }
 
 func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (*pagerduty.User, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var u *pagerduty.User
 
 	u, err := client.GetUserWithContext(ctx, id, opts)
@@ -285,7 +304,8 @@ func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (
 }
 
 func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCallOptions) ([]pagerduty.OnCall, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var o []pagerduty.OnCall
 
 	for {
@@ -324,7 +344,8 @@ func loopManageIncidents(client PagerDutyClient, ctx context.Context, email stri
 
 // ReassignIncidents reassigns a list of incidents to a list of users
 func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) ([]pagerduty.Incident, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 
 	a := []pagerduty.Assignee{}
 	for _, user := range users {
@@ -348,7 +369,8 @@ func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, u
 
 // ReEscalateIncidents re-escalates a list of incidents to an escalation policy at a specific level
 func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, policy *pagerduty.EscalationPolicy, level uint) ([]pagerduty.Incident, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 
 	opts := []pagerduty.ManageIncidentsOptions{}
 
@@ -368,7 +390,8 @@ func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident,
 }
 
 func PostNote(client PagerDutyClient, id string, user *pagerduty.User, content string) (*pagerduty.IncidentNote, error) {
-	var ctx = context.Background()
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
 	var n *pagerduty.IncidentNote
 
 	note := pagerduty.IncidentNote{

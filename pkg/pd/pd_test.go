@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,40 @@ func (m *MockManageIncidentsMoreClient) ManageIncidentsWithContext(ctx context.C
 			},
 		},
 	}, nil
+}
+
+func TestContextWithTimeout_HasDeadline(t *testing.T) {
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	assert.True(t, ok, "context should have a deadline set")
+	assert.WithinDuration(t, time.Now().Add(defaultAPITimeout), deadline, 2*time.Second,
+		"deadline should be approximately defaultAPITimeout from now")
+}
+
+func TestContextWithTimeout_CancelWorks(t *testing.T) {
+	ctx, cancel := contextWithTimeout()
+
+	// Context should not be done before cancel
+	select {
+	case <-ctx.Done():
+		t.Fatal("context should not be done before cancel is called")
+	default:
+		// expected
+	}
+
+	cancel()
+
+	// Context should be done after cancel
+	select {
+	case <-ctx.Done():
+		// expected
+	case <-time.After(1 * time.Second):
+		t.Fatal("context should be done after cancel is called")
+	}
+
+	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context error should be context.Canceled after cancel")
 }
 
 func TestGetTeams(t *testing.T) {
