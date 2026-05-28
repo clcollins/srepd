@@ -10,3 +10,6 @@ dist/
 build/
 
 coverage.out
+
+# Override global gitignore to track CLAUDE.md in this repo
+!CLAUDE.md
