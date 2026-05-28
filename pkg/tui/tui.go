@@ -455,6 +455,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Capture the currently highlighted incident ID before rebuilding rows
+		var highlightedID string
+		if currentRow := m.table.SelectedRow(); currentRow != nil && len(currentRow) > 1 {
+			highlightedID = currentRow[1]
+		}
+
 		var totalIncidentCount int
 		var rows []table.Row
 
@@ -467,6 +473,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.table.SetRows(rows)
+
+		// Restore cursor to the previously highlighted incident
+		if highlightedID != "" {
+			if idx := findRowIndex(rows, highlightedID); idx >= 0 {
+				m.table.SetCursor(idx)
+			}
+		}
 
 		if totalIncidentCount == 1 {
 			m.setStatus(fmt.Sprintf("showing %d/%d incident...", len(m.table.Rows()), totalIncidentCount))
