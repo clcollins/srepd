@@ -314,6 +314,11 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Note):
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			m.syncSelectedIncidentToHighlightedRow()
 			if m.selectedIncident == nil {
 				m.setStatus("no incident selected")
 				return m, nil
