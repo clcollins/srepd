@@ -781,15 +781,29 @@ func removeCommentsFromBytes(b []byte, prefixes ...string) string {
 	return content.String()
 }
 
+// getDetailFieldFromAlert safely extracts a string field from alert body details.
+// Returns "" if body, details, or field is missing or wrong type. Never panics.
 func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
-	if a.Body["details"] != nil {
-
-		if a.Body["details"].(map[string]interface{})[f] != nil {
-			return a.Body["details"].(map[string]interface{})[f].(string)
-		}
+	if a.Body == nil {
 		return ""
 	}
-	return ""
+	detailsRaw, ok := a.Body["details"]
+	if !ok || detailsRaw == nil {
+		return ""
+	}
+	details, ok := detailsRaw.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	fieldRaw, ok := details[f]
+	if !ok || fieldRaw == nil {
+		return ""
+	}
+	fieldStr, ok := fieldRaw.(string)
+	if !ok {
+		return ""
+	}
+	return fieldStr
 }
 
 // getEscalationPolicyKey is a helper function to determine the escalation policy key

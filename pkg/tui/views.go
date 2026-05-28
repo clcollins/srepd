@@ -427,6 +427,13 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 		cluster := getDetailFieldFromAlert("cluster_id", alt)
 		link := getDetailFieldFromAlert("link", alt)
 
+		var details map[string]interface{}
+		if alt.Body != nil {
+			if d, ok := alt.Body["details"].(map[string]interface{}); ok {
+				details = d
+			}
+		}
+
 		s = append(s, alertSummary{
 			ID:       alt.ID,
 			Name:     name,
@@ -437,7 +444,7 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 			Created:  alt.CreatedAt,
 			Status:   alt.Status,
 			Incident: alt.Incident.ID,
-			Details:  alt.Body["details"].(map[string]interface{}),
+			Details:  details,
 		})
 
 	}
