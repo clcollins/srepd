@@ -22,7 +22,10 @@ THE SOFTWARE.
 package main
 
 import (
+	"fmt"
+	"io"
 	"os"
+	"sync/atomic"
 
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/cmd"
@@ -43,7 +46,7 @@ func main() {
 	defer f.Close() //nolint:errcheck
 
 	// Use async writer to prevent log I/O from blocking the UI
-	asyncWriter := newAsyncWriter(f, 1000) // Buffer up to 1000 log messages
+	asyncWriter := newAsyncWriter(f, 5000) // Buffer up to 5000 log messages
 	defer asyncWriter.Close() //nolint:errcheck
 
 	log.SetOutput(asyncWriter)
@@ -51,14 +54,23 @@ func main() {
 	cmd.Execute()
 }
 
-// asyncWriter wraps an io.Writer and writes asynchronously via a channel
+// asyncWriter wraps an io.Writer and writes asynchronously via a channel.
+// When the internal buffer is full, messages are dropped and counted.
+// The background goroutine periodically emits a synthetic log entry
+// reporting how many messages were dropped.
 type asyncWriter struct {
-	out    chan []byte
-	done   chan struct{}
-	closed bool
+	out     chan []byte
+	done    chan struct{}
+	closed  bool
+	dropped uint64 // accessed atomically
 }
 
-func newAsyncWriter(w *os.File, bufferSize int) *asyncWriter {
+// dropReportInterval controls how often a synthetic "dropped N messages"
+// entry is written to the underlying writer. A report is emitted every
+// time the cumulative drop count crosses a multiple of this value.
+const dropReportInterval uint64 = 100
+
+func newAsyncWriter(w io.Writer, bufferSize int) *asyncWriter {
 	aw := &asyncWriter{
 		out:  make(chan []byte, bufferSize),
 		done: make(chan struct{}),
@@ -66,9 +78,27 @@ func newAsyncWriter(w *os.File, bufferSize int) *asyncWriter {
 
 	// Start background goroutine to write logs
 	go func() {
+		var lastReported uint64
 		for msg := range aw.out {
 			w.Write(msg) //nolint:errcheck
+
+			// Check for dropped messages and emit a report periodically
+			current := atomic.LoadUint64(&aw.dropped)
+			if current > 0 && current/dropReportInterval > lastReported/dropReportInterval {
+				notice := fmt.Sprintf("[asyncWriter] dropped %d log messages due to full buffer\n", current)
+				w.Write([]byte(notice)) //nolint:errcheck
+				lastReported = current
+			}
 		}
+
+		// Flush any remaining drop count on shutdown that wasn't
+		// covered by the last periodic report
+		finalDropped := atomic.LoadUint64(&aw.dropped)
+		if finalDropped > 0 && finalDropped%dropReportInterval != 0 {
+			notice := fmt.Sprintf("[asyncWriter] dropped %d log messages total (final)\n", finalDropped)
+			w.Write([]byte(notice)) //nolint:errcheck
+		}
+
 		close(aw.done)
 	}()
 
@@ -91,8 +121,14 @@ func (aw *asyncWriter) Write(p []byte) (n int, err error) {
 		return len(p), nil
 	default:
 		// Buffer full - drop message to avoid blocking
+		atomic.AddUint64(&aw.dropped, 1)
 		return len(p), nil
 	}
+}
+
+// Dropped returns the number of messages dropped due to a full buffer.
+func (aw *asyncWriter) Dropped() uint64 {
+	return atomic.LoadUint64(&aw.dropped)
 }
 
 func (aw *asyncWriter) Close() error {
