@@ -28,6 +28,13 @@ type cachedIncidentData struct {
 	lastFetched  time.Time
 }
 
+// confirmActionState stores the pending confirmation state for destructive actions.
+// When set, the UI shows a prompt and only accepts y/n/Escape.
+type confirmActionState struct {
+	prompt string  // e.g., "Acknowledge P1234567? [y/n]"
+	action tea.Cmd // Command to execute on 'y'
+}
+
 // actionLogEntry stores a record of a write action performed on an incident
 type actionLogEntry struct {
 	key       string    // Keypress that triggered action (e.g., "a", "^e", "n", "%R" for resolved)
@@ -86,6 +93,10 @@ type model struct {
 	showActionLog   bool
 	showLowUrgency  bool
 	debug           bool
+
+	// pendingConfirmation holds the state of a destructive action awaiting user confirmation.
+	// When non-nil, the UI shows the prompt and only accepts y/n/Escape.
+	pendingConfirmation *confirmActionState
 }
 
 func InitialModel(
@@ -168,6 +179,8 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	m.incidentDataLoaded = false
 	m.incidentNotesLoaded = false
 	m.incidentAlertsLoaded = false
+	// Clear any pending confirmation on view transition
+	m.pendingConfirmation = nil
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 

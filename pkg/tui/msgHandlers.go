@@ -145,6 +145,11 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// If a confirmation prompt is active, only accept y/n/Escape/quit
+	if m.pendingConfirmation != nil {
+		return m.handleConfirmationInput(msg.(tea.KeyMsg))
+	}
+
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Quit) {
 		return m, tea.Quit
 	}
@@ -192,6 +197,36 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleConfirmationInput processes keypresses while a confirmation prompt is active.
+// Only 'y' (execute), 'n' (cancel), Escape (cancel), and quit keys are accepted.
+func (m model) handleConfirmationInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if key.Matches(msg, defaultKeyMap.Quit) {
+		return m, tea.Quit
+	}
+
+	keyStr := msg.String()
+	switch keyStr {
+	case "y":
+		// Execute the pending action
+		action := m.pendingConfirmation.action
+		m.pendingConfirmation = nil
+		return m, action
+	case "n":
+		// Cancel the pending action
+		m.pendingConfirmation = nil
+		m.setStatus("action cancelled")
+		return m, nil
+	case "esc":
+		// Cancel the pending action
+		m.pendingConfirmation = nil
+		m.setStatus("action cancelled")
+		return m, nil
+	default:
+		// Ignore all other keys while confirmation is active
+		return m, nil
+	}
 }
 
 // tableFocusMode is the main mode for the application
@@ -252,6 +287,8 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// fetch full incident data from the API before proceeding.
 
 		case key.Matches(msg, defaultKeyMap.Enter):
+			// Clear any pending confirmation on view transition
+			m.pendingConfirmation = nil
 			// Check if we have cached data for this incident
 			if cached, exists := m.incidentCache[incidentID]; exists {
 				// Use cached data immediately
@@ -314,7 +351,11 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("no incident selected")
 				return m, nil
 			}
-			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
+			m.pendingConfirmation = &confirmActionState{
+				prompt: fmt.Sprintf("Silence %s? [y/n]", incidentID),
+				action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
+			}
+			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Ack):
 			if m.table.SelectedRow() == nil {
@@ -338,7 +379,11 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("no incident selected")
 				return m, nil
 			}
-			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
+			m.pendingConfirmation = &confirmActionState{
+				prompt: fmt.Sprintf("Re-escalate %s? [y/n]", incidentID),
+				action: func() tea.Msg { return unAcknowledgeIncidentsMsg{} },
+			}
+			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Note):
 			if m.table.SelectedRow() == nil {
@@ -469,10 +514,26 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
-			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
+			incidentID := ""
+			if m.selectedIncident != nil {
+				incidentID = m.selectedIncident.ID
+			}
+			m.pendingConfirmation = &confirmActionState{
+				prompt: fmt.Sprintf("Re-escalate %s? [y/n]", incidentID),
+				action: func() tea.Msg { return unAcknowledgeIncidentsMsg{} },
+			}
+			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Silence):
-			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
+			incidentID := ""
+			if m.selectedIncident != nil {
+				incidentID = m.selectedIncident.ID
+			}
+			m.pendingConfirmation = &confirmActionState{
+				prompt: fmt.Sprintf("Silence %s? [y/n]", incidentID),
+				action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
+			}
+			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Note):
 			// Note template requires full incident data (HTMLURL, Title, Service.Summary)

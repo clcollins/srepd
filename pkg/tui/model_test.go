@@ -951,6 +951,272 @@ func TestFindRowIndex_EmptyRows(t *testing.T) {
 	assert.Equal(t, -1, result, "Expected -1 when rows slice is empty")
 }
 
+// createTestModelWithSelectedIncident creates a model with a table, incident list,
+// and a highlighted/selected incident for testing confirmation prompts and actions
+func createTestModelWithSelectedIncident() model {
+	m := createTestModel()
+	m.config = &pd.Config{
+		EscalationPolicies: map[string]*pagerduty.EscalationPolicy{
+			"SILENT_DEFAULT": {
+				APIObject: pagerduty.APIObject{ID: "SILENT"},
+				Name:      "Silent",
+			},
+		},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "U123"},
+		},
+	}
+
+	m.incidentList = []pagerduty.Incident{
+		{
+			APIObject:        pagerduty.APIObject{ID: "P1234567"},
+			Title:            "Test Alert Firing",
+			Service:          pagerduty.APIObject{ID: "SVC789", Summary: "test-service"},
+			EscalationPolicy: pagerduty.APIObject{ID: "POL123"},
+		},
+	}
+
+	cols := []table.Column{
+		{Title: dot, Width: dotWidth},
+		{Title: "ID", Width: idWidth - dotWidth},
+		{Title: "Summary", Width: 30},
+		{Title: "Service", Width: 20},
+	}
+	rows := []table.Row{
+		{dot, "P1234567", "Test Alert Firing", "test-service"},
+	}
+	m.table = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+	)
+
+	// Sync the selected incident to the highlighted row
+	m.syncSelectedIncidentToHighlightedRow()
+
+	// Set up action log table to prevent panics
+	m.actionLogTable = newActionLogTable()
+	m.actionLogTable.SetColumns([]table.Column{
+		{Title: "", Width: 2},
+		{Title: "", Width: 15},
+		{Title: "", Width: 30},
+		{Title: "", Width: 20},
+	})
+
+	return m
+}
+
+func TestConfirmAction_AckExecutesDirectly(t *testing.T) {
+	t.Run("pressing 'a' in table mode executes immediately without confirmation", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+		result, cmd := m.Update(msg)
+		m = result.(model)
+
+		assert.Nil(t, m.pendingConfirmation, "acknowledge should not set pendingConfirmation")
+		assert.NotNil(t, cmd, "acknowledge should return a command immediately")
+	})
+
+	t.Run("pressing 'a' in incident view mode executes immediately without confirmation", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+		m.viewingIncident = true
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+		result, cmd := m.Update(msg)
+		m = result.(model)
+
+		assert.Nil(t, m.pendingConfirmation, "acknowledge should not set pendingConfirmation in incident view")
+		assert.NotNil(t, cmd, "acknowledge should return a command immediately")
+	})
+}
+
+func TestConfirmAction_ReEscalateShowsPrompt(t *testing.T) {
+	t.Run("pressing ctrl+e sets pendingConfirmation instead of executing", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		msg := tea.KeyMsg{Type: tea.KeyCtrlE}
+		result, cmd := m.Update(msg)
+		m = result.(model)
+
+		assert.NotNil(t, m.pendingConfirmation, "pendingConfirmation should be set after pressing ctrl+e")
+		assert.Contains(t, m.pendingConfirmation.prompt, "P1234567", "prompt should contain incident ID")
+		assert.Contains(t, m.pendingConfirmation.prompt, "Re-escalate", "prompt should describe the action")
+		assert.Nil(t, cmd, "no command should execute before confirmation")
+	})
+}
+
+func TestConfirmAction_SilenceShowsPrompt(t *testing.T) {
+	t.Run("pressing ctrl+s sets pendingConfirmation instead of executing", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		msg := tea.KeyMsg{Type: tea.KeyCtrlS}
+		result, cmd := m.Update(msg)
+		m = result.(model)
+
+		assert.NotNil(t, m.pendingConfirmation, "pendingConfirmation should be set after pressing ctrl+s")
+		assert.Contains(t, m.pendingConfirmation.prompt, "P1234567", "prompt should contain incident ID")
+		assert.Contains(t, m.pendingConfirmation.prompt, "Silence", "prompt should describe the action")
+		assert.Nil(t, cmd, "no command should execute before confirmation")
+	})
+}
+
+func TestConfirmAction_YesExecutes(t *testing.T) {
+	t.Run("pressing 'y' with pendingConfirmation executes the action and clears it", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		// Set up pendingConfirmation by pressing ctrl+s (silence)
+		msg := tea.KeyMsg{Type: tea.KeyCtrlS}
+		result, _ := m.Update(msg)
+		m = result.(model)
+		assert.NotNil(t, m.pendingConfirmation, "precondition: pendingConfirmation should be set")
+
+		// Now press 'y' to confirm
+		confirmMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}
+		result, cmd := m.Update(confirmMsg)
+		m = result.(model)
+
+		// pendingConfirmation should be cleared
+		assert.Nil(t, m.pendingConfirmation, "pendingConfirmation should be cleared after 'y'")
+		// A command should have been returned (the action executes)
+		assert.NotNil(t, cmd, "command should be returned after confirming")
+	})
+}
+
+func TestConfirmAction_NoAborts(t *testing.T) {
+	t.Run("pressing 'n' with pendingConfirmation clears it without executing", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		// Set up pendingConfirmation via ctrl+s (silence)
+		msg := tea.KeyMsg{Type: tea.KeyCtrlS}
+		result, _ := m.Update(msg)
+		m = result.(model)
+		assert.NotNil(t, m.pendingConfirmation, "precondition: pendingConfirmation should be set")
+
+		// Now press 'n' to abort
+		cancelMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+		result, cmd := m.Update(cancelMsg)
+		m = result.(model)
+
+		// pendingConfirmation should be cleared
+		assert.Nil(t, m.pendingConfirmation, "pendingConfirmation should be cleared after 'n'")
+		// No command should execute
+		assert.Nil(t, cmd, "no command should execute after aborting")
+		// Status should indicate cancellation
+		assert.Contains(t, m.status, "cancelled", "status should indicate cancellation")
+	})
+}
+
+func TestConfirmAction_EscAborts(t *testing.T) {
+	t.Run("pressing Escape with pendingConfirmation clears it without executing", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		// Set up pendingConfirmation via ctrl+s (silence)
+		msg := tea.KeyMsg{Type: tea.KeyCtrlS}
+		result, _ := m.Update(msg)
+		m = result.(model)
+		assert.NotNil(t, m.pendingConfirmation, "precondition: pendingConfirmation should be set")
+
+		// Now press Escape to abort
+		escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+		result, cmd := m.Update(escMsg)
+		m = result.(model)
+
+		// pendingConfirmation should be cleared
+		assert.Nil(t, m.pendingConfirmation, "pendingConfirmation should be cleared after Escape")
+		// No command should execute
+		assert.Nil(t, cmd, "no command should execute after pressing Escape")
+		// Status should indicate cancellation
+		assert.Contains(t, m.status, "cancelled", "status should indicate cancellation")
+	})
+}
+
+func TestConfirmAction_ClearedOnViewTransition(t *testing.T) {
+	t.Run("clearSelectedIncident clears pendingConfirmation", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		// Set up pendingConfirmation directly
+		m.pendingConfirmation = &confirmActionState{
+			prompt: "Acknowledge P1234567? [y/n]",
+			action: func() tea.Msg { return acknowledgeIncidentsMsg{} },
+		}
+
+		// clearSelectedIncident should also clear pendingConfirmation
+		m.clearSelectedIncident("test")
+
+		assert.Nil(t, m.pendingConfirmation, "pendingConfirmation should be cleared by clearSelectedIncident")
+	})
+
+	t.Run("confirmation blocks other keys including Enter", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		// Set up pendingConfirmation via ctrl+s (silence)
+		msg := tea.KeyMsg{Type: tea.KeyCtrlS}
+		result, _ := m.Update(msg)
+		m = result.(model)
+		assert.NotNil(t, m.pendingConfirmation, "precondition: pendingConfirmation should be set")
+
+		// Press Enter -- should be ignored while confirmation is active
+		enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+		result, cmd := m.Update(enterMsg)
+		m = result.(model)
+
+		// pendingConfirmation should still be set (Enter is ignored)
+		assert.NotNil(t, m.pendingConfirmation, "pendingConfirmation should remain set when Enter is pressed")
+		assert.Nil(t, cmd, "no command should execute for non-confirmation keys")
+	})
+}
+
+func TestConfirmAction_OtherKeysIgnored(t *testing.T) {
+	t.Run("pressing non-y/n/Escape keys are ignored during confirmation", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		// Set up pendingConfirmation via ctrl+s (silence)
+		msg := tea.KeyMsg{Type: tea.KeyCtrlS}
+		result, _ := m.Update(msg)
+		m = result.(model)
+		assert.NotNil(t, m.pendingConfirmation, "precondition: pendingConfirmation should be set")
+
+		savedPrompt := m.pendingConfirmation.prompt
+
+		// Press an unrelated key like 'x'
+		otherMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+		result, cmd := m.Update(otherMsg)
+		m = result.(model)
+
+		// pendingConfirmation should still be set (not cleared)
+		assert.NotNil(t, m.pendingConfirmation, "pendingConfirmation should remain set after unrelated key")
+		assert.Equal(t, savedPrompt, m.pendingConfirmation.prompt, "prompt should not change")
+		assert.Nil(t, cmd, "no command should execute for unrelated keys")
+	})
+}
+
+func TestConfirmAction_PromptRenderedInStatusArea(t *testing.T) {
+	t.Run("View renders confirmation prompt in status area", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+
+		// Need window size for View() to work
+		windowSize = tea.WindowSizeMsg{Width: 120, Height: 50}
+		// Need to handle windowSizeMsgHandler to set columns etc.
+		result, _ := m.windowSizeMsgHandler(windowSize)
+		m = result.(model)
+
+		// Reset table rows after windowSizeMsgHandler
+		m.table.SetRows([]table.Row{
+			{dot, "P1234567", "Test Alert Firing", "test-service"},
+		})
+
+		// Set up a pending confirmation
+		m.pendingConfirmation = &confirmActionState{
+			prompt: "Silence P1234567? [y/n]",
+			action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
+		}
+
+		view := m.View()
+		assert.Contains(t, view, "Silence P1234567? [y/n]", "View should render the confirmation prompt")
+	})
+}
+
 func TestWindowSizeMsgHandler_SmallWindow(t *testing.T) {
 	tests := []struct {
 		name   string

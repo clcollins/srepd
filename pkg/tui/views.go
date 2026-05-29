@@ -238,11 +238,20 @@ func (m model) renderHeader() string {
 		assignedTo = "Team"
 	}
 
+	// When a confirmation prompt is active, show it in the status area instead of
+	// the normal status text, using the warning style to draw attention
+	var statusContent string
+	if m.pendingConfirmation != nil {
+		statusContent = warningStyle.Render(m.pendingConfirmation.prompt)
+	} else {
+		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View())
+	}
+
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
 
-			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusArea(m.status, m.apiInProgress, m.spinner.View())),
+			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusContent),
 
 			paddedStyle.Render(assigneeArea(assignedTo)),
 		),
