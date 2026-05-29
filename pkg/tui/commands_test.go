@@ -453,6 +453,7 @@ func TestBuildPagerDutyEnvVars_FullIncident(t *testing.T) {
 	assert.Equal(t, "test-service", vars["PAGERDUTY_INCIDENT_SERVICE"])
 	assert.Equal(t, "high", vars["PAGERDUTY_INCIDENT_URGENCY"])
 	assert.Equal(t, "triggered", vars["PAGERDUTY_INCIDENT_STATUS"])
+	assert.Equal(t, "https://pagerduty.com/incidents/PD123", vars["REASON"])
 	assert.Equal(t, "cluster-abc", vars["PAGERDUTY_CLUSTER_ID"])
 	assert.Equal(t, "2", vars["PAGERDUTY_ALERT_COUNT"])
 	assert.Equal(t, "HighCPU,LowMemory", vars["PAGERDUTY_ALERT_NAMES"])
@@ -1094,4 +1095,26 @@ func TestGetUniqueClusters_MixedWithAndWithoutClusterID(t *testing.T) {
 	}
 	result := getUniqueClusters(alerts)
 	assert.Equal(t, []string{"cluster-abc-123", "cluster-def-456"}, result)
+}
+
+func TestSanitizeEnvValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"plain text", "ClusterOperatorDown", "ClusterOperatorDown"},
+		{"with spaces", "High CPU Alert", "High CPU Alert"},
+		{"with newlines", "line1\nline2\rline3", "line1 line2line3"},
+		{"with quotes", `alert "name" here`, "alert name here"},
+		{"with backticks", "alert `cmd` here", "alert cmd here"},
+		{"with dollar signs", "alert $VAR here", "alert VAR here"},
+		{"with backslashes", `alert \n here`, "alert n here"},
+		{"empty string", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, sanitizeEnvValue(tt.input))
+		})
+	}
 }

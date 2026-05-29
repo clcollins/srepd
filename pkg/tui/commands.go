@@ -426,17 +426,34 @@ type loginFinishedMsg struct {
 // Only alerts whose cluster_id matches clusterID contribute to ALERT_NAMES and
 // ALERT_LINKS. This replaces the previous approach of base64-encoding a JSON blob,
 // which could exceed ARG_MAX with many alerts.
+// sanitizeEnvValue removes or escapes characters that could cause issues
+// in environment variable values passed via -e flags to terminals or containers.
+func sanitizeEnvValue(s string) string {
+	r := strings.NewReplacer(
+		"\n", " ",
+		"\r", "",
+		"\t", " ",
+		"'", "",
+		"\"", "",
+		"`", "",
+		"$", "",
+		"\\", "",
+	)
+	return r.Replace(s)
+}
+
 func buildPagerDutyEnvVars(incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote, clusterID string) []string {
 	var envFlags []string
 
 	// Incident-level variables
 	if incident != nil {
 		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_ID=%s", incident.ID))
-		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_TITLE=%s", incident.Title))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_TITLE=%s", sanitizeEnvValue(incident.Title)))
 		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_URL=%s", incident.HTMLURL))
-		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_SERVICE=%s", incident.Service.Summary))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_SERVICE=%s", sanitizeEnvValue(incident.Service.Summary)))
 		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_URGENCY=%s", incident.Urgency))
 		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_STATUS=%s", incident.Status))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("REASON=%s", incident.HTMLURL))
 	}
 
 	// Cluster ID
@@ -455,7 +472,7 @@ func buildPagerDutyEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inci
 
 		name := getDetailFieldFromAlert("alert_name", alert)
 		if name != "" {
-			matchingNames = append(matchingNames, name)
+			matchingNames = append(matchingNames, sanitizeEnvValue(name))
 		}
 
 		// Check both SOP link fields in priority order, same as getSOPLink
