@@ -138,4 +138,4 @@ PRs follow TDD workflow and require a plan document in `docs/plans/`. Run `make 
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT License. See [LICENSE](LICENSE) for details. Portions of this codebase were developed with the assistance of AI tools. See the [AI-Assisted Contributions note](LICENSE) in the license file for details.
