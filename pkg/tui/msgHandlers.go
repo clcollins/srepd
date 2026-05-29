@@ -557,9 +557,20 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Enter):
-			// For now, do nothing on Enter
-			// Future: process the input command
-			return m, nil
+			// Extract the input text, reset input, and dispatch to Claude
+			prompt := m.input.Value()
+			m.input.Reset()
+			m.input.Blur()
+			m.table.Focus()
+
+			// Don't dispatch on empty input
+			if prompt == "" {
+				return m, nil
+			}
+
+			return m, func() tea.Msg {
+				return claudePromptMsg{prompt: prompt}
+			}
 
 		default:
 			// Pass ALL other keypresses (including 'h') to the input component
