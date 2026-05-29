@@ -78,6 +78,7 @@ var (
 		"terminal":              "gnome-terminal --",
 		"cluster_login_command": "ocm backplane login %%CLUSTER_ID%%",
 		"toolbox_mode":          "auto",
+		"chord_prefix":          "ctrl+x",
 	}
 	optionalKeys = map[string]string{
 		"ignoredusers":          fmt.Sprintf("PagerDuty user IDs to ignore (default: %v)", "None"),
@@ -85,6 +86,7 @@ var (
 		"terminal":              fmt.Sprintf("Terminal to use for exec commands (default: %v)", defaultOptionalKeys["terminal"]),
 		"cluster_login_command": fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
 		"toolbox_mode":          fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", defaultOptionalKeys["toolbox_mode"]),
+		"chord_prefix":          fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", defaultOptionalKeys["chord_prefix"]),
 	}
 )
 

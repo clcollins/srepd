@@ -125,6 +125,7 @@ func TestValidateConfig_OptionalKeysGetDefaults(t *testing.T) {
 	assert.Equal(t, "gnome-terminal --", viper.GetString("terminal"), "terminal should default to 'gnome-terminal --'")
 	assert.Equal(t, "ocm backplane login %%CLUSTER_ID%%", viper.GetString("cluster_login_command"), "cluster_login_command should get default value")
 	assert.Equal(t, "auto", viper.GetString("toolbox_mode"), "toolbox_mode should default to 'auto'")
+	assert.Equal(t, "ctrl+x", viper.GetString("chord_prefix"), "chord_prefix should default to 'ctrl+x'")
 }
 
 func TestValidateConfig_InvalidEscalationPoliciesType(t *testing.T) {

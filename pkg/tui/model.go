@@ -107,6 +107,12 @@ type model struct {
 	// because the incident has alerts referencing multiple distinct cluster_ids.
 	clusterSelectMode    bool
 	clusterSelectOptions []string
+
+	// chordPending is true when the chord prefix key has been pressed and
+	// the system is waiting for the second key to complete the chord.
+	chordPending bool
+	// chordPrefix is the configurable prefix key for chord commands (default "ctrl+x").
+	chordPrefix string
 }
 
 func InitialModel(
@@ -154,8 +160,9 @@ func InitialModel(
 		status:           "",
 		incidentCache:    make(map[string]*cachedIncidentData),
 		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:      true, // Start watching for updates on startup
-		showLowUrgency:   true, // Show all urgencies by default
+		autoRefresh:      true,  // Start watching for updates on startup
+		showLowUrgency:   true,  // Show all urgencies by default
+		chordPrefix:      "ctrl+x", // Default chord prefix
 	}
 
 	// This is an ugly way to handle this error
