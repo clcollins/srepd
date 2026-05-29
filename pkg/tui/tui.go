@@ -576,7 +576,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if i > 0 {
 					prompt.WriteString(", ")
 				}
-				prompt.WriteString(fmt.Sprintf("[%d] %s", i+1, c))
+				fmt.Fprintf(&prompt, "[%d] %s", i+1, c)
 			}
 			m.setStatus(prompt.String())
 			return m, nil
