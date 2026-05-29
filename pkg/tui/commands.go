@@ -494,6 +494,11 @@ func buildPagerDutyEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inci
 	envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_NOTES_EXIST=%s", strconv.FormatBool(notesExist)))
 	envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_NOTE_COUNT=%s", strconv.Itoa(len(notes))))
 
+	// Claude Code detection
+	if launcher.HasClaudeCode() {
+		envFlags = append(envFlags, "-e", "PAGERDUTY_CLAUDE_AVAILABLE=true")
+	}
+
 	return envFlags
 }
 
