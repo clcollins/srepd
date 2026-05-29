@@ -56,7 +56,11 @@ editor: vim
 terminal: gnome-terminal --
 
 # Cluster login command
-cluster-login-command: ocm backplane login %%CLUSTER_ID%%`
+cluster-login-command: ocm backplane login %%CLUSTER_ID%%
+
+# Toolbox mode: auto-detect Fedora Toolbox and prefix terminal commands
+# with flatpak-spawn --host. Values: "auto" (default), "true", "false"
+toolbox_mode: auto`
 )
 
 const description = `The config command is used to create or validate the SREPD config file.
@@ -73,12 +77,14 @@ var (
 		"editor":                "vim",
 		"terminal":              "gnome-terminal --",
 		"cluster_login_command": "ocm backplane login %%CLUSTER_ID%%",
+		"toolbox_mode":          "auto",
 	}
 	optionalKeys = map[string]string{
 		"ignoredusers":          fmt.Sprintf("PagerDuty user IDs to ignore (default: %v)", "None"),
 		"editor":                fmt.Sprintf("Editor to use for notes (default: %v)", defaultOptionalKeys["editor"]),
 		"terminal":              fmt.Sprintf("Terminal to use for exec commands (default: %v)", defaultOptionalKeys["terminal"]),
 		"cluster_login_command": fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
+		"toolbox_mode":          fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", defaultOptionalKeys["toolbox_mode"]),
 	}
 )
 

@@ -124,4 +124,5 @@ func TestValidateConfig_OptionalKeysGetDefaults(t *testing.T) {
 	assert.Equal(t, "vim", viper.GetString("editor"), "editor should default to 'vim'")
 	assert.Equal(t, "gnome-terminal --", viper.GetString("terminal"), "terminal should default to 'gnome-terminal --'")
 	assert.Equal(t, "ocm backplane login %%CLUSTER_ID%%", viper.GetString("cluster_login_command"), "cluster_login_command should get default value")
+	assert.Equal(t, "auto", viper.GetString("toolbox_mode"), "toolbox_mode should default to 'auto'")
 }

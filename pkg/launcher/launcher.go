@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/container"
 )
 
 const clusterLoginCommandFlag = "cluster_login_command"
@@ -14,6 +15,7 @@ type ClusterLauncher struct {
 	Enabled             bool
 	terminal            []string
 	clusterLoginCommand []string
+	runInToolbox        bool
 	settings            launcherSettings
 }
 
@@ -21,12 +23,31 @@ type launcherSettings struct {
 	// Future Usage Possibly
 }
 
-func NewClusterLauncher(terminal string, clusterLoginCommand string) (ClusterLauncher, error) {
+// NewClusterLauncher creates a new ClusterLauncher with automatic toolbox
+// detection using the default "auto" mode. When running inside a Fedora
+// Toolbox container, terminal commands are automatically prefixed with
+// "flatpak-spawn --host" so they execute on the host system.
+func NewClusterLauncher(terminal string, clusterLoginCommand string, toolboxMode string) (ClusterLauncher, error) {
+	return NewClusterLauncherWithToolbox(terminal, clusterLoginCommand, toolboxMode, container.IsRunningInToolbox)
+}
+
+// NewClusterLauncherWithToolbox creates a new ClusterLauncher with an
+// injectable toolbox detection function, enabling unit testing without
+// relying on actual environment state. The toolboxMode parameter controls
+// behavior: "auto" (or "") uses detectFn, "true" forces toolbox mode on,
+// "false" forces it off.
+func NewClusterLauncherWithToolbox(terminal string, clusterLoginCommand string, toolboxMode string, detectFn func() bool) (ClusterLauncher, error) {
+	inToolbox := resolveToolboxMode(toolboxMode, detectFn)
 
 	launcher := ClusterLauncher{
 		terminal:            strings.Split(terminal, " "),
 		clusterLoginCommand: strings.Split(clusterLoginCommand, " "),
+		runInToolbox:        inToolbox,
 		settings:            launcherSettings{},
+	}
+
+	if inToolbox {
+		log.Info("Toolbox detected: terminal commands will be prefixed with flatpak-spawn --host")
 	}
 
 	err := launcher.validate()
@@ -35,6 +56,22 @@ func NewClusterLauncher(terminal string, clusterLoginCommand string) (ClusterLau
 	}
 
 	return launcher, nil
+}
+
+// resolveToolboxMode determines whether toolbox wrapping should be enabled
+// based on the configuration mode and the detection function result.
+func resolveToolboxMode(mode string, detectFn func() bool) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "true":
+		return true
+	case "false":
+		return false
+	case "auto", "":
+		return detectFn()
+	default:
+		log.Warn("Unknown toolbox_mode value, falling back to auto", "value", mode)
+		return detectFn()
+	}
 }
 
 func (l *ClusterLauncher) validate() error {
@@ -65,8 +102,15 @@ func (l *ClusterLauncher) validate() error {
 }
 
 func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
-	///func (l *ClusterLauncher) BuildLoginCommand() []string {
 	command := []string{}
+
+	// When running in a Fedora Toolbox container, prepend flatpak-spawn --host
+	// so the terminal emulator command executes on the host system rather than
+	// inside the container where it does not exist.
+	if l.runInToolbox {
+		log.Debug("launcher.ClusterLauncher(): prepending flatpak-spawn --host for toolbox")
+		command = append(command, "flatpak-spawn", "--host")
+	}
 
 	// Handle the Terminal command
 	// The first arg should not be something replaceable, as checked in the

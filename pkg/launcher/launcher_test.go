@@ -3,7 +3,119 @@ package launcher
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestNewClusterLauncher_ToolboxDetection(t *testing.T) {
+	tests := []struct {
+		name          string
+		toolboxMode   string
+		detectToolbox bool
+		expectToolbox bool
+	}{
+		{
+			name:          "auto mode with detection true",
+			toolboxMode:   "auto",
+			detectToolbox: true,
+			expectToolbox: true,
+		},
+		{
+			name:          "auto mode with detection false",
+			toolboxMode:   "auto",
+			detectToolbox: false,
+			expectToolbox: false,
+		},
+		{
+			name:          "forced true overrides detection",
+			toolboxMode:   "true",
+			detectToolbox: false,
+			expectToolbox: true,
+		},
+		{
+			name:          "forced false overrides detection",
+			toolboxMode:   "false",
+			detectToolbox: true,
+			expectToolbox: false,
+		},
+		{
+			name:          "empty string defaults to auto with detection true",
+			toolboxMode:   "",
+			detectToolbox: true,
+			expectToolbox: true,
+		},
+		{
+			name:          "empty string defaults to auto with detection false",
+			toolboxMode:   "",
+			detectToolbox: false,
+			expectToolbox: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			launcher, err := NewClusterLauncherWithToolbox(
+				"gnome-terminal --",
+				"ocm backplane login %%CLUSTER_ID%%",
+				test.toolboxMode,
+				func() bool { return test.detectToolbox },
+			)
+			assert.NoError(t, err, "expected no error creating launcher")
+			assert.Equal(t, test.expectToolbox, launcher.runInToolbox, "toolbox mode mismatch")
+		})
+	}
+}
+
+func TestBuildLoginCommand_ToolboxWrapping(t *testing.T) {
+	launcher := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        true,
+	}
+
+	vars := map[string]string{
+		"%%CLUSTER_ID%%": "test-cluster-123",
+	}
+
+	cmd := launcher.BuildLoginCommand(vars)
+	expected := []string{"flatpak-spawn", "--host", "gnome-terminal", "--", "ocm-container", "-C", "test-cluster-123"}
+
+	assert.Equal(t, expected, cmd, "toolbox wrapping should prepend flatpak-spawn --host to entire command")
+}
+
+func TestBuildLoginCommand_NoWrappingNormal(t *testing.T) {
+	launcher := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        false,
+	}
+
+	vars := map[string]string{
+		"%%CLUSTER_ID%%": "test-cluster-123",
+	}
+
+	cmd := launcher.BuildLoginCommand(vars)
+	expected := []string{"gnome-terminal", "--", "ocm-container", "-C", "test-cluster-123"}
+
+	assert.Equal(t, expected, cmd, "without toolbox mode, command should not be wrapped")
+}
+
+func TestBuildLoginCommand_ToolboxWrappingWithTmux(t *testing.T) {
+	launcher := ClusterLauncher{
+		terminal:            []string{"tmux", "new-window", "-n", "%%CLUSTER_ID%%"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        true,
+	}
+
+	vars := map[string]string{
+		"%%CLUSTER_ID%%": "my-cluster",
+	}
+
+	cmd := launcher.BuildLoginCommand(vars)
+	expected := []string{"flatpak-spawn", "--host", "tmux", "new-window", "-n", "my-cluster", "ocm-container", "-C", "my-cluster"}
+
+	assert.Equal(t, expected, cmd, "toolbox wrapping should work with tmux terminal commands")
+}
 
 func TestClusterLauncherValidation(t *testing.T) {
 	tests := []struct {
@@ -46,7 +158,7 @@ func TestClusterLauncherValidation(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewClusterLauncher(test.terminalArg, test.loginCommandArg)
+			_, err := NewClusterLauncher(test.terminalArg, test.loginCommandArg, "auto")
 			if test.expectErr && err == nil {
 				t.Fatalf("Expected error but none fired")
 			}
