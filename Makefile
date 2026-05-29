@@ -162,6 +162,40 @@ test-coverage-threshold: ## Enforce minimum coverage threshold
 	echo "PASS: Coverage $$total% meets threshold $(COVERAGE_THRESHOLD)%"; \
 	rm -f coverage.out
 
+PATCH_COVERAGE_TARGET ?= 70
+
+.PHONY: test-coverage-patch
+test-coverage-patch: ## Check coverage of changed files (approximates Codecov patch coverage)
+	@echo "Checking patch coverage for changed files (target $(PATCH_COVERAGE_TARGET)%)..."
+	@MERGE_BASE=$$(git merge-base HEAD origin/main 2>/dev/null || echo ""); \
+	if [ -z "$$MERGE_BASE" ]; then \
+		echo "WARN: could not determine merge base; skipping patch coverage"; \
+		exit 0; \
+	fi; \
+	CHANGED=$$(git diff --name-only "$$MERGE_BASE"...HEAD -- '*.go' | grep -v '_test.go' || echo ""); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changed Go files - patch coverage check skipped"; \
+		exit 0; \
+	fi; \
+	go test ./... -coverprofile=coverage.out -covermode=atomic > /dev/null 2>&1; \
+	FAIL=false; \
+	for f in $$CHANGED; do \
+		pkg=$$(dirname $$f | sed 's|^|github.com/clcollins/srepd/|'); \
+		cov=$$(go tool cover -func=coverage.out 2>/dev/null | grep "^$$pkg" | awk '{sum+=$$3; n++} END {if(n>0) printf "%.0f", sum/n; else print "N/A"}'); \
+		if [ "$$cov" != "N/A" ] && [ $$(echo "$$cov < $(PATCH_COVERAGE_TARGET)" | bc 2>/dev/null || echo 0) -eq 1 ]; then \
+			echo "  WARN: $$f package coverage $$cov% < $(PATCH_COVERAGE_TARGET)%"; \
+			FAIL=true; \
+		else \
+			echo "  OK: $$f (package coverage $$cov%)"; \
+		fi; \
+	done; \
+	rm -f coverage.out; \
+	if [ "$$FAIL" = "true" ]; then \
+		echo "WARN: Some changed packages have coverage below $(PATCH_COVERAGE_TARGET)%"; \
+	else \
+		echo "PASS: All changed packages meet $(PATCH_COVERAGE_TARGET)% coverage target"; \
+	fi
+
 .PHONY: test-all
 test-all: fmt-check vet lint test test-race ## Run all checks
 	@echo "All checks passed."
