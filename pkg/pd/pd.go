@@ -114,7 +114,7 @@ func NewConfig(token string, teams []string, escalation_policies map[string]stri
 }
 
 func newClient(token string) PagerDutyClient {
-	return pagerduty.NewClient(token)
+	return NewRateLimitedClient(pagerduty.NewClient(token))
 }
 
 func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
