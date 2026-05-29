@@ -236,6 +236,52 @@ func TestGetTeamMemberIDs_PaginatedTeam(t *testing.T) {
 		"offset should reset to 0 for each new team")
 }
 
+func TestPostNote(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1", Type: "user_reference"},
+	}
+
+	tests := []struct {
+		name        string
+		id          string
+		content     string
+		expectErr   bool
+		errContains string
+	}{
+		{
+			name:      "successfully creates a note",
+			id:        "INCIDENT1",
+			content:   "Test note content",
+			expectErr: false,
+		},
+		{
+			name:        "returns wrapped error on failure",
+			id:          "err",
+			content:     "Test note content",
+			expectErr:   true,
+			errContains: "pd.PostNote()",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			note, err := PostNote(mockClient, tt.id, user, tt.content)
+			if tt.expectErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains,
+					"error should be wrapped with function context")
+				assert.Contains(t, err.Error(), tt.id,
+					"error should include the incident ID")
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, note)
+				assert.Equal(t, tt.content, note.Content)
+			}
+		})
+	}
+}
+
 func TestGetUserOnCalls_MultiplePages(t *testing.T) {
 	// Test that GetUserOnCalls appends results across pages instead of
 	// overwriting them.

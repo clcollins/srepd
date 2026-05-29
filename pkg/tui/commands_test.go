@@ -702,6 +702,345 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 	}
 }
 
+func TestStateShorthand(t *testing.T) {
+	userID := "USER1"
+
+	tests := []struct {
+		name     string
+		incident pagerduty.Incident
+		id       string
+		expected string
+	}{
+		{
+			name: "returns A when acknowledged by the given user",
+			incident: pagerduty.Incident{
+				Acknowledgements: []pagerduty.Acknowledgement{
+					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			id:       userID,
+			expected: "A",
+		},
+		{
+			name: "returns a when acknowledged by someone else",
+			incident: pagerduty.Incident{
+				Acknowledgements: []pagerduty.Acknowledgement{
+					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
+				},
+			},
+			id:       userID,
+			expected: "a",
+		},
+		{
+			name:     "returns dot when not acknowledged at all",
+			incident: pagerduty.Incident{},
+			id:       userID,
+			expected: dot,
+		},
+		{
+			name: "returns A when acknowledged by user and also by someone else",
+			incident: pagerduty.Incident{
+				Acknowledgements: []pagerduty.Acknowledgement{
+					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
+					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			id:       userID,
+			expected: "A",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := stateShorthand(tt.incident, tt.id)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestAcknowledged(t *testing.T) {
+	tests := []struct {
+		name            string
+		acknowledgments []pagerduty.Acknowledgement
+		expected        bool
+	}{
+		{
+			name:            "returns true when there are acknowledgements",
+			acknowledgments: []pagerduty.Acknowledgement{{Acknowledger: pagerduty.APIObject{ID: "USER1"}}},
+			expected:        true,
+		},
+		{
+			name:            "returns true with multiple acknowledgements",
+			acknowledgments: []pagerduty.Acknowledgement{{Acknowledger: pagerduty.APIObject{ID: "U1"}}, {Acknowledger: pagerduty.APIObject{ID: "U2"}}},
+			expected:        true,
+		},
+		{
+			name:            "returns false when there are no acknowledgements",
+			acknowledgments: []pagerduty.Acknowledgement{},
+			expected:        false,
+		},
+		{
+			name:            "returns false when acknowledgements is nil",
+			acknowledgments: nil,
+			expected:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := acknowledged(tt.acknowledgments)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestAssignedToUser(t *testing.T) {
+	tests := []struct {
+		name     string
+		incident pagerduty.Incident
+		id       string
+		expected bool
+	}{
+		{
+			name: "returns true when user is assigned",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			id:       "USER1",
+			expected: true,
+		},
+		{
+			name: "returns false when different user is assigned",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "OTHER_USER"}},
+				},
+			},
+			id:       "USER1",
+			expected: false,
+		},
+		{
+			name:     "returns false when no assignments",
+			incident: pagerduty.Incident{},
+			id:       "USER1",
+			expected: false,
+		},
+		{
+			name: "returns true when user is among multiple assignees",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "OTHER_USER"}},
+					{Assignee: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			id:       "USER1",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := AssignedToUser(tt.incident, tt.id)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestAcknowledgedByUser(t *testing.T) {
+	tests := []struct {
+		name     string
+		incident pagerduty.Incident
+		id       string
+		expected bool
+	}{
+		{
+			name: "returns true when user has acknowledged",
+			incident: pagerduty.Incident{
+				Acknowledgements: []pagerduty.Acknowledgement{
+					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			id:       "USER1",
+			expected: true,
+		},
+		{
+			name: "returns false when different user acknowledged",
+			incident: pagerduty.Incident{
+				Acknowledgements: []pagerduty.Acknowledgement{
+					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
+				},
+			},
+			id:       "USER1",
+			expected: false,
+		},
+		{
+			name:     "returns false when no acknowledgements",
+			incident: pagerduty.Incident{},
+			id:       "USER1",
+			expected: false,
+		},
+		{
+			name: "returns true when user is among multiple acknowledgers",
+			incident: pagerduty.Incident{
+				Acknowledgements: []pagerduty.Acknowledgement{
+					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
+					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			id:       "USER1",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := AcknowledgedByUser(tt.incident, tt.id)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestAssignedToAnyUsers(t *testing.T) {
+	tests := []struct {
+		name     string
+		incident pagerduty.Incident
+		ids      []string
+		expected bool
+	}{
+		{
+			name: "returns true when one of the given users is assigned",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "USER2"}},
+				},
+			},
+			ids:      []string{"USER1", "USER2", "USER3"},
+			expected: true,
+		},
+		{
+			name: "returns false when none of the given users are assigned",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "OTHER_USER"}},
+				},
+			},
+			ids:      []string{"USER1", "USER2", "USER3"},
+			expected: false,
+		},
+		{
+			name:     "returns false when no assignments",
+			incident: pagerduty.Incident{},
+			ids:      []string{"USER1", "USER2"},
+			expected: false,
+		},
+		{
+			name: "returns false with empty user list",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			ids:      []string{},
+			expected: false,
+		},
+		{
+			name: "returns false with nil user list",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "USER1"}},
+				},
+			},
+			ids:      nil,
+			expected: false,
+		},
+		{
+			name: "returns true with multiple assignments and multiple users",
+			incident: pagerduty.Incident{
+				Assignments: []pagerduty.Assignment{
+					{Assignee: pagerduty.APIObject{ID: "OTHER1"}},
+					{Assignee: pagerduty.APIObject{ID: "USER3"}},
+				},
+			},
+			ids:      []string{"USER1", "USER2", "USER3"},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := AssignedToAnyUsers(tt.incident, tt.ids)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestRemoveCommentsFromBytes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		prefixes []string
+		expected string
+	}{
+		{
+			name:     "removes lines starting with single prefix",
+			input:    []byte("# comment\nreal content\n# another comment\nmore content"),
+			prefixes: []string{"#"},
+			expected: "real contentmore content",
+		},
+		{
+			name:     "removes lines with multiple prefixes",
+			input:    []byte("# hash comment\n// slash comment\nreal content\n# another\nkeep this"),
+			prefixes: []string{"#", "//"},
+			expected: "real contentkeep this",
+		},
+		{
+			name:     "does not duplicate non-comment lines with multiple prefixes",
+			input:    []byte("line1\nline2\nline3"),
+			prefixes: []string{"#", "//"},
+			expected: "line1line2line3",
+		},
+		{
+			name:     "returns empty string for all-comment input",
+			input:    []byte("# comment1\n# comment2\n# comment3"),
+			prefixes: []string{"#"},
+			expected: "",
+		},
+		{
+			name:     "returns all content when no lines match any prefix",
+			input:    []byte("hello\nworld"),
+			prefixes: []string{"#"},
+			expected: "helloworld",
+		},
+		{
+			name:     "handles empty input",
+			input:    []byte(""),
+			prefixes: []string{"#"},
+			expected: "",
+		},
+		{
+			name:     "handles no prefixes",
+			input:    []byte("# some text\nmore text"),
+			prefixes: []string{},
+			expected: "# some textmore text",
+		},
+		{
+			name:     "handles mixed comment and non-comment lines with three prefixes",
+			input:    []byte("# hash\n// slash\n; semicolon\nkeep me"),
+			prefixes: []string{"#", "//", ";"},
+			expected: "keep me",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := removeCommentsFromBytes(tt.input, tt.prefixes...)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 func TestGetSOPLink_HasLink(t *testing.T) {
 	alerts := []pagerduty.IncidentAlert{
 		{
