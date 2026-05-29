@@ -152,6 +152,10 @@ func bindArgsToViper(cmd *cobra.Command) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	err = viper.BindPFlag("fixtures_dir", cmd.Flags().Lookup("fixtures-dir"))
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 type cliFlag struct {
@@ -175,6 +179,7 @@ func init() {
 	var flags = []cliFlag{
 		{"bool", "debug", "d", "false", "enable debug logging"},
 		{"bool", "dev", "D", "false", "enable dev mode with fixture data (no PagerDuty connection required)"},
+		{"string", "fixtures-dir", "F", "testdata/fixtures", "path to fixture data directory for dev mode"},
 		// TODO - For some reason the parsed cluster-login-command flag does not work (the "%%" is stripped out)
 		// Commenting out the config options for now, as the config file is the preferred method
 		// {"string", "token", "T", "", "PagerDuty API token"},
@@ -216,6 +221,8 @@ func runDevMode() {
 	config, err := pd.NewDevConfig(fixturesDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load dev fixtures: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\nRun srepd --dev from the repository root, or set SREPD_FIXTURES_DIR:\n")
+		fmt.Fprintf(os.Stderr, "  SREPD_FIXTURES_DIR=/path/to/testdata/fixtures srepd --dev\n\n")
 		log.Fatal(err)
 	}
 
