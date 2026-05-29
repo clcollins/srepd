@@ -43,6 +43,12 @@ func TestKeymapCompleteness(t *testing.T) {
 			keymapSourceName: "defaultKeyMap", // Uses defaultKeyMap for key.Matches
 		},
 		{
+			name:             "switchLogFocusMode uses defaultKeyMap",
+			functionName:     "switchLogFocusMode",
+			keymap:           defaultKeyMap,
+			keymapSourceName: "defaultKeyMap",
+		},
+		{
 			name:             "switchErrorFocusMode uses errorViewKeyMap",
 			functionName:     "switchErrorFocusMode",
 			keymap:           errorViewKeyMap,

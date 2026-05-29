@@ -18,7 +18,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 		// Column 2: Primary incident actions
 		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence},
 		// Column 3: Settings & toggles, Quit at bottom
-		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ToggleActionLog, k.Quit},
+		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ToggleActionLog, k.ViewLog, k.Quit},
 	}
 }
 
@@ -45,6 +45,7 @@ type keymap struct {
 	Login           key.Binding
 	Open            key.Binding
 	SOP             key.Binding
+	ViewLog         key.Binding
 }
 
 type inputKeymap struct {
@@ -168,6 +169,10 @@ var defaultKeyMap = keymap{
 	SOP: key.NewBinding(
 		key.WithKeys("s"),
 		key.WithHelp("s", "open SOP"),
+	),
+	ViewLog: key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "view debug log"),
 	),
 }
 
