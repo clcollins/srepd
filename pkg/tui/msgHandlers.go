@@ -609,18 +609,15 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.TabNext):
 			m.activeTab = (m.activeTab + 1) % tabCount
 			m.incidentViewer.GotoTop()
-			handledKey = true
 			return m, func() tea.Msg { return renderIncidentMsg("tab switch") }
 
 		case key.Matches(msg, defaultKeyMap.TabPrev):
 			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 			m.incidentViewer.GotoTop()
-			handledKey = true
 			return m, func() tea.Msg { return renderIncidentMsg("tab switch") }
 
 		// Item navigation: left/right within Alerts/Notes tabs
 		case key.Matches(msg, defaultKeyMap.ItemNext):
-			handledKey = true
 			switch m.activeTab {
 			case tabAlerts:
 				if len(m.selectedIncidentAlerts) > 0 {
