@@ -1134,6 +1134,142 @@ func TestGetUniqueClusters_MixedWithAndWithoutClusterID(t *testing.T) {
 	assert.Equal(t, []string{"cluster-abc-123", "cluster-def-456"}, result)
 }
 
+func TestCommandContainsOCMContainer_True(t *testing.T) {
+	tests := []struct {
+		name    string
+		command []string
+	}{
+		{
+			name:    "direct ocm-container command",
+			command: []string{"ocm-container", "--cluster-id", "abc123"},
+		},
+		{
+			name:    "gnome-terminal with ocm-container",
+			command: []string{"gnome-terminal", "--", "ocm-container", "-C", "abc123"},
+		},
+		{
+			name:    "flatpak-spawn with ocm-container",
+			command: []string{"flatpak-spawn", "--host", "gnome-terminal", "--", "ocm-container", "-C", "abc123"},
+		},
+		{
+			name:    "tmux with ocm-container",
+			command: []string{"tmux", "new-window", "-n", "cluster", "ocm-container", "-C", "abc123"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.True(t, commandContainsOCMContainer(tt.command), "expected true for command containing ocm-container")
+		})
+	}
+}
+
+func TestCommandContainsOCMContainer_False(t *testing.T) {
+	tests := []struct {
+		name    string
+		command []string
+	}{
+		{
+			name:    "ocm backplane login",
+			command: []string{"gnome-terminal", "--", "ocm", "backplane", "login", "abc123"},
+		},
+		{
+			name:    "direct ocm command",
+			command: []string{"ocm", "backplane", "login", "abc123"},
+		},
+		{
+			name:    "empty command",
+			command: []string{},
+		},
+		{
+			name:    "nil command",
+			command: nil,
+		},
+		{
+			name:    "flatpak-spawn without ocm-container",
+			command: []string{"flatpak-spawn", "--host", "gnome-terminal", "--", "ocm", "backplane", "login", "abc123"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.False(t, commandContainsOCMContainer(tt.command), "expected false for command without ocm-container")
+		})
+	}
+}
+
+func TestExtractEnvVarPairs(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{
+			name:     "normal pairs",
+			input:    []string{"-e", "KEY1=val1", "-e", "KEY2=val2"},
+			expected: []string{"KEY1=val1", "KEY2=val2"},
+		},
+		{
+			name:     "single pair",
+			input:    []string{"-e", "SINGLE=value"},
+			expected: []string{"SINGLE=value"},
+		},
+		{
+			name:     "empty input",
+			input:    []string{},
+			expected: nil,
+		},
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "odd length skips trailing",
+			input:    []string{"-e", "KEY=val", "-e"},
+			expected: []string{"KEY=val"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractEnvVarPairs(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestInsertOCMContainerEnvFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  []string
+		envFlags []string
+		expected []string
+	}{
+		{
+			name:     "gnome-terminal with separator and ocm-container",
+			command:  []string{"gnome-terminal", "--", "ocm-container", "--cluster-id", "abc123"},
+			envFlags: []string{"-e", "KEY=val"},
+			expected: []string{"gnome-terminal", "--", "ocm-container", "-e", "KEY=val", "--cluster-id", "abc123"},
+		},
+		{
+			name:     "tmux with ocm-container no separator",
+			command:  []string{"tmux", "new-window", "ocm-container", "-C", "abc123"},
+			envFlags: []string{"-e", "KEY=val"},
+			expected: []string{"tmux", "new-window", "ocm-container", "-e", "KEY=val", "-C", "abc123"},
+		},
+		{
+			name:     "empty env flags returns command as-is",
+			command:  []string{"gnome-terminal", "--", "ocm-container", "--cluster-id", "abc123"},
+			envFlags: []string{},
+			expected: []string{"gnome-terminal", "--", "ocm-container", "--cluster-id", "abc123"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := insertOCMContainerEnvFlags(tt.command, tt.envFlags)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestSanitizeEnvValue(t *testing.T) {
 	tests := []struct {
 		name     string
