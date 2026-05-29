@@ -338,6 +338,76 @@ func TestSummarizeIncident(t *testing.T) {
 	}
 }
 
+func TestRenderFooter_ContainsRefreshStatus(t *testing.T) {
+	// renderFooter wraps refreshArea output; verify the footer contains it
+	m := model{
+		autoRefresh:     true,
+		autoAcknowledge: false,
+		showLowUrgency:  true,
+	}
+
+	result := m.renderFooter()
+
+	assert.Contains(t, result, "Watching for updates...", "footer should contain the refresh status text from refreshArea")
+}
+
+func TestRenderBottomStatus_ShowsIncidentID(t *testing.T) {
+	// When a selected incident is set, renderBottomStatus should include its ID
+	m := model{
+		selectedIncident: &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "PABC123456"},
+		},
+	}
+
+	result := m.renderBottomStatus()
+
+	assert.Contains(t, result, "PABC123456", "bottom status should contain the selected incident ID")
+}
+
+func TestRenderBottomStatus_ShowsGitSHA(t *testing.T) {
+	// renderBottomStatus should include the GitSHA variable
+	m := model{}
+
+	result := m.renderBottomStatus()
+
+	assert.Contains(t, result, GitSHA, "bottom status should contain the GitSHA value")
+}
+
+func TestSummarizeAlerts_EmptyAlerts(t *testing.T) {
+	// Empty alert slice should return nil (empty) summary slice
+	result := summarizeAlerts([]pagerduty.IncidentAlert{})
+
+	assert.Nil(t, result, "summarizeAlerts with empty input should return nil")
+}
+
+func TestSummarizeAlerts_AlertWithNilBody(t *testing.T) {
+	// Alert with nil Body should not panic and should return a summary with empty fields
+	alerts := []pagerduty.IncidentAlert{
+		{
+			APIObject: pagerduty.APIObject{
+				ID:      "ALERT_NIL_BODY",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT_NIL_BODY",
+			},
+			Service:   pagerduty.APIObject{Summary: "Test Service"},
+			CreatedAt: "2025-06-01T00:00:00Z",
+			Status:    "triggered",
+			Incident:  pagerduty.APIReference{ID: "INC999"},
+			Body:      nil,
+		},
+	}
+
+	// Should not panic
+	result := summarizeAlerts(alerts)
+
+	assert.Len(t, result, 1, "should return exactly one alert summary")
+	assert.Equal(t, "ALERT_NIL_BODY", result[0].ID, "alert ID should be preserved")
+	assert.Equal(t, "", result[0].Name, "name should be empty when body is nil")
+	assert.Equal(t, "", result[0].Link, "link should be empty when body is nil")
+	assert.Equal(t, "", result[0].Cluster, "cluster should be empty when body is nil")
+	assert.Nil(t, result[0].Details, "details should be nil when body is nil")
+	assert.Equal(t, "Test Service", result[0].Service, "service summary should be preserved")
+}
+
 func TestAddNoteTemplate(t *testing.T) {
 	tests := []struct {
 		name             string
