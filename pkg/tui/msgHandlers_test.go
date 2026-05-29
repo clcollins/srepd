@@ -255,9 +255,11 @@ func TestTableMode_SilenceKeyWithNoSelectedIncident(t *testing.T) {
 	assert.Equal(t, "Q111", updatedModel.selectedIncident.ID,
 		"Synced selectedIncident should match highlighted row")
 
-	// A command should be returned
-	assert.NotNil(t, cmd,
-		"Silence key should return a command when a row is highlighted")
+	// Silence uses confirmation prompt, so pendingConfirmation should be set
+	assert.NotNil(t, updatedModel.pendingConfirmation,
+		"Silence key should set pendingConfirmation")
+	assert.Nil(t, cmd,
+		"Silence key should not return a command before confirmation")
 }
 
 func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
@@ -287,7 +289,9 @@ func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
 	assert.Equal(t, "Q111", updatedModel.selectedIncident.ID,
 		"Synced selectedIncident should match highlighted row")
 
-	// A command should be returned
-	assert.NotNil(t, cmd,
-		"UnAck key should return a command when a row is highlighted")
+	// Re-escalate uses confirmation prompt, so pendingConfirmation should be set
+	assert.NotNil(t, updatedModel.pendingConfirmation,
+		"UnAck key should set pendingConfirmation")
+	assert.Nil(t, cmd,
+		"UnAck key should not return a command before confirmation")
 }
