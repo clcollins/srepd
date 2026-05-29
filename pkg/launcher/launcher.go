@@ -14,6 +14,7 @@ type ClusterLauncher struct {
 	Enabled             bool
 	terminal            []string
 	clusterLoginCommand []string
+	profile             TerminalProfile
 	settings            launcherSettings
 }
 
@@ -26,6 +27,7 @@ func NewClusterLauncher(terminal string, clusterLoginCommand string) (ClusterLau
 	launcher := ClusterLauncher{
 		terminal:            strings.Split(terminal, " "),
 		clusterLoginCommand: strings.Split(clusterLoginCommand, " "),
+		profile:             DetectTerminalProfile(terminal),
 		settings:            launcherSettings{},
 	}
 
@@ -64,29 +66,79 @@ func (l *ClusterLauncher) validate() error {
 	return nil
 }
 
+// Profile returns the detected TerminalProfile for this launcher.
+func (l *ClusterLauncher) Profile() TerminalProfile {
+	return l.profile
+}
+
 func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
-	///func (l *ClusterLauncher) BuildLoginCommand() []string {
-	command := []string{}
-
-	// Handle the Terminal command
-	// The first arg should not be something replaceable, as checked in the
-	// validate function
-	log.Debug("launcher.ClusterLauncher(): building command from terminal", "terminal", l.terminal[0])
-	command = append(command, l.terminal[0])
-
-	// If there are more than one terminal arguments, replace the vars
-	// If there's not more than one terminal argument, the "replacement"
-	// nil []string{} ends up being appended as a whitespace, so don't append
-	if len(l.terminal) > 1 {
-		command = append(command, replaceVars(l.terminal[1:], vars)...)
+	// Ensure a profile is set; default to GenericProfile if nil (e.g.,
+	// when ClusterLauncher was constructed directly without NewClusterLauncher).
+	profile := l.profile
+	if profile == nil {
+		profile = &GenericProfile{}
 	}
-	command = append(command, replaceVars(l.clusterLoginCommand, vars)...)
+
+	log.Debug("launcher.ClusterLauncher(): building command", "terminal", l.terminal[0], "profile", profile.Name())
+
+	// Replace variables in terminal args (skip the first arg, which is
+	// the executable and must not be a replaceable value).
+	terminalArgs := []string{l.terminal[0]}
+	if len(l.terminal) > 1 {
+		terminalArgs = append(terminalArgs, replaceVars(l.terminal[1:], vars)...)
+	}
+
+	loginCmd := replaceVars(l.clusterLoginCommand, vars)
+
+	// If the terminal args already contain the separator or flag that
+	// the profile would insert, fall back to simple concatenation to
+	// preserve backward compatibility for users who manually specified
+	// the separator in their config.
+	if alreadyHasSeparator(profile, terminalArgs) {
+		command := append(terminalArgs, loginCmd...)
+		l.logCommand(command)
+		return command
+	}
+
+	// Use the profile to build the command with the correct separator.
+	command, err := profile.BuildCommand(terminalArgs, loginCmd)
+	if err != nil {
+		// Fallback to simple concatenation on error.
+		log.Debug("launcher.ClusterLauncher(): profile.BuildCommand failed, falling back", "error", err)
+		command = append(terminalArgs, loginCmd...)
+	}
+
+	l.logCommand(command)
+	return command
+}
+
+// alreadyHasSeparator checks whether the terminal args already include
+// the separator or flag that the detected profile would inject. This
+// preserves backward compatibility for configs where the user manually
+// placed "--" or "-e" in the terminal string.
+func alreadyHasSeparator(profile TerminalProfile, terminalArgs []string) bool {
+	switch p := profile.(type) {
+	case *SeparatorProfile:
+		for _, arg := range terminalArgs[1:] {
+			if arg == "--" {
+				return true
+			}
+		}
+	case *FlagProfile:
+		for _, arg := range terminalArgs[1:] {
+			if arg == p.flag {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (l *ClusterLauncher) logCommand(command []string) {
 	log.Debug("launcher.ClusterLauncher(): built command", "command", command)
 	for x, i := range command {
 		log.Debug("launcher.ClusterLauncher(): build command argument", fmt.Sprintf("[%d]", x), i)
 	}
-
-	return command
 }
 
 func replaceVars(args []string, vars map[string]string) []string {
