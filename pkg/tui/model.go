@@ -466,7 +466,7 @@ func newIncidentViewer() viewport.Model {
 
 func newLogViewer() viewport.Model {
 	vp := viewport.New(100, 100)
-	vp.Style = incidentViewerStyle
+	// Viewport uses container border from View(), no style needed here
 	return vp
 }
 
