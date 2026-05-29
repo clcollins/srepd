@@ -2,14 +2,13 @@ package tui
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -422,11 +421,63 @@ type loginFinishedMsg struct {
 	err error
 }
 
-// alertData contains the data we want to pass to ocm-container about alerts
-type alertData struct {
-	Incident *pagerduty.Incident       `json:"incident"`
-	Alerts   []pagerduty.IncidentAlert `json:"alerts"`
-	Notes    []pagerduty.IncidentNote  `json:"notes"`
+// buildPagerDutyEnvVars constructs a slice of "-e", "KEY=VALUE" pairs for passing
+// PagerDuty incident context to ocm-container as individual environment variables.
+// Only alerts whose cluster_id matches clusterID contribute to ALERT_NAMES and
+// ALERT_LINKS. This replaces the previous approach of base64-encoding a JSON blob,
+// which could exceed ARG_MAX with many alerts.
+func buildPagerDutyEnvVars(incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote, clusterID string) []string {
+	var envFlags []string
+
+	// Incident-level variables
+	if incident != nil {
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_ID=%s", incident.ID))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_TITLE=%s", incident.Title))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_URL=%s", incident.HTMLURL))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_SERVICE=%s", incident.Service.Summary))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_URGENCY=%s", incident.Urgency))
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT_STATUS=%s", incident.Status))
+	}
+
+	// Cluster ID
+	if clusterID != "" {
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_CLUSTER_ID=%s", clusterID))
+	}
+
+	// Filter alerts to those matching the selected cluster and collect names/links
+	var matchingNames []string
+	var matchingLinks []string
+	for _, alert := range alerts {
+		alertCluster := getDetailFieldFromAlert("cluster_id", alert)
+		if clusterID != "" && alertCluster != clusterID {
+			continue
+		}
+
+		name := getDetailFieldFromAlert("alert_name", alert)
+		if name != "" {
+			matchingNames = append(matchingNames, name)
+		}
+
+		// Check both SOP link fields in priority order, same as getSOPLink
+		for _, field := range sopLinkFields {
+			link := getDetailFieldFromAlert(field, alert)
+			if link != "" {
+				matchingLinks = append(matchingLinks, link)
+				break
+			}
+		}
+	}
+
+	envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_ALERT_COUNT=%s", strconv.Itoa(len(matchingNames))))
+	envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_ALERT_NAMES=%s", strings.Join(matchingNames, ",")))
+	envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_ALERT_LINKS=%s", strings.Join(matchingLinks, ",")))
+
+	// Notes metadata
+	notesExist := len(notes) > 0
+	envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_NOTES_EXIST=%s", strconv.FormatBool(notesExist)))
+	envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_NOTE_COUNT=%s", strconv.Itoa(len(notes))))
+
+	return envFlags
 }
 
 func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
@@ -434,33 +485,9 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.
 	command := launcher.BuildLoginCommand(vars)
 
-	// Add environment variables for PagerDuty data
-	// Find the position to insert the -e flags (before any -- separator)
-	envFlags := []string{}
-
-	// Add PAGERDUTY_INCIDENT environment variable
-	if incident != nil {
-		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT=%s", incident.ID))
-	}
-
-	// Serialize and base64 encode alert details
-	if incident != nil || len(alerts) > 0 || len(notes) > 0 {
-		data := alertData{
-			Incident: incident,
-			Alerts:   alerts,
-			Notes:    notes,
-		}
-		jsonData, err := json.Marshal(data)
-		if err != nil {
-			log.Warn("tui.login(): failed to marshal alert data", "error", err)
-		} else {
-			// Use RawStdEncoding: standard base64 alphabet (+/) without padding (no = characters)
-			// No padding avoids issues with ocm-container's env var parsing which splits on =
-			// Standard alphabet ensures `echo $ALERT_DETAILS | base64 -d` works in the container
-			encoded := base64.RawStdEncoding.EncodeToString(jsonData)
-			envFlags = append(envFlags, "-e", fmt.Sprintf("ALERT_DETAILS=%s", encoded))
-		}
-	}
+	// Build individual PAGERDUTY_* environment variables filtered to the selected cluster
+	clusterID := vars["%%CLUSTER_ID%%"]
+	envFlags := buildPagerDutyEnvVars(incident, alerts, notes, clusterID)
 
 	// Insert env flags into command
 	// We need to find the position after any terminal separator (like "--") but before ocm-container

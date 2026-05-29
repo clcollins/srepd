@@ -1,9 +1,8 @@
 package tui
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -389,98 +388,236 @@ func TestOpenBrowserCmd(t *testing.T) {
 	}
 }
 
-func TestLoginEnvironmentVariables(t *testing.T) {
-	// Note: This test validates that the login function correctly builds environment
-	// variables for ocm-container, but we can't easily test the actual command execution
-	// without mocking the exec.Command. Instead, we'll validate the command building logic
-	// by checking that the launcher is called correctly.
+// envVarMap converts a buildPagerDutyEnvVars result slice into a map of
+// variable name to value for easier assertion. Each pair is "-e", "KEY=VALUE".
+func envVarMap(flags []string) map[string]string {
+	m := make(map[string]string)
+	for i := 0; i < len(flags)-1; i += 2 {
+		if flags[i] != "-e" {
+			continue
+		}
+		parts := strings.SplitN(flags[i+1], "=", 2)
+		if len(parts) == 2 {
+			m[parts[0]] = parts[1]
+		}
+	}
+	return m
+}
 
-	// This is more of an integration test that would need to be run manually or with
-	// a mock launcher, but we can at least test the alertData serialization
-	tests := []struct {
-		name     string
-		incident *pagerduty.Incident
-		alerts   []pagerduty.IncidentAlert
-		notes    []pagerduty.IncidentNote
-	}{
-		{
-			name: "with incident, alerts, and notes",
-			incident: &pagerduty.Incident{
-				APIObject: pagerduty.APIObject{ID: "PD123"},
-				Title:     "Test Incident",
-			},
-			alerts: []pagerduty.IncidentAlert{
-				{APIObject: pagerduty.APIObject{ID: "ALERT1"}},
-				{APIObject: pagerduty.APIObject{ID: "ALERT2"}},
-			},
-			notes: []pagerduty.IncidentNote{
-				{ID: "NOTE1", Content: "Test note 1"},
-				{ID: "NOTE2", Content: "Test note 2"},
-			},
+func TestBuildPagerDutyEnvVars_FullIncident(t *testing.T) {
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{
+			ID:      "PD123",
+			HTMLURL: "https://pagerduty.com/incidents/PD123",
 		},
-		{
-			name:     "with nil incident and empty alerts and notes",
-			incident: nil,
-			alerts:   []pagerduty.IncidentAlert{},
-			notes:    []pagerduty.IncidentNote{},
-		},
-		{
-			name: "with incident and no alerts or notes",
-			incident: &pagerduty.Incident{
-				APIObject: pagerduty.APIObject{ID: "PD456"},
-			},
-			alerts: nil,
-			notes:  nil,
-		},
-		{
-			name: "with incident and alerts but no notes",
-			incident: &pagerduty.Incident{
-				APIObject: pagerduty.APIObject{ID: "PD789"},
-				Title:     "Test Incident 2",
-			},
-			alerts: []pagerduty.IncidentAlert{
-				{APIObject: pagerduty.APIObject{ID: "ALERT3"}},
-			},
-			notes: nil,
+		Title:   "Test Incident",
+		Urgency: "high",
+		Status:  "triggered",
+		Service: pagerduty.APIObject{
+			Summary: "test-service",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Test that alertData can be properly serialized
-			data := alertData{
-				Incident: tt.incident,
-				Alerts:   tt.alerts,
-				Notes:    tt.notes,
-			}
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc",
+					"alert_name": "HighCPU",
+					"link":       "https://example.com/sop/highcpu",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id":  "cluster-abc",
+					"alert_name":  "LowMemory",
+					"runbook_url": "https://example.com/sop/lowmem",
+				},
+			},
+		},
+	}
 
-			jsonData, err := json.Marshal(data)
-			assert.NoError(t, err, "Failed to marshal alertData")
-			assert.NotNil(t, jsonData, "JSON data should not be nil")
+	notes := []pagerduty.IncidentNote{
+		{ID: "NOTE1", Content: "Investigating"},
+		{ID: "NOTE2", Content: "Found root cause"},
+	}
 
-			// Test that it can be base64 encoded (standard alphabet, without padding)
-			encoded := base64.RawStdEncoding.EncodeToString(jsonData)
-			assert.NotEmpty(t, encoded, "Base64 encoding should not be empty")
-			// Verify no padding characters
-			assert.NotContains(t, encoded, "=", "RawStdEncoding should not contain = padding")
+	result := buildPagerDutyEnvVars(incident, alerts, notes, "cluster-abc")
+	vars := envVarMap(result)
 
-			// Test that it can be decoded back
-			decoded, err := base64.RawStdEncoding.DecodeString(encoded)
-			assert.NoError(t, err, "Failed to decode base64")
+	assert.Equal(t, "PD123", vars["PAGERDUTY_INCIDENT_ID"])
+	assert.Equal(t, "Test Incident", vars["PAGERDUTY_INCIDENT_TITLE"])
+	assert.Equal(t, "https://pagerduty.com/incidents/PD123", vars["PAGERDUTY_INCIDENT_URL"])
+	assert.Equal(t, "test-service", vars["PAGERDUTY_INCIDENT_SERVICE"])
+	assert.Equal(t, "high", vars["PAGERDUTY_INCIDENT_URGENCY"])
+	assert.Equal(t, "triggered", vars["PAGERDUTY_INCIDENT_STATUS"])
+	assert.Equal(t, "cluster-abc", vars["PAGERDUTY_CLUSTER_ID"])
+	assert.Equal(t, "2", vars["PAGERDUTY_ALERT_COUNT"])
+	assert.Equal(t, "HighCPU,LowMemory", vars["PAGERDUTY_ALERT_NAMES"])
+	assert.Equal(t, "https://example.com/sop/highcpu,https://example.com/sop/lowmem", vars["PAGERDUTY_ALERT_LINKS"])
+	assert.Equal(t, "true", vars["PAGERDUTY_NOTES_EXIST"])
+	assert.Equal(t, "2", vars["PAGERDUTY_NOTE_COUNT"])
 
-			var decodedData alertData
-			err = json.Unmarshal(decoded, &decodedData)
-			assert.NoError(t, err, "Failed to unmarshal decoded data")
+	// Every entry should be a "-e" / "KEY=VALUE" pair
+	for i := 0; i < len(result); i += 2 {
+		assert.Equal(t, "-e", result[i], "Expected -e flag at position %d", i)
+	}
+}
 
-			// Verify the data matches
-			if tt.incident != nil {
-				assert.Equal(t, tt.incident.ID, decodedData.Incident.ID)
-			} else {
-				assert.Nil(t, decodedData.Incident)
-			}
-			assert.Equal(t, len(tt.alerts), len(decodedData.Alerts))
-			assert.Equal(t, len(tt.notes), len(decodedData.Notes))
+func TestBuildPagerDutyEnvVars_FiltersByCluster(t *testing.T) {
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PD456"},
+		Service:   pagerduty.APIObject{Summary: "svc"},
+	}
+
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc",
+					"alert_name": "AlertA",
+					"link":       "https://sop/a",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-xyz",
+					"alert_name": "AlertX",
+					"link":       "https://sop/x",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id":  "cluster-abc",
+					"alert_name":  "AlertB",
+					"runbook_url": "https://sop/b",
+				},
+			},
+		},
+	}
+
+	result := buildPagerDutyEnvVars(incident, alerts, nil, "cluster-abc")
+	vars := envVarMap(result)
+
+	assert.Equal(t, "2", vars["PAGERDUTY_ALERT_COUNT"], "Should only count alerts matching cluster-abc")
+	assert.Equal(t, "AlertA,AlertB", vars["PAGERDUTY_ALERT_NAMES"])
+	assert.Equal(t, "https://sop/a,https://sop/b", vars["PAGERDUTY_ALERT_LINKS"])
+}
+
+func TestBuildPagerDutyEnvVars_NilIncident(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc",
+					"alert_name": "OrphanAlert",
+				},
+			},
+		},
+	}
+
+	result := buildPagerDutyEnvVars(nil, alerts, nil, "cluster-abc")
+	vars := envVarMap(result)
+
+	// Should not contain incident-level vars
+	_, hasIncidentID := vars["PAGERDUTY_INCIDENT_ID"]
+	assert.False(t, hasIncidentID, "Nil incident should not produce PAGERDUTY_INCIDENT_ID")
+
+	// Should still have cluster and alert vars
+	assert.Equal(t, "cluster-abc", vars["PAGERDUTY_CLUSTER_ID"])
+	assert.Equal(t, "1", vars["PAGERDUTY_ALERT_COUNT"])
+	assert.Equal(t, "OrphanAlert", vars["PAGERDUTY_ALERT_NAMES"])
+	assert.Equal(t, "false", vars["PAGERDUTY_NOTES_EXIST"])
+	assert.Equal(t, "0", vars["PAGERDUTY_NOTE_COUNT"])
+}
+
+func TestBuildPagerDutyEnvVars_NoMatchingAlerts(t *testing.T) {
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PD789"},
+		Service:   pagerduty.APIObject{Summary: "svc"},
+	}
+
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-other",
+					"alert_name": "OtherAlert",
+					"link":       "https://sop/other",
+				},
+			},
+		},
+	}
+
+	result := buildPagerDutyEnvVars(incident, alerts, nil, "cluster-abc")
+	vars := envVarMap(result)
+
+	assert.Equal(t, "0", vars["PAGERDUTY_ALERT_COUNT"])
+	assert.Equal(t, "", vars["PAGERDUTY_ALERT_NAMES"])
+	assert.Equal(t, "", vars["PAGERDUTY_ALERT_LINKS"])
+}
+
+func TestBuildPagerDutyEnvVars_NotesExist(t *testing.T) {
+	notes := []pagerduty.IncidentNote{
+		{ID: "N1", Content: "note one"},
+		{ID: "N2", Content: "note two"},
+		{ID: "N3", Content: "note three"},
+	}
+
+	result := buildPagerDutyEnvVars(nil, nil, notes, "")
+	vars := envVarMap(result)
+
+	assert.Equal(t, "true", vars["PAGERDUTY_NOTES_EXIST"])
+	assert.Equal(t, "3", vars["PAGERDUTY_NOTE_COUNT"])
+}
+
+func TestBuildPagerDutyEnvVars_NoNotes(t *testing.T) {
+	result := buildPagerDutyEnvVars(nil, nil, nil, "")
+	vars := envVarMap(result)
+
+	assert.Equal(t, "false", vars["PAGERDUTY_NOTES_EXIST"])
+	assert.Equal(t, "0", vars["PAGERDUTY_NOTE_COUNT"])
+}
+
+func TestBuildPagerDutyEnvVars_ManyAlerts(t *testing.T) {
+	// 50 alerts for the same cluster should not cause size issues
+	var alerts []pagerduty.IncidentAlert
+	for i := 0; i < 50; i++ {
+		alerts = append(alerts, pagerduty.IncidentAlert{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-big",
+					"alert_name": fmt.Sprintf("Alert%d", i),
+					"link":       fmt.Sprintf("https://sop/%d", i),
+				},
+			},
 		})
+	}
+
+	result := buildPagerDutyEnvVars(nil, alerts, nil, "cluster-big")
+	vars := envVarMap(result)
+
+	assert.Equal(t, "50", vars["PAGERDUTY_ALERT_COUNT"])
+
+	names := strings.Split(vars["PAGERDUTY_ALERT_NAMES"], ",")
+	assert.Equal(t, 50, len(names), "Should have 50 comma-separated alert names")
+
+	links := strings.Split(vars["PAGERDUTY_ALERT_LINKS"], ",")
+	assert.Equal(t, 50, len(links), "Should have 50 comma-separated alert links")
+
+	// Each individual env var value is a simple string, no base64 encoding
+	for _, flag := range result {
+		if flag == "-e" {
+			continue
+		}
+		// No value should contain base64-only artifacts from the old approach
+		assert.NotContains(t, flag, "ALERT_DETAILS", "Should not use old ALERT_DETAILS variable")
 	}
 }
 
@@ -646,9 +783,6 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 	// position in the command - after the terminal separator but as arguments to
 	// ocm-container, not to the terminal itself
 
-	// Mock a simple function to test command building logic
-	// We can't test the full login() function easily, but we can test the logic
-
 	testCases := []struct {
 		name           string
 		inputCommand   []string
@@ -671,10 +805,7 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Test that the command structure makes sense
-			// This is a simplified version of what login() does
-
-			envFlags := []string{"-e", "PAGERDUTY_INCIDENT=PD123"}
+			envFlags := []string{"-e", "PAGERDUTY_INCIDENT_ID=PD123"}
 
 			// Find separator position
 			var separatorIdx = -1
@@ -690,13 +821,10 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 			// If no separator: [command] [env-flags] [other-args]
 
 			if separatorIdx >= 0 {
-				// Should have structure like: gnome-terminal -- ocm-container -e VAR=val --cluster-id ABC
 				assert.Greater(t, len(tc.inputCommand), separatorIdx+1,
 					"Command should have elements after separator")
 			}
 
-			// The key is that env flags should come after any terminal command
-			// and after the actual target command (ocm-container), but before its arguments
 			assert.NotEmpty(t, envFlags, "Env flags should not be empty")
 		})
 	}
