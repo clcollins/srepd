@@ -235,10 +235,17 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(loadingIncidentsStatus)
 			cmds = append(cmds, updateIncidentList(m.config))
 
-		// In table mode, highlighted incidents are not selected yet, so they need to be retrieved
-		// and then can be acted upon.  Since tea.Sequence does not wait for completion, the
-		// "waitForSelectedIncidentsThen..." functions are used to wait for the selected incident
-		// to be retrieved from PagerDuty
+		// --- Incident action key handler pattern ---
+		// Most actions that operate on an incident follow this normalized pattern:
+		//   1. Check SelectedRow() == nil -> "no incident highlighted" (handles empty table)
+		//   2. Call syncSelectedIncidentToHighlightedRow() to ensure selectedIncident
+		//      matches the currently highlighted row (handles startup, list refresh, etc.)
+		//   3. Check selectedIncident == nil -> "no incident selected" (edge case: ID not in list)
+		//   4. Proceed with the action
+		//
+		// Login uses a different pattern (doIfIncidentSelected) because it needs to
+		// fetch full incident data from the API before proceeding.
+
 		case key.Matches(msg, defaultKeyMap.Enter):
 			// Check if we have cached data for this incident
 			if cached, exists := m.incidentCache[incidentID]; exists {
@@ -297,6 +304,11 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("no incident highlighted")
 				return m, nil
 			}
+			m.syncSelectedIncidentToHighlightedRow()
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			return m, func() tea.Msg { return silenceSelectedIncidentMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.Ack):
@@ -304,11 +316,21 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("no incident highlighted")
 				return m, nil
 			}
+			m.syncSelectedIncidentToHighlightedRow()
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
 			if m.table.SelectedRow() == nil {
 				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			m.syncSelectedIncidentToHighlightedRow()
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
 				return m, nil
 			}
 			return m, func() tea.Msg { return unAcknowledgeIncidentsMsg{} }
@@ -326,11 +348,19 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, parseTemplateForNote(m.selectedIncident)
 
 		case key.Matches(msg, defaultKeyMap.Login):
+			// Login uses doIfIncidentSelected() instead of the standard sync pattern
+			// because it needs to fetch full incident details + alerts from the API
+			// before proceeding (via getIncidentMsg + waitForSelectedIncidentThenDoMsg).
 			return m, doIfIncidentSelected(&m, func() tea.Msg {
 				return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
 			})
 
 		case key.Matches(msg, defaultKeyMap.Open):
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			m.syncSelectedIncidentToHighlightedRow()
 			if m.selectedIncident == nil {
 				m.setStatus("no incident selected")
 				return m, nil

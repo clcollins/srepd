@@ -42,6 +42,26 @@ func noteKeyMsg() tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
 }
 
+// openKeyMsg returns a tea.KeyMsg that matches the Open key binding ('o').
+func openKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}
+}
+
+// ackKeyMsg returns a tea.KeyMsg that matches the Ack key binding ('a').
+func ackKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+}
+
+// silenceKeyMsg returns a tea.KeyMsg that matches the Silence key binding (ctrl+s).
+func silenceKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyCtrlS}
+}
+
+// unAckKeyMsg returns a tea.KeyMsg that matches the UnAck key binding (ctrl+e).
+func unAckKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyCtrlE}
+}
+
 func TestTableMode_NoteKeyWithNoSelectedIncident(t *testing.T) {
 	// Scenario: The table has rows with incidents highlighted, but
 	// selectedIncident is nil because the user has not explicitly navigated
@@ -122,4 +142,152 @@ func TestTableMode_NoteKeyWithNoRows(t *testing.T) {
 	// No command should be returned
 	assert.Nil(t, cmd,
 		"Note key with empty table should not return a command")
+}
+
+func TestTableMode_OpenKeyWithNoSelectedIncident(t *testing.T) {
+	// Scenario: The table has rows with incidents highlighted, but
+	// selectedIncident is nil because the user has not explicitly navigated
+	// (no up/down key press to trigger syncSelectedIncidentToHighlightedRow).
+	// Pressing Open key should NOT return "no incident selected" - it should
+	// sync the highlighted row and proceed to the open action.
+
+	incidents := []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q111", HTMLURL: "https://example.pagerduty.com/incidents/Q111"},
+			Title:              "Test Alert",
+			Service:            pagerduty.APIObject{ID: "SVC1", Summary: "test-service"},
+			LastStatusChangeAt: time.Now().Format(time.RFC3339),
+		},
+	}
+
+	m := createTestModelWithTableRows(incidents)
+	// Explicitly ensure selectedIncident is nil to simulate the bug condition
+	m.selectedIncident = nil
+
+	// Press the Open key
+	result, cmd := m.Update(openKeyMsg())
+	updatedModel := result.(model)
+
+	// The status should NOT be "no incident selected" - that was the bug
+	assert.NotEqual(t, "no incident selected", updatedModel.status,
+		"Open key should not report 'no incident selected' when a row is highlighted")
+
+	// A command should be returned (openBrowserCmd or equivalent)
+	assert.NotNil(t, cmd,
+		"Open key should return a command when a row is highlighted")
+}
+
+func TestTableMode_OpenKeyWithNoRows(t *testing.T) {
+	// Scenario: Table has no rows at all. Pressing Open key should gracefully
+	// handle this (status message about no incident, no panic).
+
+	m := createTestModel()
+	m.table = table.New(table.WithFocused(true))
+
+	result, cmd := m.Update(openKeyMsg())
+	updatedModel := result.(model)
+
+	// Should set some status about no incident being available
+	assert.Contains(t, updatedModel.status, "no incident",
+		"Open key with empty table should report no incident")
+
+	// No command should be returned
+	assert.Nil(t, cmd,
+		"Open key with empty table should not return a command")
+}
+
+func TestTableMode_AckKeyWithNoSelectedIncident(t *testing.T) {
+	// Scenario: The table has rows with incidents highlighted, but
+	// selectedIncident is nil. Pressing Ack key should sync the highlighted
+	// row and proceed. The message handler will resolve the incident.
+
+	incidents := []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q111", HTMLURL: "https://example.pagerduty.com/incidents/Q111"},
+			Title:              "Test Alert",
+			Service:            pagerduty.APIObject{ID: "SVC1", Summary: "test-service"},
+			LastStatusChangeAt: time.Now().Format(time.RFC3339),
+		},
+	}
+
+	m := createTestModelWithTableRows(incidents)
+	m.selectedIncident = nil
+
+	// Press the Ack key
+	result, cmd := m.Update(ackKeyMsg())
+	updatedModel := result.(model)
+
+	// After pressing Ack, selectedIncident should have been synced
+	assert.NotNil(t, updatedModel.selectedIncident,
+		"Ack key should sync selectedIncident to highlighted row")
+	assert.Equal(t, "Q111", updatedModel.selectedIncident.ID,
+		"Synced selectedIncident should match highlighted row")
+
+	// A command should be returned
+	assert.NotNil(t, cmd,
+		"Ack key should return a command when a row is highlighted")
+}
+
+func TestTableMode_SilenceKeyWithNoSelectedIncident(t *testing.T) {
+	// Scenario: The table has rows with incidents highlighted, but
+	// selectedIncident is nil. Pressing Silence key should sync the highlighted
+	// row and proceed.
+
+	incidents := []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q111", HTMLURL: "https://example.pagerduty.com/incidents/Q111"},
+			Title:              "Test Alert",
+			Service:            pagerduty.APIObject{ID: "SVC1", Summary: "test-service"},
+			LastStatusChangeAt: time.Now().Format(time.RFC3339),
+		},
+	}
+
+	m := createTestModelWithTableRows(incidents)
+	m.selectedIncident = nil
+
+	// Press the Silence key
+	result, cmd := m.Update(silenceKeyMsg())
+	updatedModel := result.(model)
+
+	// After pressing Silence, selectedIncident should have been synced
+	assert.NotNil(t, updatedModel.selectedIncident,
+		"Silence key should sync selectedIncident to highlighted row")
+	assert.Equal(t, "Q111", updatedModel.selectedIncident.ID,
+		"Synced selectedIncident should match highlighted row")
+
+	// A command should be returned
+	assert.NotNil(t, cmd,
+		"Silence key should return a command when a row is highlighted")
+}
+
+func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
+	// Scenario: The table has rows with incidents highlighted, but
+	// selectedIncident is nil. Pressing UnAck key should sync the highlighted
+	// row and proceed.
+
+	incidents := []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q111", HTMLURL: "https://example.pagerduty.com/incidents/Q111"},
+			Title:              "Test Alert",
+			Service:            pagerduty.APIObject{ID: "SVC1", Summary: "test-service"},
+			LastStatusChangeAt: time.Now().Format(time.RFC3339),
+		},
+	}
+
+	m := createTestModelWithTableRows(incidents)
+	m.selectedIncident = nil
+
+	// Press the UnAck key
+	result, cmd := m.Update(unAckKeyMsg())
+	updatedModel := result.(model)
+
+	// After pressing UnAck, selectedIncident should have been synced
+	assert.NotNil(t, updatedModel.selectedIncident,
+		"UnAck key should sync selectedIncident to highlighted row")
+	assert.Equal(t, "Q111", updatedModel.selectedIncident.ID,
+		"Synced selectedIncident should match highlighted row")
+
+	// A command should be returned
+	assert.NotNil(t, cmd,
+		"UnAck key should return a command when a row is highlighted")
 }
