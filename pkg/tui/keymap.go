@@ -11,8 +11,9 @@ func (k keymap) FullHelp() [][]key.Binding {
 	// Col 1: Navigation + Help
 	// Col 2: Primary incident actions
 	// Col 3: Settings & toggles, Quit at bottom
+	// Col 4: Chord commands (dynamically generated)
 
-	return [][]key.Binding{
+	columns := [][]key.Binding{
 		// Column 1: Help at top, navigation
 		{k.Help, k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
 		// Column 2: Primary incident actions
@@ -20,6 +21,14 @@ func (k keymap) FullHelp() [][]key.Binding {
 		// Column 3: Settings & toggles, Quit at bottom
 		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ToggleActionLog, k.ViewLog, k.Quit},
 	}
+
+	// Column 4: Chord commands (generated from chordActions registry)
+	chordBindings := chordHelpBindings()
+	if len(chordBindings) > 0 {
+		columns = append(columns, chordBindings)
+	}
+
+	return columns
 }
 
 type keymap struct {

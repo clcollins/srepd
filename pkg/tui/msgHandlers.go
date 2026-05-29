@@ -161,6 +161,38 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConfirmationInput(msg.(tea.KeyMsg))
 	}
 
+	keyStr := msg.(tea.KeyMsg).String()
+
+	// Chord state machine: runs before focus-mode dispatch so chords work
+	// in both table and incident-view modes. Disabled during input and error modes
+	// (those are handled below in the focus-mode switch).
+	if !m.input.Focused() && m.err == nil {
+		// 1. If chord pending and Escape: cancel chord
+		if m.chordPending && keyStr == "esc" {
+			m.chordPending = false
+			m.setStatus("")
+			return m, nil
+		}
+
+		// 2. If chord pending: resolve second key
+		if m.chordPending {
+			m.chordPending = false
+			action := resolveChord(keyStr)
+			if action != nil {
+				return action.Handler(m)
+			}
+			m.setStatus(fmt.Sprintf("unknown chord: %s %s", m.chordPrefix, keyStr))
+			return m, nil
+		}
+
+		// 3. If key matches prefix: enter chord mode
+		if keyStr == m.chordPrefix {
+			m.chordPending = true
+			m.setStatus(fmt.Sprintf("%s ...", m.chordPrefix))
+			return m, nil
+		}
+	}
+
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Quit) {
 		return m, tea.Quit
 	}
