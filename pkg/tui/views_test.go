@@ -615,6 +615,168 @@ func TestIncidentTemplate_AlertWithEmptyName(t *testing.T) {
 	assert.Contains(t, result, "_none_")
 }
 
+func TestIncidentTemplate_BoldIncidentID(t *testing.T) {
+	tests := []struct {
+		name     string
+		summary  incidentSummary
+		expected string
+	}{
+		{
+			name: "incident ID is bold without priority",
+			summary: incidentSummary{
+				ID:           "INC001",
+				Title:        "Test",
+				HTMLURL:      "https://example.com",
+				Service:      "Svc",
+				Urgency:      "high",
+				Created:      "2025-01-01",
+				Status:       "triggered",
+				Acknowledged: []string{"User"},
+			},
+			expected: "# **INC001** - triggered",
+		},
+		{
+			name: "incident ID is bold with priority",
+			summary: incidentSummary{
+				ID:           "INC002",
+				Title:        "Test",
+				HTMLURL:      "https://example.com",
+				Service:      "Svc",
+				Urgency:      "high",
+				Created:      "2025-01-01",
+				Status:       "triggered",
+				Priority:     "P1",
+				Acknowledged: []string{"User"},
+			},
+			expected: "# P1 **INC002** - triggered",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := renderTestTemplate(t, tt.summary)
+			assert.Contains(t, result, tt.expected)
+		})
+	}
+}
+
+func TestIncidentTemplate_NotesIndented(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC001",
+		Title:        "Test",
+		HTMLURL:      "https://example.com",
+		Service:      "Svc",
+		Urgency:      "high",
+		Created:      "2025-01-01",
+		Status:       "triggered",
+		Acknowledged: []string{"User"},
+		Notes: []noteSummary{
+			{
+				ID:      "N1",
+				User:    "John Doe",
+				Content: "This is a note",
+				Created: "2025-01-02",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// Notes should have 2-space indented blockquote and attribution
+	assert.Contains(t, result, "  > This is a note")
+	assert.Contains(t, result, "  -- John Doe @ 2025-01-02")
+}
+
+func TestIncidentTemplate_AlertDetailsIndented(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC001",
+		Title:        "Test",
+		HTMLURL:      "https://example.com",
+		Service:      "Svc",
+		Urgency:      "high",
+		Created:      "2025-01-01",
+		Status:       "triggered",
+		Acknowledged: []string{"User"},
+		Alerts: []alertSummary{
+			{
+				ID:      "ALERT001",
+				Name:    "TestAlert",
+				Link:    "https://example.com/sop",
+				HTMLURL: "https://example.com/alert",
+				Service: "AlertSvc",
+				Created: "2025-01-01",
+				Status:  "triggered",
+				Cluster: "abc-123",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// Alert detail bullet points should have 2-space indent
+	assert.Contains(t, result, "  * Cluster: abc-123")
+	assert.Contains(t, result, "  * Service: AlertSvc")
+	assert.Contains(t, result, "  * Created: 2025-01-01")
+}
+
+func TestIncidentTemplate_SpacingBetweenAlerts(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC001",
+		Title:        "Test",
+		HTMLURL:      "https://example.com",
+		Service:      "Svc",
+		Urgency:      "high",
+		Created:      "2025-01-01",
+		Status:       "triggered",
+		Acknowledged: []string{"User"},
+		Alerts: []alertSummary{
+			{
+				ID:      "ALERT001",
+				Name:    "FirstAlert",
+				HTMLURL: "https://example.com/alert1",
+				Service: "Svc1",
+				Created: "2025-01-01",
+				Status:  "triggered",
+				Cluster: "abc-123",
+			},
+			{
+				ID:      "ALERT002",
+				Name:    "SecondAlert",
+				HTMLURL: "https://example.com/alert2",
+				Service: "Svc2",
+				Created: "2025-01-02",
+				Status:  "triggered",
+				Cluster: "def-456",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// Both alerts should be present
+	assert.Contains(t, result, "### FirstAlert (triggered)")
+	assert.Contains(t, result, "### SecondAlert (triggered)")
+
+	// There should be a horizontal rule (---) between alerts for clear visual separation
+	assert.Contains(t, result, "---")
+	// The separator should appear between the two alerts, with the ---
+	// separating the first alert's details from the second alert's heading
+	assert.Contains(t, result, "  * Created: 2025-01-01\n\n---\n")
+	// The second alert heading should follow after the separator
+	assert.Contains(t, result, "---\n\n\n### SecondAlert")
+}
+
+func TestIncidentViewerNoBorder(t *testing.T) {
+	vp := newIncidentViewer()
+
+	// The viewport should not have a border style set
+	// GetBorderTop returns false when no border is configured
+	assert.False(t, vp.Style.GetBorderTop(), "viewport should not have a top border")
+	assert.False(t, vp.Style.GetBorderBottom(), "viewport should not have a bottom border")
+	assert.False(t, vp.Style.GetBorderLeft(), "viewport should not have a left border")
+	assert.False(t, vp.Style.GetBorderRight(), "viewport should not have a right border")
+}
+
 func TestSummarizeAlerts_NoDetailsField(t *testing.T) {
 	alerts := []pagerduty.IncidentAlert{
 		{

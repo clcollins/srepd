@@ -4,11 +4,13 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // createTestModel creates a minimal model for testing
@@ -1215,6 +1217,28 @@ func TestConfirmAction_PromptRenderedInStatusArea(t *testing.T) {
 		view := m.View()
 		assert.Contains(t, view, "Silence P1234567? [y/n]", "View should render the confirmation prompt")
 	})
+}
+
+func TestGlamourRendererProducesBoldOutput(t *testing.T) {
+	// Create renderer with dark style (same as production code)
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStylePath("dark"),
+		glamour.WithWordWrap(100),
+	)
+	require.NoError(t, err, "glamour renderer should be created without error")
+	require.NotNil(t, renderer, "renderer should not be nil")
+
+	// Render markdown with bold text
+	output, err := renderer.Render("**bold text**")
+	require.NoError(t, err, "rendering should not error")
+
+	// With dark style, bold text should contain ANSI escape sequences
+	// (not just the raw ** markers). The exact ANSI codes vary, but
+	// the output should NOT contain the literal "**" markers.
+	assert.NotContains(t, output, "**bold text**",
+		"glamour with dark style should render bold as ANSI, not raw markdown")
+	assert.Contains(t, output, "bold text",
+		"rendered output should still contain the text content")
 }
 
 func TestWindowSizeMsgHandler_SmallWindow(t *testing.T) {
