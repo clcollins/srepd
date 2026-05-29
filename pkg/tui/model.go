@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -10,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
@@ -121,7 +121,6 @@ func InitialModel(
 
 	// Create markdown renderer once - reusing it is much faster than creating new ones
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(100), // Default width, will be adjusted on window resize
 	)
 	if err != nil {
