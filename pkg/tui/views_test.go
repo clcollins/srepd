@@ -660,6 +660,189 @@ func TestIncidentTemplate_BoldIncidentID(t *testing.T) {
 	}
 }
 
+func TestDetailsTab_Template(t *testing.T) {
+	t.Run("details tab renders metadata without alerts or notes", func(t *testing.T) {
+		summary := incidentSummary{
+			ID:           "INC010",
+			Title:        "Test Incident for Details Tab",
+			HTMLURL:      "https://example.pagerduty.com/incidents/INC010",
+			Service:      "Test Service",
+			Urgency:      "high",
+			Created:      "2025-01-01T00:00:00Z",
+			Status:       "triggered",
+			Acknowledged: []string{"SRE User"},
+			Alerts: []alertSummary{
+				{
+					ID:      "ALERT010",
+					Name:    "SomeAlert",
+					HTMLURL: "https://example.pagerduty.com/alerts/ALERT010",
+					Service: "Alert Service",
+					Created: "2025-01-01T00:00:00Z",
+					Status:  "triggered",
+					Cluster: "cluster-id",
+				},
+			},
+			Notes: []noteSummary{
+				{
+					ID:      "NOTE010",
+					User:    "Someone",
+					Content: "A note",
+					Created: "2025-01-01T00:00:00Z",
+				},
+			},
+		}
+
+		tmpl, err := template.New("details").Funcs(funcMap).Parse(detailsTabTemplate)
+		require.NoError(t, err)
+
+		var buf bytes.Buffer
+		err = tmpl.Execute(&buf, summary)
+		require.NoError(t, err)
+		result := buf.String()
+
+		// Should contain incident metadata
+		assert.Contains(t, result, "INC010")
+		assert.Contains(t, result, "Test Incident for Details Tab")
+		assert.Contains(t, result, "Test Service")
+		assert.Contains(t, result, "high")
+		assert.Contains(t, result, "triggered")
+
+		// Should NOT contain alert or note content
+		assert.NotContains(t, result, "ALERT010")
+		assert.NotContains(t, result, "SomeAlert")
+		assert.NotContains(t, result, "NOTE010")
+		assert.NotContains(t, result, "A note")
+	})
+}
+
+func TestAlertTab_ShowsSingleAlert(t *testing.T) {
+	t.Run("alert tab template renders a single alert", func(t *testing.T) {
+		data := singleAlertTabData{
+			Alert: alertSummary{
+				ID:      "ALERT020",
+				Name:    "KubePodNotReady",
+				Link:    "https://example.com/sop/kube-pod-not-ready",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT020",
+				Service: "Alert Service",
+				Created: "2025-06-01T10:00:00Z",
+				Status:  "triggered",
+				Cluster: "my-cluster-id",
+			},
+			Index: 0,
+			Total: 5,
+		}
+
+		tmpl, err := template.New("alert").Funcs(funcMap).Parse(alertTabTemplate)
+		require.NoError(t, err)
+
+		var buf bytes.Buffer
+		err = tmpl.Execute(&buf, data)
+		require.NoError(t, err)
+		result := buf.String()
+
+		assert.Contains(t, result, "KubePodNotReady")
+		assert.Contains(t, result, "my-cluster-id")
+		assert.Contains(t, result, "1/5")         // 1-based display of index 0 out of 5
+		assert.NotContains(t, result, "ALERT999") // Does not contain other alerts
+	})
+}
+
+func TestNoteTab_ShowsSingleNote(t *testing.T) {
+	t.Run("note tab template renders a single note", func(t *testing.T) {
+		data := singleNoteTabData{
+			Note: noteSummary{
+				ID:      "NOTE020",
+				User:    "Jane SRE",
+				Content: "Investigated and found root cause",
+				Created: "2025-06-01T12:00:00Z",
+			},
+			Index: 1,
+			Total: 3,
+		}
+
+		tmpl, err := template.New("note").Funcs(funcMap).Parse(noteTabTemplate)
+		require.NoError(t, err)
+
+		var buf bytes.Buffer
+		err = tmpl.Execute(&buf, data)
+		require.NoError(t, err)
+		result := buf.String()
+
+		assert.Contains(t, result, "Jane SRE")
+		assert.Contains(t, result, "Investigated and found root cause")
+		assert.Contains(t, result, "2/3") // 1-based display of index 1 out of 3
+	})
+}
+
+func TestTabHeader_Rendering(t *testing.T) {
+	tests := []struct {
+		name                string
+		activeTab           int
+		alertCount          int
+		noteCount           int
+		alertsLoading       bool
+		notesLoading        bool
+		expectedContains    []string
+		expectedNotContains []string
+	}{
+		{
+			name:       "Details tab active shows highlighted Details",
+			activeTab:  0,
+			alertCount: 5,
+			noteCount:  3,
+			expectedContains: []string{
+				"Details",
+				"Alerts (5)",
+				"Notes (3)",
+			},
+		},
+		{
+			name:       "Alerts tab active shows count",
+			activeTab:  1,
+			alertCount: 10,
+			noteCount:  0,
+			expectedContains: []string{
+				"Details",
+				"Alerts (10)",
+				"Notes (0)",
+			},
+		},
+		{
+			name:          "Loading alerts shows loading indicator",
+			activeTab:     1,
+			alertCount:    0,
+			noteCount:     2,
+			alertsLoading: true,
+			expectedContains: []string{
+				"Alerts (...)",
+			},
+		},
+		{
+			name:         "Loading notes shows loading indicator",
+			activeTab:    2,
+			alertCount:   1,
+			noteCount:    0,
+			notesLoading: true,
+			expectedContains: []string{
+				"Notes (...)",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := renderTabHeader(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
+
+			for _, expected := range tt.expectedContains {
+				assert.Contains(t, result, expected, "tab header should contain %q", expected)
+			}
+			for _, notExpected := range tt.expectedNotContains {
+				assert.NotContains(t, result, notExpected, "tab header should not contain %q", notExpected)
+			}
+		})
+	}
+}
+
 func TestIncidentTemplate_NotesIndented(t *testing.T) {
 	summary := incidentSummary{
 		ID:           "INC001",

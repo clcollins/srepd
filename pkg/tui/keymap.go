@@ -20,6 +20,8 @@ func (k keymap) FullHelp() [][]key.Binding {
 		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence},
 		// Column 3: Settings & toggles, Quit at bottom
 		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ToggleActionLog, k.ViewLog, k.Quit},
+		// Column 4: Tab navigation (incident viewer)
+		{k.TabNext, k.TabPrev, k.ItemNext, k.ItemPrev},
 	}
 
 	// Column 4: Chord commands (generated from chordActions registry)
@@ -55,6 +57,10 @@ type keymap struct {
 	Open            key.Binding
 	SOP             key.Binding
 	ViewLog         key.Binding
+	TabNext         key.Binding
+	TabPrev         key.Binding
+	ItemNext        key.Binding
+	ItemPrev        key.Binding
 }
 
 type inputKeymap struct {
@@ -182,6 +188,22 @@ var defaultKeyMap = keymap{
 	ViewLog: key.NewBinding(
 		key.WithKeys("ctrl+d"),
 		key.WithHelp("ctrl+d", "view debug log"),
+	),
+	TabNext: key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "next tab"),
+	),
+	TabPrev: key.NewBinding(
+		key.WithKeys("shift+tab"),
+		key.WithHelp("shift+tab", "prev tab"),
+	),
+	ItemNext: key.NewBinding(
+		key.WithKeys("right"),
+		key.WithHelp("->", "next item"),
+	),
+	ItemPrev: key.NewBinding(
+		key.WithKeys("left"),
+		key.WithHelp("<-", "prev item"),
 	),
 }
 
