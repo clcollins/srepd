@@ -635,7 +635,6 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.ItemPrev):
-			handledKey = true
 			switch m.activeTab {
 			case tabAlerts:
 				if len(m.selectedIncidentAlerts) > 0 {
@@ -723,19 +722,15 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 						if idx < len(m.selectedIncidentAlerts) {
 							m.activeAlertIdx = idx
 							m.incidentViewer.GotoTop()
-							handledKey = true
 							return m, func() tea.Msg { return renderIncidentMsg("alert jump") }
 						}
 					case tabNotes:
 						if idx < len(m.selectedIncidentNotes) {
 							m.activeNoteIdx = idx
 							m.incidentViewer.GotoTop()
-							handledKey = true
 							return m, func() tea.Msg { return renderIncidentMsg("note jump") }
 						}
 					}
-					// Out of range -- ignore
-					handledKey = true
 					return m, nil
 				}
 			}
