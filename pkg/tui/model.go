@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"time"
 
 	"charm.land/glamour/v2"
@@ -65,6 +66,9 @@ type model struct {
 	// This is a hack since viewport.Model doesn't have a Focused() method
 	viewingIncident  bool
 	incidentViewer   viewport.Model
+	viewingLog       bool
+	logViewer        viewport.Model
+	logFilePath      string
 	help             help.Model
 	spinner          spinner.Model
 	apiInProgress    bool
@@ -141,6 +145,8 @@ func InitialModel(
 		actionLog:        []actionLogEntry{},
 		input:            newTextInput(),
 		incidentViewer:   newIncidentViewer(),
+		logViewer:        newLogViewer(),
+		logFilePath:      defaultLogFilePath(),
 		spinner:          s,
 		markdownRenderer: renderer,
 		apiInProgress:    false,
@@ -399,4 +405,19 @@ func newHelp() help.Model {
 func newIncidentViewer() viewport.Model {
 	vp := viewport.New(100, 100)
 	return vp
+}
+
+func newLogViewer() viewport.Model {
+	vp := viewport.New(100, 100)
+	vp.Style = incidentViewerStyle
+	return vp
+}
+
+// defaultLogFilePath returns the default path for the srepd debug log file.
+func defaultLogFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return home + "/.config/srepd/debug.log"
 }

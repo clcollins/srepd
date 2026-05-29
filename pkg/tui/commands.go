@@ -203,6 +203,21 @@ type TickMsg struct {
 
 type PollIncidentsMsg struct{}
 
+// logFileContentMsg is a message containing the contents of the debug log file.
+type logFileContentMsg string
+
+// readLogFile returns a command that reads the log file at the given path.
+// If the file does not exist, it returns a logFileContentMsg with an error message.
+func readLogFile(path string) tea.Cmd {
+	return func() tea.Msg {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return logFileContentMsg(fmt.Sprintf("No log file found at %s", path))
+		}
+		return logFileContentMsg(string(data))
+	}
+}
+
 type renderIncidentMsg string
 
 type renderedIncidentMsg struct {

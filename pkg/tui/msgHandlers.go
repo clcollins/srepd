@@ -141,6 +141,10 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.incidentViewer.Height = 10 // Minimum height
 	}
 
+	// Log viewer uses the same dimensions as the incident viewer
+	m.logViewer.Width = m.incidentViewer.Width
+	m.logViewer.Height = m.incidentViewer.Height
+
 	m.help.Width = windowSize.Width - horizontalScratchWidth
 
 	return m, nil
@@ -192,6 +196,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.err != nil:
 		return switchErrorFocusMode(m, msg)
+
+	case m.viewingLog:
+		return switchLogFocusMode(m, msg)
 
 	case m.viewingIncident:
 		return switchIncidentFocusMode(m, msg)
@@ -486,6 +493,9 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			c := []string{defaultBrowserOpenCommand}
 			return m, openBrowserCmd(c, link)
 
+		case key.Matches(msg, defaultKeyMap.ViewLog):
+			return m, readLogFile(m.logFilePath)
+
 		}
 	}
 	return m, tea.Batch(cmds...)
@@ -611,6 +621,34 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	// This prevents the viewport from consuming ESC and other navigation keys
 	if !handledKey {
 		m.incidentViewer, cmd = m.incidentViewer.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func switchLogFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	var cmds []tea.Cmd
+
+	handledKey := false
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, defaultKeyMap.Back):
+			m.viewingLog = false
+			m.table.Focus()
+			return m, nil
+
+		case key.Matches(msg, defaultKeyMap.Help):
+			m.toggleHelp()
+			handledKey = true
+		}
+	}
+
+	if !handledKey {
+		m.logViewer, cmd = m.logViewer.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 

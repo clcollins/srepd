@@ -690,6 +690,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		log.Debug("Update", "waitForSelectedIncidentThenDoMsg", "performing action", "action", msg.action, "incident", m.selectedIncident.ID)
 		return m, msg.action
 
+	case logFileContentMsg:
+		m.logViewer.SetContent(string(msg))
+		m.logViewer.GotoBottom()
+		m.viewingLog = true
+		return m, nil
+
 	case renderIncidentMsg:
 		if m.selectedIncident == nil {
 			m.setStatus("failed render incidents - no incidents provided")

@@ -347,6 +347,109 @@ func TestClusterSelect_ClearedOnViewTransition(t *testing.T) {
 		"Cluster select options should be cleared on view transition")
 }
 
+// viewLogKeyMsg returns a tea.KeyMsg that matches the ViewLog key binding (ctrl+d).
+func viewLogKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyCtrlD}
+}
+
+func TestViewLogKey_OpensLogViewer(t *testing.T) {
+	// Scenario: Pressing ctrl+d in table mode should trigger a readLogFile command
+	// which, when its message arrives, sets viewingLog=true.
+
+	m := createTestModel()
+	m.table = newTableWithStyles()
+	m.table.Focus()
+	m.logFilePath = "/tmp/test-srepd-debug.log"
+
+	// Press ctrl+d
+	result, cmd := m.Update(viewLogKeyMsg())
+	updatedModel := result.(model)
+
+	// The model should NOT yet be viewingLog (that happens on logFileContentMsg)
+	// But a command should be returned (readLogFile)
+	assert.NotNil(t, cmd, "ctrl+d should return a command to read the log file")
+	assert.False(t, updatedModel.viewingLog, "viewingLog should not be set until content arrives")
+}
+
+func TestViewLogKey_EscapeCloses(t *testing.T) {
+	// Scenario: When viewingLog is true, pressing Escape should dismiss the log viewer.
+
+	m := createTestModel()
+	m.viewingLog = true
+	m.logViewer = newLogViewer()
+
+	escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	result, cmd := m.Update(escMsg)
+	updatedModel := result.(model)
+
+	assert.False(t, updatedModel.viewingLog, "Escape should dismiss the log viewer")
+	assert.Nil(t, cmd, "No command should be returned after dismissing log viewer")
+}
+
+func TestLogFileContentMsg_SetsViewport(t *testing.T) {
+	// Scenario: When logFileContentMsg arrives, it should set viewport content
+	// and set viewingLog=true.
+
+	m := createTestModel()
+	m.logViewer = newLogViewer()
+
+	content := "2025-01-01 DEBUG test log entry\n2025-01-02 INFO another entry"
+	msg := logFileContentMsg(content)
+
+	result, cmd := m.Update(msg)
+	updatedModel := result.(model)
+
+	assert.True(t, updatedModel.viewingLog, "viewingLog should be true after content arrives")
+	assert.Nil(t, cmd, "No further command should be returned")
+}
+
+func TestLogFileContentMsg_FileNotFound(t *testing.T) {
+	// Scenario: When logFileContentMsg arrives with a "file not found" message,
+	// it should still display in the viewport.
+
+	m := createTestModel()
+	m.logViewer = newLogViewer()
+
+	content := "No log file found at /tmp/nonexistent.log"
+	msg := logFileContentMsg(content)
+
+	result, _ := m.Update(msg)
+	updatedModel := result.(model)
+
+	assert.True(t, updatedModel.viewingLog, "viewingLog should be true even for error messages")
+}
+
+func TestLogViewer_WindowResize(t *testing.T) {
+	// Scenario: WindowSizeMsg should set logViewer dimensions.
+
+	m := model{
+		table:          newTableWithStyles(),
+		actionLogTable: newActionLogTable(),
+		incidentViewer: newIncidentViewer(),
+		logViewer:      newLogViewer(),
+		help:           newHelp(),
+		incidentCache:  make(map[string]*cachedIncidentData),
+	}
+
+	msg := tea.WindowSizeMsg{Width: 120, Height: 50}
+	result, _ := m.windowSizeMsgHandler(msg)
+	updatedModel := result.(model)
+
+	// logViewer should have the same dimensions as incidentViewer
+	assert.Equal(t, updatedModel.incidentViewer.Width, updatedModel.logViewer.Width,
+		"logViewer width should match incidentViewer width")
+	assert.Equal(t, updatedModel.incidentViewer.Height, updatedModel.logViewer.Height,
+		"logViewer height should match incidentViewer height")
+}
+
+func TestViewLogKey_InKeymap(t *testing.T) {
+	// Scenario: ctrl+d should be registered in the keymap as ViewLog.
+
+	// Check that the binding exists and matches ctrl+d
+	keys := defaultKeyMap.ViewLog.Keys()
+	assert.Contains(t, keys, "ctrl+d", "ViewLog binding should include ctrl+d")
+}
+
 func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
 	// Scenario: The table has rows with incidents highlighted, but
 	// selectedIncident is nil. Pressing UnAck key should sync the highlighted
