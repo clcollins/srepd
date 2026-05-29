@@ -122,8 +122,6 @@ var (
 	// Action log container style - border like main table
 	actionLogContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
 
-	incidentViewerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
-
 	errorStyle = lipgloss.NewStyle().
 			Bold(true).
 			Width(64).
@@ -551,9 +549,9 @@ var funcMap = template.FuncMap{
 
 const incidentTemplate = `
 {{- if .Priority -}}
-# {{ .Priority }} {{ .ID }} - {{ .Status }}
+# {{ .Priority }} **{{ .ID }}** - {{ .Status }}
 {{- else -}}
-# {{ .ID }} - {{ .Status }}
+# **{{ .ID }}** - {{ .Status }}
 {{- end }}
 
 {{ ToLink .Title .HTMLURL }}
@@ -579,8 +577,8 @@ Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
 _Loading notes..._
 {{ else if .Notes }}
 {{ range $note := .Notes }}
-> {{ $note.Content }}
-    -- {{ $note.User }} @ {{ $note.Created }}
+  > {{ $note.Content }}
+  -- {{ $note.User }} @ {{ $note.Created }}
 {{ end }}
 {{ else }}
 _none_
@@ -591,14 +589,16 @@ _none_
 {{ if .AlertsLoading }}
 _Loading alerts..._
 {{ else }}
-{{ range $alert := .Alerts }}
+{{ $alertLen := len .Alerts }}{{ range $i, $alert := .Alerts }}
 ### {{ if $alert.Name }}{{ $alert.Name }}{{ else }}{{ $alert.ID }}{{ end }} ({{ $alert.Status }}){{ if $alert.Severity }} [{{ $alert.Severity }}]{{ end }}{{ if $alert.AlertType }} ({{ $alert.AlertType }}){{ end }}
 
-* Cluster: {{ $alert.Cluster }}
-* SOP: {{ if $alert.Link }}{{ ToLink "SOP" $alert.Link }}{{ else }}_none_{{ end }}
-* Alert: {{ ToLink $alert.ID $alert.HTMLURL }}
-* Service: {{ $alert.Service }}
-* Created: {{ $alert.Created }}
+  * Cluster: {{ $alert.Cluster }}
+  * SOP: {{ if $alert.Link }}{{ ToLink "SOP" $alert.Link }}{{ else }}_none_{{ end }}
+  * Alert: {{ ToLink $alert.ID $alert.HTMLURL }}
+  * Service: {{ $alert.Service }}
+  * Created: {{ $alert.Created }}
+
+{{ if not (Last $i $alertLen) }}---{{ end }}
 
 {{ end }}
 {{ end }}

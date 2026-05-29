@@ -121,6 +121,7 @@ func InitialModel(
 
 	// Create markdown renderer once - reusing it is much faster than creating new ones
 	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStylePath("dark"),
 		glamour.WithWordWrap(100), // Default width, will be adjusted on window resize
 	)
 	if err != nil {
@@ -397,6 +398,5 @@ func newHelp() help.Model {
 
 func newIncidentViewer() viewport.Model {
 	vp := viewport.New(100, 100)
-	vp.Style = incidentViewerStyle
 	return vp
 }

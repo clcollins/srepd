@@ -65,8 +65,10 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	horizontalScratchWidth := horizontalMargins + horizontalPadding + horizontalBorders
 	verticalScratchWidth := verticalMargins + verticalPadding + verticalBorders
 
-	incidentHorizontalScratchWidth := incidentViewerStyle.GetHorizontalMargins() + incidentViewerStyle.GetHorizontalPadding() + incidentViewerStyle.GetHorizontalBorderSize()
-	incidentVerticalScratchWidth := incidentViewerStyle.GetVerticalMargins() + incidentViewerStyle.GetVerticalPadding() + incidentViewerStyle.GetVerticalBorderSize()
+	// The incident viewer viewport has no border/padding/margin of its own;
+	// all visual framing comes from tableContainerStyle wrapping the viewport.
+	incidentHorizontalScratchWidth := 0
+	incidentVerticalScratchWidth := 0
 
 	tableHorizontalScratchWidth := tableHorizontalMargins + tableHorizontalPadding + tableHorizontalBorders + cellHorizontalPadding + cellHorizontalMargins + cellHorizontalBorders
 	tableVerticalScratchWidth := tableVerticalMargins + tableVerticalPadding + tableVerticalBorders + cellVerticalPadding + cellVerticalMargins + cellVerticalBorders
