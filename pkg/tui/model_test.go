@@ -1241,6 +1241,157 @@ func TestGlamourRendererProducesBoldOutput(t *testing.T) {
 		"rendered output should still contain the text content")
 }
 
+// --- Eager pre-fetch tests (Issue #198) ---
+
+// createTestModelWithTable sets up a model with a table containing the given
+// incidents and an incident list that matches. The table cursor starts at row 0.
+func createTestModelWithTable(incidents []pagerduty.Incident) model {
+	m := createTestModel()
+	m.incidentList = incidents
+
+	cols := []table.Column{
+		{Title: dot, Width: dotWidth},
+		{Title: "ID", Width: idWidth - dotWidth},
+		{Title: "Summary", Width: 30},
+		{Title: "Service", Width: 20},
+	}
+	var rows []table.Row
+	for _, inc := range incidents {
+		rows = append(rows, table.Row{dot, inc.ID, inc.Title, inc.Service.Summary})
+	}
+	m.table = table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+	)
+	return m
+}
+
+func TestSyncSelectedIncident_TriggersPrefetch(t *testing.T) {
+	t.Run("uncached incident triggers pre-fetch command", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			{
+				APIObject:          pagerduty.APIObject{ID: "Q111"},
+				Title:              "Test Incident",
+				Service:            pagerduty.APIObject{Summary: "test-svc"},
+				LastStatusChangeAt: "2024-01-01T00:00:00Z",
+			},
+		}
+		m := createTestModelWithTable(incidents)
+
+		cmd := m.syncSelectedIncidentToHighlightedRow()
+
+		assert.NotNil(t, m.selectedIncident, "selectedIncident should be set")
+		assert.Equal(t, "Q111", m.selectedIncident.ID, "selected incident should match highlighted row")
+		assert.NotNil(t, cmd, "should return a pre-fetch command for uncached incident")
+	})
+}
+
+func TestSyncSelectedIncident_SkipsCached(t *testing.T) {
+	t.Run("fully cached incident does not trigger pre-fetch", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			{
+				APIObject:          pagerduty.APIObject{ID: "Q222"},
+				Title:              "Cached Incident",
+				Service:            pagerduty.APIObject{Summary: "cached-svc"},
+				LastStatusChangeAt: "2024-01-01T00:00:00Z",
+			},
+		}
+		m := createTestModelWithTable(incidents)
+
+		// Pre-populate cache with fully loaded data
+		incidentCopy := incidents[0]
+		m.incidentCache["Q222"] = &cachedIncidentData{
+			incident:     &incidentCopy,
+			dataLoaded:   true,
+			notesLoaded:  true,
+			alertsLoaded: true,
+			lastFetched:  time.Now(),
+		}
+
+		cmd := m.syncSelectedIncidentToHighlightedRow()
+
+		assert.NotNil(t, m.selectedIncident, "selectedIncident should be set from cache")
+		assert.Equal(t, "Q222", m.selectedIncident.ID)
+		assert.Nil(t, cmd, "should NOT return a command for fully cached incident")
+	})
+}
+
+func TestSyncSelectedIncident_TriggersPrefetchPartialCache(t *testing.T) {
+	t.Run("partially cached incident triggers pre-fetch", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			{
+				APIObject:          pagerduty.APIObject{ID: "Q333"},
+				Title:              "Partial Incident",
+				Service:            pagerduty.APIObject{Summary: "partial-svc"},
+				LastStatusChangeAt: "2024-01-01T00:00:00Z",
+			},
+		}
+		m := createTestModelWithTable(incidents)
+
+		// Pre-populate cache with only data loaded (alerts and notes missing)
+		incidentCopy := incidents[0]
+		m.incidentCache["Q333"] = &cachedIncidentData{
+			incident:     &incidentCopy,
+			dataLoaded:   true,
+			notesLoaded:  false,
+			alertsLoaded: false,
+			lastFetched:  time.Now(),
+		}
+
+		cmd := m.syncSelectedIncidentToHighlightedRow()
+
+		assert.NotNil(t, m.selectedIncident, "selectedIncident should be set from cache")
+		assert.Equal(t, "Q333", m.selectedIncident.ID)
+		assert.NotNil(t, cmd, "should return a pre-fetch command for partially cached incident")
+	})
+}
+
+func TestSyncSelectedIncident_NilRowReturnsNil(t *testing.T) {
+	t.Run("no highlighted row returns nil command", func(t *testing.T) {
+		// Empty table - no rows to highlight
+		m := createTestModel()
+		m.table = table.New(
+			table.WithColumns([]table.Column{
+				{Title: dot, Width: dotWidth},
+				{Title: "ID", Width: idWidth - dotWidth},
+				{Title: "Summary", Width: 30},
+				{Title: "Service", Width: 20},
+			}),
+			table.WithFocused(true),
+		)
+
+		cmd := m.syncSelectedIncidentToHighlightedRow()
+
+		assert.Nil(t, m.selectedIncident, "selectedIncident should be nil with no rows")
+		assert.Nil(t, cmd, "should return nil command when no row is highlighted")
+	})
+}
+
+func TestSyncSelectedIncident_SameIncidentReturnsNil(t *testing.T) {
+	t.Run("already-selected incident returns nil command", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			{
+				APIObject:          pagerduty.APIObject{ID: "Q444"},
+				Title:              "Same Incident",
+				Service:            pagerduty.APIObject{Summary: "same-svc"},
+				LastStatusChangeAt: "2024-01-01T00:00:00Z",
+			},
+		}
+		m := createTestModelWithTable(incidents)
+
+		// Pre-set selectedIncident to the same incident
+		incidentCopy := incidents[0]
+		m.selectedIncident = &incidentCopy
+
+		cmd := m.syncSelectedIncidentToHighlightedRow()
+
+		assert.NotNil(t, m.selectedIncident, "selectedIncident should remain set")
+		assert.Equal(t, "Q444", m.selectedIncident.ID)
+		assert.Nil(t, cmd, "should return nil command when incident is already selected")
+	})
+}
+
 func TestWindowSizeMsgHandler_SmallWindow(t *testing.T) {
 	tests := []struct {
 		name   string

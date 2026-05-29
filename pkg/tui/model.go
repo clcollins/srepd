@@ -264,7 +264,11 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 // syncSelectedIncidentToHighlightedRow updates m.selectedIncident to match the currently
 // highlighted table row. Sets to nil if no row is highlighted. Uses cached data if available,
 // otherwise uses stub data from m.incidentList.
-func (m *model) syncSelectedIncidentToHighlightedRow() {
+//
+// Returns a tea.Cmd to pre-fetch incident details if the highlighted incident is not fully
+// cached (data + alerts + notes). Returns nil if no fetch is needed. The rate limiter
+// handles debouncing for rapid navigation.
+func (m *model) syncSelectedIncidentToHighlightedRow() tea.Cmd {
 	row := m.table.SelectedRow()
 	if row == nil {
 		// Clear selection regardless of viewing state
@@ -274,19 +278,24 @@ func (m *model) syncSelectedIncidentToHighlightedRow() {
 		m.incidentNotesLoaded = false
 		m.incidentAlertsLoaded = false
 		log.Debug("syncSelectedIncidentToHighlightedRow", "no row highlighted", "cleared selection")
-		return
+		return nil
 	}
 
 	incidentID := row[1] // Column [1] is the incident ID
 
 	// If already viewing this incident, don't change anything
 	if m.selectedIncident != nil && m.selectedIncident.ID == incidentID {
-		return
+		return nil
 	}
 
+	// Track whether the cache is fully loaded to decide on pre-fetch
+	fullyLoaded := false
+
 	// Find incident in list
+	found := false
 	for i := range m.incidentList {
 		if m.incidentList[i].ID == incidentID {
+			found = true
 			// Check if we have cached full data
 			if cached, exists := m.incidentCache[incidentID]; exists && cached.incident != nil {
 				// Check if cache is fresh relative to incident list data
@@ -312,6 +321,8 @@ func (m *model) syncSelectedIncidentToHighlightedRow() {
 						m.selectedIncidentAlerts = nil
 						m.incidentAlertsLoaded = false
 					}
+					// Stale cache is not fully loaded
+					fullyLoaded = false
 				} else {
 					// Cache is fresh - use it
 					log.Debug("syncSelectedIncidentToHighlightedRow", "using cached data", "incident", incidentID)
@@ -331,6 +342,7 @@ func (m *model) syncSelectedIncidentToHighlightedRow() {
 					} else {
 						m.selectedIncidentAlerts = nil
 					}
+					fullyLoaded = cached.dataLoaded && cached.notesLoaded && cached.alertsLoaded
 				}
 			} else {
 				// Use stub data from incidentList
@@ -343,19 +355,34 @@ func (m *model) syncSelectedIncidentToHighlightedRow() {
 				m.incidentAlertsLoaded = false
 				m.selectedIncidentNotes = nil
 				m.selectedIncidentAlerts = nil
+				fullyLoaded = false
 			}
-			return
+			break
 		}
 	}
 
-	// Incident not found in list
-	log.Debug("syncSelectedIncidentToHighlightedRow", "incident not found in list", incidentID)
-	if !m.viewingIncident {
-		m.selectedIncident = nil
-		m.incidentDataLoaded = false
-		m.incidentNotesLoaded = false
-		m.incidentAlertsLoaded = false
+	if !found {
+		// Incident not found in list
+		log.Debug("syncSelectedIncidentToHighlightedRow", "incident not found in list", incidentID)
+		if !m.viewingIncident {
+			m.selectedIncident = nil
+			m.incidentDataLoaded = false
+			m.incidentNotesLoaded = false
+			m.incidentAlertsLoaded = false
+		}
+		return nil
 	}
+
+	// Pre-fetch: if the incident is not fully cached, trigger a background fetch.
+	// The getIncidentMsg handler in Update will fetch details, alerts, and notes
+	// concurrently and populate the cache. The rate limiter handles rapid scrolling.
+	if !fullyLoaded {
+		id := incidentID
+		log.Debug("syncSelectedIncidentToHighlightedRow", "triggering pre-fetch", "incident", id)
+		return func() tea.Msg { return getIncidentMsg(id) }
+	}
+
+	return nil
 }
 
 func (m *model) setStatus(msg string) {
