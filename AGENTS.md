@@ -57,16 +57,21 @@ Pass extra test flags via `TESTOPTS`, e.g.:
 - Type assertions must use the comma-ok pattern
 - Tests before code (TDD)
 - Each PR must pass all CI checks
+- **All tests must pass locally before committing.** Run
+  `make test-all` (or at minimum `go test ./... -count=1`)
+  and verify zero failures before creating a commit or PR.
+  Do not push code that fails tests.
 
 ## PR Workflow
 
 1. Create feature branch: `srepd/<description>`
 2. Write failing tests
 3. Implement minimum code to pass tests
-4. Run `make test-all` locally
-5. Push and create PR against `main`
-6. CI runs all checks via `make` targets
-7. Review, approve, merge
+4. Run `make test-all` locally — **all tests must pass**
+5. If any test fails, fix it before proceeding
+6. Push and create PR against `main`
+7. CI runs all checks via `make` targets
+8. Review, approve, merge
 
 ## Key Files
 
