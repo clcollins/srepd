@@ -207,3 +207,188 @@ func TestRetry_ContextCancellation(t *testing.T) {
 		assert.Less(t, mock.callCount.Load(), int32(5), "should not exhaust all retries due to context cancellation")
 	})
 }
+
+// TestRateLimitedWrapper_Delegation tests that each rate-limited wrapper method
+// correctly delegates to the inner mock client. Each test verifies:
+// 1. The wrapper returns the expected result from the mock
+// 2. The inner mock's call count increments (proving delegation happened)
+func TestRateLimitedWrapper_CreateIncidentNoteWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	note := pagerduty.IncidentNote{Content: "test note"}
+	result, err := client.CreateIncidentNoteWithContext(ctx, "INCIDENT1", note)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "test note", result.Content)
+	assert.Equal(t, 1, mock.CallCounts["CreateIncidentNoteWithContext"])
+}
+
+func TestRateLimitedWrapper_CreateIncidentNoteWithContext_Error(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	note := pagerduty.IncidentNote{Content: "test note"}
+	_, err := client.CreateIncidentNoteWithContext(ctx, "err", note)
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, mock.CallCounts["CreateIncidentNoteWithContext"])
+}
+
+func TestRateLimitedWrapper_GetCurrentUserWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	result, err := client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "MOCK_USER", result.ID)
+	assert.Equal(t, "mock@example.com", result.Email)
+	assert.Equal(t, 1, mock.CallCounts["GetCurrentUserWithContext"])
+}
+
+func TestRateLimitedWrapper_GetEscalationPolicyWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	result, err := client.GetEscalationPolicyWithContext(ctx, "POLICY1", &pagerduty.GetEscalationPolicyOptions{})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "POLICY1", result.ID)
+	assert.Equal(t, 1, mock.CallCounts["GetEscalationPolicyWithContext"])
+}
+
+func TestRateLimitedWrapper_GetEscalationPolicyWithContext_Error(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	_, err := client.GetEscalationPolicyWithContext(ctx, "err", &pagerduty.GetEscalationPolicyOptions{})
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, mock.CallCounts["GetEscalationPolicyWithContext"])
+}
+
+func TestRateLimitedWrapper_GetTeamWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	result, err := client.GetTeamWithContext(ctx, "TEAM1")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "TEAM1", result.Name)
+	assert.Equal(t, 1, mock.CallCounts["GetTeamWithContext"])
+}
+
+func TestRateLimitedWrapper_ListMembersWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	result, err := client.ListMembersWithContext(ctx, "TEAM1", pagerduty.ListTeamMembersOptions{Limit: 100})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Members, 1)
+	assert.Equal(t, 1, mock.CallCounts["ListMembersWithContext"])
+}
+
+func TestRateLimitedWrapper_GetUserWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	result, err := client.GetUserWithContext(ctx, "USER1", pagerduty.GetUserOptions{})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "USER1", result.ID)
+	assert.Equal(t, 1, mock.CallCounts["GetUserWithContext"])
+}
+
+func TestRateLimitedWrapper_GetUserWithContext_Error(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	_, err := client.GetUserWithContext(ctx, "err", pagerduty.GetUserOptions{})
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, mock.CallCounts["GetUserWithContext"])
+}
+
+func TestRateLimitedWrapper_ListIncidentNotesWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	result, err := client.ListIncidentNotesWithContext(ctx, "INCIDENT1")
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Equal(t, "QABCDEFG1234567", result[0].ID)
+	assert.Equal(t, 1, mock.CallCounts["ListIncidentNotesWithContext"])
+}
+
+func TestRateLimitedWrapper_ListIncidentNotesWithContext_Error(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	_, err := client.ListIncidentNotesWithContext(ctx, "err")
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, mock.CallCounts["ListIncidentNotesWithContext"])
+}
+
+func TestRateLimitedWrapper_ListOnCallsWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	result, err := client.ListOnCallsWithContext(ctx, pagerduty.ListOnCallOptions{})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Empty(t, result.OnCalls) // Default mock returns empty on-calls
+	assert.Equal(t, 1, mock.CallCounts["ListOnCallsWithContext"])
+}
+
+func TestRateLimitedWrapper_ManageIncidentsWithContext(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	opts := []pagerduty.ManageIncidentsOptions{
+		{ID: "INCIDENT1", Status: "acknowledged"},
+	}
+	result, err := client.ManageIncidentsWithContext(ctx, "user@example.com", opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Incidents, 2)
+	assert.Equal(t, 1, mock.CallCounts["ManageIncidentsWithContext"])
+}
+
+func TestRateLimitedWrapper_ManageIncidentsWithContext_Error(t *testing.T) {
+	mock := &MockPagerDutyClient{}
+	client := NewRateLimitedClient(mock)
+	ctx := context.Background()
+
+	opts := []pagerduty.ManageIncidentsOptions{
+		{ID: "err"},
+	}
+	_, err := client.ManageIncidentsWithContext(ctx, "user@example.com", opts)
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, mock.CallCounts["ManageIncidentsWithContext"])
+}

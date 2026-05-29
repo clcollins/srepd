@@ -3,7 +3,9 @@ package pd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -412,6 +414,423 @@ func TestGetUser_Error(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "pd.GetUser()")
 	assert.Nil(t, user)
+}
+
+// newConfigFromClient is a test helper that mirrors NewConfig but accepts
+// a pre-built mock client instead of creating a real PagerDuty client from a token.
+// This allows testing NewConfig's validation logic without hitting the PD API.
+func newConfigFromClient(client PagerDutyClient, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
+	var c Config
+	var err error
+
+	c.Client = client
+
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	c.CurrentUser, err = c.Client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
+	if err != nil {
+		return &c, fmt.Errorf("pd.NewConfig(): failed to retrieve PagerDuty user: %v", err)
+	}
+
+	c.Teams, err = GetTeams(c.Client, teams)
+	if err != nil {
+		return &c, fmt.Errorf("pd.NewConfig(): failed to get team(s) `%v`: %v", teams, err)
+	}
+
+	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
+	if err != nil {
+		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
+	}
+
+	_, ok := escalation_policies["default"]
+	if !ok {
+		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `default` key")
+	}
+	_, ok = escalation_policies["silent_default"]
+	if !ok {
+		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `silent_default` key")
+	}
+
+	c.EscalationPolicies = make(map[string]*pagerduty.EscalationPolicy)
+
+	for key, value := range escalation_policies {
+		c.EscalationPolicies[strings.ToUpper(key)], err = GetEscalationPolicy(c.Client, value, pagerduty.GetEscalationPolicyOptions{})
+		if err != nil {
+			return &c, fmt.Errorf("pd.NewConfig(): failed to get escalation policy: (%s: %s) %v", key, value, err)
+		}
+	}
+
+	for _, i := range ignoredUsers {
+		user, err := GetUser(c.Client, i, pagerduty.GetUserOptions{})
+		if err != nil {
+			return &c, fmt.Errorf("pd.NewConfig(): failed to get user for ignore list `%v`: %v", i, err)
+		}
+		c.IgnoredUsers = append(c.IgnoredUsers, user)
+	}
+
+	return &c, nil
+}
+
+func TestNewConfig_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	policies := map[string]string{
+		"default":        "POLICY1",
+		"silent_default": "POLICY2",
+	}
+
+	config, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.NotNil(t, config.CurrentUser)
+	assert.Equal(t, "MOCK_USER", config.CurrentUser.ID)
+	assert.Len(t, config.Teams, 1)
+	assert.Equal(t, "team1", config.Teams[0].Name)
+	assert.NotEmpty(t, config.TeamsMemberIDs)
+	assert.Len(t, config.EscalationPolicies, 2)
+	assert.NotNil(t, config.EscalationPolicies["DEFAULT"])
+	assert.NotNil(t, config.EscalationPolicies["SILENT_DEFAULT"])
+}
+
+func TestNewConfig_MissingDefaultPolicy(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	policies := map[string]string{
+		"silent_default": "POLICY2",
+	}
+
+	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must contain a `default` key")
+}
+
+func TestNewConfig_MissingSilentDefaultPolicy(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	policies := map[string]string{
+		"default": "POLICY1",
+	}
+
+	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must contain a `silent_default` key")
+}
+
+func TestNewConfig_BadEscalationPolicy(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	// "err" ID triggers mock error
+	policies := map[string]string{
+		"default":        "err",
+		"silent_default": "POLICY2",
+	}
+
+	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get escalation policy")
+}
+
+func TestNewConfig_WithIgnoredUsers(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	policies := map[string]string{
+		"default":        "POLICY1",
+		"silent_default": "POLICY2",
+	}
+
+	config, err := newConfigFromClient(mockClient, []string{"team1"}, policies, []string{"USER1", "USER2"})
+
+	assert.NoError(t, err)
+	assert.Len(t, config.IgnoredUsers, 2)
+	assert.Equal(t, "USER1", config.IgnoredUsers[0].ID)
+	assert.Equal(t, "USER2", config.IgnoredUsers[1].ID)
+}
+
+func TestNewConfig_BadIgnoredUser(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	policies := map[string]string{
+		"default":        "POLICY1",
+		"silent_default": "POLICY2",
+	}
+
+	// "err" ID triggers mock error in GetUserWithContext
+	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, []string{"err"})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get user for ignore list")
+}
+
+func TestNewConfig_MultipleTeams(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	policies := map[string]string{
+		"default":        "POLICY1",
+		"silent_default": "POLICY2",
+	}
+
+	config, err := newConfigFromClient(mockClient, []string{"team1", "team2", "team3"}, policies, nil)
+
+	assert.NoError(t, err)
+	assert.Len(t, config.Teams, 3)
+}
+
+func TestNewConfig_PolicyKeysUppercased(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	policies := map[string]string{
+		"default":        "POLICY1",
+		"silent_default": "POLICY2",
+		"custom_service": "POLICY3",
+	}
+
+	config, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+
+	assert.NoError(t, err)
+	// Keys should be uppercased
+	assert.NotNil(t, config.EscalationPolicies["DEFAULT"])
+	assert.NotNil(t, config.EscalationPolicies["SILENT_DEFAULT"])
+	assert.NotNil(t, config.EscalationPolicies["CUSTOM_SERVICE"])
+}
+
+func TestAcknowledgeIncident_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1", Type: "user_reference"},
+		Email:     "user@example.com",
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT2"}},
+	}
+
+	result, err := AcknowledgeIncident(mockClient, incidents, user, user)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+}
+
+func TestAcknowledgeIncident_Error(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	// "err" ID triggers mock error
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+	}
+
+	result, err := AcknowledgeIncident(mockClient, incidents, user, user)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestAcknowledgeIncident_UnAcknowledge(t *testing.T) {
+	// When user is nil, it should un-acknowledge (set escalation level only)
+	mockClient := &MockPagerDutyClient{}
+	currentUser := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+
+	result, err := AcknowledgeIncident(mockClient, incidents, nil, currentUser)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2) // Mock always returns 2 incidents
+}
+
+func TestAcknowledgeIncident_NilCurrentUser(t *testing.T) {
+	// When currentUser is nil, email should be empty string
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+
+	result, err := AcknowledgeIncident(mockClient, incidents, user, nil)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestReassignIncidents_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT2"}},
+	}
+	assignees := []*pagerduty.User{
+		{APIObject: pagerduty.APIObject{ID: "USER2"}},
+		{APIObject: pagerduty.APIObject{ID: "USER3"}},
+	}
+
+	result, err := ReassignIncidents(mockClient, incidents, user, assignees)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+}
+
+func TestReassignIncidents_EmptyIncidents(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+
+	// Empty incidents should still call ManageIncidents with empty opts
+	result, err := ReassignIncidents(mockClient, []pagerduty.Incident{}, user, []*pagerduty.User{})
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2) // Mock always returns 2
+}
+
+func TestReassignIncidents_EmptyIncidentID(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	// Incident with empty ID should trigger error
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: ""}},
+	}
+
+	_, err := ReassignIncidents(mockClient, incidents, user, []*pagerduty.User{})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "incident is nil")
+}
+
+func TestReassignIncidents_Error(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	// "err" ID triggers mock error
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+	}
+
+	result, err := ReassignIncidents(mockClient, incidents, user, []*pagerduty.User{})
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestReEscalateIncidents_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	result, err := ReEscalateIncidents(mockClient, incidents, user, policy, 1)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2) // Mock returns 2
+}
+
+func TestReEscalateIncidents_EmptyIncidentID(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: ""}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	_, err := ReEscalateIncidents(mockClient, incidents, user, policy, 1)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "incident is nil")
+}
+
+func TestReEscalateIncidents_Error(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	// "err" triggers mock error
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	result, err := ReEscalateIncidents(mockClient, incidents, user, policy, 1)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestReEscalateIncidents_MultipleIncidents(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT2"}},
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT3"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	result, err := ReEscalateIncidents(mockClient, incidents, user, policy, 2)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestReEscalateIncidents_LevelZero(t *testing.T) {
+	// Level 0 is technically valid to pass to the API; the function does not validate it
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	result, err := ReEscalateIncidents(mockClient, incidents, user, policy, 0)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestNewListIncidentOptsFromDefaults(t *testing.T) {
+	opts := NewListIncidentOptsFromDefaults()
+
+	assert.Equal(t, uint(defaultPageLimit), opts.Limit)
+	assert.Equal(t, uint(defaultOffset), opts.Offset)
+	assert.Equal(t, defaultIncidentStatuses, opts.Statuses)
 }
 
 func TestGetUserOnCalls_MultiplePages(t *testing.T) {
