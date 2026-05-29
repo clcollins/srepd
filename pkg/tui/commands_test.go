@@ -800,3 +800,176 @@ func TestGetSOPLink_LinkTakesPriorityOverRunbookURL(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "https://github.com/openshift/ops-sop/blob/master/v4/alerts/primary.md", link)
 }
+
+// --- Tests for buildAlertData ---
+
+func TestBuildAlertData_NilIncident(t *testing.T) {
+	// When incident is nil and alerts/notes are empty, buildAlertData should return nil, nil
+	result, err := buildAlertData(nil, nil, nil)
+	assert.NoError(t, err)
+	assert.Nil(t, result, "nil incident with no alerts or notes should return nil data")
+}
+
+func TestBuildAlertData_NilIncidentEmptySlices(t *testing.T) {
+	// Empty (non-nil) slices with nil incident should also return nil
+	result, err := buildAlertData(nil, []pagerduty.IncidentAlert{}, []pagerduty.IncidentNote{})
+	assert.NoError(t, err)
+	assert.Nil(t, result, "nil incident with empty slices should return nil data")
+}
+
+func TestBuildAlertData_FullData(t *testing.T) {
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PD123"},
+		Title:     "Test Incident",
+	}
+	alerts := []pagerduty.IncidentAlert{
+		{APIObject: pagerduty.APIObject{ID: "ALERT1"}},
+		{APIObject: pagerduty.APIObject{ID: "ALERT2"}},
+	}
+	notes := []pagerduty.IncidentNote{
+		{ID: "NOTE1", Content: "Test note"},
+	}
+
+	result, err := buildAlertData(incident, alerts, notes)
+	assert.NoError(t, err)
+	assert.NotNil(t, result, "non-nil incident should produce non-nil data")
+
+	// Verify the result is valid base64 with no padding
+	assert.NotContains(t, string(result), "=", "should use RawStdEncoding (no padding)")
+
+	// Verify it decodes to valid JSON
+	decoded, err := base64.RawStdEncoding.DecodeString(string(result))
+	assert.NoError(t, err)
+
+	var data alertData
+	err = json.Unmarshal(decoded, &data)
+	assert.NoError(t, err)
+	assert.Equal(t, "PD123", data.Incident.ID)
+	assert.Equal(t, 2, len(data.Alerts))
+	assert.Equal(t, 1, len(data.Notes))
+}
+
+func TestBuildAlertData_RoundTrip(t *testing.T) {
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PD789"},
+		Title:     "Round Trip Test",
+	}
+	alerts := []pagerduty.IncidentAlert{
+		{APIObject: pagerduty.APIObject{ID: "ALERT_RT"}},
+	}
+	notes := []pagerduty.IncidentNote{
+		{ID: "NOTE_RT", Content: "round trip note content"},
+	}
+
+	encoded, err := buildAlertData(incident, alerts, notes)
+	assert.NoError(t, err)
+	assert.NotNil(t, encoded)
+
+	// Decode the base64
+	decoded, err := base64.RawStdEncoding.DecodeString(string(encoded))
+	assert.NoError(t, err)
+
+	// Unmarshal back to alertData
+	var data alertData
+	err = json.Unmarshal(decoded, &data)
+	assert.NoError(t, err)
+
+	// Verify round-trip fidelity
+	assert.Equal(t, incident.ID, data.Incident.ID)
+	assert.Equal(t, incident.Title, data.Incident.Title)
+	assert.Equal(t, alerts[0].ID, data.Alerts[0].ID)
+	assert.Equal(t, notes[0].ID, data.Notes[0].ID)
+	assert.Equal(t, notes[0].Content, data.Notes[0].Content)
+}
+
+func TestBuildAlertData_IncidentOnlyNoAlertsOrNotes(t *testing.T) {
+	// Incident present but no alerts or notes -- should still produce output
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PD_ONLY"},
+	}
+
+	result, err := buildAlertData(incident, nil, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	decoded, err := base64.RawStdEncoding.DecodeString(string(result))
+	assert.NoError(t, err)
+
+	var data alertData
+	err = json.Unmarshal(decoded, &data)
+	assert.NoError(t, err)
+	assert.Equal(t, "PD_ONLY", data.Incident.ID)
+	assert.Empty(t, data.Alerts)
+	assert.Empty(t, data.Notes)
+}
+
+// --- Tests for insertEnvFlagsIntoCommand ---
+
+func TestInsertEnvFlags_WithSeparator(t *testing.T) {
+	// gnome-terminal -- ocm-container --cluster-id ABC123
+	// env flags should be inserted after "ocm-container" but before "--cluster-id"
+	command := []string{"gnome-terminal", "--", "ocm-container", "--cluster-id", "ABC123"}
+	envFlags := []string{"-e", "PAGERDUTY_INCIDENT=PD123", "-e", "ALERT_DETAILS=abc"}
+
+	result := insertEnvFlagsIntoCommand(command, envFlags)
+
+	expected := []string{"gnome-terminal", "--", "ocm-container", "-e", "PAGERDUTY_INCIDENT=PD123", "-e", "ALERT_DETAILS=abc", "--cluster-id", "ABC123"}
+	assert.Equal(t, expected, result)
+}
+
+func TestInsertEnvFlags_WithoutSeparator(t *testing.T) {
+	// Direct command without terminal separator
+	// ocm-container --cluster-id ABC123
+	// env flags should be inserted after "ocm-container" (first non-flag arg after command[0])
+	command := []string{"ocm-container", "--cluster-id", "ABC123"}
+	envFlags := []string{"-e", "PAGERDUTY_INCIDENT=PD456"}
+
+	result := insertEnvFlagsIntoCommand(command, envFlags)
+
+	expected := []string{"ocm-container", "-e", "PAGERDUTY_INCIDENT=PD456", "--cluster-id", "ABC123"}
+	assert.Equal(t, expected, result)
+}
+
+func TestInsertEnvFlags_EmptyFlags(t *testing.T) {
+	// No env flags -- command should be returned unchanged
+	command := []string{"gnome-terminal", "--", "ocm-container", "--cluster-id", "ABC123"}
+
+	result := insertEnvFlagsIntoCommand(command, []string{})
+	assert.Equal(t, command, result)
+
+	result = insertEnvFlagsIntoCommand(command, nil)
+	assert.Equal(t, command, result)
+}
+
+func TestInsertEnvFlags_NoArgs(t *testing.T) {
+	// Single command element with env flags
+	command := []string{"ocm-container"}
+	envFlags := []string{"-e", "VAR=val"}
+
+	result := insertEnvFlagsIntoCommand(command, envFlags)
+
+	expected := []string{"ocm-container", "-e", "VAR=val"}
+	assert.Equal(t, expected, result)
+}
+
+func TestInsertEnvFlags_TerminalFlagsBeforeSeparator(t *testing.T) {
+	// Terminal with its own flags before the separator
+	command := []string{"gnome-terminal", "--tab", "--title", "cluster", "--", "ocm-container", "--cluster-id", "XYZ"}
+	envFlags := []string{"-e", "INCIDENT=PD999"}
+
+	result := insertEnvFlagsIntoCommand(command, envFlags)
+
+	expected := []string{"gnome-terminal", "--tab", "--title", "cluster", "--", "ocm-container", "-e", "INCIDENT=PD999", "--cluster-id", "XYZ"}
+	assert.Equal(t, expected, result)
+}
+
+func TestInsertEnvFlags_SeparatorAtEnd(t *testing.T) {
+	// Separator exists but nothing after it -- env flags appended
+	command := []string{"gnome-terminal", "--"}
+	envFlags := []string{"-e", "VAR=val"}
+
+	result := insertEnvFlagsIntoCommand(command, envFlags)
+
+	expected := []string{"gnome-terminal", "--", "-e", "VAR=val"}
+	assert.Equal(t, expected, result)
+}
