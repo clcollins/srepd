@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -173,6 +174,62 @@ func InitialModel(
 
 	return m, func() tea.Msg {
 		return errMsg{err}
+	}
+}
+
+// InitialModelWithConfig creates the initial TUI model using a pre-built pd.Config.
+// This is used by dev mode to bypass live PagerDuty API initialization.
+func InitialModelWithConfig(
+	config *pd.Config,
+	editor []string,
+	launcher launcher.ClusterLauncher,
+	debug bool,
+) (tea.Model, tea.Cmd) {
+
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
+	// Create markdown renderer once
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithWordWrap(100),
+	)
+	if err != nil {
+		log.Error("tui.InitialModelWithConfig()", "msg", "failed to create markdown renderer", "error", err)
+		renderer = nil
+	}
+
+	m := model{
+
+		editor:           editor,
+		launcher:         launcher,
+		debug:            debug,
+		help:             newHelp(),
+		table:            newTableWithStyles(),
+		actionLogTable:   newActionLogTable(),
+		actionLog:        []actionLogEntry{},
+		input:            newTextInput(),
+		incidentViewer:   newIncidentViewer(),
+		spinner:          s,
+		markdownRenderer: renderer,
+		apiInProgress:    false,
+		status:           "",
+		incidentCache:    make(map[string]*cachedIncidentData),
+		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:      true,
+		showLowUrgency:   true,
+	}
+
+	m.config = config
+
+	if config == nil {
+		m.err = fmt.Errorf("InitialModelWithConfig: config is nil")
+	}
+
+	log.Debug("InitialModelWithConfig", "config", m.config)
+
+	return m, func() tea.Msg {
+		return errMsg{m.err}
 	}
 }
 
@@ -409,7 +466,7 @@ func newIncidentViewer() viewport.Model {
 
 func newLogViewer() viewport.Model {
 	vp := viewport.New(100, 100)
-	vp.Style = incidentViewerStyle
+	// Viewport uses container border from View(), no style needed here
 	return vp
 }
 
