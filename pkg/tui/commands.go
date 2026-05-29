@@ -808,13 +808,20 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 	return fieldStr
 }
 
-// getSOPLink extracts the SOP link from the first alert that has a non-empty "link" detail field.
+// sopLinkFields lists the alert detail field names that may contain an SOP URL,
+// checked in priority order. "link" is used by most SRE alerts as a label;
+// "runbook_url" is the Prometheus/Alertmanager annotation convention.
+var sopLinkFields = []string{"link", "runbook_url"}
+
+// getSOPLink extracts the SOP link from alerts, checking multiple field names.
 // Returns the URL and true if found, or "" and false if no SOP link exists.
 func getSOPLink(alerts []pagerduty.IncidentAlert) (string, bool) {
 	for _, alert := range alerts {
-		link := getDetailFieldFromAlert("link", alert)
-		if link != "" {
-			return link, true
+		for _, field := range sopLinkFields {
+			link := getDetailFieldFromAlert(field, alert)
+			if link != "" {
+				return link, true
+			}
 		}
 	}
 	return "", false

@@ -705,3 +705,36 @@ func TestGetSOPLink_MultipleAlerts(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "https://github.com/openshift/ops-sop/blob/master/v4/alerts/second-alert.md", link)
 }
+
+func TestGetSOPLink_RunbookURL(t *testing.T) {
+	// Alert uses "runbook_url" instead of "link" (Prometheus annotation convention)
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"runbook_url": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeStateNotificationFailureSRE.md",
+				},
+			},
+		},
+	}
+	link, ok := getSOPLink(alerts)
+	assert.True(t, ok)
+	assert.Equal(t, "https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeStateNotificationFailureSRE.md", link)
+}
+
+func TestGetSOPLink_LinkTakesPriorityOverRunbookURL(t *testing.T) {
+	// Alert has both "link" and "runbook_url" - "link" should take priority
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"link":        "https://github.com/openshift/ops-sop/blob/master/v4/alerts/primary.md",
+					"runbook_url": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/fallback.md",
+				},
+			},
+		},
+	}
+	link, ok := getSOPLink(alerts)
+	assert.True(t, ok)
+	assert.Equal(t, "https://github.com/openshift/ops-sop/blob/master/v4/alerts/primary.md", link)
+}
