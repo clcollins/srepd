@@ -7,248 +7,464 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/clcollins/srepd)](https://goreportcard.com/report/github.com/clcollins/srepd)
 [![License](https://img.shields.io/github/license/clcollins/srepd)](https://github.com/clcollins/srepd/blob/main/LICENSE)
 
-A PagerDuty terminal user interface focused on common SRE tasks
+A PagerDuty terminal user interface focused on common SRE tasks.
 
-**Note: This project is still in Beta phase and there are bugs to be squashed.**
-
-Features:
+## Features
 
 * Retrieve and list incidents assigned to the current user, and their team(s)
-* Vew a summary of an incident, including alerts and notes
+* View a summary of an incident, including alerts and notes, with clickable markdown links
 * Add a note to an incident
-* Reassign incidents to a (configured) "silent" escalation policy (ie. silence the alert)
-* Acknowledge incidents
-* Resizes nicely(-ish) when the terminal is resized
-* Un-Acknowledge incidents (re-assign to the Escalation Policy)
+* Acknowledge and un-acknowledge (re-escalate) incidents with confirmation prompts
+* Silence incidents by reassigning to a configured "silent" escalation policy
+* Open SOP/runbook links directly from alerts (`s` key)
+* Open incidents in the browser (`o` key)
+* Log into clusters directly from an incident, launching a terminal window with `ocm-container` or `ocm backplane`
+* Multi-cluster selection when an incident has alerts referencing multiple clusters (keys `1`-`9`)
+* Toggle between team and individual incident views (`t` key)
+* Filter incidents by urgency -- show all or high-urgency only (`u` key)
+* Action log showing recent write actions (`ctrl+l` to toggle)
+* Auto-refresh with selection preservation across refresh cycles
+* Auto-acknowledge incidents when you are on-call
+* Rate limiting with exponential backoff for PagerDuty API calls
+* Toolbox auto-detection -- when running inside a Fedora Toolbox container, terminal commands are automatically prefixed with `flatpak-spawn --host`
+* Individual `PAGERDUTY_*` environment variables passed to terminals/ocm-container for investigation context
+* Alert normalization across 6 PagerDuty alert types (upcoming -- PR #187)
+* Multi-terminal profile auto-detection for correct argument formatting (upcoming -- PR #183)
+* Flatpak-spawn environment variable passing for toolbox workflows (upcoming -- PR #185)
+* Resizes nicely when the terminal is resized
 
-Planned Features:
+## Key Bindings
 
-* View arbitrary incidents
-* Assign incidents to any PagerDuty User ID
-* Edit incident titles
-* Merge incidents
+Press `h` to toggle the full help overlay inside srepd.
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `Down` | Move down |
+| `k` / `Up` | Move up |
+| `g` | Jump to top |
+| `G` | Jump to bottom |
+| `Enter` | View selected incident |
+| `Esc` | Go back / dismiss |
+
+### Actions
+
+| Key | Action |
+|-----|--------|
+| `a` | Acknowledge selected incident |
+| `n` | Add a note to selected incident |
+| `l` | Log into cluster (opens terminal) |
+| `o` | Open incident in browser |
+| `s` | Open SOP/runbook link from alert |
+| `ctrl+s` | Silence incident (reassign to silent escalation policy) |
+| `ctrl+e` | Re-escalate incident (un-acknowledge) |
+
+### Toggles
+
+| Key | Action |
+|-----|--------|
+| `h` | Toggle help |
+| `t` | Toggle team / individual view |
+| `r` | Manual refresh |
+| `ctrl+r` | Toggle auto-refresh |
+| `ctrl+a` | Toggle auto-acknowledge |
+| `u` | Toggle urgency filter (all / high only) |
+| `ctrl+l` | Toggle action log |
+
+### Input Mode
+
+When in input mode (`i` or `:`), the following keys are active:
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Submit input |
+| `Esc` | Cancel and go back |
+| `ctrl+q` / `ctrl+c` | Quit |
+
+### Quit
+
+| Key | Action |
+|-----|--------|
+| `ctrl+q` / `ctrl+c` | Quit srepd |
 
 ## Configuration
 
-SREPD uses the [Viper](https://github.com/spf13/viper) configuration setup, and will read required values from `~/.config/srepd/srepd.yaml`.
+SREPD uses the [Viper](https://github.com/spf13/viper) configuration setup, and reads values from `~/.config/srepd/srepd.yaml`.
 
 Configuration variables have the following precedence:
 
 `command line arguments > environment variables > config file values`
 
+Environment variables use the `SREPD_` prefix (e.g., `SREPD_TOKEN`, `SREPD_TERMINAL`).
+
+You can generate a sample config with `srepd config --create` and validate an existing config with `srepd config --validate`.
+
 ### Required Values
 
-* token: A PagerDuty Oauth Token
-* teams: A list of PagerDuty team IDs to gather incidents for
-* service_escalation_policies: A string map defining the default escalation policy, "silence" policy, and optional per-service "silence" polices. The "DEFAULT" and "SILENT_DEFAULT" keys are required. Optional keys are PagerDuty service IDs.  All values are PageDuty escalation policy IDs.
+| Key | Type | Description |
+|-----|------|-------------|
+| `token` | `string` | PagerDuty API OAuth token |
+| `teams` | `[]string` | List of PagerDuty team IDs to gather incidents for |
+| `service_escalation_policies` | `map[string]string` | Escalation policy mapping (see below) |
 
-Example service_escalation_policies configuration:
+The `service_escalation_policies` map must contain at least two keys:
 
-```text
-# In this example, the Default escalation policy in use by the team is P123456, and re-escalating alerts will be assigned to that policy.
-# Alerts that are "silenced" will be re-assigned to escalation policy P654321.
-# Any alerts for service PABC123 will be silenced by re-assigning to escalation policy PXYZ890 instead of the SILENT_DEFAULT policy.
+* `DEFAULT` -- the escalation policy used when re-escalating incidents
+* `SILENT_DEFAULT` -- the escalation policy used when silencing incidents
+
+Optional keys are PagerDuty service IDs mapped to specific escalation policy IDs, allowing per-service silence behavior:
+
+```yaml
 service_escalation_policies:
   DEFAULT: P123456
   SILENT_DEFAULT: P654321
-  PABC123: PXYZ890
+  PABC123: PXYZ890   # Service-specific silence policy
 ```
 
 ### Optional Values
 
-* ignoredusers: A list of PagerDuty user IDs to exclude from retrieved incident lists.
-* editor: Your choice of editor.  Defaults to the `$EDITOR` environment variable.
-* cluster_login_command: Command used to login to a cluster from SREPD.  Defaults to `/usr/local/bin/ocm backplane login`
-* terminal: Your choice of terminal to use when launching external commands. Defaults to `/usr/bin/gnome-terminal`.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `editor` | `string` | `$EDITOR` or `vim` | Editor for writing incident notes |
+| `terminal` | `string` | `gnome-terminal --` | Terminal emulator for cluster login |
+| `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Command to log into a cluster |
+| `ignoredusers` | `[]string` | (none) | PagerDuty user IDs to exclude from incident lists |
+| `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 
-**NOTE:** The cluster_login_command and terminal accept a variable for `%%CLUSTER_ID%%` to stand in for the Cluster ID in the command. At least one of the two, most likely `cluster_login_command` MUST have the `%%CLUSTER_ID%%` placeholder set. See [AUTOMATIC LOGIN FEATURES](#automatic-login-features) for more details about config variables.
-
-An example srepd.yaml file might look like so:
+### Example Configuration
 
 ```yaml
 ---
-# Editor will always be overridden by the ENV variable
-# unless the ENV is not set for some reason
-# type: string
-editor: vim
+token: <PagerDuty API token>
 
-# Cluster Login options
-# Note the trailing `--` is necessary for gnome-terminal and may be necessary
-# for other terminals as well
-# type: string
-terminal: /usr/bin/gnome-terminal --
-# type: string
-cluster_login_cmd: ocm-container --clusterid %%CLUSTER_ID%%
-
-# Note that aliases, etc, are not sourced by the shell command when launching.
-# This means, for example, that `ocm-container`, as normally setup using an
-# alias, does not work, but calling the command or a symlink directly does.
-
-# More complicated commands can be specified with space-separated strings
-# terminal: "flatpak run org.contourterminal.Contour"
-
-# PagerDutyOauthToken
-# type: string
-token: <pagerDuty Oauth Token>
-
-# Teams are PagerDuty team IDs to retrieve incidents
-# type: []string
 teams:
-  - <pagerDuty Team ID>
+  - <PagerDuty Team ID>
 
-# Service Escalation Policies are a map of services to escalation policies, including the required "DEFAULT" and "SILENT_DEFAULT" keys.  Optional PagerDuty Service keys and PagerDuty Escalation Policies may be defined to customize how silenced serivces are assigned.
-# type: map[string]string
 service_escalation_policies:
   DEFAULT: P123456
   SILENT_DEFAULT: P654321
   PABC123: PXYZ890
 
-# Ignore Users is a list of PagerDuty User IDs to ignore when gathering incidents
-# type: []string
 ignoredusers:
-  - <pagerDuty User ID>
-  - <pagerDuty User ID>
+  - <PagerDuty User ID>
+
+editor: vim
+
+terminal: gnome-terminal --
+cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
+
+# Toolbox mode: "auto" detects Fedora Toolbox and prefixes with flatpak-spawn --host
+# Set to "true" to force, "false" to disable
+toolbox_mode: auto
 ```
 
-## Try it out
+## Getting Started
 
-The easiest way to get started with SREPD, after adding the required config file, is to just clone this repository and run `go build -o ${GOPATH}/bin/srepd .`
+### Prerequisites
 
-## Automatic Login Configuration
+* Go 1.24.2 or later
+* A PagerDuty API token
+* A configuration file at `~/.config/srepd/srepd.yaml`
 
-To enable automatic login directly from SREPD you will need to configure the `terminal` and `cluster_login_command` settings in the srepd config file.
+### Install
 
-### Linux
+```bash
+# Clone and install
+git clone https://github.com/clcollins/srepd.git
+cd srepd
+make install
+```
 
-A typical linux configuration to launch a new terminal window may look something like what follows. Be sure to change to your preferred terminal or preferred ops environment (ocm-container, ocm-backplane session, osdctl session, etc)
+Or build a snapshot binary:
+
+```bash
+make build
+```
+
+### Run
+
+```bash
+srepd
+```
+
+Enable debug logging:
+
+```bash
+srepd --debug
+```
+
+## Terminal Support
+
+SREPD launches external terminal windows for cluster login. Each terminal has its own way of accepting commands. Configure the `terminal` value in your config file to match your terminal emulator.
+
+### Linux Terminals
 
 ```yaml
-# Gnome-Terminal
-# gnome-terminal requires the "--" separator between the terminal any any of its flags and the command to be run
-# eg: gnome-terminal -- ocm backplane login %%CLUSTER_ID%%
+# gnome-terminal (separator: --)
 terminal: gnome-terminal --
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
-Each terminal has its own way of accepting an argument for a command to run after launching. Some examples known to work:
+```yaml
+# ptyxis / GNOME Console (separator: --)
+terminal: ptyxis --
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
 
 ```yaml
-# Contour (in this example, via Flatpak)
-# contour does not require any special arguments or separators
+# konsole (flag: -e)
+terminal: konsole -e
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# kitty (direct -- no separator needed)
+terminal: kitty
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# alacritty (flag: -e)
+terminal: alacritty -e
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# wezterm (separator: --)
+terminal: wezterm start --
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# foot (direct -- no separator needed)
+terminal: foot
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# ghostty (flag: -e)
+terminal: ghostty -e
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# terminator (flag: --execute)
+terminal: terminator --execute
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+### Flatpak Terminals
+
+Terminals installed via Flatpak can be launched using the `flatpak run` prefix with the application ID:
+
+```yaml
+# Konsole via Flatpak
+terminal: flatpak run org.kde.konsole -e
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# Contour via Flatpak
 terminal: flatpak run org.contourterminal.Contour
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
 ```yaml
-# BlackBox (via Flatpak)
+# BlackBox via Flatpak
 terminal: flatpak run com.raggesilver.BlackBox --
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
+**Note:** When multi-terminal profiles land (PR #183), the terminal profile (separator style) will be auto-detected from the executable name or Flatpak app ID, so the separator/flag configuration will become optional.
+
+### tmux
+
+If you are already using tmux, you can open new tmux windows instead of launching a full terminal:
+
 ```yaml
-# Terminator
-# terminator requires the "-x" or "--execute" flag as the separator between terminal arguments and the command to be run
-terminal: terminator --execute
+terminal: tmux new-window --
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
-### MacOS
+### macOS
 
-Configuration for MacOS is not as straightforward because of the way that MacOS handles applications differently from Linux. We've provided a few separate ways to configure SREPD to handle automatic logins.
-
-#### Default MacOS terminal
-
-The following configuration will launch a new MacOS default terminal window to automatically login to a cluster. This example uses ocm-container but feel free to modify to fit your preferred workflow.
+#### Default macOS Terminal
 
 ```yaml
-# MacOS Terminal
 terminal: osascript -e
 cluster_login_command: tell application "Terminal" to do script "ocm-container -C %%CLUSTER_ID%%"
 ```
 
-#### iTerm2 Support
+#### iTerm2
 
-iTerm2 is even more special in the fact that you can't tell it to 'do script' like you can with the default Terminal on MacOS. You will need to create a separate shell script to invoke from SREPD that will then run the osascript command needed to create a new iTerm2 window/tab and call the login script.
+iTerm2 requires a wrapper script. Create a script (e.g., `~/bin/iterm2-srepd.sh`):
 
 ```bash
 #!/bin/bash
-
 osascript \
   -e 'tell application "iTerm" to tell current window to set newWindow to (create tab with default profile)' \
   -e "tell application \"iTerm\" to tell current session of newWindow to write text \"${*}\""
 ```
 
-Then, you would add the following to your srepd config:
+Then configure:
 
 ```yaml
-# iTerm2
-terminal: /Users/kbater/Projects/spikes/srepd
+terminal: ~/bin/iterm2-srepd.sh
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
-### TMUX Support
+### Toolbox Auto-Detection
 
-Alternatively to launching a whole new terminal window, if you're already using tmux you can use the following configuration to create new tmux-windows and auto-launch your environment from there:
+When running srepd inside a Fedora Toolbox container, terminal commands need to execute on the host system. SREPD detects this automatically and prefixes terminal commands with `flatpak-spawn --host`.
 
-```yaml
-# TMUX
-terminal: tmux new-window --
-cluster_login_command: ocm backplane login %%CLUSTER_ID%%
-```
+This behavior is controlled by the `toolbox_mode` config key:
 
-### Automatic Login Features
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | Auto-detect Fedora Toolbox environment |
+| `true` | Always prefix with `flatpak-spawn --host` |
+| `false` | Never prefix (even inside a toolbox) |
 
-The first feature of Automatic Login is the ability to replace certain strings with their cluster-specific details. When you pass `%%VARIABLE%%` in your `terminal` or `cluster_login_command` configuration strings they will dynamically be replaced with the alert-specific variable. This allows you to be able to put the specific details of these variables inside the command. The first argument of the `terminal` setting MUST NOT BE a replaceable value.
+## Automatic Login Features
 
-Supported Variables:
+### Variable Substitution
 
-* `%%CLUSTER_ID%%` - used to identify the cluster to log into. (SEE NOTE BELOW)
-* `%%INCIDENT_ID%%` - the PagerDuty Incident ID from which the cluster details have been taken.  You can, for example, use this to pass in compliance reasons, or to set a variable.
+When you include `%%VARIABLE%%` placeholders in your `terminal` or `cluster_login_command` configuration, they are dynamically replaced with incident-specific values at launch time.
 
-Note regarding `%%CLUSTER_ID%%`: 
+Supported variables:
 
-It's also important to note that if `%%CLUSTER_ID%%` does NOT appear in the `cluster_login_command` config setting that the cluster ID will be appended to the end of the cluster login command. If the replaceable `%%CLUSTER_ID%%` string is present in the `cluster_login_command` setting, it will NOT be appended to the end.
+| Variable | Description |
+|----------|-------------|
+| `%%CLUSTER_ID%%` | The cluster ID extracted from the incident's alerts |
+| `%%INCIDENT_ID%%` | The PagerDuty incident ID |
+
+**Note:** The first argument of the `terminal` setting must not be a replaceable value.
+
+If `%%CLUSTER_ID%%` does not appear in `cluster_login_command`, the cluster ID is appended to the end of the command automatically.
 
 Examples:
 
 ```text
-## Assume the cluster ID for these examples is `abcdefg`
+# Assume the cluster ID is "abcdefg"
 
-## effectively runs "ocm backplane login abcdefg --multi"
+# Runs: ocm backplane login abcdefg --multi
 cluster_login_command: ocm backplane login %%CLUSTER_ID%% --multi
 
-## effectively runs "ocm backplane login --multi abcdefg"
+# Runs: ocm backplane login --multi abcdefg  (auto-appended)
 cluster_login_command: ocm backplane login --multi
 
-## Logs into the cluster and sets the INCIDENT_ID env variable in ocm-container to the PagerDuty Incident ID
-cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID --launch-opts --env=INCIDENT_ID=%%INCIDENT_ID%%
+# Runs: ocm-container --cluster-id abcdefg --launch-opts --env=INCIDENT_ID=Q1ABC23
+cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%% --launch-opts --env=INCIDENT_ID=%%INCIDENT_ID%%
 ```
 
-### Automatic PagerDuty Environment Variables
+### Multi-Cluster Selection
 
-When using `ocm-container` as your cluster login command, srepd automatically passes PagerDuty incident and alert information as environment variables to the container. This allows you to access incident details and alert data from within the ocm-container session without manual configuration.
+When an incident has alerts referencing multiple clusters, srepd prompts you to choose which cluster to log into. Press the number key (`1`-`9`) corresponding to the cluster in the selection list.
 
-The following environment variables are automatically set:
+## Environment Variables
 
-* `PAGERDUTY_INCIDENT` - The PagerDuty incident ID
-* `ALERT_DETAILS` - Base64-encoded JSON containing the full incident object, all associated alerts, and incident notes
+When using `ocm-container` as your cluster login command, srepd automatically passes PagerDuty incident and alert information as individual environment variables to the container. This allows you to access incident context from within the ocm-container session without manual configuration.
+
+The following environment variables are set:
+
+| Variable | Description |
+|----------|-------------|
+| `PAGERDUTY_INCIDENT_ID` | PagerDuty incident ID |
+| `PAGERDUTY_INCIDENT_TITLE` | Incident title (sanitized for shell safety) |
+| `PAGERDUTY_INCIDENT_URL` | Direct link to the incident in PagerDuty |
+| `PAGERDUTY_INCIDENT_SERVICE` | PagerDuty service name for the incident |
+| `PAGERDUTY_INCIDENT_URGENCY` | Incident urgency (`high` or `low`) |
+| `PAGERDUTY_INCIDENT_STATUS` | Incident status (`triggered`, `acknowledged`, `resolved`) |
+| `PAGERDUTY_CLUSTER_ID` | The selected cluster ID |
+| `PAGERDUTY_ALERT_COUNT` | Number of alerts matching the selected cluster |
+| `PAGERDUTY_ALERT_NAMES` | Comma-separated alert names for the selected cluster |
+| `PAGERDUTY_ALERT_LINKS` | Comma-separated SOP/runbook links from alerts |
+| `PAGERDUTY_NOTES_EXIST` | `true` or `false` -- whether the incident has notes |
+| `PAGERDUTY_NOTE_COUNT` | Number of notes on the incident |
+| `REASON` | Set to the incident URL (for compliance/audit integration) |
 
 Example usage inside ocm-container:
 
 ```bash
-# View the incident ID
-echo $PAGERDUTY_INCIDENT
+# View incident context
+echo "Incident: $PAGERDUTY_INCIDENT_ID"
+echo "Title: $PAGERDUTY_INCIDENT_TITLE"
+echo "Cluster: $PAGERDUTY_CLUSTER_ID"
+echo "Alerts: $PAGERDUTY_ALERT_NAMES"
 
-# Decode and view the full alert details
-echo $ALERT_DETAILS | base64 -d | jq .
+# Check if notes exist before fetching
+if [ "$PAGERDUTY_NOTES_EXIST" = "true" ]; then
+  echo "$PAGERDUTY_NOTE_COUNT notes on this incident"
+fi
 
-# Extract specific alert information
-echo $ALERT_DETAILS | base64 -d | jq '.alerts[0].body.details.cluster_id'
-
-# View incident notes
-echo $ALERT_DETAILS | base64 -d | jq '.notes'
+# Use REASON for compliance tracking
+echo "REASON: $REASON"
 ```
 
-**Note:** The `ALERT_DETAILS` variable uses standard base64 encoding without padding to avoid parsing issues with `=` characters in ocm-container's env var handling.
+These environment variables are automatically set when you use the login feature (press `l` on an incident). Only alerts matching the selected cluster are included in the alert-related variables. No additional configuration is required.
 
-These environment variables are automatically added when you use the login feature (press `l` on an incident). No additional configuration is required.
+**Note:** Values containing characters that could cause shell issues (newlines, quotes, etc.) are sanitized automatically.
+
+## Build and Development
+
+### Requirements
+
+* Go 1.24.2 or later
+* GNU Make
+
+### Make Targets
+
+| Command | Purpose |
+|---------|---------|
+| `make build` | Build via goreleaser snapshot |
+| `make install` | Install to `$GOPATH/bin` |
+| `make install-local` | Build and install to `~/.local/bin` |
+| `make run` | Run the application locally |
+| `make test` | Run unit tests (`go test ./...`) |
+| `make lint` | Run golangci-lint |
+| `make vet` | Run `go vet ./...` |
+| `make fmt` | Format code with `gofmt -s` |
+| `make fmt-check` | Check formatting (CI-friendly, exits non-zero on diff) |
+| `make coverage` | Generate test coverage report |
+| `make tidy` | Run `go mod tidy` |
+| `make clean` | Remove build artifacts |
+| `make test-all` | Run all checks: `fmt-check`, `vet`, `lint`, `test` |
+| `make plan-check` | Verify a plan document exists for the branch |
+| `make release` | Create a release using goreleaser |
+| `make help` | Show all available targets |
+
+Pass extra test flags via `TESTOPTS`:
+
+```bash
+make test TESTOPTS="-run TestFoo"
+```
+
+### PR Workflow
+
+1. Create a feature branch: `srepd/<description>`
+2. Write failing tests (TDD)
+3. Implement minimum code to pass tests
+4. Create a plan document in `docs/plans/`
+5. Run `make test-all` locally
+6. Push and create PR against `main`
+
+Every PR must include a plan document in `docs/plans/` and pass all CI checks (`make test-all` and `make plan-check`).
+
+## Architecture
+
+SREPD is built with the [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework using the Model-View-Update (MVU) pattern.
+
+| Package | Purpose |
+|---------|---------|
+| `cmd/` | CLI entry point and config validation (Cobra) |
+| `pkg/tui/` | TUI model, update loop, views, key bindings |
+| `pkg/pd/` | PagerDuty API wrapper and mock client |
+| `pkg/launcher/` | Terminal command builder with variable substitution |
+| `pkg/container/` | Container/toolbox environment detection |
+
+All PagerDuty API calls run as `tea.Cmd` closures returning `tea.Msg` values. The update loop is single-threaded. The PagerDuty client is abstracted behind `PagerDutyClientInterface` for testability.
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
