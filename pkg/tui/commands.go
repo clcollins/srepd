@@ -497,76 +497,106 @@ func buildPagerDutyEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inci
 	return envFlags
 }
 
-func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
+// commandContainsOCMContainer returns true if any element of the command
+// slice contains "ocm-container", indicating this is an ocm-container flow
+// where -e flags should be passed directly as container arguments.
+func commandContainsOCMContainer(command []string) bool {
+	for _, arg := range command {
+		if strings.Contains(arg, "ocm-container") {
+			return true
+		}
+	}
+	return false
+}
+
+// insertOCMContainerEnvFlags inserts -e env flags into a command at the
+// correct position for ocm-container: after the ocm-container command itself
+// but before its other arguments (like --cluster-id).
+func insertOCMContainerEnvFlags(command []string, envFlags []string) []string {
+	if len(envFlags) == 0 {
+		return command
+	}
+
+	// Find the ocm-container argument in the command slice
+	ocmIdx := -1
+	for i, arg := range command {
+		if strings.Contains(arg, "ocm-container") {
+			ocmIdx = i
+			break
+		}
+	}
+
+	log.Debug("tui.insertOCMContainerEnvFlags()", "ocmIdx", ocmIdx, "commandLen", len(command))
+
+	if ocmIdx < 0 {
+		// No ocm-container found; return command unchanged
+		return command
+	}
+
+	// Insert env flags right after the ocm-container argument
+	insertIdx := ocmIdx + 1
+	result := make([]string, 0, len(command)+len(envFlags))
+	result = append(result, command[:insertIdx]...)
+	result = append(result, envFlags...)
+	result = append(result, command[insertIdx:]...)
+
+	return result
+}
+
+// extractEnvVarPairs extracts "KEY=VALUE" strings from a slice of
+// ["-e", "KEY=VALUE", "-e", "KEY2=VALUE2", ...] pairs. It skips the "-e"
+// elements and returns only the environment variable assignments, suitable
+// for setting on exec.Cmd.Env.
+func extractEnvVarPairs(envFlags []string) []string {
+	var pairs []string
+	for i := 0; i < len(envFlags)-1; i += 2 {
+		if envFlags[i] == "-e" {
+			pairs = append(pairs, envFlags[i+1])
+		}
+	}
+	return pairs
+}
+
+func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
 	// The first element of Terminal is the command to be executed, followed by args, in order
 	// This handles if folks use, eg: flatpak run <some package> as a terminal.
-	command := launcher.BuildLoginCommand(vars)
+	command := l.BuildLoginCommand(vars)
 
 	// Build individual PAGERDUTY_* environment variables filtered to the selected cluster
 	clusterID := vars["%%CLUSTER_ID%%"]
 	envFlags := buildPagerDutyEnvVars(incident, alerts, notes, clusterID)
 
-	// Insert env flags into command
-	// We need to find the position after any terminal separator (like "--") but before ocm-container
-	// Typical command structure: ["gnome-terminal", "--", "ocm-container", "--cluster-id", "ABC123"]
-	// We want: ["gnome-terminal", "--", "ocm-container", "-e", "VAR=val", "--cluster-id", "ABC123"]
+	// Determine the correct env var passing mechanism based on the command flow:
+	// 1. ocm-container flow: use -e flags (they become podman -e flags)
+	// 2. Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
+	// 3. Non-ocm-container, not in toolbox: set on exec.Cmd.Env
 
-	finalCommand := []string{}
-	separatorFound := false
-	insertPosition := -1
+	var finalCommand []string
+	var processEnvVars []string // Only used for the exec.Cmd.Env case
 
-	// Find the position right after "--" separator or at the start of the actual command
-	for i, arg := range command {
-		if arg == "--" {
-			separatorFound = true
-			insertPosition = i + 1
-			break
-		}
-	}
-
-	// If no separator found, look for the actual command (ocm-container, ocm, etc)
-	if !separatorFound {
-		for i, arg := range command {
-			// Skip the first element (terminal command) and find the first non-flag argument
-			if i > 0 && !strings.HasPrefix(arg, "-") {
-				insertPosition = i
-				break
-			}
-		}
-	}
-
-	// Build the final command
-	log.Debug("tui.login(): building final command", "insertPosition", insertPosition, "separatorFound", separatorFound, "commandLen", len(command))
-
-	if insertPosition > 0 && len(envFlags) > 0 {
-		// Insert env flags at the correct position
-		finalCommand = append(finalCommand, command[:insertPosition]...)
-		log.Debug("tui.login(): added prefix", "finalCommand", finalCommand)
-
-		// Check if the next argument is the actual command (like "ocm-container")
-		// If so, add it first, then the env flags
-		if insertPosition < len(command) && !strings.HasPrefix(command[insertPosition], "-") {
-			log.Debug("tui.login(): found command at insertPosition", "command", command[insertPosition])
-			finalCommand = append(finalCommand, command[insertPosition])
-			finalCommand = append(finalCommand, envFlags...)
-			log.Debug("tui.login(): added command and env flags", "finalCommand", finalCommand)
-			if insertPosition+1 < len(command) {
-				finalCommand = append(finalCommand, command[insertPosition+1:]...)
-				log.Debug("tui.login(): added remaining args", "finalCommand", finalCommand)
-			}
-		} else {
-			// Otherwise just insert the env flags here
-			log.Debug("tui.login(): inserting env flags directly")
-			finalCommand = append(finalCommand, envFlags...)
-			finalCommand = append(finalCommand, command[insertPosition:]...)
-		}
+	if commandContainsOCMContainer(command) {
+		// ocm-container flow: insert -e flags into the command for ocm-container
+		finalCommand = insertOCMContainerEnvFlags(command, envFlags)
+		log.Debug("tui.login(): ocm-container flow", "finalCommand", finalCommand)
+	} else if l.IsToolbox() {
+		// Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
+		// so that the host process launched via flatpak-spawn inherits them
+		toolboxFlags := l.ToolboxEnvFlags(envFlags)
+		finalCommand = launcher.InsertToolboxEnvFlags(command, toolboxFlags)
+		log.Debug("tui.login(): toolbox non-ocm-container flow", "toolboxFlags", toolboxFlags, "finalCommand", finalCommand)
 	} else {
-		// No separator found or no env flags, use command as-is
-		log.Debug("tui.login(): using command as-is", "insertPosition", insertPosition, "envFlagsLen", len(envFlags))
+		// Non-ocm-container, not in toolbox: set env vars on the process directly
 		finalCommand = command
+		processEnvVars = extractEnvVarPairs(envFlags)
+		log.Debug("tui.login(): direct process env flow", "processEnvVars", processEnvVars, "finalCommand", finalCommand)
 	}
 
 	c := exec.Command(finalCommand[0], finalCommand[1:]...)
+
+	// For the non-ocm-container, non-toolbox case, set env vars on the process
+	if len(processEnvVars) > 0 {
+		c.Env = append(os.Environ(), processEnvVars...)
+	}
 
 	log.Debug("tui.login(): original command", "command", command)
 	log.Debug("tui.login(): env flags", "envFlags", envFlags)

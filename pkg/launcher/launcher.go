@@ -74,6 +74,62 @@ func resolveToolboxMode(mode string, detectFn func() bool) bool {
 	}
 }
 
+// IsToolbox returns whether this launcher is configured to run inside a
+// Fedora Toolbox container, meaning commands are prefixed with flatpak-spawn.
+func (l *ClusterLauncher) IsToolbox() bool {
+	return l.runInToolbox
+}
+
+// ToolboxEnvFlags converts a slice of "-e", "VAR=VALUE" pairs (the format
+// produced by buildPagerDutyEnvVars) into "--env=VAR=VALUE" flags suitable
+// for flatpak-spawn. Returns nil if the launcher is not in toolbox mode,
+// or if envFlags is nil/empty.
+func (l *ClusterLauncher) ToolboxEnvFlags(envFlags []string) []string {
+	if !l.runInToolbox {
+		return nil
+	}
+	if len(envFlags) == 0 {
+		return nil
+	}
+
+	var toolboxFlags []string
+	for i := 0; i < len(envFlags)-1; i += 2 {
+		if envFlags[i] == "-e" {
+			toolboxFlags = append(toolboxFlags, fmt.Sprintf("--env=%s", envFlags[i+1]))
+		}
+	}
+	return toolboxFlags
+}
+
+// InsertToolboxEnvFlags inserts --env= flags into a command slice at the
+// correct position for flatpak-spawn: after "flatpak-spawn" and "--host"
+// but before the terminal command. Returns the original command if no
+// flatpak-spawn is found or toolboxFlags is empty.
+func InsertToolboxEnvFlags(command []string, toolboxFlags []string) []string {
+	if len(toolboxFlags) == 0 {
+		return command
+	}
+
+	// Find the insertion point: right after "--host" in the flatpak-spawn prefix
+	insertIdx := -1
+	for i, arg := range command {
+		if arg == "--host" {
+			insertIdx = i + 1
+			break
+		}
+	}
+
+	if insertIdx < 0 || insertIdx > len(command) {
+		return command
+	}
+
+	result := make([]string, 0, len(command)+len(toolboxFlags))
+	result = append(result, command[:insertIdx]...)
+	result = append(result, toolboxFlags...)
+	result = append(result, command[insertIdx:]...)
+	return result
+}
+
 func (l *ClusterLauncher) validate() error {
 	errs := []error{}
 

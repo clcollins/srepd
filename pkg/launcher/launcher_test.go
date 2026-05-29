@@ -117,6 +117,105 @@ func TestBuildLoginCommand_ToolboxWrappingWithTmux(t *testing.T) {
 	assert.Equal(t, expected, cmd, "toolbox wrapping should work with tmux terminal commands")
 }
 
+func TestIsToolbox(t *testing.T) {
+	tests := []struct {
+		name     string
+		toolbox  bool
+		expected bool
+	}{
+		{"toolbox mode on", true, true},
+		{"toolbox mode off", false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := ClusterLauncher{
+				terminal:            []string{"gnome-terminal", "--"},
+				clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+				runInToolbox:        tt.toolbox,
+			}
+			assert.Equal(t, tt.expected, l.IsToolbox())
+		})
+	}
+}
+
+func TestToolboxEnvFlags_AddsEnvFlags(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        true,
+	}
+	envFlags := []string{"-e", "KEY1=val1", "-e", "KEY2=val2"}
+	result := l.ToolboxEnvFlags(envFlags)
+	expected := []string{"--env=KEY1=val1", "--env=KEY2=val2"}
+	assert.Equal(t, expected, result)
+}
+
+func TestToolboxEnvFlags_NoFlagsWhenNotToolbox(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        false,
+	}
+	envFlags := []string{"-e", "KEY1=val1", "-e", "KEY2=val2"}
+	result := l.ToolboxEnvFlags(envFlags)
+	assert.Nil(t, result)
+}
+
+func TestToolboxEnvFlags_EmptyEnvFlags(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        true,
+	}
+	result := l.ToolboxEnvFlags([]string{})
+	assert.Nil(t, result)
+}
+
+func TestToolboxEnvFlags_NilEnvFlags(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        true,
+	}
+	result := l.ToolboxEnvFlags(nil)
+	assert.Nil(t, result)
+}
+
+func TestToolboxEnvFlags_OddLengthEnvFlags(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		runInToolbox:        true,
+	}
+	// Odd-length slice: trailing "-e" without a value should be ignored
+	envFlags := []string{"-e", "KEY1=val1", "-e"}
+	result := l.ToolboxEnvFlags(envFlags)
+	expected := []string{"--env=KEY1=val1"}
+	assert.Equal(t, expected, result)
+}
+
+func TestInsertToolboxEnvFlags_PositionAfterFlatpakSpawn(t *testing.T) {
+	command := []string{"flatpak-spawn", "--host", "gnome-terminal", "--", "ocm", "backplane", "login", "abc123"}
+	toolboxFlags := []string{"--env=KEY1=val1", "--env=KEY2=val2"}
+	result := InsertToolboxEnvFlags(command, toolboxFlags)
+	expected := []string{"flatpak-spawn", "--host", "--env=KEY1=val1", "--env=KEY2=val2", "gnome-terminal", "--", "ocm", "backplane", "login", "abc123"}
+	assert.Equal(t, expected, result)
+}
+
+func TestInsertToolboxEnvFlags_EmptyFlags(t *testing.T) {
+	command := []string{"flatpak-spawn", "--host", "gnome-terminal", "--", "ocm", "backplane", "login"}
+	result := InsertToolboxEnvFlags(command, []string{})
+	assert.Equal(t, command, result)
+}
+
+func TestInsertToolboxEnvFlags_NoFlatpakSpawn(t *testing.T) {
+	// No --host in command; should return command unchanged
+	command := []string{"gnome-terminal", "--", "ocm-container", "-C", "abc123"}
+	toolboxFlags := []string{"--env=KEY=val"}
+	result := InsertToolboxEnvFlags(command, toolboxFlags)
+	assert.Equal(t, command, result)
+}
+
 func TestClusterLauncherValidation(t *testing.T) {
 	tests := []struct {
 		name            string
