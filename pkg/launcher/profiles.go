@@ -1,0 +1,206 @@
+package launcher
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+)
+
+// TerminalProfile defines how a terminal emulator expects to receive
+// the command it should execute.
+type TerminalProfile interface {
+	// Name returns a human-readable name for this profile.
+	Name() string
+
+	// BuildCommand constructs the full exec argument slice by combining
+	// the terminal's own arguments with the login command according to
+	// the terminal's expected syntax.
+	BuildCommand(terminalArgs []string, loginCmd []string) ([]string, error)
+}
+
+// SeparatorProfile is used by terminals that expect a "--" separator
+// between their own flags and the executed command (gnome-terminal,
+// ptyxis, wezterm, BlackBox, tmux).
+type SeparatorProfile struct {
+	terminalName string
+}
+
+func (p *SeparatorProfile) Name() string {
+	return fmt.Sprintf("separator (%s)", p.terminalName)
+}
+
+func (p *SeparatorProfile) BuildCommand(terminalArgs []string, loginCmd []string) ([]string, error) {
+	if len(terminalArgs) == 0 {
+		return nil, fmt.Errorf("terminal args must not be empty")
+	}
+	if len(loginCmd) == 0 {
+		return nil, fmt.Errorf("login command must not be empty")
+	}
+
+	cmd := make([]string, 0, len(terminalArgs)+1+len(loginCmd))
+	cmd = append(cmd, terminalArgs...)
+	cmd = append(cmd, "--")
+	cmd = append(cmd, loginCmd...)
+	return cmd, nil
+}
+
+// FlagProfile is used by terminals that require a specific flag before
+// the executed command (konsole -e, alacritty -e, terminator --execute).
+type FlagProfile struct {
+	terminalName string
+	flag         string
+}
+
+func (p *FlagProfile) Name() string {
+	return fmt.Sprintf("flag[%s] (%s)", p.flag, p.terminalName)
+}
+
+func (p *FlagProfile) BuildCommand(terminalArgs []string, loginCmd []string) ([]string, error) {
+	if len(terminalArgs) == 0 {
+		return nil, fmt.Errorf("terminal args must not be empty")
+	}
+	if len(loginCmd) == 0 {
+		return nil, fmt.Errorf("login command must not be empty")
+	}
+
+	cmd := make([]string, 0, len(terminalArgs)+1+len(loginCmd))
+	cmd = append(cmd, terminalArgs...)
+	cmd = append(cmd, p.flag)
+	cmd = append(cmd, loginCmd...)
+	return cmd, nil
+}
+
+// DirectProfile is used by terminals where the executed command follows
+// terminal flags directly with no separator (kitty, foot, Contour).
+type DirectProfile struct {
+	terminalName string
+}
+
+func (p *DirectProfile) Name() string {
+	return fmt.Sprintf("direct (%s)", p.terminalName)
+}
+
+func (p *DirectProfile) BuildCommand(terminalArgs []string, loginCmd []string) ([]string, error) {
+	if len(terminalArgs) == 0 {
+		return nil, fmt.Errorf("terminal args must not be empty")
+	}
+	if len(loginCmd) == 0 {
+		return nil, fmt.Errorf("login command must not be empty")
+	}
+
+	cmd := make([]string, 0, len(terminalArgs)+len(loginCmd))
+	cmd = append(cmd, terminalArgs...)
+	cmd = append(cmd, loginCmd...)
+	return cmd, nil
+}
+
+// GenericProfile is the fallback that preserves the original launcher
+// behavior: terminal args and login command are simply concatenated.
+type GenericProfile struct{}
+
+func (p *GenericProfile) Name() string {
+	return "generic"
+}
+
+func (p *GenericProfile) BuildCommand(terminalArgs []string, loginCmd []string) ([]string, error) {
+	if len(terminalArgs) == 0 {
+		return nil, fmt.Errorf("terminal args must not be empty")
+	}
+	if len(loginCmd) == 0 {
+		return nil, fmt.Errorf("login command must not be empty")
+	}
+
+	cmd := make([]string, 0, len(terminalArgs)+len(loginCmd))
+	cmd = append(cmd, terminalArgs...)
+	cmd = append(cmd, loginCmd...)
+	return cmd, nil
+}
+
+// separatorTerminals maps executable names to their profile category.
+var separatorTerminals = map[string]bool{
+	"gnome-terminal": true,
+	"ptyxis":         true,
+	"wezterm":        true,
+	"blackbox":       true,
+	"tmux":           true,
+}
+
+// flagTerminals maps executable names to the flag they use.
+var flagTerminals = map[string]string{
+	"konsole":    "-e",
+	"alacritty":  "-e",
+	"terminator": "--execute",
+}
+
+// directTerminals maps executable names to their profile category.
+var directTerminals = map[string]bool{
+	"kitty":   true,
+	"foot":    true,
+	"contour": true,
+}
+
+// flatpakAppTerminals maps Flatpak application IDs to executable names
+// so that detection works for flatpak-launched terminals.
+var flatpakAppTerminals = map[string]string{
+	"org.gnome.Terminal":          "gnome-terminal",
+	"org.gnome.Ptyxis":            "ptyxis",
+	"org.wezfurlong.wezterm":      "wezterm",
+	"com.raggesilver.BlackBox":    "blackbox",
+	"org.kde.konsole":             "konsole",
+	"org.codeberg.dnkl.foot":      "foot",
+	"net.kovidgoyal.kitty":        "kitty",
+	"io.github.AtomsDevs.Contour": "contour",
+}
+
+// DetectTerminalProfile inspects the terminal command string and returns
+// the appropriate TerminalProfile. It checks the base executable name
+// first, then checks for Flatpak app IDs. Unknown terminals get the
+// GenericProfile fallback.
+func DetectTerminalProfile(terminalCmd string) TerminalProfile {
+	if terminalCmd == "" {
+		return &GenericProfile{}
+	}
+
+	parts := strings.Fields(terminalCmd)
+	if len(parts) == 0 {
+		return &GenericProfile{}
+	}
+
+	// Extract the executable name (basename, no path).
+	execName := filepath.Base(parts[0])
+
+	// For flatpak commands, try to find the app ID in the arguments.
+	if execName == "flatpak" || execName == "flatpak-spawn" {
+		resolvedName := resolveFlatpakTerminal(parts)
+		if resolvedName != "" {
+			execName = resolvedName
+		}
+	}
+
+	return profileForExecName(execName)
+}
+
+// resolveFlatpakTerminal scans the argument list for a known Flatpak
+// application ID and returns the corresponding executable name.
+func resolveFlatpakTerminal(parts []string) string {
+	for _, arg := range parts {
+		if mapped, ok := flatpakAppTerminals[arg]; ok {
+			return mapped
+		}
+	}
+	return ""
+}
+
+// profileForExecName returns the correct profile for a given executable name.
+func profileForExecName(execName string) TerminalProfile {
+	if separatorTerminals[execName] {
+		return &SeparatorProfile{terminalName: execName}
+	}
+	if flag, ok := flagTerminals[execName]; ok {
+		return &FlagProfile{terminalName: execName, flag: flag}
+	}
+	if directTerminals[execName] {
+		return &DirectProfile{terminalName: execName}
+	}
+	return &GenericProfile{}
+}
