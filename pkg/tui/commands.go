@@ -422,11 +422,52 @@ type loginFinishedMsg struct {
 	err error
 }
 
+// maxAlertDataSize is the maximum size in bytes for encoded alert data passed
+// as a command-line argument. 100KB avoids "argument list too long" errors.
+const maxAlertDataSize = 100 * 1024
+
 // alertData contains the data we want to pass to ocm-container about alerts
 type alertData struct {
 	Incident *pagerduty.Incident       `json:"incident"`
 	Alerts   []pagerduty.IncidentAlert `json:"alerts"`
 	Notes    []pagerduty.IncidentNote  `json:"notes"`
+}
+
+// compactAlertSummary contains only essential fields from a PagerDuty alert.
+type compactAlertSummary struct {
+	ID        string `json:"id"`
+	AlertName string `json:"alert_name"`
+	ClusterID string `json:"cluster_id"`
+	Link      string `json:"link"`
+	Status    string `json:"status"`
+	HTMLURL   string `json:"html_url"`
+}
+
+// compactAlertData uses compact summaries instead of full alert objects.
+type compactAlertData struct {
+	Incident *pagerduty.Incident      `json:"incident"`
+	Alerts   []compactAlertSummary    `json:"alerts"`
+	Notes    []pagerduty.IncidentNote `json:"notes"`
+	Compact  bool                     `json:"compact"`
+}
+
+// compactAlerts extracts essential fields from full alerts.
+func compactAlerts(alerts []pagerduty.IncidentAlert) []compactAlertSummary {
+	if len(alerts) == 0 {
+		return nil
+	}
+	summaries := make([]compactAlertSummary, len(alerts))
+	for i, a := range alerts {
+		summaries[i] = compactAlertSummary{
+			ID:        a.ID,
+			AlertName: getDetailFieldFromAlert("alert_name", a),
+			ClusterID: getDetailFieldFromAlert("cluster_id", a),
+			Link:      getDetailFieldFromAlert("link", a),
+			Status:    a.Status,
+			HTMLURL:   a.HTMLURL,
+		}
+	}
+	return summaries
 }
 
 func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
@@ -455,9 +496,26 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 			log.Warn("tui.login(): failed to marshal alert data", "error", err)
 		} else {
 			// Use RawStdEncoding: standard base64 alphabet (+/) without padding (no = characters)
-			// No padding avoids issues with ocm-container's env var parsing which splits on =
-			// Standard alphabet ensures `echo $ALERT_DETAILS | base64 -d` works in the container
 			encoded := base64.RawStdEncoding.EncodeToString(jsonData)
+
+			// If full encoding exceeds size limit, fall back to compact mode
+			if len(encoded) >= maxAlertDataSize {
+				log.Warn("tui.login(): full alert data exceeds size limit, using compact mode",
+					"full_size", len(encoded), "max_size", maxAlertDataSize, "alert_count", len(alerts))
+				compact := compactAlertData{
+					Incident: incident,
+					Alerts:   compactAlerts(alerts),
+					Notes:    notes,
+					Compact:  true,
+				}
+				compactJSON, err := json.Marshal(compact)
+				if err != nil {
+					log.Warn("tui.login(): failed to marshal compact alert data", "error", err)
+				} else {
+					encoded = base64.RawStdEncoding.EncodeToString(compactJSON)
+				}
+			}
+
 			envFlags = append(envFlags, "-e", fmt.Sprintf("ALERT_DETAILS=%s", encoded))
 		}
 	}

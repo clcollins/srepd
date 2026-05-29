@@ -967,3 +967,41 @@ func TestGetUniqueClusters_MixedWithAndWithoutClusterID(t *testing.T) {
 	result := getUniqueClusters(alerts)
 	assert.Equal(t, []string{"cluster-abc-123", "cluster-def-456"}, result)
 }
+
+func TestCompactAlerts_ExtractsEssentialFields(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{
+		{
+			APIObject: pagerduty.APIObject{ID: "ALERT1", HTMLURL: "https://pd.com/alerts/ALERT1"},
+			Status:    "triggered",
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "abc-123",
+					"alert_name": "ClusterOperatorDown",
+					"link":       "https://github.com/openshift/ops-sop/blob/master/v4/alerts/COD.md",
+				},
+			},
+		},
+	}
+	result := compactAlerts(alerts)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "ALERT1", result[0].ID)
+	assert.Equal(t, "ClusterOperatorDown", result[0].AlertName)
+	assert.Equal(t, "abc-123", result[0].ClusterID)
+	assert.Equal(t, "triggered", result[0].Status)
+}
+
+func TestCompactAlerts_EmptyAlerts(t *testing.T) {
+	assert.Empty(t, compactAlerts(nil))
+	assert.Empty(t, compactAlerts([]pagerduty.IncidentAlert{}))
+}
+
+func TestCompactAlerts_MissingBodyFields(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{
+		{APIObject: pagerduty.APIObject{ID: "A1"}, Status: "triggered", Body: nil},
+	}
+	result := compactAlerts(alerts)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "A1", result[0].ID)
+	assert.Equal(t, "", result[0].AlertName)
+	assert.Equal(t, "", result[0].ClusterID)
+}
