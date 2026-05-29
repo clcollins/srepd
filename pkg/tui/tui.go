@@ -498,7 +498,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Re-sync selectedIncident to match highlighted row
 		// This handles cases where the incident list changed but cursor position stayed same
-		m.syncSelectedIncidentToHighlightedRow()
+		if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 
 	case parseTemplateForNoteMsg:
 		if m.selectedIncident == nil {

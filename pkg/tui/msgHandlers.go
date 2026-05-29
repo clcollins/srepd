@@ -327,19 +327,27 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Up):
 			m.table.MoveUp(1)
-			m.syncSelectedIncidentToHighlightedRow()
+			if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 
 		case key.Matches(msg, defaultKeyMap.Down):
 			m.table.MoveDown(1)
-			m.syncSelectedIncidentToHighlightedRow()
+			if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 
 		case key.Matches(msg, defaultKeyMap.Top):
 			m.table.GotoTop()
-			m.syncSelectedIncidentToHighlightedRow()
+			if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 
 		case key.Matches(msg, defaultKeyMap.Bottom):
 			m.table.GotoBottom()
-			m.syncSelectedIncidentToHighlightedRow()
+			if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 
 		case key.Matches(msg, defaultKeyMap.Team):
 			m.teamMode = !m.teamMode
@@ -581,10 +589,10 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// This un-sets the selected incident and returns to the table view
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.clearSelectedIncident(msg.String() + " (back)")
-			m.table.Focus()                          // Ensure table regains focus immediately
-			m.syncSelectedIncidentToHighlightedRow() // Re-establish selection to current cursor position
+			m.table.Focus()                                        // Ensure table regains focus immediately
+			prefetchCmd := m.syncSelectedIncidentToHighlightedRow() // Re-establish selection to current cursor position
 			// Return immediately - no need to process anything else or update viewport
-			return m, nil
+			return m, prefetchCmd
 
 		case key.Matches(msg, defaultKeyMap.Refresh):
 			return m, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) }
