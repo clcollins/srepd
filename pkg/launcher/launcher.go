@@ -24,8 +24,29 @@ type launcherSettings struct {
 
 func NewClusterLauncher(terminal string, clusterLoginCommand string) (ClusterLauncher, error) {
 
+	// Feature 2: Warn on redundant "flatpak run" prefix when the user
+	// could simplify to just the app ID.
+	if appID, redundant := detectRedundantFlatpakPrefix(terminal); redundant {
+		log.Warn("launcher: terminal config includes 'flatpak run' prefix; you can simplify to just the app ID", "terminal", terminal, "suggestion", appID)
+	}
+
+	// Feature 1: If the terminal string is a bare Flatpak app ID
+	// (e.g., "org.kde.konsole"), prepend "flatpak run" so the command
+	// actually launches the Flatpak application.
+	terminalForExec := terminal
+	parts := strings.Fields(terminal)
+	if len(parts) > 0 && isFlatpakAppID(parts[0]) {
+		terminalForExec = "flatpak run " + terminal
+		log.Debug("launcher: detected Flatpak app ID, prepending 'flatpak run'", "original", terminal, "resolved", terminalForExec)
+	}
+
+	// Feature 3: Validate that the terminal command exists on the system.
+	if warning := validateTerminalExists(terminal); warning != "" {
+		log.Warn("launcher: terminal command not found in PATH; cluster login may fail", "terminal", terminal, "detail", warning)
+	}
+
 	launcher := ClusterLauncher{
-		terminal:            strings.Split(terminal, " "),
+		terminal:            strings.Split(terminalForExec, " "),
 		clusterLoginCommand: strings.Split(clusterLoginCommand, " "),
 		profile:             DetectTerminalProfile(terminal),
 		settings:            launcherSettings{},
