@@ -1068,6 +1068,43 @@ func TestGetUniqueClusters_NilAlerts(t *testing.T) {
 	assert.Empty(t, result)
 }
 
+func TestStateShorthand_Triggered(t *testing.T) {
+	// Incident with no acknowledgements should return dot
+	incident := pagerduty.Incident{
+		APIObject:        pagerduty.APIObject{ID: "INC001"},
+		Acknowledgements: []pagerduty.Acknowledgement{},
+	}
+
+	result := stateShorthand(incident, "USER123")
+	assert.Equal(t, dot, result, "triggered incident (no acknowledgements) should return dot")
+}
+
+func TestStateShorthand_AckedByUser(t *testing.T) {
+	// Incident acknowledged by the current user should return "A"
+	incident := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC002"},
+		Acknowledgements: []pagerduty.Acknowledgement{
+			{Acknowledger: pagerduty.APIObject{ID: "USER123"}},
+		},
+	}
+
+	result := stateShorthand(incident, "USER123")
+	assert.Equal(t, "A", result, "incident acknowledged by current user should return 'A'")
+}
+
+func TestStateShorthand_AckedByOther(t *testing.T) {
+	// Incident acknowledged by someone else should return "a"
+	incident := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC003"},
+		Acknowledgements: []pagerduty.Acknowledgement{
+			{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
+		},
+	}
+
+	result := stateShorthand(incident, "USER123")
+	assert.Equal(t, "a", result, "incident acknowledged by another user should return 'a'")
+}
+
 func TestGetUniqueClusters_MixedWithAndWithoutClusterID(t *testing.T) {
 	// Some alerts have cluster_id, some don't - should only return those that do
 	alerts := []pagerduty.IncidentAlert{
