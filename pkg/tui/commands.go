@@ -326,6 +326,7 @@ type browserFinishedMsg struct {
 	err error
 }
 type openBrowserMsg string
+type openSOPMsg string
 
 func openBrowserCmd(browser []string, url string) tea.Cmd {
 	log.Debug("tui.openBrowserCmd(): opening browser")
@@ -805,6 +806,18 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 		return ""
 	}
 	return fieldStr
+}
+
+// getSOPLink extracts the SOP link from the first alert that has a non-empty "link" detail field.
+// Returns the URL and true if found, or "" and false if no SOP link exists.
+func getSOPLink(alerts []pagerduty.IncidentAlert) (string, bool) {
+	for _, alert := range alerts {
+		link := getDetailFieldFromAlert("link", alert)
+		if link != "" {
+			return link, true
+		}
+	}
+	return "", false
 }
 
 // getEscalationPolicyKey is a helper function to determine the escalation policy key

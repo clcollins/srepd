@@ -639,3 +639,69 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSOPLink_HasLink(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/some-alert.md",
+				},
+			},
+		},
+	}
+	link, ok := getSOPLink(alerts)
+	assert.True(t, ok)
+	assert.Equal(t, "https://github.com/openshift/ops-sop/blob/master/v4/alerts/some-alert.md", link)
+}
+
+func TestGetSOPLink_NoLink(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "abc-123",
+				},
+			},
+		},
+	}
+	link, ok := getSOPLink(alerts)
+	assert.False(t, ok)
+	assert.Equal(t, "", link)
+}
+
+func TestGetSOPLink_EmptyAlerts(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{}
+	link, ok := getSOPLink(alerts)
+	assert.False(t, ok)
+	assert.Equal(t, "", link)
+}
+
+func TestGetSOPLink_NilAlerts(t *testing.T) {
+	link, ok := getSOPLink(nil)
+	assert.False(t, ok)
+	assert.Equal(t, "", link)
+}
+
+func TestGetSOPLink_MultipleAlerts(t *testing.T) {
+	// First alert has no link, second does - should return second's link
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "abc-123",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/second-alert.md",
+				},
+			},
+		},
+	}
+	link, ok := getSOPLink(alerts)
+	assert.True(t, ok)
+	assert.Equal(t, "https://github.com/openshift/ops-sop/blob/master/v4/alerts/second-alert.md", link)
+}
