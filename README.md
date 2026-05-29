@@ -12,12 +12,21 @@ A PagerDuty terminal user interface focused on common SRE tasks
 Features:
 
 * Retrieve and list incidents assigned to the current user, and their team(s)
-* Vew a summary of an incident, including alerts and notes
+* View a summary of an incident, including alerts and notes
 * Add a note to an incident
-* Reassign incidents to a (configured) "silent" escalation policy (ie. silence the alert)
+* Reassign incidents to a (configured) "silent" escalation policy (ie. silence the alert), with confirmation prompt
 * Acknowledge incidents
+* Re-escalate incidents (un-acknowledge and reassign to the default escalation policy), with confirmation prompt
 * Resizes nicely(-ish) when the terminal is resized
-* Un-Acknowledge incidents (re-assign to the Escalation Policy)
+* Launch SOP links from alerts directly in the browser
+* Open incidents in the browser
+* Toggle urgency filter to show only high-urgency incidents
+* Multi-cluster selection when an incident has alerts for multiple clusters (keys 1-9)
+* Action log tracking recent actions and resolved incidents
+* Rate limiting for PagerDuty API calls
+* Selection preservation on auto-refresh (cursor stays on the same incident)
+* Auto-acknowledge incidents assigned to you while on-call
+* Login to clusters directly from incidents, with automatic PagerDuty environment variables passed to ocm-container
 
 Planned Features:
 
@@ -25,6 +34,58 @@ Planned Features:
 * Assign incidents to any PagerDuty User ID
 * Edit incident titles
 * Merge incidents
+
+## Requirements
+
+* Go 1.26.3 or later
+
+## Key Bindings
+
+Press `h` at any time to toggle the in-app help overlay.
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `k` / `Up` | Move up |
+| `j` / `Down` | Move down |
+| `g` | Jump to top |
+| `G` | Jump to bottom |
+| `Enter` | View incident details |
+| `h` | Toggle help |
+| `Esc` | Back (close incident view, cancel selection, exit input mode) |
+
+### Actions
+
+| Key | Action |
+|-----|--------|
+| `a` | Acknowledge incident |
+| `Ctrl+s` | Silence incident (requires `y/n` confirmation) |
+| `Ctrl+e` | Re-escalate incident (requires `y/n` confirmation) |
+| `n` | Add a note to the incident |
+| `l` | Login to the cluster associated with the incident |
+| `o` | Open the incident in the browser |
+| `s` | Open the SOP link from the incident's alerts in the browser |
+| `1`-`9` | Select a cluster when multiple clusters are available |
+
+### Toggles
+
+| Key | Action |
+|-----|--------|
+| `t` | Toggle between team and individual incident views |
+| `r` | Refresh the incident list |
+| `Ctrl+r` | Toggle auto-refresh |
+| `Ctrl+a` | Toggle auto-acknowledge |
+| `u` | Toggle urgency filter (show all vs. high-urgency only) |
+| `Ctrl+l` | Toggle the action log |
+| `i` / `:` | Enter input mode |
+
+### Quit
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+q` | Quit |
+| `Ctrl+c` | Quit |
 
 ## Configuration
 
@@ -76,7 +137,7 @@ editor: vim
 # type: string
 terminal: /usr/bin/gnome-terminal --
 # type: string
-cluster_login_cmd: ocm-container --clusterid %%CLUSTER_ID%%
+cluster_login_command: ocm-container --clusterid %%CLUSTER_ID%%
 
 # Note that aliases, etc, are not sourced by the shell command when launching.
 # This means, for example, that `ocm-container`, as normally setup using an
@@ -107,6 +168,28 @@ ignoredusers:
   - <pagerDuty User ID>
   - <pagerDuty User ID>
 ```
+
+## Building
+
+SREPD uses a Makefile for common development tasks. Run `make help` to see all available targets.
+
+| Target | Description |
+|--------|-------------|
+| `make build` | Build the application using goreleaser (snapshot) |
+| `make install` | Install the binary to `$GOPATH/bin` |
+| `make install-local` | Build and install to `~/.local/bin` |
+| `make test` | Run unit tests |
+| `make lint` | Run golangci-lint |
+| `make vet` | Run `go vet` to catch common mistakes |
+| `make fmt` | Format the code with `gofmt -s` |
+| `make fmt-check` | Check code formatting (CI-friendly, exits non-zero if unformatted) |
+| `make coverage` | Generate test coverage report |
+| `make test-all` | Run all checks: fmt-check, vet, lint, test |
+| `make plan-check` | Check that a plan document exists for the current branch |
+| `make tidy` | Tidy up go modules |
+| `make clean` | Clean up build artifacts |
+| `make run` | Run the application locally via `go run` |
+| `make release` | Create a release using goreleaser |
 
 ## Try it out
 
@@ -147,6 +230,47 @@ cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 # Terminator
 # terminator requires the "-x" or "--execute" flag as the separator between terminal arguments and the command to be run
 terminal: terminator --execute
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# Ptyxis (GNOME's newer terminal, available via Flatpak)
+terminal: flatpak run app.devsuite.Ptyxis --
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# Konsole (KDE)
+# konsole uses the "-e" flag to execute a command
+terminal: konsole -e
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# Kitty
+# kitty accepts the command directly after the terminal name
+terminal: kitty
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# Alacritty
+# alacritty uses the "-e" flag to execute a command
+terminal: alacritty -e
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# WezTerm
+# wezterm uses the "start --" subcommand to execute a command
+terminal: wezterm start --
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
+```
+
+```yaml
+# Foot (Wayland-native terminal)
+# foot accepts the command directly after the terminal name
+terminal: foot
 cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 ```
 
