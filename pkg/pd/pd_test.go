@@ -282,6 +282,138 @@ func TestPostNote(t *testing.T) {
 	}
 }
 
+func TestGetAlerts_Success(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.ListIncidentAlertsOptions{}
+
+	alerts, err := GetAlerts(mockClient, "INCIDENT1", opts)
+
+	assert.NoError(t, err)
+	assert.Len(t, alerts, 2)
+	assert.Equal(t, "QABCDEFG1234567", alerts[0].ID)
+	assert.Equal(t, "QABCDEFG7654321", alerts[1].ID)
+}
+
+func TestGetAlerts_Error(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.ListIncidentAlertsOptions{}
+
+	alerts, err := GetAlerts(mockClient, "err", opts)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetAlerts()")
+	assert.Empty(t, alerts)
+}
+
+func TestGetEscalationPolicy_Success(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.GetEscalationPolicyOptions{}
+
+	policy, err := GetEscalationPolicy(mockClient, "POLICY1", opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+	assert.Equal(t, "POLICY1", policy.ID)
+}
+
+func TestGetEscalationPolicy_Error(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.GetEscalationPolicyOptions{}
+
+	policy, err := GetEscalationPolicy(mockClient, "err", opts)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetEscalationPolicy()")
+	assert.Nil(t, policy)
+}
+
+func TestGetIncident_Success(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+
+	incident, err := GetIncident(mockClient, "INCIDENT1")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, incident)
+	assert.Equal(t, "INCIDENT1", incident.ID)
+}
+
+func TestGetIncident_Error(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+
+	_, err := GetIncident(mockClient, "err")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetIncident()")
+}
+
+func TestGetIncidents_Success(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.ListIncidentsOptions{}
+
+	incidents, err := GetIncidents(mockClient, opts)
+
+	assert.NoError(t, err)
+	assert.Len(t, incidents, 2)
+	assert.Equal(t, "QABCDEFG1234567", incidents[0].ID)
+	assert.Equal(t, "QABCDEFG7654321", incidents[1].ID)
+}
+
+func TestGetIncidents_Error(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.ListIncidentsOptions{
+		UserIDs: []string{"err"},
+	}
+
+	incidents, err := GetIncidents(mockClient, opts)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetIncidents()")
+	assert.Empty(t, incidents)
+}
+
+func TestGetNotes_Success(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+
+	notes, err := GetNotes(mockClient, "INCIDENT1")
+
+	assert.NoError(t, err)
+	assert.Len(t, notes, 2)
+	assert.Equal(t, "QABCDEFG1234567", notes[0].ID)
+	assert.Equal(t, "QABCDEFG7654321", notes[1].ID)
+}
+
+func TestGetNotes_Error(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+
+	notes, err := GetNotes(mockClient, "err")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetNotes()")
+	assert.Empty(t, notes)
+}
+
+func TestGetUser_Success(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.GetUserOptions{}
+
+	user, err := GetUser(mockClient, "USER1", opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, "USER1", user.ID)
+}
+
+func TestGetUser_Error(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+	opts := pagerduty.GetUserOptions{}
+
+	user, err := GetUser(mockClient, "err", opts)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetUser()")
+	assert.Nil(t, user)
+}
+
 func TestGetUserOnCalls_MultiplePages(t *testing.T) {
 	// Test that GetUserOnCalls appends results across pages instead of
 	// overwriting them.
