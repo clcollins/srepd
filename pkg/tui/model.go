@@ -160,8 +160,8 @@ func InitialModel(
 		status:           "",
 		incidentCache:    make(map[string]*cachedIncidentData),
 		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:      true,  // Start watching for updates on startup
-		showLowUrgency:   true,  // Show all urgencies by default
+		autoRefresh:      true,     // Start watching for updates on startup
+		showLowUrgency:   true,     // Show all urgencies by default
 		chordPrefix:      "ctrl+x", // Default chord prefix
 	}
 

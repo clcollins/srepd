@@ -72,12 +72,12 @@ func chordViewLog(m model) (tea.Model, tea.Cmd) {
 // chordHelpText generates a human-readable help string listing all chord commands.
 func chordHelpText(prefix string) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Chords (%s + key): ", prefix))
+	fmt.Fprintf(&b, "Chords (%s + key): ", prefix)
 	for i, entry := range chordRegistry {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(fmt.Sprintf("%s=%s", entry.Key, entry.Description))
+		fmt.Fprintf(&b, "%s=%s", entry.Key, entry.Description)
 	}
 	return b.String()
 }
