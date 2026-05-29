@@ -61,18 +61,39 @@ Pass extra test flags via `TESTOPTS`, e.g.:
 - Type assertions must use the comma-ok pattern
 - Tests before code (TDD)
 - Each PR must pass all CI checks
-- **All tests must pass locally before committing.** Run
-  `make test-all` (or at minimum `go test ./... -count=1`)
-  and verify zero failures before creating a commit or PR.
-  Do not push code that fails tests.
+- **Run the FULL local CI suite before every commit.** Run
+  all checks in parallel before pushing. Do not push code
+  that fails any check.
+
+## Pre-Commit Checks (MANDATORY)
+
+Run ALL of these in parallel before every commit/push:
+
+```bash
+# Run all 6 in parallel:
+gofmt -s -l cmd pkg                              # fmt-check
+go vet ./...                                     # vet
+go test ./... -count=1                           # unit tests
+CGO_ENABLED=1 go test -race ./... -count=1       # race detection
+ls docs/plans/*.md                               # plan doc exists
+# If keymap.go/config.go/root.go/commands.go changed:
+git diff origin/main --name-only | grep README   # readme updated
+```
+
+If `golangci-lint` is installed, also run:
+```bash
+golangci-lint run --timeout 5m                   # lint
+```
+
+**Every check must pass. Fix failures before committing.**
 
 ## PR Workflow
 
 1. Create feature branch: `srepd/<description>`
 2. Write failing tests
 3. Implement minimum code to pass tests
-4. Run `make test-all` locally — **all tests must pass**
-5. If any test fails, fix it before proceeding
+4. Run the full pre-commit checks (see above) — **all must pass**
+5. Fix any failures before proceeding
 6. Push and create PR against `main`
 7. CI runs all checks via `make` targets
 8. Review, approve, merge
