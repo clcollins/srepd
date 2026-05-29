@@ -286,14 +286,39 @@ func setupFileLogging(filePath string) {
 	log.SetOutput(logWriter)
 }
 
+// syslogIdentifier is the identifier used for systemd journal entries,
+// enabling log retrieval via "journalctl -t srepd".
+const syslogIdentifier = "srepd"
+
 // journalWriter implements io.Writer for systemd journal
 type journalWriter struct{}
 
 func (jw journalWriter) Write(p []byte) (n int, err error) {
 	message := strings.TrimSpace(string(p))
-	err = journal.Send(message, journal.PriInfo, nil)
+	priority := journalPriority(message)
+	vars := map[string]string{
+		"SYSLOG_IDENTIFIER": syslogIdentifier,
+	}
+	err = journal.Send(message, priority, vars)
 	if err != nil {
 		return 0, err
 	}
 	return len(p), nil
+}
+
+// journalPriority maps log message content to the appropriate systemd
+// journal priority level. It inspects the message for common log level
+// prefixes emitted by the charmbracelet/log package.
+func journalPriority(message string) journal.Priority {
+	upper := strings.ToUpper(message)
+	switch {
+	case strings.Contains(upper, "ERROR"), strings.Contains(upper, "ERRO"):
+		return journal.PriErr
+	case strings.Contains(upper, "WARN"):
+		return journal.PriWarning
+	case strings.Contains(upper, "DEBUG"):
+		return journal.PriDebug
+	default:
+		return journal.PriInfo
+	}
 }
