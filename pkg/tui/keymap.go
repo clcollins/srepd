@@ -18,7 +18,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 		// Column 2: Primary incident actions
 		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence},
 		// Column 3: Settings & toggles, Quit at bottom
-		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.ToggleActionLog, k.Quit},
+		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ToggleActionLog, k.Quit},
 	}
 }
 
@@ -40,6 +40,7 @@ type keymap struct {
 	UnAck           key.Binding
 	AutoAck         key.Binding
 	ToggleActionLog key.Binding
+	Urgency         key.Binding
 	Input           key.Binding
 	Login           key.Binding
 	Open            key.Binding
@@ -147,6 +148,10 @@ var defaultKeyMap = keymap{
 	ToggleActionLog: key.NewBinding(
 		key.WithKeys("ctrl+l"),
 		key.WithHelp("ctrl+l", "toggle action log"),
+	),
+	Urgency: key.NewBinding(
+		key.WithKeys("u"),
+		key.WithHelp("u", "toggle urgency filter"),
 	),
 	Input: key.NewBinding(
 		key.WithKeys("i", ":"),

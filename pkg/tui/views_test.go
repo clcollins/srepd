@@ -86,40 +86,66 @@ func TestStatusArea(t *testing.T) {
 
 func TestRefreshArea(t *testing.T) {
 	tests := []struct {
-		name        string
-		autoRefresh bool
-		autoAck     bool
-		expected    string
+		name           string
+		autoRefresh    bool
+		autoAck        bool
+		showLowUrgency bool
+		expected       string
 	}{
 		{
-			name:        "both enabled",
-			autoRefresh: true,
-			autoAck:     true,
-			expected:    "Watching for updates...  [auto-acknowledge]",
+			name:           "both enabled, all urgencies",
+			autoRefresh:    true,
+			autoAck:        true,
+			showLowUrgency: true,
+			expected:       "Watching for updates...  [auto-acknowledge]",
 		},
 		{
-			name:        "auto-refresh enabled, auto-ack disabled",
-			autoRefresh: true,
-			autoAck:     false,
-			expected:    "Watching for updates... ",
+			name:           "auto-refresh enabled, auto-ack disabled, all urgencies",
+			autoRefresh:    true,
+			autoAck:        false,
+			showLowUrgency: true,
+			expected:       "Watching for updates... ",
 		},
 		{
-			name:        "auto-refresh disabled",
-			autoRefresh: false,
-			autoAck:     false,
-			expected:    "Watching for updates...  [PAUSED]",
+			name:           "auto-refresh disabled, all urgencies",
+			autoRefresh:    false,
+			autoAck:        false,
+			showLowUrgency: true,
+			expected:       "Watching for updates...  [PAUSED]",
 		},
 		{
-			name:        "auto-refresh disabled, auto-ack enabled (paused takes precedence)",
-			autoRefresh: false,
-			autoAck:     true,
-			expected:    "Watching for updates...  [PAUSED]",
+			name:           "auto-refresh disabled, auto-ack enabled (paused takes precedence), all urgencies",
+			autoRefresh:    false,
+			autoAck:        true,
+			showLowUrgency: true,
+			expected:       "Watching for updates...  [PAUSED]",
+		},
+		{
+			name:           "high urgency only filter shown",
+			autoRefresh:    true,
+			autoAck:        false,
+			showLowUrgency: false,
+			expected:       "Watching for updates...  [high urgency only]",
+		},
+		{
+			name:           "auto-ack and high urgency only",
+			autoRefresh:    true,
+			autoAck:        true,
+			showLowUrgency: false,
+			expected:       "Watching for updates...  [auto-acknowledge] [high urgency only]",
+		},
+		{
+			name:           "paused and high urgency only",
+			autoRefresh:    false,
+			autoAck:        false,
+			showLowUrgency: false,
+			expected:       "Watching for updates...  [PAUSED] [high urgency only]",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := refreshArea(test.autoRefresh, test.autoAck)
+			result := refreshArea(test.autoRefresh, test.autoAck, test.showLowUrgency)
 			assert.Equal(t, test.expected, result)
 		})
 	}

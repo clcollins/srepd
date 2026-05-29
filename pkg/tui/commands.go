@@ -881,6 +881,23 @@ func runScheduledJobs(m *model) []tea.Cmd {
 	return cmds
 }
 
+// filterByUrgency returns a filtered copy of incidents based on urgency.
+// When showLow is true, all incidents are returned unchanged.
+// When showLow is false, only high-urgency incidents are returned.
+func filterByUrgency(incidents []pagerduty.Incident, showLow bool) []pagerduty.Incident {
+	if showLow {
+		return incidents
+	}
+
+	var filtered []pagerduty.Incident
+	for _, i := range incidents {
+		if i.Urgency == "high" {
+			filtered = append(filtered, i)
+		}
+	}
+	return filtered
+}
+
 func getIDsFromIncidents(incidents []pagerduty.Incident) []string {
 	var ids []string
 	for _, i := range incidents {

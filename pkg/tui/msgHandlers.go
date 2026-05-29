@@ -164,6 +164,11 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Urgency) {
+		m.showLowUrgency = !m.showLowUrgency
+		return m, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
+	}
+
 	// Commands for any focus mode
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
 		return m, tea.Sequence(

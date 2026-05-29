@@ -579,6 +579,68 @@ func TestGetDetailFieldFromAlert_HappyPath(t *testing.T) {
 	assert.Equal(t, "https://example.com/sop", getDetailFieldFromAlert("link", alert))
 }
 
+func TestFilterByUrgency_ShowAll(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "Q001"}, Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "Q002"}, Urgency: "low"},
+		{APIObject: pagerduty.APIObject{ID: "Q003"}, Urgency: "high"},
+	}
+
+	result := filterByUrgency(incidents, true)
+	assert.Equal(t, 3, len(result), "showLow=true should return all incidents unchanged")
+	assert.Equal(t, "Q001", result[0].ID)
+	assert.Equal(t, "Q002", result[1].ID)
+	assert.Equal(t, "Q003", result[2].ID)
+}
+
+func TestFilterByUrgency_HighOnly(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "Q001"}, Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "Q002"}, Urgency: "low"},
+		{APIObject: pagerduty.APIObject{ID: "Q003"}, Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "Q004"}, Urgency: "low"},
+	}
+
+	result := filterByUrgency(incidents, false)
+	assert.Equal(t, 2, len(result), "showLow=false should return only high-urgency incidents")
+	assert.Equal(t, "Q001", result[0].ID)
+	assert.Equal(t, "Q003", result[1].ID)
+}
+
+func TestFilterByUrgency_EmptyList(t *testing.T) {
+	var incidents []pagerduty.Incident
+
+	result := filterByUrgency(incidents, true)
+	assert.Empty(t, result, "empty input should return empty result")
+
+	result = filterByUrgency(incidents, false)
+	assert.Empty(t, result, "empty input should return empty result regardless of filter")
+}
+
+func TestFilterByUrgency_AllLow(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "Q001"}, Urgency: "low"},
+		{APIObject: pagerduty.APIObject{ID: "Q002"}, Urgency: "low"},
+	}
+
+	result := filterByUrgency(incidents, false)
+	assert.Empty(t, result, "all low urgency with filter on should return empty")
+}
+
+func TestFilterByUrgency_AllHigh(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "Q001"}, Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "Q002"}, Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "Q003"}, Urgency: "high"},
+	}
+
+	result := filterByUrgency(incidents, false)
+	assert.Equal(t, 3, len(result), "all high urgency with filter on should return all")
+	assert.Equal(t, "Q001", result[0].ID)
+	assert.Equal(t, "Q002", result[1].ID)
+	assert.Equal(t, "Q003", result[2].ID)
+}
+
 func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 	// This test validates that environment variables are inserted at the correct
 	// position in the command - after the terminal separator but as arguments to

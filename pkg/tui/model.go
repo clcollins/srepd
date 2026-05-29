@@ -84,6 +84,7 @@ type model struct {
 	autoRefresh     bool
 	teamMode        bool
 	showActionLog   bool
+	showLowUrgency  bool
 	debug           bool
 }
 
@@ -131,6 +132,7 @@ func InitialModel(
 		incidentCache:    make(map[string]*cachedIncidentData),
 		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
 		autoRefresh:      true, // Start watching for updates on startup
+		showLowUrgency:   true, // Show all urgencies by default
 	}
 
 	// This is an ugly way to handle this error
