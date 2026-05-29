@@ -23,7 +23,10 @@ direct `ocm backplane` login.
 | `make tidy` | Run `go mod tidy` |
 | `make plan-check` | Verify plan document exists for this branch |
 | `make readme-check` | Ensure README updated when config/keys/flags change |
-| `make test-all` | Run all checks: fmt-check, vet, lint, test |
+| `make test-race` | Run tests with race detector |
+| `make test-vuln` | Check for known vulnerabilities |
+| `make test-coverage-threshold` | Enforce minimum coverage threshold (55%) |
+| `make test-all` | Run all checks: fmt-check, vet, lint, test, test-race |
 
 Pass extra test flags via `TESTOPTS`, e.g.:
 `make test TESTOPTS="-run TestFoo"`

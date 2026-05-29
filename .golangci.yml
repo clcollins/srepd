@@ -1,0 +1,17 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose      # HTTP response body close checking
+    - errcheck       # Unchecked error returns
+    - gosec          # Security issue detection
+    - govet          # Go vet checks
+    - ineffassign    # Unused variable assignments
+    - staticcheck    # Comprehensive static analysis
+    - unused         # Unused code detection
+  disable:
+    - depguard       # Not needed (no dependency restrictions)
+run:
+  timeout: 5m
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
