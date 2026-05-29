@@ -407,7 +407,6 @@ func TestSummarizeAlerts_AlertWithNilBody(t *testing.T) {
 	assert.Equal(t, "", result[0].Name, "name should be empty when body is nil")
 	assert.Equal(t, "", result[0].Link, "link should be empty when body is nil")
 	assert.Equal(t, "", result[0].Cluster, "cluster should be empty when body is nil")
-	assert.Nil(t, result[0].Details, "details should be nil when body is nil")
 	assert.Equal(t, "Test Service", result[0].Service, "service summary should be preserved")
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 )
@@ -861,12 +862,22 @@ func getDetailFieldFromAlert(f string, a pagerduty.IncidentAlert) string {
 // "runbook_url" is the Prometheus/Alertmanager annotation convention.
 var sopLinkFields = []string{"link", "runbook_url"}
 
-// getSOPLink extracts the SOP link from alerts, checking multiple field names.
+// getSOPLink extracts the SOP link from alerts using the alert normalization engine.
+// Falls back to raw detail field extraction for backward compatibility.
 // Returns the URL and true if found, or "" and false if no SOP link exists.
 func getSOPLink(alerts []pagerduty.IncidentAlert) (string, bool) {
-	for _, alert := range alerts {
+	// Try normalized extraction first (handles firing text parsing for appsre, notes for DMS)
+	for _, a := range alerts {
+		normalized := alert.NormalizeAlert(a.Service.Summary, "", a)
+		if normalized.SOPLink != "" {
+			return normalized.SOPLink, true
+		}
+	}
+
+	// Fallback to raw detail field extraction for backward compatibility
+	for _, a := range alerts {
 		for _, field := range sopLinkFields {
-			link := getDetailFieldFromAlert(field, alert)
+			link := getDetailFieldFromAlert(field, a)
 			if link != "" {
 				return link, true
 			}

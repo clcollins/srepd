@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/alert"
 )
 
 const (
@@ -420,38 +421,60 @@ func summarizeNotes(n []pagerduty.IncidentNote) []noteSummary {
 }
 
 type alertSummary struct {
-	ID       string
-	Name     string
-	Link     string
-	HTMLURL  string
-	Service  string
-	Created  string
-	Status   string
-	Incident string
-	Cluster  string
+	ID        string
+	Name      string
+	Link      string
+	HTMLURL   string
+	Service   string
+	Created   string
+	Status    string
+	Incident  string
+	Cluster   string
+	Severity  string
+	Tags      []string
+	AlertType string
 }
 
 func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 	var s []alertSummary
 
 	for _, alt := range a {
+		// Use the alert normalization engine to extract structured fields
+		serviceSummary := alt.Service.Summary
+		// For the title, we don't have access to the incident title here,
+		// so we use an empty string. The incident title is available at the
+		// incident level (incidentSummary.Title), not the alert level.
+		normalized := alert.NormalizeAlert(serviceSummary, "", alt)
 
-		// Our alerts are not standardized enough
-		// CPD, for example, does not have "alert_name"
-		name := getDetailFieldFromAlert("alert_name", alt)
-		cluster := getDetailFieldFromAlert("cluster_id", alt)
-		link := getDetailFieldFromAlert("link", alt)
+		// Fall back to raw detail extraction if normalization yielded empty fields
+		name := normalized.AlertName
+		if name == "" {
+			name = getDetailFieldFromAlert("alert_name", alt)
+		}
+
+		cluster := normalized.ClusterID
+		if cluster == "" {
+			cluster = getDetailFieldFromAlert("cluster_id", alt)
+		}
+
+		link := normalized.SOPLink
+		if link == "" {
+			link = getDetailFieldFromAlert("link", alt)
+		}
 
 		s = append(s, alertSummary{
-			ID:       alt.ID,
-			Name:     name,
-			Link:     link,
-			Cluster:  cluster,
-			HTMLURL:  alt.HTMLURL,
-			Service:  alt.Service.Summary,
-			Created:  alt.CreatedAt,
-			Status:   alt.Status,
-			Incident: alt.Incident.ID,
+			ID:        alt.ID,
+			Name:      name,
+			Link:      link,
+			Cluster:   cluster,
+			HTMLURL:   alt.HTMLURL,
+			Service:   alt.Service.Summary,
+			Created:   alt.CreatedAt,
+			Status:    alt.Status,
+			Incident:  alt.Incident.ID,
+			Severity:  normalized.Severity,
+			Tags:      normalized.Tags,
+			AlertType: normalized.AlertType,
 		})
 
 	}
@@ -569,7 +592,7 @@ _none_
 _Loading alerts..._
 {{ else }}
 {{ range $alert := .Alerts }}
-### {{ if $alert.Name }}{{ $alert.Name }}{{ else }}{{ $alert.ID }}{{ end }} ({{ $alert.Status }})
+### {{ if $alert.Name }}{{ $alert.Name }}{{ else }}{{ $alert.ID }}{{ end }} ({{ $alert.Status }}){{ if $alert.Severity }} [{{ $alert.Severity }}]{{ end }}{{ if $alert.AlertType }} ({{ $alert.AlertType }}){{ end }}
 
 * Cluster: {{ $alert.Cluster }}
 * SOP: {{ if $alert.Link }}{{ ToLink "SOP" $alert.Link }}{{ else }}_none_{{ end }}
