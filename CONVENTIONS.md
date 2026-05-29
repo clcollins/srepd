@@ -71,8 +71,11 @@ docs/plans/       Plan documents (one per PR)
 | Format | gofmt -s | `make fmt-check` |
 | Go vet | go vet | `make vet` |
 | Lint | golangci-lint | `make lint` |
+| Race detection | go test -race | `make test-race` |
 | Unit tests | go test | `make test` |
 | Coverage | go test -coverprofile | `make coverage` |
+| Coverage threshold | go test + threshold check | `make test-coverage-threshold` |
+| Vulnerability scan | govulncheck | `make test-vuln` |
 | Build | go build | `make build` |
 
 ## Linting

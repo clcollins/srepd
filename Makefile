@@ -136,8 +136,34 @@ readme-check: ## Ensure README is updated when config/keys/flags change
 		echo "No config/key/flag changes detected - README check skipped"; \
 	fi
 
+.PHONY: test-race
+test-race: ## Run tests with race detector
+	@echo "Running tests with race detector..."
+	CGO_ENABLED=1 go test -race ./... -count=1 $(TESTOPTS)
+
+.PHONY: test-vuln
+test-vuln: ## Check for known vulnerabilities in dependencies
+	@echo "Checking for known vulnerabilities..."
+	@which govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+	govulncheck ./...
+
+COVERAGE_THRESHOLD ?= 55
+
+.PHONY: test-coverage-threshold
+test-coverage-threshold: ## Enforce minimum coverage threshold
+	@echo "Checking coverage threshold ($(COVERAGE_THRESHOLD)%)..."
+	@go test ./... -coverprofile=coverage.out -covermode=atomic > /dev/null 2>&1
+	@total=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | tr -d '%'); \
+	if [ $$(echo "$$total < $(COVERAGE_THRESHOLD)" | bc) -eq 1 ]; then \
+		echo "FAIL: Coverage $$total% is below threshold $(COVERAGE_THRESHOLD)%"; \
+		rm -f coverage.out; \
+		exit 1; \
+	fi; \
+	echo "PASS: Coverage $$total% meets threshold $(COVERAGE_THRESHOLD)%"; \
+	rm -f coverage.out
+
 .PHONY: test-all
-test-all: fmt-check vet lint test ## Run all checks (fmt, vet, lint, test)
+test-all: fmt-check vet lint test test-race ## Run all checks
 	@echo "All checks passed."
 
 .PHONY: ensure-goreleaser
