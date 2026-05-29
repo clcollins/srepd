@@ -139,7 +139,7 @@ readme-check: ## Ensure README is updated when config/keys/flags change
 .PHONY: test-race
 test-race: ## Run tests with race detector
 	@echo "Running tests with race detector..."
-	go test -race ./... -count=1 $(TESTOPTS)
+	CGO_ENABLED=1 go test -race ./... -count=1 $(TESTOPTS)
 
 .PHONY: test-vuln
 test-vuln: ## Check for known vulnerabilities in dependencies
