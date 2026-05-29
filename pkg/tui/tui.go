@@ -550,23 +550,56 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		var cluster string
-
-		switch len(m.selectedIncidentAlerts) {
-		case 0:
+		if len(m.selectedIncidentAlerts) == 0 {
 			log.Debug("Update", reflect.TypeOf(msg), fmt.Sprintf("no alerts found for incident %s - requeuing", m.selectedIncident.ID))
 			return m, func() tea.Msg { return loginMsg("sender: loginMsg; requeue") }
+		}
+
+		clusters := getUniqueClusters(m.selectedIncidentAlerts)
+
+		var cluster string
+		switch len(clusters) {
+		case 0:
+			// Alerts exist but none carry a cluster_id
+			cluster = ""
+			m.setStatus("no cluster_id found in alerts - launching without cluster")
 		case 1:
-			cluster = getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
-			m.setStatus(fmt.Sprintf("logging into cluster %s from alert %s", cluster, m.selectedIncidentAlerts[0].ID))
+			cluster = clusters[0]
+			m.setStatus(fmt.Sprintf("logging into cluster %s", cluster))
 		default:
-			// TODO https://github.com/clcollins/srepd/issues/1: Figure out how to prompt with list to select from
-			cluster = getDetailFieldFromAlert("cluster_id", m.selectedIncidentAlerts[0])
-			m.setStatus(fmt.Sprintf("multiple alerts found - logging into cluster %s from first alert %s", cluster, m.selectedIncidentAlerts[0].ID))
+			// Multiple distinct clusters - ask the user to choose
+			m.clusterSelectMode = true
+			m.clusterSelectOptions = clusters
+			var prompt strings.Builder
+			prompt.WriteString("Select cluster: ")
+			for i, c := range clusters {
+				if i > 0 {
+					prompt.WriteString(", ")
+				}
+				prompt.WriteString(fmt.Sprintf("[%d] %s", i+1, c))
+			}
+			m.setStatus(prompt.String())
+			return m, nil
 		}
 
 		// NOTE: It's important that **ALL** of these variables' values are NOT NIL.
 		// They can be empty strings, but the must not be nil.
+		var vars = map[string]string{
+			"%%CLUSTER_ID%%":  cluster,
+			"%%INCIDENT_ID%%": m.selectedIncident.ID,
+		}
+
+		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
+
+	case clusterSelectedMsg:
+		if m.selectedIncident == nil {
+			m.setStatus("unable to login - no selected incident")
+			return m, nil
+		}
+
+		cluster := string(msg)
+		m.setStatus(fmt.Sprintf("logging into cluster %s", cluster))
+
 		var vars = map[string]string{
 			"%%CLUSTER_ID%%":  cluster,
 			"%%INCIDENT_ID%%": m.selectedIncident.ID,

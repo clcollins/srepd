@@ -97,6 +97,11 @@ type model struct {
 	// pendingConfirmation holds the state of a destructive action awaiting user confirmation.
 	// When non-nil, the UI shows the prompt and only accepts y/n/Escape.
 	pendingConfirmation *confirmActionState
+
+	// clusterSelectMode is true when the user must choose which cluster to log into
+	// because the incident has alerts referencing multiple distinct cluster_ids.
+	clusterSelectMode    bool
+	clusterSelectOptions []string
 }
 
 func InitialModel(
@@ -179,8 +184,10 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	m.incidentDataLoaded = false
 	m.incidentNotesLoaded = false
 	m.incidentAlertsLoaded = false
-	// Clear any pending confirmation on view transition
+	// Clear any pending confirmation or cluster selection on view transition
 	m.pendingConfirmation = nil
+	m.clusterSelectMode = false
+	m.clusterSelectOptions = nil
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 
