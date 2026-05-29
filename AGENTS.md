@@ -22,6 +22,7 @@ direct `ocm backplane` login.
 | `make clean` | Remove build artifacts |
 | `make tidy` | Run `go mod tidy` |
 | `make plan-check` | Verify plan document exists for this branch |
+| `make readme-check` | Ensure README updated when config/keys/flags change |
 | `make test-all` | Run all checks: fmt-check, vet, lint, test |
 
 Pass extra test flags via `TESTOPTS`, e.g.:

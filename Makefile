@@ -112,6 +112,30 @@ plan-check: ## Check that a plan document exists for this branch
 	echo "Plan document(s) found:"; \
 	echo "$$PLAN_FILES" | sed 's/^/  /'
 
+.PHONY: readme-check
+readme-check: ## Ensure README is updated when config/keys/flags change
+	@echo "Checking if README update is needed..."
+	@MERGE_BASE=$$(git merge-base HEAD origin/main 2>/dev/null || echo ""); \
+	if [ -z "$$MERGE_BASE" ]; then exit 0; fi; \
+	CHANGED=$$(git diff --name-only "$$MERGE_BASE"...HEAD); \
+	NEEDS_README=false; \
+	for f in $$CHANGED; do \
+		case "$$f" in \
+			pkg/tui/keymap.go|cmd/config.go|cmd/root.go|pkg/tui/commands.go) NEEDS_README=true ;; \
+		esac; \
+	done; \
+	if [ "$$NEEDS_README" = "true" ]; then \
+		if ! echo "$$CHANGED" | grep -q "README.md"; then \
+			echo "ERROR: Changes to keymap.go, config.go, root.go, or commands.go require a README.md update"; \
+			echo "Changed files that trigger this check:"; \
+			echo "$$CHANGED" | grep -E "keymap.go|config.go|root.go|commands.go"; \
+			exit 1; \
+		fi; \
+		echo "README.md update found - OK"; \
+	else \
+		echo "No config/key/flag changes detected - README check skipped"; \
+	fi
+
 .PHONY: test-all
 test-all: fmt-check vet lint test ## Run all checks (fmt, vet, lint, test)
 	@echo "All checks passed."
