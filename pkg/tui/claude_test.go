@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 )
@@ -325,9 +324,3 @@ func TestClaudeResponse_RendersWithPrefix(t *testing.T) {
 }
 
 // Helper to create a model with a table for input focus testing
-func createTestModelWithInput() model {
-	m := createTestModel()
-	m.input = newTextInput()
-	m.table = table.New(table.WithFocused(true))
-	return m
-}
