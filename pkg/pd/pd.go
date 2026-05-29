@@ -269,6 +269,7 @@ func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts page
 	var u []string
 
 	for _, team := range teams {
+		opts.Offset = defaultOffset
 		for {
 			response, err := client.ListMembersWithContext(ctx, team.ID, opts)
 			if err != nil {
@@ -314,7 +315,7 @@ func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCall
 			return o, fmt.Errorf("pd.GetUserOnCalls(): failed to get on-call entries for user `%v`: %v", id, err)
 		}
 
-		o = response.OnCalls
+		o = append(o, response.OnCalls...)
 
 		opts.Offset += opts.Limit
 

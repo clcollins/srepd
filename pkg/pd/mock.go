@@ -28,12 +28,19 @@ type MockPagerDutyClient struct {
 
 	// ListMembersResponses is an optional response queue for
 	// ListMembersWithContext. When populated, successive calls pop from the
-	// front of the slice. When empty or nil, a default empty response is
-	// returned instead.
+	// front of the slice. When empty or nil, a default response is returned.
 	ListMembersResponses []ListMembersResponse
 
 	// listMembersIndex tracks the current position in ListMembersResponses.
 	listMembersIndex int
+
+	// ListOnCallsResponses is a queue of responses for ListOnCallsWithContext.
+	// When configured, responses are popped in order; when empty, falls back to default behavior.
+	ListOnCallsResponses []pagerduty.ListOnCallsResponse
+
+	// ListMembersOffsets records the offset value from each call to ListMembersWithContext,
+	// in order. Useful for verifying pagination offset reset behavior.
+	ListMembersOffsets []uint
 }
 
 // recordCall increments the call count for the named method, lazily
@@ -149,11 +156,10 @@ func (m *MockPagerDutyClient) ManageIncidentsWithContext(ctx context.Context, em
 }
 
 // ListMembersWithContext returns responses from the ListMembersResponses queue
-// when configured, otherwise returns a default empty response. This allows
-// tests to simulate paginated member listings by enqueuing multiple responses
-// with different More values.
+// when configured, otherwise returns a default member response.
 func (m *MockPagerDutyClient) ListMembersWithContext(ctx context.Context, id string, opts pagerduty.ListTeamMembersOptions) (*pagerduty.ListTeamMembersResponse, error) {
 	m.recordCall("ListMembersWithContext")
+	m.ListMembersOffsets = append(m.ListMembersOffsets, opts.Offset)
 
 	// If a response queue is configured, pop from it
 	if len(m.ListMembersResponses) > 0 && m.listMembersIndex < len(m.ListMembersResponses) {
@@ -165,6 +171,30 @@ func (m *MockPagerDutyClient) ListMembersWithContext(ctx context.Context, id str
 		return entry.Response, nil
 	}
 
-	// Default fallback: return an empty, non-paginated response
-	return &pagerduty.ListTeamMembersResponse{}, nil
+	// Default behavior: return a single member with the team ID as the user ID
+	return &pagerduty.ListTeamMembersResponse{
+		Members: []pagerduty.Member{
+			{
+				User: pagerduty.APIObject{
+					ID: id,
+				},
+			},
+		},
+	}, nil
+}
+
+func (m *MockPagerDutyClient) ListOnCallsWithContext(ctx context.Context, opts pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error) {
+	m.recordCall("ListOnCallsWithContext")
+
+	// If the response queue is configured, pop the first response
+	if len(m.ListOnCallsResponses) > 0 {
+		resp := m.ListOnCallsResponses[0]
+		m.ListOnCallsResponses = m.ListOnCallsResponses[1:]
+		return &resp, nil
+	}
+
+	// Default behavior: return empty on-calls
+	return &pagerduty.ListOnCallsResponse{
+		OnCalls: []pagerduty.OnCall{},
+	}, nil
 }
