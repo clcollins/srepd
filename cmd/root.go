@@ -103,12 +103,29 @@ but rather a simple tool to make on-call tasks easier.`,
 	},
 }
 
+// logWriter holds the active asyncWriter so it can be flushed on shutdown.
+var logWriter *asyncWriter
+
+// asyncWriterBufferSize is the number of log messages that can be buffered
+// before the asyncWriter starts dropping messages.
+const asyncWriterBufferSize = 5000
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	defer CleanupLogging()
+
 	err := rootCmd.Execute()
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+// CleanupLogging flushes and closes the async log writer.
+// It is safe to call multiple times.
+func CleanupLogging() {
+	if logWriter != nil {
+		logWriter.Close() //nolint:errcheck
 	}
 }
 
@@ -235,7 +252,8 @@ func configureLogging() {
 
 	switch dest {
 	case LogToJournal:
-		log.SetOutput(journalWriter{})
+		logWriter = newAsyncWriter(journalWriter{}, asyncWriterBufferSize)
+		log.SetOutput(logWriter)
 		log.Info("Logging to systemd journal")
 
 	case LogToFile:
@@ -251,18 +269,21 @@ func configureLogging() {
 		log.Info("Logging to " + logPath)
 
 	case LogToStderr:
-		log.SetOutput(os.Stderr)
+		logWriter = newAsyncWriter(os.Stderr, asyncWriterBufferSize)
+		log.SetOutput(logWriter)
 		log.Warn("Unsupported OS: logging to stderr")
 	}
 }
 
-// setupFileLogging configures logging to a file
+// setupFileLogging configures logging to a file, wrapped in asyncWriter
+// to prevent log I/O from blocking the TUI.
 func setupFileLogging(filePath string) {
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal("Failed to open log file:", err)
 	}
-	log.SetOutput(file)
+	logWriter = newAsyncWriter(file, asyncWriterBufferSize)
+	log.SetOutput(logWriter)
 }
 
 // journalWriter implements io.Writer for systemd journal
