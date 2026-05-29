@@ -337,6 +337,17 @@ func (m *model) ageOutResolvedIncidents(maxAge time.Duration) {
 	m.updateActionLogTable()
 }
 
+// findRowIndex returns the index of the row in rows whose incident ID column
+// (column 1) matches incidentID. Returns -1 if not found or rows is empty.
+func findRowIndex(rows []table.Row, incidentID string) int {
+	for i, row := range rows {
+		if len(row) > 1 && row[1] == incidentID {
+			return i
+		}
+	}
+	return -1
+}
+
 func newTableWithStyles() table.Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(tableStyle)

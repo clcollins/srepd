@@ -909,6 +909,48 @@ func TestSelectedIncidentSurvivesListUpdate(t *testing.T) {
 		"selectedIncident should retain original data after list reallocation")
 }
 
+func TestFindRowIndex_Found(t *testing.T) {
+	rows := []table.Row{
+		{"triggered", "Q111", "First Incident", "service-a"},
+		{"acknowledged", "Q222", "Second Incident", "service-b"},
+		{"triggered", "Q333", "Third Incident", "service-c"},
+	}
+
+	tests := []struct {
+		name       string
+		incidentID string
+		expected   int
+	}{
+		{"finds first row", "Q111", 0},
+		{"finds middle row", "Q222", 1},
+		{"finds last row", "Q333", 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := findRowIndex(rows, tt.incidentID)
+			assert.Equal(t, tt.expected, result, "Expected row index %d for incident %s", tt.expected, tt.incidentID)
+		})
+	}
+}
+
+func TestFindRowIndex_NotFound(t *testing.T) {
+	rows := []table.Row{
+		{"triggered", "Q111", "First Incident", "service-a"},
+		{"acknowledged", "Q222", "Second Incident", "service-b"},
+	}
+
+	result := findRowIndex(rows, "QNOTFOUND")
+	assert.Equal(t, -1, result, "Expected -1 when incident ID is not in rows")
+}
+
+func TestFindRowIndex_EmptyRows(t *testing.T) {
+	var rows []table.Row
+
+	result := findRowIndex(rows, "Q123")
+	assert.Equal(t, -1, result, "Expected -1 when rows slice is empty")
+}
+
 func TestWindowSizeMsgHandler_SmallWindow(t *testing.T) {
 	tests := []struct {
 		name   string
