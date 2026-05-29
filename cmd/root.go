@@ -33,6 +33,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/coreos/go-systemd/journal"
 	"github.com/spf13/cobra"
@@ -62,6 +63,12 @@ but rather a simple tool to make on-call tasks easier.`,
 			return log.WarnLevel
 		}())
 
+		// Skip config validation in dev mode
+		if viper.GetBool("dev") {
+			log.Info("Dev mode enabled: skipping config validation")
+			return
+		}
+
 		err := validateConfig()
 		if err != nil {
 			log.Fatal(err)
@@ -69,6 +76,11 @@ but rather a simple tool to make on-call tasks easier.`,
 
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+
+		if viper.GetBool("dev") {
+			runDevMode()
+			return
+		}
 
 		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"), viper.GetString("toolbox_mode"))
 		if err != nil {
@@ -135,6 +147,11 @@ func bindArgsToViper(cmd *cobra.Command) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = viper.BindPFlag("dev", cmd.Flags().Lookup("dev"))
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 type cliFlag struct {
@@ -157,6 +174,7 @@ func (f cliFlag) BoolValue() bool {
 func init() {
 	var flags = []cliFlag{
 		{"bool", "debug", "d", "false", "enable debug logging"},
+		{"bool", "dev", "D", "false", "enable dev mode with fixture data (no PagerDuty connection required)"},
 		// TODO - For some reason the parsed cluster-login-command flag does not work (the "%%" is stripped out)
 		// Commenting out the config options for now, as the config file is the preferred method
 		// {"string", "token", "T", "", "PagerDuty API token"},
@@ -179,6 +197,60 @@ func init() {
 		case "stringSlice":
 			rootCmd.Flags().StringSliceP(f.name, f.shorthand, []string{f.StringValue()}, f.usage)
 		}
+	}
+}
+
+// defaultFixturesDir is the path to fixture data relative to the binary's working directory.
+// It can be overridden by the SREPD_FIXTURES_DIR environment variable.
+const defaultFixturesDir = "testdata/fixtures"
+
+// runDevMode starts the TUI in development mode using fixture data instead of live PagerDuty.
+func runDevMode() {
+	fixturesDir := viper.GetString("fixtures_dir")
+	if fixturesDir == "" {
+		fixturesDir = defaultFixturesDir
+	}
+
+	log.Info("Dev mode: loading fixtures", "dir", fixturesDir)
+
+	config, err := pd.NewDevConfig(fixturesDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load dev fixtures: %v\n", err)
+		log.Fatal(err)
+	}
+
+	// Create a dev launcher that logs instead of executing
+	devLauncher, err := launcher.NewClusterLauncherWithToolbox(
+		"echo dev-mode",
+		"echo %%CLUSTER_ID%%",
+		"false",
+		func() bool { return false },
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create dev launcher: %v\n", err)
+		log.Fatal(err)
+	}
+
+	m, _ := tui.InitialModelWithConfig(
+		config,
+		viper.GetStringSlice("editor"),
+		devLauncher,
+		viper.GetBool("debug"),
+	)
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	go func() {
+		for {
+			time.Sleep(tickInterval * time.Second)
+			p.Send(tui.TickMsg{})
+		}
+	}()
+
+	_, err = p.Run()
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
 	}
 }
 

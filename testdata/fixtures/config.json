@@ -1,0 +1,51 @@
+{
+  "user": {
+    "id": "PDEV_USER_001",
+    "name": "Dev User",
+    "email": "dev@example.com",
+    "type": "user",
+    "self": "https://api.pagerduty.com/users/PDEV_USER_001",
+    "html_url": "https://example.pagerduty.com/users/PDEV_USER_001"
+  },
+  "teams": [
+    {
+      "id": "PDEV_TEAM_001",
+      "name": "SREP On-Call",
+      "type": "team",
+      "self": "https://api.pagerduty.com/teams/PDEV_TEAM_001",
+      "html_url": "https://example.pagerduty.com/teams/PDEV_TEAM_001"
+    }
+  ],
+  "team_members": [
+    {
+      "id": "PDEV_USER_001",
+      "name": "Dev User",
+      "email": "dev@example.com",
+      "type": "user"
+    },
+    {
+      "id": "PDEV_USER_002",
+      "name": "Alice Engineer",
+      "email": "alice@example.com",
+      "type": "user"
+    },
+    {
+      "id": "PDEV_USER_003",
+      "name": "Bob Oncall",
+      "email": "bob@example.com",
+      "type": "user"
+    }
+  ],
+  "escalation_policies": {
+    "DEFAULT": {
+      "id": "PDEV_POLICY_DEFAULT",
+      "name": "SREP Default Escalation",
+      "type": "escalation_policy"
+    },
+    "SILENT_DEFAULT": {
+      "id": "PDEV_POLICY_SILENT",
+      "name": "SREP Silent Escalation",
+      "type": "escalation_policy"
+    }
+  }
+}
