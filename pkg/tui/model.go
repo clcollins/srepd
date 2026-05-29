@@ -113,6 +113,9 @@ type model struct {
 	chordPending bool
 	// chordPrefix is the configurable prefix key for chord commands (default "ctrl+x").
 	chordPrefix string
+
+	// claudeQuerying is true while a Claude CLI query is in progress
+	claudeQuerying bool
 }
 
 func InitialModel(
@@ -482,8 +485,8 @@ func newActionLogTable() table.Model {
 func newTextInput() textinput.Model {
 	i := textinput.New()
 	i.Prompt = " $ "
-	i.CharLimit = 32
-	i.Width = 50
+	i.CharLimit = 500
+	i.Width = 120
 	return i
 }
 

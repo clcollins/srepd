@@ -86,7 +86,7 @@ var inputModeKeyMap = inputKeymap{
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
-		key.WithHelp("enter", "n/a"),
+		key.WithHelp("enter", "ask Claude"),
 	),
 }
 

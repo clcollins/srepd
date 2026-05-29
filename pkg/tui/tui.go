@@ -887,6 +887,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearSelectedIncidentsMsg:
 		m.clearSelectedIncident(msg)
 		return m, nil
+
+	case claudePromptMsg:
+		return m.handleClaudePrompt(msg, defaultHasClaudeCode)
+
+	case claudeResponseMsg:
+		return m.handleClaudeResponse(msg)
 	}
 
 	return m, tea.Batch(cmds...)
