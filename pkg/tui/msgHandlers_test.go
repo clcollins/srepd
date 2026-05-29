@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -260,6 +261,49 @@ func TestTableMode_SilenceKeyWithNoSelectedIncident(t *testing.T) {
 		"Silence key should set pendingConfirmation")
 	assert.Nil(t, cmd,
 		"Silence key should not return a command before confirmation")
+}
+
+// escKeyMsg returns a tea.KeyMsg that matches the Back/ESC key binding.
+func escKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyEscape}
+}
+
+func TestErrorView_BackClearsError(t *testing.T) {
+	// Scenario: The model has an error set. Pressing ESC should clear the error.
+	m := createTestModel()
+	m.err = fmt.Errorf("test error: something went wrong")
+
+	// Press ESC
+	result, _ := m.Update(escKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Nil(t, updatedModel.err,
+		"ESC should clear the error in error view mode")
+}
+
+func TestErrorView_BackTriggersRefresh(t *testing.T) {
+	// Scenario: The model has an error set. Pressing ESC should clear the error
+	// AND trigger an incident list refresh so the app recovers gracefully.
+	m := createTestModel()
+	m.err = fmt.Errorf("test error: API failure")
+
+	// Press ESC
+	result, cmd := m.Update(escKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Nil(t, updatedModel.err,
+		"ESC should clear the error")
+
+	if !assert.NotNil(t, cmd,
+		"ESC in error mode should return a command to trigger incident list refresh") {
+		t.FailNow()
+	}
+
+	// Execute the command and verify it produces an updateIncidentListMsg
+	msg := cmd()
+	_, ok := msg.(updateIncidentListMsg)
+	assert.True(t, ok,
+		"Command returned from error dismiss should produce an updateIncidentListMsg, got %T", msg)
 }
 
 func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {

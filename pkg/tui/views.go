@@ -136,9 +136,6 @@ var (
 func (m model) View() string {
 	var s strings.Builder
 
-	// errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
-	errHelpView := help.New().View(errorViewKeyMap)
-
 	s.WriteString(m.renderHeader())
 
 	switch {
@@ -150,8 +147,8 @@ func (m model) View() string {
 		s.WriteString(dot)
 		s.WriteString("\n\n")
 		s.WriteString(m.err.Error())
-		s.WriteString("\n")
-		s.WriteString(errHelpView)
+		s.WriteString("\n\n")
+		s.WriteString("Press ESC to dismiss")
 
 		return errorStyle.Render(s.String())
 
