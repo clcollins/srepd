@@ -428,7 +428,6 @@ type alertSummary struct {
 	Created  string
 	Status   string
 	Incident string
-	Details  map[string]interface{}
 	Cluster  string
 }
 
@@ -443,13 +442,6 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 		cluster := getDetailFieldFromAlert("cluster_id", alt)
 		link := getDetailFieldFromAlert("link", alt)
 
-		var details map[string]interface{}
-		if alt.Body != nil {
-			if d, ok := alt.Body["details"].(map[string]interface{}); ok {
-				details = d
-			}
-		}
-
 		s = append(s, alertSummary{
 			ID:       alt.ID,
 			Name:     name,
@@ -460,7 +452,6 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 			Created:  alt.CreatedAt,
 			Status:   alt.Status,
 			Incident: alt.Incident.ID,
-			Details:  details,
 		})
 
 	}
@@ -578,22 +569,13 @@ _none_
 _Loading alerts..._
 {{ else }}
 {{ range $alert := .Alerts }}
-{{ $alert.ID }} - {{ $alert.Status }}
-{{ if $alert.Name }}
-_{{- $alert.Name }}_
-{{- end }}
-{{ $alert.HTMLURL }}
+### {{ if $alert.Name }}{{ $alert.Name }}{{ else }}{{ $alert.ID }}{{ end }} ({{ $alert.Status }})
 
 * Cluster: {{ $alert.Cluster }}
+* SOP: {{ if $alert.Link }}{{ ToLink "SOP" $alert.Link }}{{ else }}_none_{{ end }}
+* Alert: {{ ToLink $alert.ID $alert.HTMLURL }}
 * Service: {{ $alert.Service }}
 * Created: {{ $alert.Created }}
-* SOP: {{ $alert.Link }}
-
-Details :
-
-{{ range $key, $value := $alert.Details }}
-* {{ $key }}: {{ $value }}
-{{ end }}
 
 {{ end }}
 {{ end }}

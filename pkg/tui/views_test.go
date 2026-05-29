@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"bytes"
+	"html/template"
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAssigneeArea(t *testing.T) {
@@ -369,4 +372,206 @@ func TestAddNoteTemplate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// renderTestTemplate is a helper that executes the incidentTemplate with funcMap
+// against the given incidentSummary and returns the rendered string.
+func renderTestTemplate(t *testing.T, summary incidentSummary) string {
+	t.Helper()
+	tmpl, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, summary)
+	require.NoError(t, err)
+
+	return buf.String()
+}
+
+func TestIncidentTemplate_AlertRendersAsMarkdownLink(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC001",
+		Title:        "Test Incident",
+		HTMLURL:      "https://example.pagerduty.com/incidents/INC001",
+		Service:      "Test Service",
+		Urgency:      "high",
+		Created:      "2025-01-01T00:00:00Z",
+		Status:       "triggered",
+		Acknowledged: []string{"SRE User"},
+		Alerts: []alertSummary{
+			{
+				ID:      "ALERT001",
+				Name:    "ClusterOperatorDown",
+				Link:    "https://example.com/sop/cluster-operator-down",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT001",
+				Service: "Alert Service",
+				Created: "2025-01-01T00:00:00Z",
+				Status:  "triggered",
+				Cluster: "abc-123-def",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// SOP should render as a markdown link using ToLink
+	assert.Contains(t, result, "[SOP](https://example.com/sop/cluster-operator-down)")
+
+	// Alert PD URL should render as a markdown link using ToLink
+	assert.Contains(t, result, "[ALERT001](https://example.pagerduty.com/alerts/ALERT001)")
+}
+
+func TestIncidentTemplate_AlertRendersSOPNoneWhenMissing(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC002",
+		Title:        "Test Incident No SOP",
+		HTMLURL:      "https://example.pagerduty.com/incidents/INC002",
+		Service:      "Test Service",
+		Urgency:      "high",
+		Created:      "2025-01-01T00:00:00Z",
+		Status:       "triggered",
+		Acknowledged: []string{"SRE User"},
+		Alerts: []alertSummary{
+			{
+				ID:      "ALERT002",
+				Name:    "SomeAlert",
+				Link:    "",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT002",
+				Service: "Alert Service",
+				Created: "2025-01-01T00:00:00Z",
+				Status:  "triggered",
+				Cluster: "xyz-789",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// When Link is empty, SOP should show _none_
+	assert.Contains(t, result, "_none_")
+	// Should NOT contain an empty SOP link
+	assert.NotContains(t, result, "[SOP]()")
+}
+
+func TestIncidentTemplate_NoDetailsSection(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC003",
+		Title:        "Test Incident",
+		HTMLURL:      "https://example.pagerduty.com/incidents/INC003",
+		Service:      "Test Service",
+		Urgency:      "high",
+		Created:      "2025-01-01T00:00:00Z",
+		Status:       "triggered",
+		Acknowledged: []string{"SRE User"},
+		Alerts: []alertSummary{
+			{
+				ID:      "ALERT003",
+				Name:    "TestAlert",
+				Link:    "https://example.com/sop",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT003",
+				Service: "Alert Service",
+				Created: "2025-01-01T00:00:00Z",
+				Status:  "triggered",
+				Cluster: "cluster-id",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// The rendered output should NOT contain a "Details" section
+	assert.NotContains(t, result, "Details")
+}
+
+func TestIncidentTemplate_AlertNameAsHeading(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC004",
+		Title:        "Test Incident",
+		HTMLURL:      "https://example.pagerduty.com/incidents/INC004",
+		Service:      "Test Service",
+		Urgency:      "high",
+		Created:      "2025-01-01T00:00:00Z",
+		Status:       "triggered",
+		Acknowledged: []string{"SRE User"},
+		Alerts: []alertSummary{
+			{
+				ID:      "ALERT004",
+				Name:    "KubePersistentVolumeFillingUp",
+				Link:    "https://example.com/sop",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT004",
+				Service: "Alert Service",
+				Created: "2025-01-01T00:00:00Z",
+				Status:  "triggered",
+				Cluster: "cluster-id",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// Alert name should appear as a ### heading
+	assert.Contains(t, result, "### KubePersistentVolumeFillingUp (triggered)")
+}
+
+func TestIncidentTemplate_AlertWithEmptyName(t *testing.T) {
+	summary := incidentSummary{
+		ID:           "INC005",
+		Title:        "Test Incident",
+		HTMLURL:      "https://example.pagerduty.com/incidents/INC005",
+		Service:      "Test Service",
+		Urgency:      "high",
+		Created:      "2025-01-01T00:00:00Z",
+		Status:       "triggered",
+		Acknowledged: []string{"SRE User"},
+		Alerts: []alertSummary{
+			{
+				ID:      "ALERT005",
+				Name:    "",
+				Link:    "",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT005",
+				Service: "Alert Service",
+				Created: "2025-01-01T00:00:00Z",
+				Status:  "triggered",
+				Cluster: "",
+			},
+		},
+	}
+
+	result := renderTestTemplate(t, summary)
+
+	// Should still render gracefully with empty fields
+	// The heading should fall back to the alert ID when Name is empty
+	assert.Contains(t, result, "### ALERT005 (triggered)")
+	// Should contain _none_ for SOP
+	assert.Contains(t, result, "_none_")
+}
+
+func TestSummarizeAlerts_NoDetailsField(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{
+		{
+			APIObject: pagerduty.APIObject{
+				ID:      "ALERT001",
+				HTMLURL: "https://example.pagerduty.com/alerts/ALERT001",
+			},
+			Service: pagerduty.APIObject{Summary: "Test Service"},
+			Status:  "triggered",
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "abc-123",
+					"alert_name": "TestAlert",
+					"link":       "https://example.com/sop",
+					"extra_key":  "extra_value",
+				},
+			},
+			Incident: pagerduty.APIReference{ID: "INC001"},
+		},
+	}
+
+	result := summarizeAlerts(alerts)
+
+	assert.Len(t, result, 1)
+	assert.Equal(t, "ALERT001", result[0].ID)
+	assert.Equal(t, "TestAlert", result[0].Name)
+	assert.Equal(t, "abc-123", result[0].Cluster)
+	assert.Equal(t, "https://example.com/sop", result[0].Link)
 }
