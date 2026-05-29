@@ -7,7 +7,7 @@ GOPATH := $(shell go env GOPATH | awk -F: '{print $1}')
 BIN_DIR := $(GOPATH)/bin
 HOME ?= $(shell echo ~)
 
-GOLANGCI_LINT_VERSION = v2.1.5
+GOLANGCI_LINT_VERSION = v2.12.2
 GORELEASER_VERSION = v2.8.2
 
 # Ensure go modules are enabled:

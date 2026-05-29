@@ -3,7 +3,7 @@
 ## Language -- Go
 
 - Language: Go
-- Go version: 1.24.2 (from go.mod)
+- Go version: 1.26.3 (from go.mod)
 - Module path: `github.com/clcollins/srepd`
 - Entry point: `main.go` using cobra + viper
 - Linter: golangci-lint
