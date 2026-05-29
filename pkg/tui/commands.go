@@ -246,7 +246,7 @@ func ShouldBeAcknowledged(p *pd.Config, i pagerduty.Incident, id string, autoAck
 	userIsOnCall := UserIsOnCall(p, id)
 	doIt := assigned && !acknowledged && autoAcknowledge && userIsOnCall
 	log.Debug(
-		"commands.ShouldBeAcknowledged",
+		"tui.ShouldBeAcknowledged()",
 		"assigned", assigned,
 		"acknowledged", acknowledged,
 		"autoAcknowledge", autoAcknowledge,
@@ -293,21 +293,21 @@ func UserIsOnCall(p *pd.Config, id string) bool {
 
 	onCalls, err := pd.GetUserOnCalls(p.Client, id, opts)
 	if err != nil {
-		log.Debug("commands.UserIsOnCall", "error", err)
+		log.Debug("tui.UserIsOnCall()", "error", err)
 		return false
 	}
 
 	for _, o := range onCalls {
-		log.Debug("commands.UserIsOnCall", "on-call", o)
+		log.Debug("tui.UserIsOnCall()", "on-call", o)
 
 		start, err := time.Parse(timeLayout, o.Start)
 		if err != nil {
-			log.Debug("commands.UserIsOnCall", "error parsing on-call start time", err)
+			log.Debug("tui.UserIsOnCall()", "msg", "error parsing on-call start time", "error", err)
 			return false
 		}
 		end, err := time.Parse(timeLayout, o.End)
 		if err != nil {
-			log.Debug("commands.UserIsOnCall", "error parsing on-call end time", err)
+			log.Debug("tui.UserIsOnCall()", "msg", "error parsing on-call end time", "error", err)
 			return false
 		}
 
@@ -329,19 +329,18 @@ type openBrowserMsg string
 type openSOPMsg string
 
 func openBrowserCmd(browser []string, url string) tea.Cmd {
-	log.Debug("tui.openBrowserCmd(): opening browser")
-	log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v %v", browser, url))
+	log.Debug("tui.openBrowserCmd()", "msg", "opening browser", "browser", browser, "url", url)
 
 	var args []string
 	args = append(args, browser[1:]...)
 	args = append(args, url)
 
 	c := exec.Command(browser[0], args...)
-	log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", c.String()))
+	log.Debug("tui.openBrowserCmd()", "command", c.String())
 
 	err := c.Start()
 	if err != nil {
-		log.Debug(fmt.Sprintf("tui.openBrowserCmd(): %v", err.Error()))
+		log.Debug("tui.openBrowserCmd()", "error", err)
 		return func() tea.Msg {
 			return browserFinishedMsg{err}
 		}
@@ -366,7 +365,7 @@ func openEditorCmd(editor []string, initialMsg ...string) tea.Cmd {
 
 	file, err := os.CreateTemp(os.TempDir(), "")
 	if err != nil {
-		log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+		log.Debug("tui.openEditorCmd()", "error", err)
 		return func() tea.Msg {
 			return errMsg{error: err}
 		}
@@ -376,7 +375,7 @@ func openEditorCmd(editor []string, initialMsg ...string) tea.Cmd {
 		for _, msg := range initialMsg {
 			_, err = file.WriteString(msg)
 			if err != nil {
-				log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+				log.Debug("tui.openEditorCmd()", "error", err)
 				return func() tea.Msg {
 					return errMsg{error: err}
 				}
@@ -389,10 +388,10 @@ func openEditorCmd(editor []string, initialMsg ...string) tea.Cmd {
 
 	c := exec.Command(editor[0], args...)
 
-	log.Debug(fmt.Sprintf("%+v", c))
+	log.Debug("tui.openEditorCmd()", "command", c)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		if err != nil {
-			log.Debug(fmt.Sprintf("tui.openEditorCmd(): error: %v", err))
+			log.Debug("tui.openEditorCmd()", "error", err)
 			return errMsg{error: err}
 		}
 		return editorFinishedMsg{err, file}
@@ -518,7 +517,7 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 		}
 	} else {
 		// No separator found or no env flags, use command as-is
-		log.Debug("tui.login(): using command as-is", "reason", fmt.Sprintf("insertPosition=%d, envFlagsLen=%d", insertPosition, len(envFlags)))
+		log.Debug("tui.login(): using command as-is", "insertPosition", insertPosition, "envFlagsLen", len(envFlags))
 		finalCommand = command
 	}
 
@@ -527,13 +526,13 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 	log.Debug("tui.login(): original command", "command", command)
 	log.Debug("tui.login(): env flags", "envFlags", envFlags)
 	log.Debug("tui.login(): final command", "finalCommand", finalCommand)
-	log.Debug(fmt.Sprintf("tui.login(): %v", c.String()))
+	log.Debug("tui.login()", "command", c.String())
 
 	var stdOut io.ReadCloser
 	var stdOutPipeErr error
 	stdOut, stdOutPipeErr = c.StdoutPipe()
 	if stdOutPipeErr != nil {
-		log.Warn("tui.login():", "stdOutPipeErr", stdOutPipeErr.Error())
+		log.Error("tui.login()", "error", stdOutPipeErr)
 		return func() tea.Msg {
 			return loginFinishedMsg{stdOutPipeErr}
 		}
@@ -543,7 +542,7 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 	var stdErrPipeErr error
 	stdErr, stdErrPipeErr = c.StderrPipe()
 	if stdErrPipeErr != nil {
-		log.Warn("tui.login():", "stdErrErr", stdErrPipeErr.Error())
+		log.Error("tui.login()", "error", stdErrPipeErr)
 		return func() tea.Msg {
 			return loginFinishedMsg{stdErrPipeErr}
 		}
@@ -551,7 +550,7 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 
 	startCmdErr := c.Start()
 	if startCmdErr != nil {
-		log.Warn("tui.login():", "startCmdErr", startCmdErr.Error())
+		log.Error("tui.login()", "error", startCmdErr)
 		return func() tea.Msg {
 			return loginFinishedMsg{startCmdErr}
 		}
@@ -561,7 +560,7 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 	var stdOutReadErr error
 	out, stdOutReadErr = io.ReadAll(stdOut)
 	if stdOutReadErr != nil {
-		log.Warn("tui.login():", "stdOutReadErr", stdOutReadErr.Error())
+		log.Error("tui.login()", "error", stdOutReadErr)
 		return func() tea.Msg {
 			return loginFinishedMsg{stdOutReadErr}
 		}
@@ -571,7 +570,7 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 	var stdErrReadErr error
 	errOut, stdErrReadErr = io.ReadAll(stdErr)
 	if stdErrReadErr != nil {
-		log.Warn("tui.login():", "stdErrReadErr", stdErrReadErr.Error())
+		log.Error("tui.login()", "error", stdErrReadErr)
 		return func() tea.Msg {
 			return loginFinishedMsg{stdErrReadErr}
 		}
@@ -591,19 +590,19 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 				ExitErr:    exitError,
 				ExecStdErr: string(errOut),
 			}
-			log.Warn("tui.login():", "processErr", execExitErr)
+			log.Error("tui.login()", "error", execExitErr)
 			return func() tea.Msg {
 				return loginFinishedMsg{execExitErr}
 			}
 		}
-		log.Warn("tui.login():", "processErr", processErr.Error())
+		log.Error("tui.login()", "error", processErr)
 		return func() tea.Msg {
 			return loginFinishedMsg{processErr}
 		}
 	}
 
 	if err != nil {
-		log.Warn("tui.login():", "execStdErr", err.Error())
+		log.Warn("tui.login()", "execStdErr", err.Error())
 		return func() tea.Msg {
 			// Do not return the execStdErr as an error
 			return loginFinishedMsg{}
@@ -613,7 +612,7 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 	var stdOutAsErr error
 	if len(out) > 0 {
 		stdOutAsErr = errors.New(string(out))
-		log.Warn("tui.login():", "stdOutAsErr", stdOutAsErr.Error())
+		log.Warn("tui.login()", "stdOutAsErr", stdOutAsErr.Error())
 		return func() tea.Msg {
 			return loginFinishedMsg{stdOutAsErr}
 		}
@@ -687,7 +686,7 @@ func fetchEscalationPolicyAndReEscalate(p *pd.Config, incidents []pagerduty.Inci
 		// Fetch the full escalation policy details
 		policy, err := pd.GetEscalationPolicy(p.Client, policyID, pagerduty.GetEscalationPolicyOptions{})
 		if err != nil {
-			log.Error("tui.fetchEscalationPolicyAndReEscalate", "failed to fetch escalation policy", "policy_id", policyID, "error", err)
+			log.Error("tui.fetchEscalationPolicyAndReEscalate()", "msg", "failed to fetch escalation policy", "policy_id", policyID, "error", err)
 			return errMsg{err}
 		}
 
@@ -710,21 +709,21 @@ var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid argume
 func silenceIncidents(incidents []pagerduty.Incident, policy *pagerduty.EscalationPolicy, level uint) tea.Cmd {
 	// SilenceIncidents doesn't have it's own "silencedIncidentsMessage" because it's really just a re-escalation
 	if policy == nil {
-		log.Debug("silenceIncidents: nil escalation policy provided")
+		log.Debug("tui.silenceIncidents()", "msg", "nil escalation policy provided")
 		return func() tea.Msg {
 			return errMsg{errSilenceIncidentInvalidArgs}
 		}
 	}
 
 	if len(incidents) == 0 {
-		log.Debug("silenceIncidents: no incidents provided")
+		log.Debug("tui.silenceIncidents()", "msg", "no incidents provided")
 		return func() tea.Msg {
 			return errMsg{errSilenceIncidentInvalidArgs}
 		}
 	}
 
 	if policy.Name == "" || policy.ID == "" || level == 0 {
-		log.Debug("silenceIncidents: invalid arguments", "incident(s) count: %d; policy: %s(%s), level: %d", len(incidents), policy.Name, policy.ID, level)
+		log.Debug("tui.silenceIncidents()", "msg", "invalid arguments", "incident_count", len(incidents), "policy_name", policy.Name, "policy_id", policy.ID, "level", level)
 		return func() tea.Msg {
 			return errMsg{errSilenceIncidentInvalidArgs}
 		}
@@ -732,7 +731,7 @@ func silenceIncidents(incidents []pagerduty.Incident, policy *pagerduty.Escalati
 
 	incidentIDs := getIDsFromIncidents(incidents)
 
-	log.Printf("silence requested for incident(s) %v; reassigning to %s(%s), level %d", incidentIDs, policy.Name, policy.ID, level)
+	log.Info("tui.silenceIncidents()", "msg", "silence requested", "incidents", incidentIDs, "policy_name", policy.Name, "policy_id", policy.ID, "level", level)
 
 	return func() tea.Msg {
 		return reEscalateIncidentsMsg{incidents, policy, level}

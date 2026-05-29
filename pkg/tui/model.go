@@ -125,7 +125,7 @@ func InitialModel(
 		glamour.WithWordWrap(100), // Default width, will be adjusted on window resize
 	)
 	if err != nil {
-		log.Error("InitialModel", "failed to create markdown renderer", err)
+		log.Error("tui.InitialModel()", "msg", "failed to create markdown renderer", "error", err)
 		// Continue without renderer - rendering will fall back to plain text
 		renderer = nil
 	}

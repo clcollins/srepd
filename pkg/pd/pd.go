@@ -16,7 +16,7 @@ const (
 	defaultAPITimeout = 30 * time.Second
 )
 
-var defaultIncidentStatues = []string{"triggered", "acknowledged"}
+var defaultIncidentStatuses = []string{"triggered", "acknowledged"}
 
 // contextWithTimeout returns a context with the default API timeout and its cancel func.
 func contextWithTimeout() (context.Context, context.CancelFunc) {
@@ -121,7 +121,7 @@ func NewListIncidentOptsFromDefaults() pagerduty.ListIncidentsOptions {
 	return pagerduty.ListIncidentsOptions{
 		Limit:    defaultPageLimit,
 		Offset:   defaultOffset,
-		Statuses: defaultIncidentStatues,
+		Statuses: defaultIncidentStatuses,
 	}
 
 }
