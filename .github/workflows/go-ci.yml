@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-      - 'srepd/**'
   pull_request:
     branches:
       - main
