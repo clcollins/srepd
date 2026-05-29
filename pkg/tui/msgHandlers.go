@@ -587,6 +587,8 @@ func switchErrorFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.err = nil
+			// Trigger an incident list refresh so the app recovers gracefully
+			return m, func() tea.Msg { return updateIncidentListMsg("sender: switchErrorFocusMode") }
 		}
 	}
 	return m, nil
