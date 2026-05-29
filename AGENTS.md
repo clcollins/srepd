@@ -21,6 +21,7 @@ direct `ocm backplane` login.
 | `make coverage` | Generate coverage report |
 | `make clean` | Remove build artifacts |
 | `make tidy` | Run `go mod tidy` |
+| `make plan-check` | Verify plan document exists for this branch |
 | `make test-all` | Run all checks: fmt-check, vet, lint, test |
 
 Pass extra test flags via `TESTOPTS`, e.g.:
