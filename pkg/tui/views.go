@@ -221,7 +221,7 @@ func (m model) renderFooter() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			paddedStyle.Render(refreshArea(m.autoRefresh, m.autoAcknowledge)),
+			paddedStyle.Render(refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)),
 		),
 	)
 
@@ -297,13 +297,17 @@ func statusArea(s string, showSpinner bool, spinnerView string) string {
 	return fmt.Sprintf(fstring, prefix, s)
 }
 
-func refreshArea(autoRefresh bool, autoAck bool) string {
+func refreshArea(autoRefresh bool, autoAck bool, showLowUrgency bool) string {
 	var fstring = "Watching for updates... "
 
 	if autoRefresh && autoAck {
 		fstring = fstring + " [auto-acknowledge]"
 	} else if !autoRefresh {
 		fstring = fstring + " [PAUSED]"
+	}
+
+	if !showLowUrgency {
+		fstring = fstring + " [high urgency only]"
 	}
 
 	fstring = strings.TrimSuffix(fstring, "\n")

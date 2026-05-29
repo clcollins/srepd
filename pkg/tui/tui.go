@@ -461,11 +461,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			highlightedID = currentRow[1]
 		}
 
-		var totalIncidentCount int
+		totalIncidentCount := len(m.incidentList)
+
+		// Apply urgency filter before building table rows
+		filteredIncidents := filterByUrgency(m.incidentList, m.showLowUrgency)
+
 		var rows []table.Row
 
-		for _, i := range m.incidentList {
-			totalIncidentCount++
+		for _, i := range filteredIncidents {
 			state := stateShorthand(i, m.config.CurrentUser.ID)
 			if AssignedToUser(i, m.config.CurrentUser.ID) || m.teamMode {
 				rows = append(rows, table.Row{state, i.ID, i.Title, i.Service.Summary})
@@ -481,10 +484,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Build status message with filter and count info
+		var filterSuffix string
+		if !m.showLowUrgency {
+			filterSuffix = " (high only)"
+		}
+
 		if totalIncidentCount == 1 {
-			m.setStatus(fmt.Sprintf("showing %d/%d incident...", len(m.table.Rows()), totalIncidentCount))
+			m.setStatus(fmt.Sprintf("showing %d/%d incident%s...", len(m.table.Rows()), totalIncidentCount, filterSuffix))
 		} else {
-			m.setStatus(fmt.Sprintf("showing %d/%d incidents...", len(m.table.Rows()), totalIncidentCount))
+			m.setStatus(fmt.Sprintf("showing %d/%d incidents%s...", len(m.table.Rows()), totalIncidentCount, filterSuffix))
 		}
 
 		// Re-sync selectedIncident to match highlighted row
