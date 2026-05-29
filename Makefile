@@ -7,7 +7,7 @@ GOPATH := $(shell go env GOPATH | awk -F: '{print $1}')
 BIN_DIR := $(GOPATH)/bin
 HOME ?= $(shell echo ~)
 
-GOLANGCI_LINT_VERSION = v2.1.5
+GOLANGCI_LINT_VERSION = v2.12.2
 GORELEASER_VERSION = v2.8.2
 
 # Ensure go modules are enabled:
@@ -68,7 +68,7 @@ coverage: ## Generate test coverage report
 .PHONY: getlint
 getlint: ## Install golangci-lint if not already installed
 	@echo "Checking for golangci-lint..."
-	@which golangci-lint >/dev/null 2>&1 || (echo "Installing golangci-lint..." && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(BIN_DIR) $(GOLANGCI_LINT_VERSION))
+	@which golangci-lint >/dev/null 2>&1 || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION))
 
 .PHONY: lint
 lint: getlint ## Run golangci-lint
