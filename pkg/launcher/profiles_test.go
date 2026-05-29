@@ -411,3 +411,119 @@ func TestValidateTerminal_EmptyString(t *testing.T) {
 	warning := validateTerminalExists("")
 	assert.NotEmpty(t, warning, "expected a warning for an empty terminal string")
 }
+
+// --- AppleScript terminal support (iTerm2, Terminal.app) ---
+
+func TestDetectProfile_ITerm2(t *testing.T) {
+	profile := DetectTerminalProfile("iterm2")
+	assert.IsType(t, &AppleScriptProfile{}, profile)
+	assert.Contains(t, profile.Name(), "iterm2")
+}
+
+func TestDetectProfile_ITerm2_MixedCase(t *testing.T) {
+	profile := DetectTerminalProfile("iTerm2")
+	assert.IsType(t, &AppleScriptProfile{}, profile)
+	assert.Contains(t, profile.Name(), "iterm2")
+}
+
+func TestDetectProfile_TerminalApp(t *testing.T) {
+	profile := DetectTerminalProfile("terminal")
+	assert.IsType(t, &AppleScriptProfile{}, profile)
+	assert.Contains(t, profile.Name(), "terminal")
+}
+
+func TestDetectProfile_TerminalApp_UpperCase(t *testing.T) {
+	profile := DetectTerminalProfile("Terminal")
+	assert.IsType(t, &AppleScriptProfile{}, profile)
+	assert.Contains(t, profile.Name(), "terminal")
+}
+
+func TestAppleScriptProfile_Name_ITerm2(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"}
+	assert.Equal(t, "applescript (iterm2)", p.Name())
+}
+
+func TestAppleScriptProfile_Name_Terminal(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "terminal", appName: "Terminal"}
+	assert.Equal(t, "applescript (terminal)", p.Name())
+}
+
+func TestAppleScriptProfile_BuildCommand_ITerm2(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"}
+	// terminalArgs is just ["iterm2"] since the user sets terminal: iterm2
+	termArgs := []string{"iterm2"}
+	loginCmd := []string{"ocm-container", "-C", "abc123"}
+
+	cmd, err := p.BuildCommand(termArgs, loginCmd)
+	require.NoError(t, err)
+
+	// The profile should produce an osascript command that tells iTerm2
+	// to create a window with the login command.
+	assert.Equal(t, "osascript", cmd[0])
+	assert.Equal(t, "-e", cmd[1])
+
+	// The AppleScript should reference iTerm2 and contain the login command.
+	script := cmd[2]
+	assert.Contains(t, script, "iTerm2")
+	assert.Contains(t, script, "ocm-container -C abc123")
+}
+
+func TestAppleScriptProfile_BuildCommand_TerminalApp(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "terminal", appName: "Terminal"}
+	termArgs := []string{"terminal"}
+	loginCmd := []string{"ocm-container", "-C", "abc123"}
+
+	cmd, err := p.BuildCommand(termArgs, loginCmd)
+	require.NoError(t, err)
+
+	// Should produce osascript command for Terminal.app.
+	assert.Equal(t, "osascript", cmd[0])
+	assert.Equal(t, "-e", cmd[1])
+
+	script := cmd[2]
+	assert.Contains(t, script, "Terminal")
+	assert.Contains(t, script, "ocm-container -C abc123")
+}
+
+func TestAppleScriptProfile_BuildCommand_EmptyTerminalArgs(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"}
+	_, err := p.BuildCommand([]string{}, []string{"cmd"})
+	assert.Error(t, err)
+}
+
+func TestAppleScriptProfile_BuildCommand_EmptyLoginCmd(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"}
+	_, err := p.BuildCommand([]string{"iterm2"}, []string{})
+	assert.Error(t, err)
+}
+
+func TestAppleScriptProfile_BuildCommand_ITerm2_QuotesInCommand(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"}
+	termArgs := []string{"iterm2"}
+	loginCmd := []string{"bash", "-c", "echo hello world"}
+
+	cmd, err := p.BuildCommand(termArgs, loginCmd)
+	require.NoError(t, err)
+
+	assert.Equal(t, "osascript", cmd[0])
+	script := cmd[2]
+	assert.Contains(t, script, "bash -c echo hello world")
+}
+
+func TestAppleScriptProfile_ValidateTerminal_ITerm2(t *testing.T) {
+	// "iterm2" is a virtual terminal name; validation should check for
+	// "osascript" rather than "iterm2" itself.
+	warning := validateTerminalExists("iterm2")
+	// On macOS, osascript exists. On Linux CI, it will not, so just
+	// verify it returns something sensible.
+	if warning != "" {
+		assert.Contains(t, warning, "osascript")
+	}
+}
+
+func TestAppleScriptProfile_ValidateTerminal_Terminal(t *testing.T) {
+	warning := validateTerminalExists("terminal")
+	if warning != "" {
+		assert.Contains(t, warning, "osascript")
+	}
+}
