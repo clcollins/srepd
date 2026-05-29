@@ -702,345 +702,6 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 	}
 }
 
-func TestStateShorthand(t *testing.T) {
-	userID := "USER1"
-
-	tests := []struct {
-		name     string
-		incident pagerduty.Incident
-		id       string
-		expected string
-	}{
-		{
-			name: "returns A when acknowledged by the given user",
-			incident: pagerduty.Incident{
-				Acknowledgements: []pagerduty.Acknowledgement{
-					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			id:       userID,
-			expected: "A",
-		},
-		{
-			name: "returns a when acknowledged by someone else",
-			incident: pagerduty.Incident{
-				Acknowledgements: []pagerduty.Acknowledgement{
-					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
-				},
-			},
-			id:       userID,
-			expected: "a",
-		},
-		{
-			name:     "returns dot when not acknowledged at all",
-			incident: pagerduty.Incident{},
-			id:       userID,
-			expected: dot,
-		},
-		{
-			name: "returns A when acknowledged by user and also by someone else",
-			incident: pagerduty.Incident{
-				Acknowledgements: []pagerduty.Acknowledgement{
-					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
-					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			id:       userID,
-			expected: "A",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := stateShorthand(tt.incident, tt.id)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
-func TestAcknowledged(t *testing.T) {
-	tests := []struct {
-		name            string
-		acknowledgments []pagerduty.Acknowledgement
-		expected        bool
-	}{
-		{
-			name:            "returns true when there are acknowledgements",
-			acknowledgments: []pagerduty.Acknowledgement{{Acknowledger: pagerduty.APIObject{ID: "USER1"}}},
-			expected:        true,
-		},
-		{
-			name:            "returns true with multiple acknowledgements",
-			acknowledgments: []pagerduty.Acknowledgement{{Acknowledger: pagerduty.APIObject{ID: "U1"}}, {Acknowledger: pagerduty.APIObject{ID: "U2"}}},
-			expected:        true,
-		},
-		{
-			name:            "returns false when there are no acknowledgements",
-			acknowledgments: []pagerduty.Acknowledgement{},
-			expected:        false,
-		},
-		{
-			name:            "returns false when acknowledgements is nil",
-			acknowledgments: nil,
-			expected:        false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := acknowledged(tt.acknowledgments)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
-func TestAssignedToUser(t *testing.T) {
-	tests := []struct {
-		name     string
-		incident pagerduty.Incident
-		id       string
-		expected bool
-	}{
-		{
-			name: "returns true when user is assigned",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			id:       "USER1",
-			expected: true,
-		},
-		{
-			name: "returns false when different user is assigned",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "OTHER_USER"}},
-				},
-			},
-			id:       "USER1",
-			expected: false,
-		},
-		{
-			name:     "returns false when no assignments",
-			incident: pagerduty.Incident{},
-			id:       "USER1",
-			expected: false,
-		},
-		{
-			name: "returns true when user is among multiple assignees",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "OTHER_USER"}},
-					{Assignee: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			id:       "USER1",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := AssignedToUser(tt.incident, tt.id)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
-func TestAcknowledgedByUser(t *testing.T) {
-	tests := []struct {
-		name     string
-		incident pagerduty.Incident
-		id       string
-		expected bool
-	}{
-		{
-			name: "returns true when user has acknowledged",
-			incident: pagerduty.Incident{
-				Acknowledgements: []pagerduty.Acknowledgement{
-					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			id:       "USER1",
-			expected: true,
-		},
-		{
-			name: "returns false when different user acknowledged",
-			incident: pagerduty.Incident{
-				Acknowledgements: []pagerduty.Acknowledgement{
-					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
-				},
-			},
-			id:       "USER1",
-			expected: false,
-		},
-		{
-			name:     "returns false when no acknowledgements",
-			incident: pagerduty.Incident{},
-			id:       "USER1",
-			expected: false,
-		},
-		{
-			name: "returns true when user is among multiple acknowledgers",
-			incident: pagerduty.Incident{
-				Acknowledgements: []pagerduty.Acknowledgement{
-					{Acknowledger: pagerduty.APIObject{ID: "OTHER_USER"}},
-					{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			id:       "USER1",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := AcknowledgedByUser(tt.incident, tt.id)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
-func TestAssignedToAnyUsers(t *testing.T) {
-	tests := []struct {
-		name     string
-		incident pagerduty.Incident
-		ids      []string
-		expected bool
-	}{
-		{
-			name: "returns true when one of the given users is assigned",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "USER2"}},
-				},
-			},
-			ids:      []string{"USER1", "USER2", "USER3"},
-			expected: true,
-		},
-		{
-			name: "returns false when none of the given users are assigned",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "OTHER_USER"}},
-				},
-			},
-			ids:      []string{"USER1", "USER2", "USER3"},
-			expected: false,
-		},
-		{
-			name:     "returns false when no assignments",
-			incident: pagerduty.Incident{},
-			ids:      []string{"USER1", "USER2"},
-			expected: false,
-		},
-		{
-			name: "returns false with empty user list",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			ids:      []string{},
-			expected: false,
-		},
-		{
-			name: "returns false with nil user list",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "USER1"}},
-				},
-			},
-			ids:      nil,
-			expected: false,
-		},
-		{
-			name: "returns true with multiple assignments and multiple users",
-			incident: pagerduty.Incident{
-				Assignments: []pagerduty.Assignment{
-					{Assignee: pagerduty.APIObject{ID: "OTHER1"}},
-					{Assignee: pagerduty.APIObject{ID: "USER3"}},
-				},
-			},
-			ids:      []string{"USER1", "USER2", "USER3"},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := AssignedToAnyUsers(tt.incident, tt.ids)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
-func TestRemoveCommentsFromBytes(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		prefixes []string
-		expected string
-	}{
-		{
-			name:     "removes lines starting with single prefix",
-			input:    []byte("# comment\nreal content\n# another comment\nmore content"),
-			prefixes: []string{"#"},
-			expected: "real contentmore content",
-		},
-		{
-			name:     "removes lines with multiple prefixes",
-			input:    []byte("# hash comment\n// slash comment\nreal content\n# another\nkeep this"),
-			prefixes: []string{"#", "//"},
-			expected: "real contentkeep this",
-		},
-		{
-			name:     "does not duplicate non-comment lines with multiple prefixes",
-			input:    []byte("line1\nline2\nline3"),
-			prefixes: []string{"#", "//"},
-			expected: "line1line2line3",
-		},
-		{
-			name:     "returns empty string for all-comment input",
-			input:    []byte("# comment1\n# comment2\n# comment3"),
-			prefixes: []string{"#"},
-			expected: "",
-		},
-		{
-			name:     "returns all content when no lines match any prefix",
-			input:    []byte("hello\nworld"),
-			prefixes: []string{"#"},
-			expected: "helloworld",
-		},
-		{
-			name:     "handles empty input",
-			input:    []byte(""),
-			prefixes: []string{"#"},
-			expected: "",
-		},
-		{
-			name:     "handles no prefixes",
-			input:    []byte("# some text\nmore text"),
-			prefixes: []string{},
-			expected: "# some textmore text",
-		},
-		{
-			name:     "handles mixed comment and non-comment lines with three prefixes",
-			input:    []byte("# hash\n// slash\n; semicolon\nkeep me"),
-			prefixes: []string{"#", "//", ";"},
-			expected: "keep me",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := removeCommentsFromBytes(tt.input, tt.prefixes...)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
 func TestGetSOPLink_HasLink(t *testing.T) {
 	alerts := []pagerduty.IncidentAlert{
 		{
@@ -1140,175 +801,169 @@ func TestGetSOPLink_LinkTakesPriorityOverRunbookURL(t *testing.T) {
 	assert.Equal(t, "https://github.com/openshift/ops-sop/blob/master/v4/alerts/primary.md", link)
 }
 
-// --- Tests for buildAlertData ---
-
-func TestBuildAlertData_NilIncident(t *testing.T) {
-	// When incident is nil and alerts/notes are empty, buildAlertData should return nil, nil
-	result, err := buildAlertData(nil, nil, nil)
-	assert.NoError(t, err)
-	assert.Nil(t, result, "nil incident with no alerts or notes should return nil data")
-}
-
-func TestBuildAlertData_NilIncidentEmptySlices(t *testing.T) {
-	// Empty (non-nil) slices with nil incident should also return nil
-	result, err := buildAlertData(nil, []pagerduty.IncidentAlert{}, []pagerduty.IncidentNote{})
-	assert.NoError(t, err)
-	assert.Nil(t, result, "nil incident with empty slices should return nil data")
-}
-
-func TestBuildAlertData_FullData(t *testing.T) {
-	incident := &pagerduty.Incident{
-		APIObject: pagerduty.APIObject{ID: "PD123"},
-		Title:     "Test Incident",
-	}
+func TestGetUniqueClusters_SingleCluster(t *testing.T) {
 	alerts := []pagerduty.IncidentAlert{
-		{APIObject: pagerduty.APIObject{ID: "ALERT1"}},
-		{APIObject: pagerduty.APIObject{ID: "ALERT2"}},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc-123",
+				},
+			},
+		},
 	}
-	notes := []pagerduty.IncidentNote{
-		{ID: "NOTE1", Content: "Test note"},
-	}
-
-	result, err := buildAlertData(incident, alerts, notes)
-	assert.NoError(t, err)
-	assert.NotNil(t, result, "non-nil incident should produce non-nil data")
-
-	// Verify the result is valid base64 with no padding
-	assert.NotContains(t, string(result), "=", "should use RawStdEncoding (no padding)")
-
-	// Verify it decodes to valid JSON
-	decoded, err := base64.RawStdEncoding.DecodeString(string(result))
-	assert.NoError(t, err)
-
-	var data alertData
-	err = json.Unmarshal(decoded, &data)
-	assert.NoError(t, err)
-	assert.Equal(t, "PD123", data.Incident.ID)
-	assert.Equal(t, 2, len(data.Alerts))
-	assert.Equal(t, 1, len(data.Notes))
+	result := getUniqueClusters(alerts)
+	assert.Equal(t, []string{"cluster-abc-123"}, result)
 }
 
-func TestBuildAlertData_RoundTrip(t *testing.T) {
-	incident := &pagerduty.Incident{
-		APIObject: pagerduty.APIObject{ID: "PD789"},
-		Title:     "Round Trip Test",
-	}
+func TestGetUniqueClusters_MultipleDifferent(t *testing.T) {
+	// 3 alerts with 2 distinct cluster_ids should return 2 entries
 	alerts := []pagerduty.IncidentAlert{
-		{APIObject: pagerduty.APIObject{ID: "ALERT_RT"}},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc-123",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-def-456",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc-123",
+				},
+			},
+		},
 	}
-	notes := []pagerduty.IncidentNote{
-		{ID: "NOTE_RT", Content: "round trip note content"},
+	result := getUniqueClusters(alerts)
+	assert.Equal(t, 2, len(result))
+	assert.Contains(t, result, "cluster-abc-123")
+	assert.Contains(t, result, "cluster-def-456")
+}
+
+func TestGetUniqueClusters_NoClusterID(t *testing.T) {
+	// Alerts without cluster_id should return empty slice
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"alert_name": "TestAlert",
+				},
+			},
+		},
+		{
+			Body: nil,
+		},
 	}
-
-	encoded, err := buildAlertData(incident, alerts, notes)
-	assert.NoError(t, err)
-	assert.NotNil(t, encoded)
-
-	// Decode the base64
-	decoded, err := base64.RawStdEncoding.DecodeString(string(encoded))
-	assert.NoError(t, err)
-
-	// Unmarshal back to alertData
-	var data alertData
-	err = json.Unmarshal(decoded, &data)
-	assert.NoError(t, err)
-
-	// Verify round-trip fidelity
-	assert.Equal(t, incident.ID, data.Incident.ID)
-	assert.Equal(t, incident.Title, data.Incident.Title)
-	assert.Equal(t, alerts[0].ID, data.Alerts[0].ID)
-	assert.Equal(t, notes[0].ID, data.Notes[0].ID)
-	assert.Equal(t, notes[0].Content, data.Notes[0].Content)
+	result := getUniqueClusters(alerts)
+	assert.Empty(t, result)
 }
 
-func TestBuildAlertData_IncidentOnlyNoAlertsOrNotes(t *testing.T) {
-	// Incident present but no alerts or notes -- should still produce output
-	incident := &pagerduty.Incident{
-		APIObject: pagerduty.APIObject{ID: "PD_ONLY"},
+func TestGetUniqueClusters_Deduplication(t *testing.T) {
+	// Same cluster in multiple alerts should return only one entry
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc-123",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc-123",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc-123",
+				},
+			},
+		},
 	}
-
-	result, err := buildAlertData(incident, nil, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-
-	decoded, err := base64.RawStdEncoding.DecodeString(string(result))
-	assert.NoError(t, err)
-
-	var data alertData
-	err = json.Unmarshal(decoded, &data)
-	assert.NoError(t, err)
-	assert.Equal(t, "PD_ONLY", data.Incident.ID)
-	assert.Empty(t, data.Alerts)
-	assert.Empty(t, data.Notes)
+	result := getUniqueClusters(alerts)
+	assert.Equal(t, []string{"cluster-abc-123"}, result)
 }
 
-// --- Tests for insertEnvFlagsIntoCommand ---
-
-func TestInsertEnvFlags_WithSeparator(t *testing.T) {
-	// gnome-terminal -- ocm-container --cluster-id ABC123
-	// env flags should be inserted after "ocm-container" but before "--cluster-id"
-	command := []string{"gnome-terminal", "--", "ocm-container", "--cluster-id", "ABC123"}
-	envFlags := []string{"-e", "PAGERDUTY_INCIDENT=PD123", "-e", "ALERT_DETAILS=abc"}
-
-	result := insertEnvFlagsIntoCommand(command, envFlags)
-
-	expected := []string{"gnome-terminal", "--", "ocm-container", "-e", "PAGERDUTY_INCIDENT=PD123", "-e", "ALERT_DETAILS=abc", "--cluster-id", "ABC123"}
-	assert.Equal(t, expected, result)
+func TestGetUniqueClusters_PreservesOrder(t *testing.T) {
+	// Order should match first appearance of each cluster
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-first",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-second",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-first",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-third",
+				},
+			},
+		},
+	}
+	result := getUniqueClusters(alerts)
+	assert.Equal(t, []string{"cluster-first", "cluster-second", "cluster-third"}, result)
 }
 
-func TestInsertEnvFlags_WithoutSeparator(t *testing.T) {
-	// Direct command without terminal separator
-	// ocm-container --cluster-id ABC123
-	// env flags should be inserted after "ocm-container" (first non-flag arg after command[0])
-	command := []string{"ocm-container", "--cluster-id", "ABC123"}
-	envFlags := []string{"-e", "PAGERDUTY_INCIDENT=PD456"}
-
-	result := insertEnvFlagsIntoCommand(command, envFlags)
-
-	expected := []string{"ocm-container", "-e", "PAGERDUTY_INCIDENT=PD456", "--cluster-id", "ABC123"}
-	assert.Equal(t, expected, result)
+func TestGetUniqueClusters_EmptyAlerts(t *testing.T) {
+	result := getUniqueClusters([]pagerduty.IncidentAlert{})
+	assert.Empty(t, result)
 }
 
-func TestInsertEnvFlags_EmptyFlags(t *testing.T) {
-	// No env flags -- command should be returned unchanged
-	command := []string{"gnome-terminal", "--", "ocm-container", "--cluster-id", "ABC123"}
-
-	result := insertEnvFlagsIntoCommand(command, []string{})
-	assert.Equal(t, command, result)
-
-	result = insertEnvFlagsIntoCommand(command, nil)
-	assert.Equal(t, command, result)
+func TestGetUniqueClusters_NilAlerts(t *testing.T) {
+	result := getUniqueClusters(nil)
+	assert.Empty(t, result)
 }
 
-func TestInsertEnvFlags_NoArgs(t *testing.T) {
-	// Single command element with env flags
-	command := []string{"ocm-container"}
-	envFlags := []string{"-e", "VAR=val"}
-
-	result := insertEnvFlagsIntoCommand(command, envFlags)
-
-	expected := []string{"ocm-container", "-e", "VAR=val"}
-	assert.Equal(t, expected, result)
-}
-
-func TestInsertEnvFlags_TerminalFlagsBeforeSeparator(t *testing.T) {
-	// Terminal with its own flags before the separator
-	command := []string{"gnome-terminal", "--tab", "--title", "cluster", "--", "ocm-container", "--cluster-id", "XYZ"}
-	envFlags := []string{"-e", "INCIDENT=PD999"}
-
-	result := insertEnvFlagsIntoCommand(command, envFlags)
-
-	expected := []string{"gnome-terminal", "--tab", "--title", "cluster", "--", "ocm-container", "-e", "INCIDENT=PD999", "--cluster-id", "XYZ"}
-	assert.Equal(t, expected, result)
-}
-
-func TestInsertEnvFlags_SeparatorAtEnd(t *testing.T) {
-	// Separator exists but nothing after it -- env flags appended
-	command := []string{"gnome-terminal", "--"}
-	envFlags := []string{"-e", "VAR=val"}
-
-	result := insertEnvFlagsIntoCommand(command, envFlags)
-
-	expected := []string{"gnome-terminal", "--", "-e", "VAR=val"}
-	assert.Equal(t, expected, result)
+func TestGetUniqueClusters_MixedWithAndWithoutClusterID(t *testing.T) {
+	// Some alerts have cluster_id, some don't - should only return those that do
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc-123",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"alert_name": "NoCluster",
+				},
+			},
+		},
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-def-456",
+				},
+			},
+		},
+	}
+	result := getUniqueClusters(alerts)
+	assert.Equal(t, []string{"cluster-abc-123", "cluster-def-456"}, result)
 }

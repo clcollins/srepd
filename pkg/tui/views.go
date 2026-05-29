@@ -136,6 +136,9 @@ var (
 func (m model) View() string {
 	var s strings.Builder
 
+	// errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
+	errHelpView := help.New().View(errorViewKeyMap)
+
 	s.WriteString(m.renderHeader())
 
 	switch {
@@ -147,8 +150,8 @@ func (m model) View() string {
 		s.WriteString(dot)
 		s.WriteString("\n\n")
 		s.WriteString(m.err.Error())
-		s.WriteString("\n\n")
-		s.WriteString("Press ESC to dismiss")
+		s.WriteString("\n")
+		s.WriteString(errHelpView)
 
 		return errorStyle.Render(s.String())
 
@@ -235,10 +238,13 @@ func (m model) renderHeader() string {
 		assignedTo = "Team"
 	}
 
-	// When a confirmation prompt is active, show it in the status area instead of
-	// the normal status text, using the warning style to draw attention
+	// When a cluster selection or confirmation prompt is active, show it in the
+	// status area instead of the normal status text, using the warning style to
+	// draw attention
 	var statusContent string
-	if m.pendingConfirmation != nil {
+	if m.clusterSelectMode {
+		statusContent = warningStyle.Render(m.status)
+	} else if m.pendingConfirmation != nil {
 		statusContent = warningStyle.Render(m.pendingConfirmation.prompt)
 	} else {
 		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View())

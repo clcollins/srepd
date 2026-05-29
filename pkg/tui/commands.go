@@ -413,6 +413,11 @@ func parseTemplateForNote(p *pagerduty.Incident) tea.Cmd {
 }
 
 type loginMsg string
+
+// clusterSelectedMsg is sent when the user picks a cluster from the
+// multi-cluster selection prompt. The string value is the cluster_id.
+type clusterSelectedMsg string
+
 type loginFinishedMsg struct {
 	err error
 }
@@ -424,44 +429,49 @@ type alertData struct {
 	Notes    []pagerduty.IncidentNote  `json:"notes"`
 }
 
-// buildAlertData serializes incident, alerts, and notes into a base64-encoded JSON string.
-// Returns nil, nil when there is no data to encode (nil incident and no alerts/notes).
-// Uses RawStdEncoding (standard base64 alphabet, no padding) so the output is safe for
-// environment variables that are split on '=' by ocm-container.
-func buildAlertData(incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) ([]byte, error) {
-	if incident == nil && len(alerts) == 0 && len(notes) == 0 {
-		return nil, nil
+func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
+	// The first element of Terminal is the command to be executed, followed by args, in order
+	// This handles if folks use, eg: flatpak run <some package> as a terminal.
+	command := launcher.BuildLoginCommand(vars)
+
+	// Add environment variables for PagerDuty data
+	// Find the position to insert the -e flags (before any -- separator)
+	envFlags := []string{}
+
+	// Add PAGERDUTY_INCIDENT environment variable
+	if incident != nil {
+		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT=%s", incident.ID))
 	}
 
-	data := alertData{
-		Incident: incident,
-		Alerts:   alerts,
-		Notes:    notes,
-	}
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal alert data: %w", err)
+	// Serialize and base64 encode alert details
+	if incident != nil || len(alerts) > 0 || len(notes) > 0 {
+		data := alertData{
+			Incident: incident,
+			Alerts:   alerts,
+			Notes:    notes,
+		}
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			log.Warn("tui.login(): failed to marshal alert data", "error", err)
+		} else {
+			// Use RawStdEncoding: standard base64 alphabet (+/) without padding (no = characters)
+			// No padding avoids issues with ocm-container's env var parsing which splits on =
+			// Standard alphabet ensures `echo $ALERT_DETAILS | base64 -d` works in the container
+			encoded := base64.RawStdEncoding.EncodeToString(jsonData)
+			envFlags = append(envFlags, "-e", fmt.Sprintf("ALERT_DETAILS=%s", encoded))
+		}
 	}
 
-	encoded := base64.RawStdEncoding.EncodeToString(jsonData)
-	return []byte(encoded), nil
-}
-
-// insertEnvFlagsIntoCommand inserts env flags (e.g. ["-e", "VAR=val"]) into a command
-// slice at the correct position. For commands with a "--" separator (terminal wrapper
-// commands), flags are inserted after the separator and the target command name. For
-// commands without a separator, flags are inserted after the first element (the command
-// itself). Returns the command unchanged when envFlags is empty.
-func insertEnvFlagsIntoCommand(command []string, envFlags []string) []string {
-	if len(envFlags) == 0 {
-		return command
-	}
+	// Insert env flags into command
+	// We need to find the position after any terminal separator (like "--") but before ocm-container
+	// Typical command structure: ["gnome-terminal", "--", "ocm-container", "--cluster-id", "ABC123"]
+	// We want: ["gnome-terminal", "--", "ocm-container", "-e", "VAR=val", "--cluster-id", "ABC123"]
 
 	finalCommand := []string{}
 	separatorFound := false
 	insertPosition := -1
 
-	// Find the position right after "--" separator
+	// Find the position right after "--" separator or at the start of the actual command
 	for i, arg := range command {
 		if arg == "--" {
 			separatorFound = true
@@ -470,65 +480,47 @@ func insertEnvFlagsIntoCommand(command []string, envFlags []string) []string {
 		}
 	}
 
-	// If no separator found, the insert position is right after the first element
-	// (the command itself, e.g. "ocm-container")
+	// If no separator found, look for the actual command (ocm-container, ocm, etc)
 	if !separatorFound {
-		if len(command) > 0 {
-			insertPosition = 1
+		for i, arg := range command {
+			// Skip the first element (terminal command) and find the first non-flag argument
+			if i > 0 && !strings.HasPrefix(arg, "-") {
+				insertPosition = i
+				break
+			}
 		}
 	}
 
-	if insertPosition < 0 {
-		return command
-	}
+	// Build the final command
+	log.Debug("tui.login(): building final command", "insertPosition", insertPosition, "separatorFound", separatorFound, "commandLen", len(command))
 
-	if insertPosition >= len(command) {
-		// Separator at the end or single command -- append env flags
-		finalCommand = append(finalCommand, command...)
-		finalCommand = append(finalCommand, envFlags...)
-		return finalCommand
-	}
+	if insertPosition > 0 && len(envFlags) > 0 {
+		// Insert env flags at the correct position
+		finalCommand = append(finalCommand, command[:insertPosition]...)
+		log.Debug("tui.login(): added prefix", "finalCommand", finalCommand)
 
-	// Insert env flags at the correct position
-	finalCommand = append(finalCommand, command[:insertPosition]...)
-
-	// If the element at insertPosition is a non-flag arg (the target command),
-	// include it before the env flags
-	if !strings.HasPrefix(command[insertPosition], "-") {
-		finalCommand = append(finalCommand, command[insertPosition])
-		finalCommand = append(finalCommand, envFlags...)
-		if insertPosition+1 < len(command) {
-			finalCommand = append(finalCommand, command[insertPosition+1:]...)
+		// Check if the next argument is the actual command (like "ocm-container")
+		// If so, add it first, then the env flags
+		if insertPosition < len(command) && !strings.HasPrefix(command[insertPosition], "-") {
+			log.Debug("tui.login(): found command at insertPosition", "command", command[insertPosition])
+			finalCommand = append(finalCommand, command[insertPosition])
+			finalCommand = append(finalCommand, envFlags...)
+			log.Debug("tui.login(): added command and env flags", "finalCommand", finalCommand)
+			if insertPosition+1 < len(command) {
+				finalCommand = append(finalCommand, command[insertPosition+1:]...)
+				log.Debug("tui.login(): added remaining args", "finalCommand", finalCommand)
+			}
+		} else {
+			// Otherwise just insert the env flags here
+			log.Debug("tui.login(): inserting env flags directly")
+			finalCommand = append(finalCommand, envFlags...)
+			finalCommand = append(finalCommand, command[insertPosition:]...)
 		}
 	} else {
-		finalCommand = append(finalCommand, envFlags...)
-		finalCommand = append(finalCommand, command[insertPosition:]...)
+		// No separator found or no env flags, use command as-is
+		log.Debug("tui.login(): using command as-is", "reason", fmt.Sprintf("insertPosition=%d, envFlagsLen=%d", insertPosition, len(envFlags)))
+		finalCommand = command
 	}
-
-	return finalCommand
-}
-
-func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
-	// The first element of Terminal is the command to be executed, followed by args, in order
-	// This handles if folks use, eg: flatpak run <some package> as a terminal.
-	command := launcher.BuildLoginCommand(vars)
-
-	// Build environment variable flags for PagerDuty data
-	envFlags := []string{}
-
-	if incident != nil {
-		envFlags = append(envFlags, "-e", fmt.Sprintf("PAGERDUTY_INCIDENT=%s", incident.ID))
-	}
-
-	encoded, err := buildAlertData(incident, alerts, notes)
-	if err != nil {
-		log.Warn("tui.login(): failed to build alert data", "error", err)
-	} else if encoded != nil {
-		envFlags = append(envFlags, "-e", fmt.Sprintf("ALERT_DETAILS=%s", string(encoded)))
-	}
-
-	// Insert env flags into the command at the correct position
-	finalCommand := insertEnvFlagsIntoCommand(command, envFlags)
 
 	c := exec.Command(finalCommand[0], finalCommand[1:]...)
 
@@ -585,9 +577,9 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 		}
 	}
 
-	var stderrErr error
+	var err error
 	if len(errOut) > 0 {
-		stderrErr = errors.New(string(errOut))
+		err = errors.New(string(errOut))
 	}
 
 	processErr := c.Wait()
@@ -610,8 +602,8 @@ func login(vars map[string]string, launcher launcher.ClusterLauncher, incident *
 		}
 	}
 
-	if stderrErr != nil {
-		log.Warn("tui.login():", "execStdErr", stderrErr.Error())
+	if err != nil {
+		log.Warn("tui.login():", "execStdErr", err.Error())
 		return func() tea.Msg {
 			// Do not return the execStdErr as an error
 			return loginFinishedMsg{}
@@ -786,15 +778,10 @@ func removeCommentsFromBytes(b []byte, prefixes ...string) string {
 	lines := strings.Split(string(b[:]), "\n")
 
 	for _, c := range lines {
-		isComment := false
 		for _, a := range prefixes {
-			if strings.HasPrefix(c, a) {
-				isComment = true
-				break
+			if !strings.HasPrefix(c, a) {
+				content.WriteString(c)
 			}
-		}
-		if !isComment {
-			content.WriteString(c)
 		}
 	}
 
@@ -843,6 +830,21 @@ func getSOPLink(alerts []pagerduty.IncidentAlert) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// getUniqueClusters extracts deduplicated cluster_ids from alerts, preserving
+// the order of first appearance. Alerts without a cluster_id are skipped.
+func getUniqueClusters(alerts []pagerduty.IncidentAlert) []string {
+	seen := make(map[string]bool)
+	var clusters []string
+	for _, alert := range alerts {
+		cluster := getDetailFieldFromAlert("cluster_id", alert)
+		if cluster != "" && !seen[cluster] {
+			seen[cluster] = true
+			clusters = append(clusters, cluster)
+		}
+	}
+	return clusters
 }
 
 // getEscalationPolicyKey is a helper function to determine the escalation policy key

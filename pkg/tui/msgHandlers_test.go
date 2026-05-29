@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -263,47 +262,89 @@ func TestTableMode_SilenceKeyWithNoSelectedIncident(t *testing.T) {
 		"Silence key should not return a command before confirmation")
 }
 
-// escKeyMsg returns a tea.KeyMsg that matches the Back/ESC key binding.
-func escKeyMsg() tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyEscape}
-}
-
-func TestErrorView_BackClearsError(t *testing.T) {
-	// Scenario: The model has an error set. Pressing ESC should clear the error.
+func TestClusterSelect_DigitSelectsCluster(t *testing.T) {
 	m := createTestModel()
-	m.err = fmt.Errorf("test error: something went wrong")
+	m.clusterSelectMode = true
+	m.clusterSelectOptions = []string{"cluster-abc", "cluster-def", "cluster-ghi"}
 
-	// Press ESC
-	result, _ := m.Update(escKeyMsg())
+	// Press '2' to select the second cluster
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}
+	result, cmd := m.Update(keyMsg)
 	updatedModel := result.(model)
 
-	assert.Nil(t, updatedModel.err,
-		"ESC should clear the error in error view mode")
-}
+	assert.False(t, updatedModel.clusterSelectMode,
+		"Cluster select mode should be cleared after selection")
+	assert.Nil(t, updatedModel.clusterSelectOptions,
+		"Cluster select options should be cleared after selection")
 
-func TestErrorView_BackTriggersRefresh(t *testing.T) {
-	// Scenario: The model has an error set. Pressing ESC should clear the error
-	// AND trigger an incident list refresh so the app recovers gracefully.
-	m := createTestModel()
-	m.err = fmt.Errorf("test error: API failure")
-
-	// Press ESC
-	result, cmd := m.Update(escKeyMsg())
-	updatedModel := result.(model)
-
-	assert.Nil(t, updatedModel.err,
-		"ESC should clear the error")
-
-	if !assert.NotNil(t, cmd,
-		"ESC in error mode should return a command to trigger incident list refresh") {
-		t.FailNow()
-	}
-
-	// Execute the command and verify it produces an updateIncidentListMsg
+	// The command should produce a clusterSelectedMsg with the chosen cluster
+	assert.NotNil(t, cmd, "A command should be returned after selection")
 	msg := cmd()
-	_, ok := msg.(updateIncidentListMsg)
-	assert.True(t, ok,
-		"Command returned from error dismiss should produce an updateIncidentListMsg, got %T", msg)
+	assert.Equal(t, clusterSelectedMsg("cluster-def"), msg,
+		"Should select the second cluster")
+}
+
+func TestClusterSelect_EscCancels(t *testing.T) {
+	m := createTestModel()
+	m.clusterSelectMode = true
+	m.clusterSelectOptions = []string{"cluster-abc", "cluster-def"}
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, cmd := m.Update(keyMsg)
+	updatedModel := result.(model)
+
+	assert.False(t, updatedModel.clusterSelectMode,
+		"Cluster select mode should be cleared on Escape")
+	assert.Nil(t, updatedModel.clusterSelectOptions,
+		"Cluster select options should be cleared on Escape")
+	assert.Contains(t, updatedModel.status, "cancelled",
+		"Status should indicate cancellation")
+	assert.Nil(t, cmd, "No command should be returned on cancel")
+}
+
+func TestClusterSelect_OutOfRangeIgnored(t *testing.T) {
+	m := createTestModel()
+	m.clusterSelectMode = true
+	m.clusterSelectOptions = []string{"cluster-abc"}
+
+	// Press '5' which is out of range (only 1 option)
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}}
+	result, cmd := m.Update(keyMsg)
+	updatedModel := result.(model)
+
+	assert.True(t, updatedModel.clusterSelectMode,
+		"Cluster select mode should remain active for out-of-range digit")
+	assert.NotNil(t, updatedModel.clusterSelectOptions,
+		"Cluster select options should remain for out-of-range digit")
+	assert.Nil(t, cmd, "No command for out-of-range digit")
+}
+
+func TestClusterSelect_OtherKeysIgnored(t *testing.T) {
+	m := createTestModel()
+	m.clusterSelectMode = true
+	m.clusterSelectOptions = []string{"cluster-abc", "cluster-def"}
+
+	// Press 'a' which is not a valid key in cluster selection mode
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	result, cmd := m.Update(keyMsg)
+	updatedModel := result.(model)
+
+	assert.True(t, updatedModel.clusterSelectMode,
+		"Cluster select mode should remain active for non-digit keys")
+	assert.Nil(t, cmd, "No command for non-digit keys")
+}
+
+func TestClusterSelect_ClearedOnViewTransition(t *testing.T) {
+	m := createTestModel()
+	m.clusterSelectMode = true
+	m.clusterSelectOptions = []string{"cluster-abc", "cluster-def"}
+
+	m.clearSelectedIncident("test")
+
+	assert.False(t, m.clusterSelectMode,
+		"Cluster select mode should be cleared on view transition")
+	assert.Nil(t, m.clusterSelectOptions,
+		"Cluster select options should be cleared on view transition")
 }
 
 func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
