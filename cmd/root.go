@@ -70,7 +70,7 @@ but rather a simple tool to make on-call tasks easier.`,
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 
-		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"))
+		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"), viper.GetString("toolbox_mode"))
 		if err != nil {
 			fmt.Println(err)
 			log.Fatal(err)
