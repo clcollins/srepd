@@ -589,7 +589,7 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// This un-sets the selected incident and returns to the table view
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.clearSelectedIncident(msg.String() + " (back)")
-			m.table.Focus()                                        // Ensure table regains focus immediately
+			m.table.Focus()                                         // Ensure table regains focus immediately
 			prefetchCmd := m.syncSelectedIncidentToHighlightedRow() // Re-establish selection to current cursor position
 			// Return immediately - no need to process anything else or update viewport
 			return m, prefetchCmd
