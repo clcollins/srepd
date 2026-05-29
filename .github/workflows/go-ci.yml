@@ -25,6 +25,20 @@ jobs:
       - name: Check for plan document
         run: make plan-check
 
+  readme-check:
+    name: README Update Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check README update
+        run: make readme-check
+
   fmt:
     name: Format Check
     runs-on: ubuntu-latest
