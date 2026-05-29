@@ -19,7 +19,7 @@ pkg/tui/          Bubble Tea TUI (model, views, commands, key bindings)
 pkg/launcher/     Terminal launcher for cluster investigation
 pkg/deprecation/  Configuration deprecation utilities
 pkg/rand/         Random ID generation
-hack/             Build and CI helper scripts
+docs/plans/       Plan documents (one per PR)
 ```
 
 ### Go Style
@@ -88,6 +88,24 @@ hack/             Build and CI helper scripts
 - Build targets: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64
 - Terminal support: gnome-terminal, ptyxis, konsole, kitty, alacritty,
   wezterm, foot, tmux
+
+## Documentation
+
+### Plan Documents
+
+- Every PR must include a plan document in `docs/plans/`
+- A PR without a plan document is not reviewable
+- Filenames use incrementing numbers with descriptive slug:
+  `###-slug.md` (e.g., `001-fix-mapstructure-vulnerability.md`,
+  `002-project-docs.md`)
+- Numbers are sequential creation order, not PR or issue numbers
+- Plans must include: Context, Plan/Solution, Files Modified,
+  Verification sections
+- Plans must consider lessons learned from prior `docs/plans/`
+  entries and reference predecessors when relevant
+- Superseded plans are preserved with a note at the top pointing
+  to the replacement
+- CI enforces plan document presence for every PR
 
 ## Version Control
 

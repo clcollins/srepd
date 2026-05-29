@@ -52,7 +52,18 @@ test: ## Run unit tests
 .PHONY: coverage
 coverage: ## Generate test coverage report
 	@echo "Generating test coverage report..."
-	hack/codecov.sh
+	go test ./... -coverprofile=coverage.out -covermode=atomic
+	@if [ ! -f coverage.out ]; then echo "Error: Coverage file not generated."; exit 1; fi
+	@echo "Coverage summary:"
+	go tool cover -func=coverage.out
+	@if command -v codecov >/dev/null 2>&1; then \
+		echo "Uploading coverage report to Codecov..."; \
+		codecov -f coverage.out; \
+	else \
+		echo "Codecov CLI not found. Skipping upload."; \
+	fi
+	@rm -f coverage.out
+	@echo "Test coverage report generation complete."
 
 .PHONY: getlint
 getlint: ## Install golangci-lint if not already installed
@@ -79,6 +90,27 @@ fmt: ## Format the code
 fmt-check: ## Check code formatting (CI-friendly, exits non-zero if unformatted)
 	@echo "Checking code formatting..."
 	@test -z "$$(gofmt -s -l cmd pkg)" || (echo "The following files are not formatted:"; gofmt -s -l cmd pkg; exit 1)
+
+.PHONY: plan-check
+plan-check: ## Check that a plan document exists for this branch
+	@echo "Checking for plan document..."
+	@MERGE_BASE=$$(git merge-base HEAD origin/main 2>/dev/null || echo ""); \
+	if [ -z "$$MERGE_BASE" ]; then \
+		echo "WARN: could not determine merge base with origin/main; skipping plan doc check"; \
+		exit 0; \
+	fi; \
+	PLAN_FILES=$$(git diff --name-only --diff-filter=ACMR "$$MERGE_BASE"...HEAD -- 'docs/plans/*.md' 2>/dev/null || echo ""); \
+	if [ -z "$$PLAN_FILES" ]; then \
+		echo "ERROR: no plan document found in docs/plans/"; \
+		echo ""; \
+		echo "Every PR must include a plan document in docs/plans/."; \
+		echo "See CONVENTIONS.md for the required format."; \
+		echo ""; \
+		echo "Create a file like: docs/plans/NNN-your-change.md"; \
+		exit 1; \
+	fi; \
+	echo "Plan document(s) found:"; \
+	echo "$$PLAN_FILES" | sed 's/^/  /'
 
 .PHONY: test-all
 test-all: fmt-check vet lint test ## Run all checks (fmt, vet, lint, test)
