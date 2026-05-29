@@ -587,6 +587,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		c := []string{defaultBrowserOpenCommand}
 		return m, openBrowserCmd(c, m.selectedIncident.HTMLURL)
 
+	case openSOPMsg:
+		if m.selectedIncident == nil {
+			m.setStatus("no incident selected")
+			return m, nil
+		}
+		link, ok := getSOPLink(m.selectedIncidentAlerts)
+		if !ok {
+			m.setStatus("no SOP link found")
+			return m, nil
+		}
+		if defaultBrowserOpenCommand == "" {
+			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
+		}
+
+		log.Debug("openSOPMsg", "incident", m.selectedIncident.ID, "link", link)
+		m.addActionLogEntry("s", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
+
+		c := []string{defaultBrowserOpenCommand}
+		return m, openBrowserCmd(c, link)
+
 	case browserFinishedMsg:
 		if msg.err != nil {
 			m.setStatus(fmt.Sprintf("failed to open browser: %s", msg.err))

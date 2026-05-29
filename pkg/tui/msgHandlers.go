@@ -380,6 +380,25 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			c := []string{defaultBrowserOpenCommand}
 			return m, openBrowserCmd(c, m.selectedIncident.HTMLURL)
 
+		case key.Matches(msg, defaultKeyMap.SOP):
+			if !m.incidentAlertsLoaded {
+				m.setStatus("Loading incident alerts, please wait...")
+				return m, nil
+			}
+			link, ok := getSOPLink(m.selectedIncidentAlerts)
+			if !ok {
+				m.setStatus("no SOP link found")
+				return m, nil
+			}
+			if defaultBrowserOpenCommand == "" {
+				return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
+			}
+
+			m.addActionLogEntry("s", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
+
+			c := []string{defaultBrowserOpenCommand}
+			return m, openBrowserCmd(c, link)
+
 		}
 	}
 	return m, tea.Batch(cmds...)
@@ -473,6 +492,14 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return openBrowserMsg("incident") }
+
+		case key.Matches(msg, defaultKeyMap.SOP):
+			// SOP link requires alerts to extract the link field
+			if !m.incidentAlertsLoaded {
+				m.setStatus("Loading incident alerts, please wait...")
+				return m, nil
+			}
+			return m, func() tea.Msg { return openSOPMsg("sop") }
 
 		}
 	}
