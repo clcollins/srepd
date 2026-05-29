@@ -183,6 +183,47 @@ func (m *MockPagerDutyClient) ListMembersWithContext(ctx context.Context, id str
 	}, nil
 }
 
+func (m *MockPagerDutyClient) CreateIncidentNoteWithContext(ctx context.Context, id string, note pagerduty.IncidentNote) (*pagerduty.IncidentNote, error) {
+	m.recordCall("CreateIncidentNoteWithContext")
+	if id == "err" {
+		return nil, ErrMockError
+	}
+	return &pagerduty.IncidentNote{
+		ID:      "NOTE_MOCK_001",
+		Content: note.Content,
+		User:    note.User,
+	}, nil
+}
+
+func (m *MockPagerDutyClient) GetCurrentUserWithContext(ctx context.Context, opts pagerduty.GetCurrentUserOptions) (*pagerduty.User, error) {
+	m.recordCall("GetCurrentUserWithContext")
+	return &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "MOCK_USER"},
+		Email:     "mock@example.com",
+	}, nil
+}
+
+func (m *MockPagerDutyClient) GetEscalationPolicyWithContext(ctx context.Context, id string, opts *pagerduty.GetEscalationPolicyOptions) (*pagerduty.EscalationPolicy, error) {
+	m.recordCall("GetEscalationPolicyWithContext")
+	if id == "err" {
+		return nil, ErrMockError
+	}
+	return &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: id},
+		Name:      "Mock Policy",
+	}, nil
+}
+
+func (m *MockPagerDutyClient) GetUserWithContext(ctx context.Context, id string, opts pagerduty.GetUserOptions) (*pagerduty.User, error) {
+	m.recordCall("GetUserWithContext")
+	if id == "err" {
+		return nil, ErrMockError
+	}
+	return &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: id},
+	}, nil
+}
+
 func (m *MockPagerDutyClient) ListOnCallsWithContext(ctx context.Context, opts pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error) {
 	m.recordCall("ListOnCallsWithContext")
 

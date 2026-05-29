@@ -773,10 +773,15 @@ func removeCommentsFromBytes(b []byte, prefixes ...string) string {
 	lines := strings.Split(string(b[:]), "\n")
 
 	for _, c := range lines {
+		isComment := false
 		for _, a := range prefixes {
-			if !strings.HasPrefix(c, a) {
-				content.WriteString(c)
+			if strings.HasPrefix(c, a) {
+				isComment = true
+				break
 			}
+		}
+		if !isComment {
+			content.WriteString(c)
 		}
 	}
 

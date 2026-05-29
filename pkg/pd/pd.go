@@ -402,7 +402,7 @@ func PostNote(client PagerDutyClient, id string, user *pagerduty.User, content s
 
 	n, err := client.CreateIncidentNoteWithContext(ctx, id, note)
 	if err != nil {
-		return n, err
+		return n, fmt.Errorf("pd.PostNote(): failed to create note for incident %v: %w", id, err)
 	}
 
 	return n, nil
