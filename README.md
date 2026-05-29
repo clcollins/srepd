@@ -1,3 +1,5 @@
+![srepd](img/srepd.jpg)
+
 # SREPD
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/clcollins/srepd)](https://golang.org)
