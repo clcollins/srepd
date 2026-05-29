@@ -2,6 +2,8 @@ package launcher
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -94,6 +96,48 @@ func (p *DirectProfile) BuildCommand(terminalArgs []string, loginCmd []string) (
 	return cmd, nil
 }
 
+// AppleScriptProfile is used by macOS terminals that must be launched
+// via osascript (iTerm2, Terminal.app). Instead of executing the
+// terminal binary directly, it constructs an osascript command with
+// the appropriate AppleScript to open a window and run the login
+// command inside it.
+type AppleScriptProfile struct {
+	terminalName string // lowercase identifier (e.g., "iterm2", "terminal")
+	appName      string // macOS application name (e.g., "iTerm2", "Terminal")
+}
+
+func (p *AppleScriptProfile) Name() string {
+	return fmt.Sprintf("applescript (%s)", p.terminalName)
+}
+
+func (p *AppleScriptProfile) BuildCommand(terminalArgs []string, loginCmd []string) ([]string, error) {
+	if len(terminalArgs) == 0 {
+		return nil, fmt.Errorf("terminal args must not be empty")
+	}
+	if len(loginCmd) == 0 {
+		return nil, fmt.Errorf("login command must not be empty")
+	}
+
+	fullLoginCmd := strings.Join(loginCmd, " ")
+
+	var script string
+	switch p.terminalName {
+	case "iterm2":
+		script = fmt.Sprintf(
+			`tell application "%s" to create window with default profile command "%s"`,
+			p.appName, fullLoginCmd,
+		)
+	default:
+		// Terminal.app and any other AppleScript-based terminal.
+		script = fmt.Sprintf(
+			`tell application "%s" to do script "%s"`,
+			p.appName, fullLoginCmd,
+		)
+	}
+
+	return []string{"osascript", "-e", script}, nil
+}
+
 // GenericProfile is the fallback that preserves the original launcher
 // behavior: terminal args and login command are simply concatenated.
 type GenericProfile struct{}
@@ -129,6 +173,7 @@ var separatorTerminals = map[string]bool{
 var flagTerminals = map[string]string{
 	"konsole":    "-e",
 	"alacritty":  "-e",
+	"ghostty":    "-e",
 	"terminator": "--execute",
 }
 
@@ -137,6 +182,14 @@ var directTerminals = map[string]bool{
 	"kitty":   true,
 	"foot":    true,
 	"contour": true,
+}
+
+// appleScriptTerminals maps terminal names (lowercase) to their macOS
+// application names. These terminals are launched via osascript instead
+// of being executed directly.
+var appleScriptTerminals = map[string]string{
+	"iterm2":   "iTerm2",
+	"terminal": "Terminal",
 }
 
 // flatpakAppTerminals maps Flatpak application IDs to executable names
@@ -169,6 +222,15 @@ func DetectTerminalProfile(terminalCmd string) TerminalProfile {
 	// Extract the executable name (basename, no path).
 	execName := filepath.Base(parts[0])
 
+	// If the first token is a bare Flatpak app ID (reverse-DNS with 2+
+	// dots and no spaces), resolve the inner terminal from it.
+	if isFlatpakAppID(parts[0]) {
+		if mapped, ok := flatpakAppTerminals[parts[0]]; ok {
+			execName = mapped
+		}
+		return profileForExecName(execName)
+	}
+
 	// For flatpak commands, try to find the app ID in the arguments.
 	if execName == "flatpak" || execName == "flatpak-spawn" {
 		resolvedName := resolveFlatpakTerminal(parts)
@@ -193,6 +255,13 @@ func resolveFlatpakTerminal(parts []string) string {
 
 // profileForExecName returns the correct profile for a given executable name.
 func profileForExecName(execName string) TerminalProfile {
+	// Check AppleScript terminals first (case-insensitive match).
+	if appName, ok := appleScriptTerminals[strings.ToLower(execName)]; ok {
+		return &AppleScriptProfile{
+			terminalName: strings.ToLower(execName),
+			appName:      appName,
+		}
+	}
 	if separatorTerminals[execName] {
 		return &SeparatorProfile{terminalName: execName}
 	}
@@ -203,4 +272,95 @@ func profileForExecName(execName string) TerminalProfile {
 		return &DirectProfile{terminalName: execName}
 	}
 	return &GenericProfile{}
+}
+
+// isFlatpakAppID returns true if the string looks like a reverse-DNS
+// Flatpak application ID (e.g., "org.kde.konsole"). A valid app ID has
+// at least two dots, no spaces, and no path separators.
+func isFlatpakAppID(s string) bool {
+	if s == "" {
+		return false
+	}
+	// Must not contain spaces (bare token only).
+	if strings.Contains(s, " ") {
+		return false
+	}
+	// Must not start with a path separator.
+	if strings.HasPrefix(s, "/") {
+		return false
+	}
+	// Must have at least two dots (three segments: org.kde.konsole).
+	return strings.Count(s, ".") >= 2
+}
+
+// detectRedundantFlatpakPrefix checks whether a terminal command string
+// starts with "flatpak run <app-id>" where <app-id> is a recognized
+// Flatpak application ID. If so, it returns the app ID and true,
+// indicating that the user can simplify their config to just the app ID.
+// Commands using "flatpak-spawn" are not flagged as redundant because
+// they serve a different purpose (running from inside a container).
+func detectRedundantFlatpakPrefix(terminalCmd string) (string, bool) {
+	parts := strings.Fields(terminalCmd)
+	if len(parts) < 3 {
+		return "", false
+	}
+	// Only flag "flatpak run <app-id>", not flatpak-spawn variants.
+	if filepath.Base(parts[0]) != "flatpak" {
+		return "", false
+	}
+	if parts[1] != "run" {
+		return "", false
+	}
+	if isFlatpakAppID(parts[2]) {
+		return parts[2], true
+	}
+	return "", false
+}
+
+// validateTerminalExists checks whether the terminal command is
+// available on the system. It returns a non-empty warning message if the
+// terminal cannot be found, or an empty string if everything looks fine.
+// For Flatpak app IDs, it checks for the "flatpak" binary instead.
+// For AppleScript terminals (iterm2, terminal), it checks for "osascript".
+func validateTerminalExists(terminal string) string {
+	if terminal == "" {
+		return "terminal command is empty"
+	}
+
+	parts := strings.Fields(terminal)
+	name := parts[0]
+
+	// For AppleScript terminals, check that "osascript" is available.
+	if _, ok := appleScriptTerminals[strings.ToLower(name)]; ok {
+		_, err := exec.LookPath("osascript")
+		if err != nil {
+			return fmt.Sprintf("osascript command not found in PATH; cluster login via %s may fail (requires macOS)", name)
+		}
+		return ""
+	}
+
+	// For Flatpak app IDs, check that "flatpak" is available.
+	if isFlatpakAppID(name) {
+		_, err := exec.LookPath("flatpak")
+		if err != nil {
+			return fmt.Sprintf("flatpak command not found in PATH; cluster login via %s may fail", name)
+		}
+		return ""
+	}
+
+	// Full path: use os.Stat.
+	if strings.HasPrefix(name, "/") {
+		_, err := os.Stat(name)
+		if err != nil {
+			return fmt.Sprintf("terminal path %s does not exist", name)
+		}
+		return ""
+	}
+
+	// Bare command: use exec.LookPath.
+	_, err := exec.LookPath(name)
+	if err != nil {
+		return fmt.Sprintf("terminal command %s not found in PATH", name)
+	}
+	return ""
 }
