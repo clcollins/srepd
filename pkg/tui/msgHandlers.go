@@ -20,7 +20,7 @@ func (m model) setStatusMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // errMsgHandler is the message handler for the errMsg message
 func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Error("errMsgHandler", "tea.errMsg", msg)
+	log.Error("tui.errMsgHandler()", "error", msg)
 	m.setStatus(msg.(errMsg).Error())
 	m.err = msg.(errMsg)
 	return m, nil

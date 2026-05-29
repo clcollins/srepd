@@ -115,7 +115,7 @@ func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
 	// Handle the Terminal command
 	// The first arg should not be something replaceable, as checked in the
 	// validate function
-	log.Debug("launcher.ClusterLauncher(): building command from terminal", "terminal", l.terminal[0])
+	log.Debug("launcher.BuildLoginCommand()", "terminal", l.terminal[0])
 	command = append(command, l.terminal[0])
 
 	// If there are more than one terminal arguments, replace the vars
@@ -125,9 +125,9 @@ func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
 		command = append(command, replaceVars(l.terminal[1:], vars)...)
 	}
 	command = append(command, replaceVars(l.clusterLoginCommand, vars)...)
-	log.Debug("launcher.ClusterLauncher(): built command", "command", command)
+	log.Debug("launcher.BuildLoginCommand()", "command", command)
 	for x, i := range command {
-		log.Debug("launcher.ClusterLauncher(): build command argument", fmt.Sprintf("[%d]", x), i)
+		log.Debug("launcher.BuildLoginCommand()", "index", x, "arg", i)
 	}
 
 	return command
@@ -141,11 +141,11 @@ func replaceVars(args []string, vars map[string]string) []string {
 	str := strings.Join(args, " ")
 
 	for k, v := range vars {
-		log.Debug("ClusterLauncher():", "Replacing vars in string", str, k, v)
+		log.Debug("launcher.replaceVars()", "string", str, "key", k, "value", v)
 		str = strings.ReplaceAll(str, k, v)
 	}
 
-	log.Debug("launcher.replaceVars(): Replaced vars in string", "string", str)
+	log.Debug("launcher.replaceVars()", "result", str)
 
 	transformedArgs := strings.Split(str, " ")
 	return transformedArgs

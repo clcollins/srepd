@@ -551,7 +551,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if len(m.selectedIncidentAlerts) == 0 {
-			log.Debug("Update", reflect.TypeOf(msg), fmt.Sprintf("no alerts found for incident %s - requeuing", m.selectedIncident.ID))
+			log.Debug("tui.Update()", "msg_type", reflect.TypeOf(msg), "msg", "no alerts found for incident - requeuing", "incident", m.selectedIncident.ID)
 			return m, func() tea.Msg { return loginMsg("sender: loginMsg; requeue") }
 		}
 
