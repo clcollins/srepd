@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -242,7 +243,7 @@ func NewDevPagerDutyClient(fixtures *Fixtures) (*DevPagerDutyClient, error) {
 		client.escalationPolicies[key] = client.escalationPolicies[fp.ID]
 	}
 
-	// Convert fixture incidents to PagerDuty incidents
+	// Convert fixture incidents to PagerDuty incidents, preserving fixture order
 	for _, fi := range fixtures.Incidents {
 		incident := convertFixtureIncident(fi)
 		client.incidents[fi.ID] = incident
@@ -476,10 +477,14 @@ func (d *DevPagerDutyClient) ListIncidentsWithContext(_ context.Context, opts pa
 			}
 		}
 
-		// Return a copy to prevent external mutation
-		copy := *incident
-		incidents = append(incidents, copy)
+		incidentCopy := *incident
+		incidents = append(incidents, incidentCopy)
 	}
+
+	// Sort by CreatedAt descending (newest first), matching PagerDuty API behavior
+	sort.Slice(incidents, func(i, j int) bool {
+		return incidents[i].CreatedAt > incidents[j].CreatedAt
+	})
 
 	return &pagerduty.ListIncidentsResponse{
 		Incidents: incidents,

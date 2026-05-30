@@ -367,6 +367,119 @@ func TestDevClient_ListOnCalls(t *testing.T) {
 	})
 }
 
+func TestDevClient_ListIncidents_StableOrder(t *testing.T) {
+	client := newTestDevClient(t)
+	ctx := context.Background()
+
+	t.Run("returns incidents sorted by CreatedAt descending", func(t *testing.T) {
+		resp, err := client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{})
+		require.NoError(t, err)
+		require.True(t, len(resp.Incidents) > 1, "need at least 2 incidents to verify order")
+
+		// Verify descending CreatedAt order (newest first, matching PD API)
+		for i := 1; i < len(resp.Incidents); i++ {
+			assert.True(t, resp.Incidents[i-1].CreatedAt >= resp.Incidents[i].CreatedAt,
+				"incident %d (%s) should be >= incident %d (%s) by CreatedAt",
+				i-1, resp.Incidents[i-1].CreatedAt, i, resp.Incidents[i].CreatedAt)
+		}
+	})
+
+	t.Run("order is stable across repeated calls", func(t *testing.T) {
+		var firstOrder []string
+		resp, err := client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{})
+		require.NoError(t, err)
+		for _, inc := range resp.Incidents {
+			firstOrder = append(firstOrder, inc.ID)
+		}
+
+		// Call multiple times and verify the order never changes
+		for attempt := 0; attempt < 20; attempt++ {
+			resp, err := client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{})
+			require.NoError(t, err)
+			for i, inc := range resp.Incidents {
+				assert.Equal(t, firstOrder[i], inc.ID, "order changed on attempt %d at index %d", attempt, i)
+			}
+		}
+	})
+
+	t.Run("order is preserved after acknowledging an incident", func(t *testing.T) {
+		// Capture order before mutation
+		resp, err := client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{})
+		require.NoError(t, err)
+		var orderBefore []string
+		for _, inc := range resp.Incidents {
+			orderBefore = append(orderBefore, inc.ID)
+		}
+
+		// Acknowledge an incident in the middle of the list
+		_, err = client.ManageIncidentsWithContext(ctx, "dev@example.com", []pagerduty.ManageIncidentsOptions{
+			{
+				ID:     "PDEV_INC_005",
+				Status: "acknowledged",
+				Assignments: []pagerduty.Assignee{
+					{
+						Assignee: pagerduty.APIObject{
+							ID:   "PDEV_USER_001",
+							Type: "user_reference",
+						},
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		// Verify order is unchanged
+		resp, err = client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{})
+		require.NoError(t, err)
+		for i, inc := range resp.Incidents {
+			assert.Equal(t, orderBefore[i], inc.ID, "order changed after ack at index %d", i)
+		}
+	})
+
+	t.Run("filtered results preserve relative order", func(t *testing.T) {
+		// First acknowledge a specific incident so we have both statuses
+		_, err := client.ManageIncidentsWithContext(ctx, "dev@example.com", []pagerduty.ManageIncidentsOptions{
+			{
+				ID:     "PDEV_INC_002",
+				Status: "acknowledged",
+				Assignments: []pagerduty.Assignee{
+					{
+						Assignee: pagerduty.APIObject{
+							ID:   "PDEV_USER_001",
+							Type: "user_reference",
+						},
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		// Get full list to know the expected relative order
+		fullResp, err := client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{})
+		require.NoError(t, err)
+
+		// Get triggered-only list
+		triggeredResp, err := client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{
+			Statuses: []string{"triggered"},
+		})
+		require.NoError(t, err)
+
+		// Verify triggered incidents appear in the same relative order as the full list
+		triggeredIdx := 0
+		for _, inc := range fullResp.Incidents {
+			if triggeredIdx >= len(triggeredResp.Incidents) {
+				break
+			}
+			if inc.Status == "triggered" {
+				assert.Equal(t, triggeredResp.Incidents[triggeredIdx].ID, inc.ID,
+					"triggered incident at filtered index %d has wrong relative order", triggeredIdx)
+				triggeredIdx++
+			}
+		}
+		assert.Equal(t, len(triggeredResp.Incidents), triggeredIdx, "not all triggered incidents were matched")
+	})
+}
+
 func TestDevClient_ImplementsInterface(t *testing.T) {
 	// Compile-time check that DevPagerDutyClient implements PagerDutyClientInterface
 	var _ PagerDutyClientInterface = (*DevPagerDutyClient)(nil)
