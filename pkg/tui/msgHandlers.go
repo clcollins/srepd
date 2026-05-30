@@ -350,6 +350,10 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		// fetch full incident data from the API before proceeding.
 
 		case key.Matches(msg, defaultKeyMap.Enter):
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
 			// Clear any pending confirmation on view transition
 			m.pendingConfirmation = nil
 			// Check if we have cached data for this incident
@@ -491,6 +495,15 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened %s in browser", m.selectedIncident.ID)), openBrowserCmd(c, m.selectedIncident.HTMLURL))
 
 		case key.Matches(msg, defaultKeyMap.SOP):
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			m.syncSelectedIncidentToHighlightedRow()
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			if !m.incidentAlertsLoaded {
 				m.setStatus("Loading incident alerts, please wait...")
 				return m, nil
@@ -626,34 +639,46 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Refresh):
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			return m, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) }
 
 		case key.Matches(msg, defaultKeyMap.Ack):
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			return m, func() tea.Msg { return acknowledgeIncidentsMsg{} }
 
 		case key.Matches(msg, defaultKeyMap.UnAck):
-			incidentID := ""
-			if m.selectedIncident != nil {
-				incidentID = m.selectedIncident.ID
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
 			}
 			m.pendingConfirmation = &confirmActionState{
-				prompt: fmt.Sprintf("Re-escalate %s? [y/n]", incidentID),
+				prompt: fmt.Sprintf("Re-escalate %s? [y/n]", m.selectedIncident.ID),
 				action: func() tea.Msg { return unAcknowledgeIncidentsMsg{} },
 			}
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Silence):
-			incidentID := ""
-			if m.selectedIncident != nil {
-				incidentID = m.selectedIncident.ID
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
 			}
 			m.pendingConfirmation = &confirmActionState{
-				prompt: fmt.Sprintf("Silence %s? [y/n]", incidentID),
+				prompt: fmt.Sprintf("Silence %s? [y/n]", m.selectedIncident.ID),
 				action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
 			}
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Note):
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			// Note template requires full incident data (HTMLURL, Title, Service.Summary)
 			if !m.incidentDataLoaded {
 				m.setStatus("Loading incident details, please wait...")
@@ -662,6 +687,10 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return parseTemplateForNoteMsg("add note") }
 
 		case key.Matches(msg, defaultKeyMap.Login):
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			// Login requires alerts to extract cluster_id
 			if !m.incidentAlertsLoaded {
 				m.setStatus("Loading incident alerts, please wait...")
@@ -670,6 +699,10 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return loginMsg("login") }
 
 		case key.Matches(msg, defaultKeyMap.Open):
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			// Browser open requires HTMLURL from full incident data
 			if !m.incidentDataLoaded {
 				m.setStatus("Loading incident details, please wait...")
@@ -678,6 +711,10 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return openBrowserMsg("incident") }
 
 		case key.Matches(msg, defaultKeyMap.SOP):
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
 			// SOP link requires alerts to extract the link field
 			if !m.incidentAlertsLoaded {
 				m.setStatus("Loading incident alerts, please wait...")
