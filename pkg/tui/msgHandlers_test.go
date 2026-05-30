@@ -262,6 +262,222 @@ func TestTableMode_SilenceKeyWithNoSelectedIncident(t *testing.T) {
 		"Silence key should not return a command before confirmation")
 }
 
+// enterKeyMsg returns a tea.KeyMsg that matches the Enter key binding.
+func enterKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyEnter}
+}
+
+// sopKeyMsg returns a tea.KeyMsg that matches the SOP key binding ('s').
+func sopKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}
+}
+
+// loginKeyMsg returns a tea.KeyMsg that matches the Login key binding ('l').
+func loginKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
+}
+
+// refreshKeyMsg returns a tea.KeyMsg that matches the Refresh key binding ('r').
+func refreshKeyMsg() tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+}
+
+func TestTableMode_EnterKeyWithNoRows(t *testing.T) {
+	// Scenario: Table has no rows at all. Pressing Enter key should gracefully
+	// report "no incident highlighted" instead of opening an empty incident viewer.
+
+	m := createTestModel()
+	m.table = table.New(table.WithFocused(true))
+
+	result, cmd := m.Update(enterKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident",
+		"Enter key with empty table should report no incident")
+	assert.False(t, updatedModel.viewingIncident,
+		"Should not open incident viewer when no row is highlighted")
+	assert.Nil(t, cmd,
+		"Enter key with empty table should not return a command")
+}
+
+func TestTableMode_SOPKeyWithNoRows(t *testing.T) {
+	// Scenario: Table has no rows at all. Pressing SOP key should gracefully
+	// handle this (status message about no incident, no panic).
+
+	m := createTestModel()
+	m.table = table.New(table.WithFocused(true))
+
+	result, cmd := m.Update(sopKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident",
+		"SOP key with empty table should report no incident")
+	assert.Nil(t, cmd,
+		"SOP key with empty table should not return a command")
+}
+
+func TestTableMode_SOPKeyWithNoSelectedIncident(t *testing.T) {
+	// Scenario: The table has rows with incidents highlighted, but
+	// selectedIncident is nil. Pressing SOP key should sync the highlighted
+	// row and proceed (sync happens inside the handler).
+
+	incidents := []pagerduty.Incident{
+		{
+			APIObject:          pagerduty.APIObject{ID: "Q111", HTMLURL: "https://example.pagerduty.com/incidents/Q111"},
+			Title:              "Test Alert",
+			Service:            pagerduty.APIObject{ID: "SVC1", Summary: "test-service"},
+			LastStatusChangeAt: time.Now().Format(time.RFC3339),
+		},
+	}
+
+	m := createTestModelWithTableRows(incidents)
+	m.selectedIncident = nil
+
+	// Press the SOP key
+	result, _ := m.Update(sopKeyMsg())
+	updatedModel := result.(model)
+
+	// The status should NOT be "no incident highlighted" - there IS a row highlighted
+	assert.NotEqual(t, "no incident highlighted", updatedModel.status,
+		"SOP key should not report 'no incident highlighted' when a row is highlighted")
+}
+
+func TestTableMode_LoginKeyWithNoRows(t *testing.T) {
+	// Scenario: Table has no rows at all. Pressing Login key should gracefully
+	// handle this via doIfIncidentSelected.
+
+	m := createTestModel()
+	m.table = table.New(table.WithFocused(true))
+
+	result, cmd := m.Update(loginKeyMsg())
+	updatedModel := result.(model)
+
+	// doIfIncidentSelected checks SelectedRow() and returns a setStatusMsg
+	// The cmd when executed should produce a "no incident selected" status
+	assert.NotNil(t, cmd, "Login key should return a status command even with no rows")
+	msg := cmd()
+	statusMsg, ok := msg.(setStatusMsg)
+	assert.True(t, ok, "Should return a setStatusMsg")
+	assert.Contains(t, statusMsg.string, "no incident",
+		"Should indicate no incident selected")
+
+	_ = updatedModel
+}
+
+// --- Incident view mode: actions with nil selectedIncident ---
+
+func TestIncidentViewMode_AckWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(ackKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"Ack in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
+func TestIncidentViewMode_UnAckWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(unAckKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"UnAck in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
+func TestIncidentViewMode_SilenceWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(silenceKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"Silence in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
+func TestIncidentViewMode_NoteWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(noteKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"Note in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
+func TestIncidentViewMode_LoginWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(loginKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"Login in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
+func TestIncidentViewMode_OpenWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(openKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"Open in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
+func TestIncidentViewMode_SOPWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(sopKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"SOP in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
+func TestIncidentViewMode_RefreshWithNilSelectedIncident(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = nil
+
+	result, cmd := m.Update(refreshKeyMsg())
+	updatedModel := result.(model)
+
+	assert.Contains(t, updatedModel.status, "no incident selected",
+		"Refresh in incident view with nil selectedIncident should report no incident selected")
+	assert.Nil(t, cmd,
+		"No command should be returned when selectedIncident is nil")
+}
+
 func TestClusterSelect_DigitSelectsCluster(t *testing.T) {
 	m := createTestModel()
 	m.clusterSelectMode = true
