@@ -443,45 +443,45 @@ func TestUpdatedIncidentListNoPrefetch(t *testing.T) {
 func TestProgressiveRendering(t *testing.T) {
 	tests := []struct {
 		name                 string
-		activeTab            int
+		activeSection        int
 		incidentNotesLoaded  bool
 		incidentAlertsLoaded bool
 		expectedContains     []string
 		expectedNotContains  []string
 	}{
 		{
-			name:                 "Tab header shows loading indicator for notes when not loaded",
-			activeTab:            0,
+			name:                 "Section header shows loading for notes when not loaded",
+			activeSection:        sectionAlerts,
 			incidentNotesLoaded:  false,
 			incidentAlertsLoaded: true,
 			expectedContains:     []string{"Notes (...)"},
 			expectedNotContains:  []string{"Alerts (...)"},
 		},
 		{
-			name:                 "Tab header shows loading indicator for alerts when not loaded",
-			activeTab:            0,
+			name:                 "Section header shows loading for alerts when not loaded",
+			activeSection:        sectionAlerts,
 			incidentNotesLoaded:  true,
 			incidentAlertsLoaded: false,
 			expectedContains:     []string{"Alerts (...)"},
 			expectedNotContains:  []string{"Notes (...)"},
 		},
 		{
-			name:                 "Tab header shows both loading indicators when neither loaded",
-			activeTab:            0,
+			name:                 "Section header shows both loading when neither loaded",
+			activeSection:        sectionAlerts,
 			incidentNotesLoaded:  false,
 			incidentAlertsLoaded: false,
 			expectedContains:     []string{"Notes (...)", "Alerts (...)"},
 		},
 		{
-			name:                 "Alerts tab shows loading message when alerts not loaded",
-			activeTab:            1,
+			name:                 "Alerts section shows loading when alerts not loaded",
+			activeSection:        sectionAlerts,
 			incidentNotesLoaded:  true,
 			incidentAlertsLoaded: false,
 			expectedContains:     []string{"Loading alerts..."},
 		},
 		{
-			name:                 "Notes tab shows loading message when notes not loaded",
-			activeTab:            2,
+			name:                 "Notes section shows loading when notes not loaded",
+			activeSection:        sectionNotes,
 			incidentNotesLoaded:  false,
 			incidentAlertsLoaded: true,
 			expectedContains:     []string{"Loading notes..."},
@@ -502,7 +502,7 @@ func TestProgressiveRendering(t *testing.T) {
 
 			m := model{
 				selectedIncident:     incident,
-				activeTab:            tt.activeTab,
+				activeSection:        tt.activeSection,
 				incidentNotesLoaded:  tt.incidentNotesLoaded,
 				incidentAlertsLoaded: tt.incidentAlertsLoaded,
 				incidentCache:        make(map[string]*cachedIncidentData),
@@ -1194,67 +1194,55 @@ func TestSyncSelectedIncident_SameIncidentReturnsNil(t *testing.T) {
 	})
 }
 
-func TestTabReset_OnClearSelectedIncident(t *testing.T) {
-	t.Run("clearSelectedIncident resets tab state to defaults", func(t *testing.T) {
+func TestSectionReset_OnClearSelectedIncident(t *testing.T) {
+	t.Run("clearSelectedIncident resets section state to defaults", func(t *testing.T) {
 		m := createTestModel()
 		m.selectedIncident = &pagerduty.Incident{
 			APIObject: pagerduty.APIObject{ID: "Q123"},
 		}
 		m.viewingIncident = true
-		m.activeTab = 2
+		m.activeSection = 1
 		m.activeAlertIdx = 3
 		m.activeNoteIdx = 1
 
 		m.clearSelectedIncident("test reset")
 
-		assert.Equal(t, 0, m.activeTab, "activeTab should reset to 0")
+		assert.Equal(t, 0, m.activeSection, "activeSection should reset to 0")
 		assert.Equal(t, 0, m.activeAlertIdx, "activeAlertIdx should reset to 0")
 		assert.Equal(t, 0, m.activeNoteIdx, "activeNoteIdx should reset to 0")
 	})
 }
 
-func TestTabSwitch_LeftRight(t *testing.T) {
+func TestSectionSwitch_UpDown(t *testing.T) {
 	tests := []struct {
-		name        string
-		initialTab  int
-		keyMsg      tea.KeyMsg
-		expectedTab int
+		name            string
+		initialSection  int
+		keyMsg          tea.KeyMsg
+		expectedSection int
 	}{
 		{
-			name:        "Tab key cycles from Details to Alerts",
-			initialTab:  0,
-			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
-			expectedTab: 1,
+			name:            "Down key switches from Alerts to Notes",
+			initialSection:  0,
+			keyMsg:          tea.KeyMsg{Type: tea.KeyDown},
+			expectedSection: 1,
 		},
 		{
-			name:        "Tab key cycles from Alerts to Notes",
-			initialTab:  1,
-			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
-			expectedTab: 2,
+			name:            "Down key wraps from Notes to Alerts",
+			initialSection:  1,
+			keyMsg:          tea.KeyMsg{Type: tea.KeyDown},
+			expectedSection: 0,
 		},
 		{
-			name:        "Tab key wraps from Notes back to Details",
-			initialTab:  2,
-			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
-			expectedTab: 0,
+			name:            "Up key switches from Notes to Alerts",
+			initialSection:  1,
+			keyMsg:          tea.KeyMsg{Type: tea.KeyUp},
+			expectedSection: 0,
 		},
 		{
-			name:        "Shift+Tab cycles from Details to Notes (backward wrap)",
-			initialTab:  0,
-			keyMsg:      tea.KeyMsg{Type: tea.KeyShiftTab},
-			expectedTab: 2,
-		},
-		{
-			name:        "Shift+Tab cycles from Notes to Alerts",
-			initialTab:  2,
-			keyMsg:      tea.KeyMsg{Type: tea.KeyShiftTab},
-			expectedTab: 1,
-		},
-		{
-			name:        "Shift+Tab cycles from Alerts to Details",
-			initialTab:  1,
-			keyMsg:      tea.KeyMsg{Type: tea.KeyShiftTab},
-			expectedTab: 0,
+			name:            "Up key wraps from Alerts to Notes",
+			initialSection:  0,
+			keyMsg:          tea.KeyMsg{Type: tea.KeyUp},
+			expectedSection: 1,
 		},
 	}
 
@@ -1262,7 +1250,7 @@ func TestTabSwitch_LeftRight(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := createTestModel()
 			m.viewingIncident = true
-			m.activeTab = tt.initialTab
+			m.activeSection = tt.initialSection
 			m.selectedIncident = &pagerduty.Incident{
 				APIObject: pagerduty.APIObject{ID: "Q123"},
 			}
@@ -1278,13 +1266,107 @@ func TestTabSwitch_LeftRight(t *testing.T) {
 			result, _ := m.Update(tt.keyMsg)
 			updatedModel := result.(model)
 
-			assert.Equal(t, tt.expectedTab, updatedModel.activeTab,
-				"activeTab should be %d after key press", tt.expectedTab)
+			assert.Equal(t, tt.expectedSection, updatedModel.activeSection,
+				"activeSection should be %d after key press", tt.expectedSection)
 		})
 	}
 }
 
-func TestAlertTab_Navigation(t *testing.T) {
+func TestTabKey_CyclesItemsInActiveSection(t *testing.T) {
+	tests := []struct {
+		name             string
+		activeSection    int
+		initialAlertIdx  int
+		initialNoteIdx   int
+		alertCount       int
+		noteCount        int
+		keyMsg           tea.KeyMsg
+		expectedAlertIdx int
+		expectedNoteIdx  int
+	}{
+		{
+			name:             "Tab in alerts section advances alert index",
+			activeSection:    0,
+			initialAlertIdx:  0,
+			alertCount:       3,
+			noteCount:        1,
+			keyMsg:           tea.KeyMsg{Type: tea.KeyTab},
+			expectedAlertIdx: 1,
+			expectedNoteIdx:  0,
+		},
+		{
+			name:             "Tab in notes section advances note index",
+			activeSection:    1,
+			initialNoteIdx:   0,
+			alertCount:       1,
+			noteCount:        3,
+			keyMsg:           tea.KeyMsg{Type: tea.KeyTab},
+			expectedAlertIdx: 0,
+			expectedNoteIdx:  1,
+		},
+		{
+			name:             "Shift+Tab in alerts section decrements alert index with wrap",
+			activeSection:    0,
+			initialAlertIdx:  0,
+			alertCount:       3,
+			noteCount:        1,
+			keyMsg:           tea.KeyMsg{Type: tea.KeyShiftTab},
+			expectedAlertIdx: 2,
+			expectedNoteIdx:  0,
+		},
+		{
+			name:             "Shift+Tab in notes section decrements note index with wrap",
+			activeSection:    1,
+			initialNoteIdx:   0,
+			alertCount:       1,
+			noteCount:        3,
+			keyMsg:           tea.KeyMsg{Type: tea.KeyShiftTab},
+			expectedAlertIdx: 0,
+			expectedNoteIdx:  2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModel()
+			m.viewingIncident = true
+			m.activeSection = tt.activeSection
+			m.activeAlertIdx = tt.initialAlertIdx
+			m.activeNoteIdx = tt.initialNoteIdx
+			m.selectedIncident = &pagerduty.Incident{
+				APIObject: pagerduty.APIObject{ID: "Q123"},
+			}
+			m.incidentAlertsLoaded = true
+			m.incidentNotesLoaded = true
+
+			var alerts []pagerduty.IncidentAlert
+			for i := 0; i < tt.alertCount; i++ {
+				alerts = append(alerts, pagerduty.IncidentAlert{
+					APIObject: pagerduty.APIObject{ID: fmt.Sprintf("A%d", i)},
+				})
+			}
+			m.selectedIncidentAlerts = alerts
+
+			var notes []pagerduty.IncidentNote
+			for i := 0; i < tt.noteCount; i++ {
+				notes = append(notes, pagerduty.IncidentNote{
+					ID: fmt.Sprintf("N%d", i),
+				})
+			}
+			m.selectedIncidentNotes = notes
+
+			result, _ := m.Update(tt.keyMsg)
+			updatedModel := result.(model)
+
+			assert.Equal(t, tt.expectedAlertIdx, updatedModel.activeAlertIdx,
+				"activeAlertIdx should be %d", tt.expectedAlertIdx)
+			assert.Equal(t, tt.expectedNoteIdx, updatedModel.activeNoteIdx,
+				"activeNoteIdx should be %d", tt.expectedNoteIdx)
+		})
+	}
+}
+
+func TestAlertSection_Navigation(t *testing.T) {
 	tests := []struct {
 		name             string
 		initialAlertIdx  int
@@ -1326,7 +1408,7 @@ func TestAlertTab_Navigation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := createTestModel()
 			m.viewingIncident = true
-			m.activeTab = 1 // Alerts tab
+			m.activeSection = sectionAlerts
 			m.activeAlertIdx = tt.initialAlertIdx
 			m.selectedIncident = &pagerduty.Incident{
 				APIObject: pagerduty.APIObject{ID: "Q123"},
@@ -1350,7 +1432,7 @@ func TestAlertTab_Navigation(t *testing.T) {
 	}
 }
 
-func TestNoteTab_Navigation(t *testing.T) {
+func TestNoteSection_Navigation(t *testing.T) {
 	tests := []struct {
 		name            string
 		initialNoteIdx  int
@@ -1392,7 +1474,7 @@ func TestNoteTab_Navigation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := createTestModel()
 			m.viewingIncident = true
-			m.activeTab = 2 // Notes tab
+			m.activeSection = sectionNotes
 			m.activeNoteIdx = tt.initialNoteIdx
 			m.selectedIncident = &pagerduty.Incident{
 				APIObject: pagerduty.APIObject{ID: "Q123"},
@@ -1416,10 +1498,10 @@ func TestNoteTab_Navigation(t *testing.T) {
 	}
 }
 
-func TestTabBoundsCheck(t *testing.T) {
+func TestSectionBoundsCheck(t *testing.T) {
 	tests := []struct {
 		name             string
-		activeTab        int
+		activeSection    int
 		alertIdx         int
 		noteIdx          int
 		alertCount       int
@@ -1430,7 +1512,7 @@ func TestTabBoundsCheck(t *testing.T) {
 	}{
 		{
 			name:             "Alert index clamped with single alert - right wraps to 0",
-			activeTab:        1,
+			activeSection:    sectionAlerts,
 			alertIdx:         0,
 			alertCount:       1,
 			keyMsg:           tea.KeyMsg{Type: tea.KeyRight},
@@ -1438,7 +1520,7 @@ func TestTabBoundsCheck(t *testing.T) {
 		},
 		{
 			name:            "Note index clamped with single note - right wraps to 0",
-			activeTab:       2,
+			activeSection:   sectionNotes,
 			noteIdx:         0,
 			noteCount:       1,
 			keyMsg:          tea.KeyMsg{Type: tea.KeyRight},
@@ -1446,7 +1528,7 @@ func TestTabBoundsCheck(t *testing.T) {
 		},
 		{
 			name:             "Number key out of range is ignored for alerts",
-			activeTab:        1,
+			activeSection:    sectionAlerts,
 			alertIdx:         0,
 			alertCount:       2,
 			keyMsg:           tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}},
@@ -1454,7 +1536,7 @@ func TestTabBoundsCheck(t *testing.T) {
 		},
 		{
 			name:            "Number key out of range is ignored for notes",
-			activeTab:       2,
+			activeSection:   sectionNotes,
 			noteIdx:         0,
 			noteCount:       2,
 			keyMsg:          tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}},
@@ -1466,7 +1548,7 @@ func TestTabBoundsCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := createTestModel()
 			m.viewingIncident = true
-			m.activeTab = tt.activeTab
+			m.activeSection = tt.activeSection
 			m.activeAlertIdx = tt.alertIdx
 			m.activeNoteIdx = tt.noteIdx
 			m.selectedIncident = &pagerduty.Incident{
@@ -1494,10 +1576,10 @@ func TestTabBoundsCheck(t *testing.T) {
 			result, _ := m.Update(tt.keyMsg)
 			updatedModel := result.(model)
 
-			if tt.activeTab == 1 {
+			if tt.activeSection == sectionAlerts {
 				assert.Equal(t, tt.expectedAlertIdx, updatedModel.activeAlertIdx)
 			}
-			if tt.activeTab == 2 {
+			if tt.activeSection == sectionNotes {
 				assert.Equal(t, tt.expectedNoteIdx, updatedModel.activeNoteIdx)
 			}
 		})
@@ -1507,7 +1589,7 @@ func TestTabBoundsCheck(t *testing.T) {
 func TestNumberKeys_JumpToIndex(t *testing.T) {
 	tests := []struct {
 		name             string
-		activeTab        int
+		activeSection    int
 		count            int
 		keyMsg           tea.KeyMsg
 		expectedAlertIdx int
@@ -1515,21 +1597,21 @@ func TestNumberKeys_JumpToIndex(t *testing.T) {
 	}{
 		{
 			name:             "Pressing 1 jumps to first alert",
-			activeTab:        1,
+			activeSection:    sectionAlerts,
 			count:            5,
 			keyMsg:           tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}},
 			expectedAlertIdx: 0,
 		},
 		{
 			name:             "Pressing 3 jumps to third alert",
-			activeTab:        1,
+			activeSection:    sectionAlerts,
 			count:            5,
 			keyMsg:           tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}},
 			expectedAlertIdx: 2,
 		},
 		{
 			name:            "Pressing 2 jumps to second note",
-			activeTab:       2,
+			activeSection:   sectionNotes,
 			count:           3,
 			keyMsg:          tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}},
 			expectedNoteIdx: 1,
@@ -1540,7 +1622,7 @@ func TestNumberKeys_JumpToIndex(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := createTestModel()
 			m.viewingIncident = true
-			m.activeTab = tt.activeTab
+			m.activeSection = tt.activeSection
 			m.selectedIncident = &pagerduty.Incident{
 				APIObject: pagerduty.APIObject{ID: "Q123"},
 			}
@@ -1550,7 +1632,7 @@ func TestNumberKeys_JumpToIndex(t *testing.T) {
 			var alerts []pagerduty.IncidentAlert
 			var notes []pagerduty.IncidentNote
 
-			if tt.activeTab == 1 {
+			if tt.activeSection == sectionAlerts {
 				for i := 0; i < tt.count; i++ {
 					alerts = append(alerts, pagerduty.IncidentAlert{
 						APIObject: pagerduty.APIObject{ID: fmt.Sprintf("A%d", i)},
@@ -1569,10 +1651,10 @@ func TestNumberKeys_JumpToIndex(t *testing.T) {
 			result, _ := m.Update(tt.keyMsg)
 			updatedModel := result.(model)
 
-			if tt.activeTab == 1 {
+			if tt.activeSection == sectionAlerts {
 				assert.Equal(t, tt.expectedAlertIdx, updatedModel.activeAlertIdx)
 			}
-			if tt.activeTab == 2 {
+			if tt.activeSection == sectionNotes {
 				assert.Equal(t, tt.expectedNoteIdx, updatedModel.activeNoteIdx)
 			}
 		})

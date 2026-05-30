@@ -335,19 +335,49 @@ func (m model) template() (string, error) {
 	summary.AlertsLoading = !m.incidentAlertsLoaded
 	summary.NotesLoading = !m.incidentNotesLoaded
 
-	// Render tab header
-	alertCount := len(alerts)
-	noteCount := len(notes)
-	tabHeader := renderTabHeader(m.activeTab, alertCount, noteCount, summary.AlertsLoading, summary.NotesLoading)
+	var content strings.Builder
 
-	var content string
+	// 1. Always render details at the top
+	tmpl, err := template.New("details").Funcs(funcMap).Parse(detailsTabTemplate)
+	if err != nil {
+		return "", err
+	}
+	o := new(bytes.Buffer)
+	err = tmpl.Execute(o, summary)
+	if err != nil {
+		return "", err
+	}
+	content.WriteString(o.String())
+	content.WriteString("\n---\n")
 
-	switch m.activeTab {
-	case tabAlerts:
+	// 2. Render both sections with active/inactive markers
+	// Active section comes first, inactive section second
+	sections := []int{sectionAlerts, sectionNotes}
+	for _, section := range sections {
+		sectionContent, sectionErr := m.renderSection(section, summary)
+		if sectionErr != nil {
+			return "", sectionErr
+		}
+		content.WriteString(sectionContent)
+	}
+
+	return content.String(), nil
+}
+
+// renderSection renders a single section (alerts or notes) with its header and content.
+func (m model) renderSection(section int, summary incidentSummary) (string, error) {
+	var content strings.Builder
+	isActive := section == m.activeSection
+
+	switch section {
+	case sectionAlerts:
+		header := renderSectionHeader("Alerts", len(summary.Alerts), isActive, summary.AlertsLoading)
+		content.WriteString("\n" + header + "\n")
+
 		if summary.AlertsLoading {
-			content = tabHeader + "\n\n_Loading alerts..._\n"
+			content.WriteString("\n_Loading alerts..._\n")
 		} else if len(summary.Alerts) == 0 {
-			content = tabHeader + "\n\n_No alerts_\n"
+			content.WriteString("\n_No alerts_\n")
 		} else {
 			idx := m.activeAlertIdx
 			if idx >= len(summary.Alerts) {
@@ -358,7 +388,7 @@ func (m model) template() (string, error) {
 				Index: idx,
 				Total: len(summary.Alerts),
 			}
-			tmpl, err := template.New("alert").Funcs(funcMap).Parse(alertTabTemplate)
+			tmpl, err := template.New("alert").Funcs(funcMap).Parse(alertSectionTemplate)
 			if err != nil {
 				return "", err
 			}
@@ -367,14 +397,17 @@ func (m model) template() (string, error) {
 			if err != nil {
 				return "", err
 			}
-			content = tabHeader + "\n" + o.String()
+			content.WriteString(o.String())
 		}
 
-	case tabNotes:
+	case sectionNotes:
+		header := renderSectionHeader("Notes", len(summary.Notes), isActive, summary.NotesLoading)
+		content.WriteString("\n" + header + "\n")
+
 		if summary.NotesLoading {
-			content = tabHeader + "\n\n_Loading notes..._\n"
+			content.WriteString("\n_Loading notes..._\n")
 		} else if len(summary.Notes) == 0 {
-			content = tabHeader + "\n\n_No notes_\n"
+			content.WriteString("\n_No notes_\n")
 		} else {
 			idx := m.activeNoteIdx
 			if idx >= len(summary.Notes) {
@@ -385,7 +418,7 @@ func (m model) template() (string, error) {
 				Index: idx,
 				Total: len(summary.Notes),
 			}
-			tmpl, err := template.New("note").Funcs(funcMap).Parse(noteTabTemplate)
+			tmpl, err := template.New("note").Funcs(funcMap).Parse(noteSectionTemplate)
 			if err != nil {
 				return "", err
 			}
@@ -394,23 +427,11 @@ func (m model) template() (string, error) {
 			if err != nil {
 				return "", err
 			}
-			content = tabHeader + "\n" + o.String()
+			content.WriteString(o.String())
 		}
-
-	default: // tabDetails
-		tmpl, err := template.New("details").Funcs(funcMap).Parse(detailsTabTemplate)
-		if err != nil {
-			return "", err
-		}
-		o := new(bytes.Buffer)
-		err = tmpl.Execute(o, summary)
-		if err != nil {
-			return "", err
-		}
-		content = tabHeader + "\n" + o.String()
 	}
 
-	return content, nil
+	return content.String(), nil
 }
 
 func addNoteTemplate(id string, title string, service string) (string, error) {
@@ -670,7 +691,15 @@ func renderIncidentMarkdown(m *model, content string) (string, error) {
 	return str, nil
 }
 
-// Tab constants
+// Section constants (details always visible, these are the selectable sections)
+const (
+	sectionAlerts = 0
+	sectionNotes  = 1
+	sectionCount  = 2
+)
+
+// Tab constants are kept as aliases for backward compatibility with tests
+// that reference them, but the tab-based navigation is replaced by sections.
 const (
 	tabDetails = 0
 	tabAlerts  = 1
@@ -692,7 +721,33 @@ type singleNoteTabData struct {
 	Total int
 }
 
+// renderSectionHeader renders a section header with an active/inactive marker.
+// Active sections use a filled triangle, inactive use a hollow triangle.
+// Example: ">> Alerts (3)                    [Tab: cycle | Up/Down: select section]"
+func renderSectionHeader(name string, count int, active bool, loading bool) string {
+	var marker string
+	if active {
+		marker = ">>"
+	} else {
+		marker = "> "
+	}
+
+	var countStr string
+	if loading {
+		countStr = "(...)"
+	} else {
+		countStr = fmt.Sprintf("(%d)", count)
+	}
+
+	header := fmt.Sprintf("%s %s %s", marker, name, countStr)
+	if active {
+		header += "                    [Tab: cycle | Up/Down: select section]"
+	}
+	return header
+}
+
 // renderTabHeader renders the tab bar with counts and highlights the active tab.
+// Kept for backward compatibility with tests.
 // Example: " [Details]  Alerts (5)  Notes (3) "
 func renderTabHeader(activeTab int, alertCount int, noteCount int, alertsLoading bool, notesLoading bool) string {
 	tabs := make([]string, tabCount)
@@ -748,7 +803,7 @@ Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
 {{- end -}}
 `
 
-// alertTabTemplate renders a single alert with navigation header
+// alertTabTemplate renders a single alert with navigation header (kept for backward compatibility)
 const alertTabTemplate = `
 ### Alert {{ add1 .Index }}/{{ .Total }}
 
@@ -761,13 +816,32 @@ const alertTabTemplate = `
 * Created: {{ .Alert.Created }}
 `
 
-// noteTabTemplate renders a single note with navigation header
+// noteTabTemplate renders a single note with navigation header (kept for backward compatibility)
 const noteTabTemplate = `
 ### Note {{ add1 .Index }}/{{ .Total }}
 
 > {{ .Note.Content }}
 
 -- {{ .Note.User }} @ {{ .Note.Created }}
+`
+
+// alertSectionTemplate renders a single alert in the section layout
+const alertSectionTemplate = `
+**Alert {{ add1 .Index }}/{{ .Total }}**: {{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }} ({{ .Alert.Status }}){{ if .Alert.Severity }} [{{ .Alert.Severity }}]{{ end }}{{ if .Alert.AlertType }} ({{ .Alert.AlertType }}){{ end }}
+
+  * Cluster: {{ .Alert.Cluster }}
+  * SOP: {{ if .Alert.Link }}{{ ToLink "SOP" .Alert.Link }}{{ else }}_none_{{ end }}
+  * Alert: {{ ToLink .Alert.ID .Alert.HTMLURL }}
+  * Service: {{ .Alert.Service }}
+  * Created: {{ .Alert.Created }}
+`
+
+// noteSectionTemplate renders a single note in the section layout
+const noteSectionTemplate = `
+**Note {{ add1 .Index }}/{{ .Total }}**
+
+  > {{ .Note.Content }}
+  -- {{ .Note.User }} @ {{ .Note.Created }}
 `
 
 const noteTemplate = `

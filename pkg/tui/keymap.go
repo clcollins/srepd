@@ -20,8 +20,8 @@ func (k keymap) FullHelp() [][]key.Binding {
 		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence},
 		// Column 3: Settings & toggles, Quit at bottom
 		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ViewLog, k.Quit},
-		// Column 4: Tab navigation (incident viewer)
-		{k.TabNext, k.TabPrev, k.ItemNext, k.ItemPrev},
+		// Column 4: Section navigation (incident viewer)
+		{k.Up, k.Down, k.TabNext, k.TabPrev, k.ItemNext, k.ItemPrev},
 	}
 
 	// Column 4: Chord commands (generated from chordActions registry)
@@ -186,11 +186,11 @@ var defaultKeyMap = keymap{
 	),
 	TabNext: key.NewBinding(
 		key.WithKeys("tab"),
-		key.WithHelp("tab", "next tab"),
+		key.WithHelp("tab", "next item"),
 	),
 	TabPrev: key.NewBinding(
 		key.WithKeys("shift+tab"),
-		key.WithHelp("shift+tab", "prev tab"),
+		key.WithHelp("shift+tab", "prev item"),
 	),
 	ItemNext: key.NewBinding(
 		key.WithKeys("right"),
