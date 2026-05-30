@@ -19,7 +19,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 		// Column 2: Primary incident actions
 		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence},
 		// Column 3: Settings & toggles, Quit at bottom
-		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ToggleActionLog, k.ViewLog, k.Quit},
+		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ViewLog, k.Quit},
 		// Column 4: Tab navigation (incident viewer)
 		{k.TabNext, k.TabPrev, k.ItemNext, k.ItemPrev},
 	}
@@ -34,33 +34,32 @@ func (k keymap) FullHelp() [][]key.Binding {
 }
 
 type keymap struct {
-	Up              key.Binding
-	Down            key.Binding
-	Top             key.Binding
-	Bottom          key.Binding
-	Back            key.Binding
-	Enter           key.Binding
-	Quit            key.Binding
-	Help            key.Binding
-	Team            key.Binding
-	Refresh         key.Binding
-	AutoRefresh     key.Binding
-	Note            key.Binding
-	Silence         key.Binding
-	Ack             key.Binding
-	UnAck           key.Binding
-	AutoAck         key.Binding
-	ToggleActionLog key.Binding
-	Urgency         key.Binding
-	Input           key.Binding
-	Login           key.Binding
-	Open            key.Binding
-	SOP             key.Binding
-	ViewLog         key.Binding
-	TabNext         key.Binding
-	TabPrev         key.Binding
-	ItemNext        key.Binding
-	ItemPrev        key.Binding
+	Up          key.Binding
+	Down        key.Binding
+	Top         key.Binding
+	Bottom      key.Binding
+	Back        key.Binding
+	Enter       key.Binding
+	Quit        key.Binding
+	Help        key.Binding
+	Team        key.Binding
+	Refresh     key.Binding
+	AutoRefresh key.Binding
+	Note        key.Binding
+	Silence     key.Binding
+	Ack         key.Binding
+	UnAck       key.Binding
+	AutoAck     key.Binding
+	Urgency     key.Binding
+	Input       key.Binding
+	Login       key.Binding
+	Open        key.Binding
+	SOP         key.Binding
+	ViewLog     key.Binding
+	TabNext     key.Binding
+	TabPrev     key.Binding
+	ItemNext    key.Binding
+	ItemPrev    key.Binding
 }
 
 type inputKeymap struct {
@@ -161,10 +160,6 @@ var defaultKeyMap = keymap{
 		key.WithKeys("ctrl+a"),
 		key.WithHelp("ctrl+a", "toggle auto-acknowledge"),
 	),
-	ToggleActionLog: key.NewBinding(
-		key.WithKeys("ctrl+l"),
-		key.WithHelp("ctrl+l", "toggle action log"),
-	),
 	Urgency: key.NewBinding(
 		key.WithKeys("u"),
 		key.WithHelp("u", "toggle urgency filter"),
@@ -186,8 +181,8 @@ var defaultKeyMap = keymap{
 		key.WithHelp("s", "open SOP"),
 	),
 	ViewLog: key.NewBinding(
-		key.WithKeys("ctrl+d"),
-		key.WithHelp("ctrl+d", "view debug log"),
+		key.WithKeys("ctrl+l"),
+		key.WithHelp("ctrl+l", "view debug log"),
 	),
 	TabNext: key.NewBinding(
 		key.WithKeys("tab"),

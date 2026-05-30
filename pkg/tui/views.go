@@ -112,16 +112,6 @@ var (
 		Header:   tableHeaderStyle,
 	}
 
-	// Action log table styles - header with border like main table, no selection highlight
-	actionLogTableStyle = table.Styles{
-		Cell:     tableCellStyle,
-		Selected: tableCellStyle,   // Same as cell style = no highlight
-		Header:   tableHeaderStyle, // Same header style as main table (with border)
-	}
-
-	// Action log container style - border like main table
-	actionLogContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
-
 	errorStyle = lipgloss.NewStyle().
 			Bold(true).
 			Width(64).
@@ -171,12 +161,6 @@ func (m model) View() string {
 			s.WriteString(m.input.View())
 		} else {
 			s.WriteString("") // Preserve empty line when input not focused
-		}
-		// Only render action log if it's toggled on
-		if m.showActionLog {
-			s.WriteString("\n")
-			// Render action log table with border like main table
-			s.WriteString(actionLogContainerStyle.Render(m.actionLogTable.View()))
 		}
 	}
 

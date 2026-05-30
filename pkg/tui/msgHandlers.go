@@ -74,15 +74,11 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	tableVerticalScratchWidth := tableVerticalMargins + tableVerticalPadding + tableVerticalBorders + cellVerticalPadding + cellVerticalMargins + cellVerticalBorders
 
 	tableWidth := windowSize.Width - horizontalScratchWidth - tableHorizontalScratchWidth
-	// Reserve lines for input field (1 line) and action log when visible (11 lines for 5-row table + spacing)
+	// Reserve lines for input field (1 line)
 	// Additional spacing for help (needs ~12 lines when expanded with 10-item columns)
 	inputReservedLines := 1
 	additionalSpacing := 15
-	actionLogReservedLines := 0
-	if m.showActionLog {
-		actionLogReservedLines = 11
-	}
-	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents - actionLogReservedLines - inputReservedLines - additionalSpacing
+	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents - inputReservedLines - additionalSpacing
 	// table.SetHeight subtracts the rendered header height (2 lines: text + bottom border)
 	// from the value we pass, so the minimum must exceed the header height to keep the
 	// internal viewport height positive and avoid a panic in viewport.visibleLines
@@ -91,10 +87,6 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.table.SetHeight(tableHeight)
-
-	// Action log table setup - fixed 6 rows
-	actionLogHeight := 6
-	m.actionLogTable.SetHeight(actionLogHeight)
 
 	// converting to floats, rounding up and converting back to int handles layout issues arising from odd numbers
 	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
@@ -119,19 +111,6 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		{Title: "Summary", Width: columnWidth},
 		{Title: "Service", Width: columnWidth},
 	})
-
-	// Action log table columns: total width must match main table
-	// First column needs width 2 to accommodate 2-char sequences like "^e", "%R"
-	// We compensate by taking 1 from the last column
-	// Total: 2 + 15 + columnWidth + (columnWidth-1) = 16 + 2*columnWidth = same as main table
-	m.actionLogTable.SetColumns([]table.Column{
-		{Title: " " + dot, Width: 2},               // Keypress column - space + dot like main table
-		{Title: "ID", Width: idWidth - dotWidth},   // ID column (same as main table)
-		{Title: "Summary", Width: columnWidth},     // Summary column (same as main table)
-		{Title: "Service", Width: columnWidth - 1}, // Action column (1 less to compensate)
-	})
-	// Set explicit width to force table to respect column widths and not auto-size
-	m.actionLogTable.SetWidth(tableWidth)
 
 	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth
 	// Account for header (2 lines), footer (1 line), help (~2 lines), bottom status (1 line), and spacing
@@ -209,11 +188,6 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.AutoAck) {
 		m.autoAcknowledge = !m.autoAcknowledge
-		return m, nil
-	}
-
-	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.ToggleActionLog) {
-		m.showActionLog = !m.showActionLog
 		return m, nil
 	}
 
@@ -513,11 +487,8 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 			}
 
-			// TEMPORARY: Log open action to action log for testing
-			m.addActionLogEntry("o", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
-
 			c := []string{defaultBrowserOpenCommand}
-			return m, openBrowserCmd(c, m.selectedIncident.HTMLURL)
+			return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened %s in browser", m.selectedIncident.ID)), openBrowserCmd(c, m.selectedIncident.HTMLURL))
 
 		case key.Matches(msg, defaultKeyMap.SOP):
 			if !m.incidentAlertsLoaded {
@@ -533,10 +504,8 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 			}
 
-			m.addActionLogEntry("s", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
-
 			c := []string{defaultBrowserOpenCommand}
-			return m, openBrowserCmd(c, link)
+			return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened SOP for %s", m.selectedIncident.ID)), openBrowserCmd(c, link))
 
 		case key.Matches(msg, defaultKeyMap.ViewLog):
 			return m, readLogFile(m.logFilePath)

@@ -18,7 +18,6 @@ const (
 	title              = "SREPD: It really whips the PDs' ACKs!"
 	waitTime           = time.Millisecond * 1
 	defaultInputPrompt = " $ "
-	maxStaleAge        = time.Minute * 5 // How long resolved incidents stay in action log
 	nilNoteErr         = "incident note content is empty"
 	nilIncidentMsg     = "no incident selected"
 )
@@ -191,6 +190,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case setStatusMsg:
 		return m.setStatusMsgHandler(msg)
+
+	case clearFlashMsg:
+		// Only clear the status if it still matches the flash message.
+		// This prevents a newer message from being prematurely dismissed.
+		if m.status == msg.message {
+			m.setStatus("")
+		}
+		return m, nil
 
 	// Command to trigger a regular poll for new incidents
 	case PollIncidentsMsg:
@@ -367,36 +374,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		var acknowledgeIncidentsList []pagerduty.Incident
 
-		// If m.incidentList contains incidents that are not in msg.incidents, they've been resolved
-		// Add them to the action log with key "R" instead of keeping them in the main table
+		// Flash notification for resolved incidents
+		var resolvedIDs []string
 		for _, i := range m.incidentList {
 			idx := slices.IndexFunc(msg.incidents, func(incident pagerduty.Incident) bool {
 				return incident.ID == i.ID
 			})
-
-			// If incident not in current list, it's been resolved
 			if idx == -1 {
-				// Check if it's already in the action log to avoid duplicates
-				alreadyLogged := false
-				for _, entry := range m.actionLog {
-					if entry.id == i.ID && entry.key == "%R" {
-						alreadyLogged = true
-						break
-					}
-				}
-
-				if !alreadyLogged {
-					log.Debug("Update", "updatedIncidentListMsg", "adding resolved incident to action log", "incident", i.ID)
-					m.addActionLogEntry("%R", i.ID, i.Title, i.Service.Summary)
-				}
+				resolvedIDs = append(resolvedIDs, i.ID)
 			}
+		}
+		if len(resolvedIDs) > 0 {
+			resolvedMsg := fmt.Sprintf("Resolved: %s", strings.Join(resolvedIDs, ", "))
+			cmds = append(cmds, m.flashNotification(resolvedMsg))
 		}
 
 		// Overwrite m.incidentList with current incidents
 		m.incidentList = msg.incidents
-
-		// Age out resolved incidents from action log that are older than maxStaleAge
-		m.ageOutResolvedIncidents(maxStaleAge)
 
 		// Note: We no longer pre-fetch all incident details, alerts, and notes here.
 		// This was inefficient because:
@@ -541,8 +535,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Log note addition to action log
-		m.addActionLogEntry("n", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
+		// Flash notification for note addition
+		cmds = append(cmds, m.flashNotification(fmt.Sprintf("Added note to %s", m.selectedIncident.ID)))
 
 		cmds = append(cmds, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) })
 
@@ -624,12 +618,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{fmt.Errorf("unsupported OS: no browser open command available")} }
 		}
 
-		// TEMPORARY: Log open action to action log for testing
 		log.Debug("openBrowserMsg", "incident", m.selectedIncident.ID, "title", m.selectedIncident.Title, "service", m.selectedIncident.Service.Summary)
-		m.addActionLogEntry("o", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
 
 		c := []string{defaultBrowserOpenCommand}
-		return m, openBrowserCmd(c, m.selectedIncident.HTMLURL)
+		return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened %s in browser", m.selectedIncident.ID)), openBrowserCmd(c, m.selectedIncident.HTMLURL))
 
 	case openSOPMsg:
 		if m.selectedIncident == nil {
@@ -646,10 +638,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		log.Debug("openSOPMsg", "incident", m.selectedIncident.ID, "link", link)
-		m.addActionLogEntry("s", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
 
 		c := []string{defaultBrowserOpenCommand}
-		return m, openBrowserCmd(c, link)
+		return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened SOP for %s", m.selectedIncident.ID)), openBrowserCmd(c, link))
 
 	case browserFinishedMsg:
 		if msg.err != nil {
@@ -797,14 +788,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
-		m.setStatus(fmt.Sprintf("acknowledged incidents: %s", incidentIDs))
 
-		// Log each acknowledgement to action log
-		for _, incident := range msg.incidents {
-			m.addActionLogEntry("a", incident.ID, incident.Title, incident.Service.Summary)
-		}
-
-		return m, func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") }
+		return m, tea.Batch(
+			m.flashNotification(fmt.Sprintf("Acknowledged %s", incidentIDs)),
+			func() tea.Msg { return updateIncidentListMsg("sender: acknowledgedIncidentsMsg") },
+		)
 
 	case reassignIncidentsMsg:
 		if msg.incidents == nil {
@@ -835,15 +823,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case reEscalatedIncidentsMsg:
 		m.apiInProgress = false
-		incidentIDs := getIDsFromIncidents(msg)
-		m.setStatus(fmt.Sprintf("re-escalated incidents %v; refreshing Incident List ", incidentIDs))
+		incidentIDs := strings.Join(getIDsFromIncidents(msg), " ")
 
-		// Log each re-escalation to action log
-		for _, incident := range msg {
-			m.addActionLogEntry("^e", incident.ID, incident.Title, incident.Service.Summary)
-		}
-
-		return m, func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") }
+		return m, tea.Batch(
+			m.flashNotification(fmt.Sprintf("Re-escalated %s", incidentIDs)),
+			func() tea.Msg { return updateIncidentListMsg("sender: reEscalatedIncidentsMsg") },
+		)
 
 	case silenceSelectedIncidentMsg:
 		if m.selectedIncident == nil {
@@ -851,16 +836,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Log silence action immediately
-		m.addActionLogEntry("^s", m.selectedIncident.ID, m.selectedIncident.Title, m.selectedIncident.Service.Summary)
-
+		incidentID := m.selectedIncident.ID
 		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
 
 		m.apiInProgress = true
-		return m, tea.Sequence(
-			m.spinner.Tick,
-			silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
-			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
+		return m, tea.Batch(
+			m.flashNotification(fmt.Sprintf("Silenced %s", incidentID)),
+			tea.Sequence(
+				m.spinner.Tick,
+				silenceIncidents([]pagerduty.Incident{*m.selectedIncident}, m.config.EscalationPolicies[policyKey], silentDefaultPolicyLevel),
+				func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceSelectedIncidentMsg") },
+			),
 		)
 
 	case silenceIncidentsMsg:
@@ -874,14 +860,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			incidents = append(msg.incidents, *m.selectedIncident)
 		}
 
-		// Log each silence action
-		for _, incident := range incidents {
-			m.addActionLogEntry("^s", incident.ID, incident.Title, incident.Service.Summary)
-		}
+		incidentIDs := strings.Join(getIDsFromIncidents(incidents), " ")
 
-		return m, tea.Sequence(
-			silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
-			func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },
+		return m, tea.Batch(
+			m.flashNotification(fmt.Sprintf("Silenced %s", incidentIDs)),
+			tea.Sequence(
+				silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
+				func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },
+			),
 		)
 
 	case clearSelectedIncidentsMsg:

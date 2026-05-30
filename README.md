@@ -91,7 +91,7 @@ Press `h` to toggle the help overlay inside srepd.
 | `t` | Toggle team/individual | `ctrl+s` | Silence |
 | `r` | Refresh | `ctrl+e` | Re-escalate |
 | `ctrl+r` | Toggle auto-refresh | `u` | Toggle urgency filter |
-| `ctrl+a` | Toggle auto-acknowledge | `ctrl+l` | Toggle action log |
+| `ctrl+a` | Toggle auto-acknowledge | `ctrl+l` | View debug log |
 | `ctrl+q`/`ctrl+c` | Quit | `1`-`9` | Select cluster |
 | `i`/`:` | Ask Claude | | |
 | `ctrl+x` + key | Chord commands | `ctrl+x ?` | Show chord help |
