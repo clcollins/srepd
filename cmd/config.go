@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -60,7 +61,14 @@ cluster-login-command: ocm backplane login %%CLUSTER_ID%%
 
 # Toolbox mode: auto-detect Fedora Toolbox and prefix terminal commands
 # with flatpak-spawn --host. Values: "auto" (default), "true", "false"
-toolbox_mode: auto`
+toolbox_mode: auto
+
+# LLM API configuration (optional - AI features disabled when absent)
+# llm_api:
+#   provider: anthropic
+#   api_key_env: ANTHROPIC_API_KEY
+#   model: claude-sonnet-4-6
+#   endpoint: https://api.anthropic.com`
 )
 
 const description = `The config command is used to create or validate the SREPD config file.
@@ -197,5 +205,27 @@ func validateConfig() error {
 		}
 	}
 
+	// Validate llm_api config if present (entirely optional section)
+	if llmCfg, ok := settings["llm_api"]; ok && llmCfg != nil {
+		if err := validateLLMConfig(); err != nil {
+			log.Warn("cmd.validateConfig()", "msg", "llm_api config invalid; AI features disabled", "error", err)
+		}
+	}
+
 	return errors.Join(errs...)
+}
+
+// validateLLMConfig validates the llm_api configuration section.
+// It checks that the provider is known and the API key environment
+// variable is set. This function only logs warnings instead of
+// returning errors because the llm_api section is optional.
+func validateLLMConfig() error {
+	cfg := ai.Config{
+		Provider:  viper.GetString("llm_api.provider"),
+		APIKeyEnv: viper.GetString("llm_api.api_key_env"),
+		Model:     viper.GetString("llm_api.model"),
+		Endpoint:  viper.GetString("llm_api.endpoint"),
+	}
+
+	return ai.ValidateConfig(cfg)
 }

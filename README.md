@@ -50,6 +50,20 @@ SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment varia
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
 | `ignoredusers` | `[]string` | (none) | PagerDuty user IDs to exclude |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
+| `llm_api` | `map` | (none) | LLM API configuration (see below) |
+
+### LLM API Configuration (Optional)
+
+When configured, enables AI-powered incident analysis via direct API calls. If absent, AI features are disabled.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `llm_api.provider` | `string` | LLM provider: `anthropic` |
+| `llm_api.api_key_env` | `string` | Environment variable name containing the API key |
+| `llm_api.model` | `string` | Model identifier (e.g., `claude-sonnet-4-6`) |
+| `llm_api.endpoint` | `string` | Custom API endpoint URL (optional) |
+
+**Privacy note:** When using an external LLM provider, incident data (titles, alert names, cluster IDs) is sent to the provider's API. Use the `ollama` provider (future) for local, privacy-preserving analysis.
 
 ### Example
 
@@ -63,6 +77,10 @@ service_escalation_policies:
 terminal: gnome-terminal
 cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
 toolbox_mode: auto
+llm_api:
+  provider: anthropic
+  api_key_env: ANTHROPIC_API_KEY
+  model: claude-sonnet-4-6
 ```
 
 Use `%%CLUSTER_ID%%` and `%%INCIDENT_ID%%` as placeholders in `terminal` or `cluster_login_command` for dynamic substitution at launch time. If `%%CLUSTER_ID%%` is not present in `cluster_login_command`, the cluster ID is appended automatically.

@@ -153,6 +153,90 @@ func TestValidateConfig_DeprecatedKeyDetected(t *testing.T) {
 	assert.NoError(t, err, "validateConfig should not return an error for deprecated keys")
 }
 
+func TestValidateConfig_LLMApiValid(t *testing.T) {
+	viper.Reset()
+	setValidConfig()
+	t.Setenv("TEST_LLM_KEY", "sk-ant-test-key")
+	viper.Set("llm_api", map[string]interface{}{
+		"provider":    "anthropic",
+		"api_key_env": "TEST_LLM_KEY",
+		"model":       "claude-sonnet-4-6",
+	})
+
+	err := validateConfig()
+
+	assert.NoError(t, err, "validateConfig should not error when llm_api is valid")
+}
+
+func TestValidateConfig_LLMApiMissing(t *testing.T) {
+	viper.Reset()
+	setValidConfig()
+	// No llm_api set at all - should be fine since it is optional
+
+	err := validateConfig()
+
+	assert.NoError(t, err, "validateConfig should not error when llm_api is absent")
+}
+
+func TestValidateConfig_LLMApiInvalidProvider(t *testing.T) {
+	viper.Reset()
+	setValidConfig()
+	viper.Set("llm_api", map[string]interface{}{
+		"provider":    "unknown-llm",
+		"api_key_env": "SOME_KEY",
+	})
+
+	// Invalid llm_api should not cause validateConfig to fail (it's optional),
+	// but it should log a warning. The error from validateLLMConfig is only logged.
+	err := validateConfig()
+
+	assert.NoError(t, err, "validateConfig should not error for invalid llm_api (it's optional)")
+}
+
+func TestValidateLLMConfig_Valid(t *testing.T) {
+	viper.Reset()
+	t.Setenv("TEST_LLM_VALID_KEY", "sk-ant-test-valid")
+	viper.Set("llm_api.provider", "anthropic")
+	viper.Set("llm_api.api_key_env", "TEST_LLM_VALID_KEY")
+	viper.Set("llm_api.model", "claude-sonnet-4-6")
+
+	err := validateLLMConfig()
+
+	assert.NoError(t, err, "validateLLMConfig should succeed with valid config")
+}
+
+func TestValidateLLMConfig_UnknownProvider(t *testing.T) {
+	viper.Reset()
+	viper.Set("llm_api.provider", "chatgpt")
+	viper.Set("llm_api.api_key_env", "SOME_KEY")
+
+	err := validateLLMConfig()
+
+	assert.Error(t, err, "validateLLMConfig should error for unknown provider")
+	assert.Contains(t, err.Error(), "unknown provider", "error should mention unknown provider")
+}
+
+func TestValidateLLMConfig_MissingAPIKeyEnv(t *testing.T) {
+	viper.Reset()
+	viper.Set("llm_api.provider", "anthropic")
+	viper.Set("llm_api.api_key_env", "")
+
+	err := validateLLMConfig()
+
+	assert.Error(t, err, "validateLLMConfig should error when api_key_env is empty")
+}
+
+func TestValidateLLMConfig_EmptyEnvVar(t *testing.T) {
+	viper.Reset()
+	t.Setenv("TEST_EMPTY_LLM_KEY", "")
+	viper.Set("llm_api.provider", "anthropic")
+	viper.Set("llm_api.api_key_env", "TEST_EMPTY_LLM_KEY")
+
+	err := validateLLMConfig()
+
+	assert.Error(t, err, "validateLLMConfig should error when env var is empty")
+}
+
 func TestValidateConfig_CaseSensitiveEscalationKeys(t *testing.T) {
 	// The validateConfig code looks up escalation policy keys using
 	// strings.ToLower(), so it always searches for lowercase "default" and
