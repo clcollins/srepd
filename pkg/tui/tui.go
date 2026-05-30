@@ -385,6 +385,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if len(resolvedIDs) > 0 {
+			for _, id := range resolvedIDs {
+				log.Info("incident resolved", "incident_id", id)
+			}
 			resolvedMsg := fmt.Sprintf("Resolved: %s", strings.Join(resolvedIDs, ", "))
 			cmds = append(cmds, m.flashNotification(resolvedMsg))
 		}
@@ -535,6 +538,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		log.Info("added note to incident", "incident_id", m.selectedIncident.ID)
+
 		// Flash notification for note addition
 		cmds = append(cmds, m.flashNotification(fmt.Sprintf("Added note to %s", m.selectedIncident.ID)))
 
@@ -585,6 +590,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"%%INCIDENT_ID%%": m.selectedIncident.ID,
 		}
 
+		log.Info("login initiated", "incident_id", m.selectedIncident.ID, "cluster_id", cluster)
 		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case clusterSelectedMsg:
@@ -601,12 +607,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"%%INCIDENT_ID%%": m.selectedIncident.ID,
 		}
 
+		log.Info("login initiated", "incident_id", m.selectedIncident.ID, "cluster_id", cluster)
 		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case loginFinishedMsg:
 		if msg.err != nil {
 			m.status = fmt.Sprintf("failed to login: %s", msg.err)
 			return m, func() tea.Msg { return errMsg{msg.err} }
+		}
+		if m.selectedIncident != nil {
+			log.Info("login completed", "incident_id", m.selectedIncident.ID)
+		} else {
+			log.Info("login completed")
 		}
 
 	case openBrowserMsg:
@@ -619,6 +631,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		log.Debug("openBrowserMsg", "incident", m.selectedIncident.ID, "title", m.selectedIncident.Title, "service", m.selectedIncident.Service.Summary)
+		log.Info("opened incident in browser", "incident_id", m.selectedIncident.ID)
 
 		c := []string{defaultBrowserOpenCommand}
 		return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened %s in browser", m.selectedIncident.ID)), openBrowserCmd(c, m.selectedIncident.HTMLURL))
@@ -638,6 +651,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		log.Debug("openSOPMsg", "incident", m.selectedIncident.ID, "link", link)
+		log.Info("opened SOP in browser", "incident_id", m.selectedIncident.ID, "link", link)
 
 		c := []string{defaultBrowserOpenCommand}
 		return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened SOP for %s", m.selectedIncident.ID)), openBrowserCmd(c, link))
@@ -788,6 +802,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return errMsg{msg.err} }
 		}
 		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
+		log.Info("acknowledged incident", "incident_id", incidentIDs)
 
 		return m, tea.Batch(
 			m.flashNotification(fmt.Sprintf("Acknowledged %s", incidentIDs)),
@@ -824,6 +839,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reEscalatedIncidentsMsg:
 		m.apiInProgress = false
 		incidentIDs := strings.Join(getIDsFromIncidents(msg), " ")
+		log.Info("re-escalated incident", "incident_id", incidentIDs)
 
 		return m, tea.Batch(
 			m.flashNotification(fmt.Sprintf("Re-escalated %s", incidentIDs)),
@@ -837,6 +853,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		incidentID := m.selectedIncident.ID
+		log.Info("silenced incident", "incident_id", incidentID)
 		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
 
 		m.apiInProgress = true
