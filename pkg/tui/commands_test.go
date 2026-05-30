@@ -1,7 +1,11 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +16,90 @@ import (
 	"github.com/clcollins/srepd/pkg/rand"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestExecErr_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		ee       execErr
+		expected string
+	}{
+		{
+			name: "strips Error: prefix and newline suffix",
+			ee: execErr{
+				ExecStdErr: "Error: something went wrong\n",
+			},
+			expected: "something went wrong",
+		},
+		{
+			name: "strips lowercase error: prefix",
+			ee: execErr{
+				ExecStdErr: "error: failed to start\n",
+			},
+			expected: "failed to start",
+		},
+		{
+			name: "returns plain message unchanged",
+			ee: execErr{
+				ExecStdErr: "plain message",
+			},
+			expected: "plain message",
+		},
+		{
+			name: "handles empty string",
+			ee: execErr{
+				ExecStdErr: "",
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.ee.Error()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestExecErr_Code(t *testing.T) {
+	// exec.ExitError requires a real process exit, so use a process that exits with code 1
+	// We test this indirectly by constructing an execErr with a real ExitError
+	tests := []struct {
+		name         string
+		command      string
+		args         []string
+		expectedCode int
+	}{
+		{
+			name:         "exit code 1",
+			command:      "sh",
+			args:         []string{"-c", "exit 1"},
+			expectedCode: 1,
+		},
+		{
+			name:         "exit code 2",
+			command:      "sh",
+			args:         []string{"-c", "exit 2"},
+			expectedCode: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.Command(tt.command, tt.args...)
+			err := cmd.Run()
+			exitErr, ok := err.(*exec.ExitError)
+			assert.True(t, ok, "expected *exec.ExitError")
+
+			ee := &execErr{
+				Err:        err,
+				ExitErr:    exitErr,
+				ExecStdErr: "test error",
+			}
+			assert.Equal(t, tt.expectedCode, ee.Code())
+		})
+	}
+}
 
 func TestAcknowledgeIncident(t *testing.T) {
 	mockConfig := &pd.Config{
@@ -1674,4 +1762,516 @@ func TestSanitizeEnvValue(t *testing.T) {
 			assert.Equal(t, tt.expected, sanitizeEnvValue(tt.input))
 		})
 	}
+}
+
+// mockCurrentUserErrorClient is a specialized mock that returns an error
+// from GetCurrentUserWithContext, used to test the error path in reassignIncidents.
+type mockCurrentUserErrorClient struct {
+	pd.MockPagerDutyClient
+}
+
+func (m *mockCurrentUserErrorClient) GetCurrentUserWithContext(ctx context.Context, opts pagerduty.GetCurrentUserOptions) (*pagerduty.User, error) {
+	return nil, pd.ErrMockError
+}
+
+func TestReassignIncidents_GetCurrentUserError(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &mockCurrentUserErrorClient{},
+	}
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+
+	cmd := reassignIncidents(mockConfig, incidents, []*pagerduty.User{})
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg when GetCurrentUser fails")
+	assert.ErrorIs(t, msg.error, pd.ErrMockError)
+}
+
+func TestReassignIncidents_Success(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT2"}},
+	}
+
+	users := []*pagerduty.User{
+		{APIObject: pagerduty.APIObject{ID: "USER2"}},
+	}
+
+	cmd := reassignIncidents(mockConfig, incidents, users)
+	result := cmd()
+
+	msg, ok := result.(reassignedIncidentsMsg)
+	assert.True(t, ok, "expected reassignedIncidentsMsg")
+	assert.Len(t, msg, 2)
+}
+
+func TestReassignIncidents_Error(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	// "err" triggers mock error in ManageIncidentsWithContext
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+	}
+
+	cmd := reassignIncidents(mockConfig, incidents, []*pagerduty.User{})
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on error")
+	assert.Error(t, msg.error)
+}
+
+func TestReassignIncidents_EmptyIncidentID(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	// Empty ID triggers error in pd.ReassignIncidents
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: ""}},
+	}
+
+	cmd := reassignIncidents(mockConfig, incidents, []*pagerduty.User{})
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on empty incident ID")
+	assert.Error(t, msg.error)
+	assert.Contains(t, msg.Error(), "incident is nil")
+}
+
+func TestReEscalateIncidents_Success(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	cmd := reEscalateIncidents(mockConfig, incidents, policy, 1)
+	result := cmd()
+
+	msg, ok := result.(reEscalatedIncidentsMsg)
+	assert.True(t, ok, "expected reEscalatedIncidentsMsg")
+	assert.Len(t, msg, 2) // Mock returns 2 incidents
+}
+
+func TestReEscalateIncidents_Error(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	// "err" triggers mock error
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+	}
+
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	cmd := reEscalateIncidents(mockConfig, incidents, policy, 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on error")
+	assert.Error(t, msg.error)
+}
+
+func TestReEscalateIncidents_EmptyIncidentID(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: ""}},
+	}
+
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+	}
+
+	cmd := reEscalateIncidents(mockConfig, incidents, policy, 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on empty incident ID")
+	assert.Error(t, msg.error)
+	assert.Contains(t, msg.Error(), "incident is nil")
+}
+
+func TestFetchEscalationPolicyAndReEscalate_Success(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+
+	cmd := fetchEscalationPolicyAndReEscalate(mockConfig, incidents, "POLICY1", 1)
+	result := cmd()
+
+	msg, ok := result.(reEscalatedIncidentsMsg)
+	assert.True(t, ok, "expected reEscalatedIncidentsMsg")
+	assert.Len(t, msg, 2) // Mock returns 2 incidents
+}
+
+func TestFetchEscalationPolicyAndReEscalate_PolicyFetchError(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+
+	// "err" triggers mock error in GetEscalationPolicyWithContext
+	cmd := fetchEscalationPolicyAndReEscalate(mockConfig, incidents, "err", 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg when policy fetch fails")
+	assert.Error(t, msg.error)
+}
+
+func TestFetchEscalationPolicyAndReEscalate_ReEscalateError(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "USER1"},
+			Email:     "user@example.com",
+		},
+	}
+
+	// "err" in incident ID triggers ManageIncidents error
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "err"}},
+	}
+
+	cmd := fetchEscalationPolicyAndReEscalate(mockConfig, incidents, "POLICY1", 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg when re-escalate fails")
+	assert.Error(t, msg.error)
+}
+
+func TestSilenceIncidents_Success(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+		Name:      "Silent Policy",
+	}
+
+	cmd := silenceIncidents(incidents, policy, 1)
+	result := cmd()
+
+	msg, ok := result.(reEscalateIncidentsMsg)
+	assert.True(t, ok, "expected reEscalateIncidentsMsg")
+	assert.Len(t, msg.incidents, 1)
+	assert.Equal(t, "POLICY1", msg.policy.ID)
+	assert.Equal(t, uint(1), msg.level)
+}
+
+func TestSilenceIncidents_NilPolicy(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+
+	cmd := silenceIncidents(incidents, nil, 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on nil policy")
+	assert.ErrorIs(t, msg.error, errSilenceIncidentInvalidArgs)
+}
+
+func TestSilenceIncidents_EmptyIncidents(t *testing.T) {
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+		Name:      "Silent Policy",
+	}
+
+	cmd := silenceIncidents([]pagerduty.Incident{}, policy, 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on empty incidents")
+	assert.ErrorIs(t, msg.error, errSilenceIncidentInvalidArgs)
+}
+
+func TestSilenceIncidents_ZeroLevel(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+		Name:      "Silent Policy",
+	}
+
+	// level=0 is invalid
+	cmd := silenceIncidents(incidents, policy, 0)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on zero level")
+	assert.ErrorIs(t, msg.error, errSilenceIncidentInvalidArgs)
+}
+
+func TestSilenceIncidents_EmptyPolicyName(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+		Name:      "", // empty name is invalid
+	}
+
+	cmd := silenceIncidents(incidents, policy, 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on empty policy name")
+	assert.ErrorIs(t, msg.error, errSilenceIncidentInvalidArgs)
+}
+
+func TestSilenceIncidents_EmptyPolicyID(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: ""}, // empty ID is invalid
+		Name:      "Silent Policy",
+	}
+
+	cmd := silenceIncidents(incidents, policy, 1)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg on empty policy ID")
+	assert.ErrorIs(t, msg.error, errSilenceIncidentInvalidArgs)
+}
+
+func TestShouldBeAcknowledged_AllConditionsTrue(t *testing.T) {
+	// User is assigned, not yet acknowledged, autoAcknowledge is enabled, and user is on-call
+	now := time.Now().UTC()
+	mockClient := &pd.MockPagerDutyClient{
+		ListOnCallsResponses: []pagerduty.ListOnCallsResponse{
+			{
+				OnCalls: []pagerduty.OnCall{
+					{
+						User:  pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+						Start: now.Add(-1 * time.Hour).Format("2006-01-02T15:04:05Z"),
+						End:   now.Add(5 * time.Hour).Format("2006-01-02T15:04:05Z"),
+					},
+				},
+			},
+		},
+	}
+	config := &pd.Config{Client: mockClient}
+
+	incident := pagerduty.Incident{
+		Assignments: []pagerduty.Assignment{
+			{Assignee: pagerduty.APIObject{ID: "USER1"}},
+		},
+		Acknowledgements: []pagerduty.Acknowledgement{},
+	}
+
+	result := ShouldBeAcknowledged(config, incident, "USER1", true)
+	assert.True(t, result, "should return true when assigned, not acked, auto-ack enabled, and on-call")
+}
+
+func TestShouldBeAcknowledged_NotAssigned(t *testing.T) {
+	now := time.Now().UTC()
+	mockClient := &pd.MockPagerDutyClient{
+		ListOnCallsResponses: []pagerduty.ListOnCallsResponse{
+			{
+				OnCalls: []pagerduty.OnCall{
+					{
+						User:  pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+						Start: now.Add(-1 * time.Hour).Format("2006-01-02T15:04:05Z"),
+						End:   now.Add(5 * time.Hour).Format("2006-01-02T15:04:05Z"),
+					},
+				},
+			},
+		},
+	}
+	config := &pd.Config{Client: mockClient}
+
+	incident := pagerduty.Incident{
+		Assignments:      []pagerduty.Assignment{},
+		Acknowledgements: []pagerduty.Acknowledgement{},
+	}
+
+	result := ShouldBeAcknowledged(config, incident, "USER1", true)
+	assert.False(t, result, "should return false when not assigned")
+}
+
+func TestShouldBeAcknowledged_AlreadyAcknowledged(t *testing.T) {
+	now := time.Now().UTC()
+	mockClient := &pd.MockPagerDutyClient{
+		ListOnCallsResponses: []pagerduty.ListOnCallsResponse{
+			{
+				OnCalls: []pagerduty.OnCall{
+					{
+						User:  pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+						Start: now.Add(-1 * time.Hour).Format("2006-01-02T15:04:05Z"),
+						End:   now.Add(5 * time.Hour).Format("2006-01-02T15:04:05Z"),
+					},
+				},
+			},
+		},
+	}
+	config := &pd.Config{Client: mockClient}
+
+	incident := pagerduty.Incident{
+		Assignments: []pagerduty.Assignment{
+			{Assignee: pagerduty.APIObject{ID: "USER1"}},
+		},
+		Acknowledgements: []pagerduty.Acknowledgement{
+			{Acknowledger: pagerduty.APIObject{ID: "USER1"}},
+		},
+	}
+
+	result := ShouldBeAcknowledged(config, incident, "USER1", true)
+	assert.False(t, result, "should return false when already acknowledged")
+}
+
+func TestShouldBeAcknowledged_AutoAckDisabled(t *testing.T) {
+	now := time.Now().UTC()
+	mockClient := &pd.MockPagerDutyClient{
+		ListOnCallsResponses: []pagerduty.ListOnCallsResponse{
+			{
+				OnCalls: []pagerduty.OnCall{
+					{
+						User:  pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+						Start: now.Add(-1 * time.Hour).Format("2006-01-02T15:04:05Z"),
+						End:   now.Add(5 * time.Hour).Format("2006-01-02T15:04:05Z"),
+					},
+				},
+			},
+		},
+	}
+	config := &pd.Config{Client: mockClient}
+
+	incident := pagerduty.Incident{
+		Assignments: []pagerduty.Assignment{
+			{Assignee: pagerduty.APIObject{ID: "USER1"}},
+		},
+		Acknowledgements: []pagerduty.Acknowledgement{},
+	}
+
+	result := ShouldBeAcknowledged(config, incident, "USER1", false)
+	assert.False(t, result, "should return false when autoAcknowledge is disabled")
+}
+
+func TestShouldBeAcknowledged_NotOnCall(t *testing.T) {
+	// Default mock returns empty on-calls (user not on-call)
+	mockClient := &pd.MockPagerDutyClient{}
+	config := &pd.Config{Client: mockClient}
+
+	incident := pagerduty.Incident{
+		Assignments: []pagerduty.Assignment{
+			{Assignee: pagerduty.APIObject{ID: "USER1"}},
+		},
+		Acknowledgements: []pagerduty.Acknowledgement{},
+	}
+
+	result := ShouldBeAcknowledged(config, incident, "USER1", true)
+	assert.False(t, result, "should return false when user is not on-call")
+}
+
+func TestReadLogFile_ExistingFile(t *testing.T) {
+	// Create a temp file with known content
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "test.log")
+	expectedContent := "log line 1\nlog line 2\n"
+	err := os.WriteFile(logPath, []byte(expectedContent), 0644)
+	assert.NoError(t, err)
+
+	cmd := readLogFile(logPath)
+	result := cmd()
+
+	msg, ok := result.(logFileContentMsg)
+	assert.True(t, ok, "expected logFileContentMsg")
+	assert.Equal(t, expectedContent, string(msg))
+}
+
+func TestReadLogFile_MissingFile(t *testing.T) {
+	cmd := readLogFile("/tmp/nonexistent-log-file-srepd-test.log")
+	result := cmd()
+
+	msg, ok := result.(logFileContentMsg)
+	assert.True(t, ok, "expected logFileContentMsg")
+	assert.Contains(t, string(msg), "No log file found")
+}
+
+func TestSilenceIncidents_MultipleIncidents(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}},
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT2"}},
+		{APIObject: pagerduty.APIObject{ID: "INCIDENT3"}},
+	}
+	policy := &pagerduty.EscalationPolicy{
+		APIObject: pagerduty.APIObject{ID: "POLICY1"},
+		Name:      "Silent Policy",
+	}
+
+	cmd := silenceIncidents(incidents, policy, 2)
+	result := cmd()
+
+	msg, ok := result.(reEscalateIncidentsMsg)
+	assert.True(t, ok, "expected reEscalateIncidentsMsg")
+	assert.Len(t, msg.incidents, 3)
+	assert.Equal(t, uint(2), msg.level)
 }
