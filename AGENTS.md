@@ -64,25 +64,25 @@ Pass extra test flags via `TESTOPTS`, e.g.:
 - **Run the FULL local CI suite before every commit.** Run
   all checks in parallel before pushing. Do not push code
   that fails any check.
+- When fixing a bug introduced by a previous PR, document the
+  lesson in both plan docs (the new fix PR's plan and the
+  original PR's plan) describing what went wrong and how to
+  prevent it
 
 ## Pre-Commit Checks (MANDATORY)
 
 Run ALL of these in parallel before every commit/push:
 
 ```bash
-# Run all 6 in parallel:
+# Run all 7 in parallel:
 gofmt -s -l cmd pkg                              # fmt-check
 go vet ./...                                     # vet
 go test ./... -count=1                           # unit tests
 CGO_ENABLED=1 go test -race ./... -count=1       # race detection
+golangci-lint run --timeout 5m                   # lint
 ls docs/plans/*.md                               # plan doc exists
 # If keymap.go/config.go/root.go/commands.go changed:
 git diff origin/main --name-only | grep README   # readme updated
-```
-
-If `golangci-lint` is installed, also run:
-```bash
-golangci-lint run --timeout 5m                   # lint
 ```
 
 **Every check must pass. Fix failures before committing.**
