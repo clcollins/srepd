@@ -329,14 +329,6 @@ func refreshArea(autoRefresh bool, autoAck bool, showLowUrgency bool) string {
 }
 
 func (m model) template() (string, error) {
-	template, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
-	if err != nil {
-		// TODO: Figure out how to handle this with a proper errMsg
-		return "", err
-	}
-
-	o := new(bytes.Buffer)
-
 	// Progressive rendering: show what we have, mark missing parts as loading
 	var alerts []pagerduty.IncidentAlert
 	var notes []pagerduty.IncidentNote
@@ -344,29 +336,95 @@ func (m model) template() (string, error) {
 	if m.incidentAlertsLoaded {
 		alerts = m.selectedIncidentAlerts
 	} else {
-		// Alerts not loaded yet - will show "Loading alerts..." in template
 		alerts = nil
 	}
 
 	if m.incidentNotesLoaded {
 		notes = m.selectedIncidentNotes
 	} else {
-		// Notes not loaded yet - will show "Loading notes..." in template
 		notes = nil
 	}
 
 	summary := summarize(m.selectedIncident, alerts, notes)
-	// Add loading state info to summary for template to use
 	summary.AlertsLoading = !m.incidentAlertsLoaded
 	summary.NotesLoading = !m.incidentNotesLoaded
 
-	err = template.Execute(o, summary)
-	if err != nil {
-		// TODO: Figure out how to handle this with a proper errMsg
-		return "", err
+	// Render tab header
+	alertCount := len(alerts)
+	noteCount := len(notes)
+	tabHeader := renderTabHeader(m.activeTab, alertCount, noteCount, summary.AlertsLoading, summary.NotesLoading)
+
+	var content string
+
+	switch m.activeTab {
+	case tabAlerts:
+		if summary.AlertsLoading {
+			content = tabHeader + "\n\n_Loading alerts..._\n"
+		} else if len(summary.Alerts) == 0 {
+			content = tabHeader + "\n\n_No alerts_\n"
+		} else {
+			idx := m.activeAlertIdx
+			if idx >= len(summary.Alerts) {
+				idx = len(summary.Alerts) - 1
+			}
+			data := singleAlertTabData{
+				Alert: summary.Alerts[idx],
+				Index: idx,
+				Total: len(summary.Alerts),
+			}
+			tmpl, err := template.New("alert").Funcs(funcMap).Parse(alertTabTemplate)
+			if err != nil {
+				return "", err
+			}
+			o := new(bytes.Buffer)
+			err = tmpl.Execute(o, data)
+			if err != nil {
+				return "", err
+			}
+			content = tabHeader + "\n" + o.String()
+		}
+
+	case tabNotes:
+		if summary.NotesLoading {
+			content = tabHeader + "\n\n_Loading notes..._\n"
+		} else if len(summary.Notes) == 0 {
+			content = tabHeader + "\n\n_No notes_\n"
+		} else {
+			idx := m.activeNoteIdx
+			if idx >= len(summary.Notes) {
+				idx = len(summary.Notes) - 1
+			}
+			data := singleNoteTabData{
+				Note:  summary.Notes[idx],
+				Index: idx,
+				Total: len(summary.Notes),
+			}
+			tmpl, err := template.New("note").Funcs(funcMap).Parse(noteTabTemplate)
+			if err != nil {
+				return "", err
+			}
+			o := new(bytes.Buffer)
+			err = tmpl.Execute(o, data)
+			if err != nil {
+				return "", err
+			}
+			content = tabHeader + "\n" + o.String()
+		}
+
+	default: // tabDetails
+		tmpl, err := template.New("details").Funcs(funcMap).Parse(detailsTabTemplate)
+		if err != nil {
+			return "", err
+		}
+		o := new(bytes.Buffer)
+		err = tmpl.Execute(o, summary)
+		if err != nil {
+			return "", err
+		}
+		content = tabHeader + "\n" + o.String()
 	}
 
-	return o.String(), nil
+	return content, nil
 }
 
 func addNoteTemplate(id string, title string, service string) (string, error) {
@@ -548,6 +606,9 @@ var funcMap = template.FuncMap{
 	"Last": func(i, length int) bool {
 		return i == length-1
 	},
+	"add1": func(i int) int {
+		return i + 1
+	},
 }
 
 const incidentTemplate = `
@@ -622,6 +683,106 @@ func renderIncidentMarkdown(m *model, content string) (string, error) {
 
 	return str, nil
 }
+
+// Tab constants
+const (
+	tabDetails = 0
+	tabAlerts  = 1
+	tabNotes   = 2
+	tabCount   = 3
+)
+
+// singleAlertTabData is the data passed to the alertTabTemplate
+type singleAlertTabData struct {
+	Alert alertSummary
+	Index int // 0-based
+	Total int
+}
+
+// singleNoteTabData is the data passed to the noteTabTemplate
+type singleNoteTabData struct {
+	Note  noteSummary
+	Index int // 0-based
+	Total int
+}
+
+// renderTabHeader renders the tab bar with counts and highlights the active tab.
+// Example: " [Details]  Alerts (5)  Notes (3) "
+func renderTabHeader(activeTab int, alertCount int, noteCount int, alertsLoading bool, notesLoading bool) string {
+	tabs := make([]string, tabCount)
+	tabs[tabDetails] = "Details"
+
+	if alertsLoading {
+		tabs[tabAlerts] = "Alerts (...)"
+	} else {
+		tabs[tabAlerts] = fmt.Sprintf("Alerts (%d)", alertCount)
+	}
+
+	if notesLoading {
+		tabs[tabNotes] = "Notes (...)"
+	} else {
+		tabs[tabNotes] = fmt.Sprintf("Notes (%d)", noteCount)
+	}
+
+	var parts []string
+	for i, tab := range tabs {
+		if i == activeTab {
+			parts = append(parts, fmt.Sprintf("[%s]", tab))
+		} else {
+			parts = append(parts, fmt.Sprintf(" %s ", tab))
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// detailsTabTemplate renders only the incident metadata (no alerts or notes)
+const detailsTabTemplate = `
+{{- if .Priority -}}
+# {{ .Priority }} {{ .ID }} - {{ .Status }}
+{{- else -}}
+# {{ .ID }} - {{ .Status }}
+{{- end }}
+
+{{ ToLink .Title .HTMLURL }}
+
+* Service: {{ .Service }}
+* Urgency: {{ .Urgency }}
+* Created: {{ .Created }}
+
+{{ if not .Acknowledged -}}
+Assigned to:{{ range $assignee := .Assigned }}
++ *{{ $assignee }}* *(not yet acknowledged)*
+{{ end }}
+{{- else -}}
+{{ $length := len .Acknowledged }}
+Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
+{{ if Last $i $length }}**{{ $ack }}**{{ else }}**{{ $ack }},**{{ end }}
+{{ end }}
+{{- end -}}
+`
+
+// alertTabTemplate renders a single alert with navigation header
+const alertTabTemplate = `
+### Alert {{ add1 .Index }}/{{ .Total }}
+
+### {{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }} ({{ .Alert.Status }}){{ if .Alert.Severity }} [{{ .Alert.Severity }}]{{ end }}{{ if .Alert.AlertType }} ({{ .Alert.AlertType }}){{ end }}
+
+* Cluster: {{ .Alert.Cluster }}
+* SOP: {{ if .Alert.Link }}{{ ToLink "SOP" .Alert.Link }}{{ else }}_none_{{ end }}
+* Alert: {{ ToLink .Alert.ID .Alert.HTMLURL }}
+* Service: {{ .Alert.Service }}
+* Created: {{ .Alert.Created }}
+`
+
+// noteTabTemplate renders a single note with navigation header
+const noteTabTemplate = `
+### Note {{ add1 .Index }}/{{ .Total }}
+
+> {{ .Note.Content }}
+
+-- {{ .Note.User }} @ {{ .Note.Created }}
+`
 
 const noteTemplate = `
 
