@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -697,4 +698,80 @@ func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
 		"UnAck key should set pendingConfirmation")
 	assert.Nil(t, cmd,
 		"UnAck key should not return a command before confirmation")
+}
+
+// --- switchInputFocusMode gap tests ---
+
+func TestInputMode_QuitKey(t *testing.T) {
+	// Cover the Quit key path in switchInputFocusMode (lines 535-537)
+	// The quit key is normally caught by keyMsgHandler before reaching
+	// switchInputFocusMode, so we call switchInputFocusMode directly.
+	t.Run("ctrl+c in switchInputFocusMode quits the application", func(t *testing.T) {
+		m := createTestModel()
+		m.input = newTextInput()
+		m.input.Focus()
+
+		// Call switchInputFocusMode directly to exercise its quit handler
+		quitMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+		_, cmd := switchInputFocusMode(m, quitMsg)
+
+		// The command should be tea.Quit
+		assert.NotNil(t, cmd, "ctrl+c in switchInputFocusMode should return a command")
+		msg := cmd()
+		_, isQuit := msg.(tea.QuitMsg)
+		assert.True(t, isQuit, "ctrl+c in switchInputFocusMode should produce a QuitMsg")
+	})
+}
+
+func TestInputMode_NonKeyMsgReturnsUnchanged(t *testing.T) {
+	// Cover the fallthrough return at line 570 in switchInputFocusMode
+	t.Run("non-KeyMsg in input mode returns model unchanged", func(t *testing.T) {
+		m := createTestModel()
+		m.input = newTextInput()
+		m.input.Focus()
+		m.status = "original status"
+
+		// Send a non-KeyMsg message while input is focused
+		// We use the keyMsgHandler path through Update which will delegate to switchInputFocusMode
+		// but switchInputFocusMode only handles tea.KeyMsg, so a non-KeyMsg should fall through
+		// We need to call switchInputFocusMode directly with a non-KeyMsg
+		result, cmd := switchInputFocusMode(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+		updatedModel := result.(model)
+
+		assert.Equal(t, "original status", updatedModel.status, "status should be unchanged")
+		assert.Nil(t, cmd, "no command should be returned for non-KeyMsg")
+	})
+}
+
+// --- switchErrorFocusMode gap tests ---
+
+func TestErrorMode_EscapeClearsError(t *testing.T) {
+	// Cover the Escape key path in switchErrorFocusMode (lines 794-795)
+	t.Run("escape key in error mode clears the error", func(t *testing.T) {
+		m := createTestModel()
+		m.err = fmt.Errorf("test error")
+
+		// Press Escape
+		escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+		result, cmd := m.Update(escMsg)
+		updatedModel := result.(model)
+
+		assert.Nil(t, updatedModel.err, "error should be cleared after pressing Escape in error mode")
+		assert.Nil(t, cmd, "no command should be returned")
+	})
+}
+
+func TestErrorMode_NonEscapeKeysDoNotClearError(t *testing.T) {
+	t.Run("non-Escape keys do not clear the error", func(t *testing.T) {
+		m := createTestModel()
+		m.err = fmt.Errorf("test error")
+
+		// Press a non-Escape key (like 'a')
+		keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+		result, cmd := m.Update(keyMsg)
+		updatedModel := result.(model)
+
+		assert.NotNil(t, updatedModel.err, "error should NOT be cleared by non-Escape key")
+		assert.Nil(t, cmd, "no command should be returned")
+	})
 }
