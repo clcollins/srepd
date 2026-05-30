@@ -9,6 +9,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1574,6 +1575,148 @@ func TestNumberKeys_JumpToIndex(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --- InitialModel / InitialModelWithConfig tests ---
+
+func TestInitialModel_ValidConfig(t *testing.T) {
+	t.Run("returns a model with expected default fields", func(t *testing.T) {
+		mockClient := &pd.MockPagerDutyClient{}
+		l := launcher.ClusterLauncher{}
+		editor := []string{"vim"}
+
+		// Use InitialModelWithConfig to avoid live PagerDuty API calls
+		config := &pd.Config{
+			Client: mockClient,
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "U123"},
+			},
+		}
+
+		teaModel, cmd := InitialModelWithConfig(config, editor, l, false)
+		assert.NotNil(t, teaModel, "InitialModelWithConfig should return a non-nil model")
+		assert.NotNil(t, cmd, "InitialModelWithConfig should return a non-nil cmd")
+
+		m := teaModel.(model)
+
+		// Check default field values
+		assert.True(t, m.autoRefresh, "autoRefresh should default to true")
+		assert.True(t, m.showLowUrgency, "showLowUrgency should default to true")
+		assert.False(t, m.debug, "debug should be false when passed as false")
+		assert.False(t, m.apiInProgress, "apiInProgress should default to false")
+		assert.Equal(t, "", m.status, "status should default to empty string")
+		assert.NotNil(t, m.incidentCache, "incidentCache should be initialized")
+		assert.NotNil(t, m.scheduledJobs, "scheduledJobs should be initialized")
+		assert.Equal(t, editor, m.editor, "editor should match input")
+	})
+}
+
+func TestInitialModel_DebugFlag(t *testing.T) {
+	t.Run("debug flag propagates to the model", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "U123"},
+			},
+		}
+
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, true)
+		m := teaModel.(model)
+
+		assert.True(t, m.debug, "debug should be true when passed as true")
+	})
+}
+
+func TestInitialModelWithConfig_NilConfig(t *testing.T) {
+	t.Run("nil config sets m.err", func(t *testing.T) {
+		teaModel, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, false)
+		m := teaModel.(model)
+
+		assert.NotNil(t, m.err, "m.err should be set when config is nil")
+		assert.Contains(t, m.err.Error(), "config is nil", "error should mention nil config")
+		assert.NotNil(t, cmd, "cmd should be non-nil (returns errMsg)")
+	})
+}
+
+func TestInitialModelWithConfig_SetsConfig(t *testing.T) {
+	t.Run("config is stored on the model", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "USER42"},
+			},
+		}
+
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false)
+		m := teaModel.(model)
+
+		assert.Equal(t, config, m.config, "config should be stored on the model")
+		assert.Nil(t, m.err, "m.err should be nil for valid config")
+	})
+}
+
+func TestInitialModelWithConfig_CmdReturnsErrMsg(t *testing.T) {
+	t.Run("cmd produces errMsg with nil error for valid config", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "U123"},
+			},
+		}
+
+		_, cmd := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false)
+		assert.NotNil(t, cmd, "cmd should be non-nil")
+
+		msg := cmd()
+		em, ok := msg.(errMsg)
+		assert.True(t, ok, "cmd should produce an errMsg")
+		assert.Nil(t, em.error, "error should be nil for valid config")
+	})
+}
+
+func TestInitialModelWithConfig_CmdReturnsErrMsgForNilConfig(t *testing.T) {
+	t.Run("cmd produces errMsg with non-nil error for nil config", func(t *testing.T) {
+		_, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, false)
+		assert.NotNil(t, cmd, "cmd should be non-nil")
+
+		msg := cmd()
+		em, ok := msg.(errMsg)
+		assert.True(t, ok, "cmd should produce an errMsg")
+		assert.NotNil(t, em.error, "error should be non-nil for nil config")
+	})
+}
+
+func TestInitialModel_ScheduledJobsInitialized(t *testing.T) {
+	t.Run("scheduled jobs are initialized with at least one job", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "U123"},
+			},
+		}
+
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false)
+		m := teaModel.(model)
+
+		assert.GreaterOrEqual(t, len(m.scheduledJobs), 1, "should have at least one scheduled job (PollIncidents)")
+	})
+}
+
+func TestInitialModel_MarkdownRenderer(t *testing.T) {
+	t.Run("markdown renderer is created for InitialModelWithConfig", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "U123"},
+			},
+		}
+
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false)
+		m := teaModel.(model)
+
+		// markdownRenderer should be non-nil (created by NewTermRenderer)
+		assert.NotNil(t, m.markdownRenderer, "markdownRenderer should be initialized")
+	})
 }
 
 func TestWindowSizeMsgHandler_SmallWindow(t *testing.T) {
