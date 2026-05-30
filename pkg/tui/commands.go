@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -630,26 +629,6 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 	log.Debug("tui.login(): final command", "finalCommand", finalCommand)
 	log.Debug("tui.login()", "command", c.String())
 
-	var stdOut io.ReadCloser
-	var stdOutPipeErr error
-	stdOut, stdOutPipeErr = c.StdoutPipe()
-	if stdOutPipeErr != nil {
-		log.Error("tui.login()", "error", stdOutPipeErr)
-		return func() tea.Msg {
-			return loginFinishedMsg{stdOutPipeErr}
-		}
-	}
-
-	var stdErr io.ReadCloser
-	var stdErrPipeErr error
-	stdErr, stdErrPipeErr = c.StderrPipe()
-	if stdErrPipeErr != nil {
-		log.Error("tui.login()", "error", stdErrPipeErr)
-		return func() tea.Msg {
-			return loginFinishedMsg{stdErrPipeErr}
-		}
-	}
-
 	startCmdErr := c.Start()
 	if startCmdErr != nil {
 		log.Error("tui.login()", "error", startCmdErr)
@@ -658,67 +637,14 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 		}
 	}
 
-	var out []byte
-	var stdOutReadErr error
-	out, stdOutReadErr = io.ReadAll(stdOut)
-	if stdOutReadErr != nil {
-		log.Error("tui.login()", "error", stdOutReadErr)
-		return func() tea.Msg {
-			return loginFinishedMsg{stdOutReadErr}
+	// Reap the child process in background to avoid zombies.
+	// Don't block — return immediately so srepd stays responsive.
+	go func() {
+		err := c.Wait()
+		if err != nil {
+			log.Debug("tui.login(): terminal process exited", "error", err)
 		}
-	}
-
-	var errOut []byte
-	var stdErrReadErr error
-	errOut, stdErrReadErr = io.ReadAll(stdErr)
-	if stdErrReadErr != nil {
-		log.Error("tui.login()", "error", stdErrReadErr)
-		return func() tea.Msg {
-			return loginFinishedMsg{stdErrReadErr}
-		}
-	}
-
-	var err error
-	if len(errOut) > 0 {
-		err = errors.New(string(errOut))
-	}
-
-	processErr := c.Wait()
-
-	if processErr != nil {
-		if exitError, ok := processErr.(*exec.ExitError); ok {
-			execExitErr := &execErr{
-				Err:        processErr,
-				ExitErr:    exitError,
-				ExecStdErr: string(errOut),
-			}
-			log.Error("tui.login()", "error", execExitErr)
-			return func() tea.Msg {
-				return loginFinishedMsg{execExitErr}
-			}
-		}
-		log.Error("tui.login()", "error", processErr)
-		return func() tea.Msg {
-			return loginFinishedMsg{processErr}
-		}
-	}
-
-	if err != nil {
-		log.Warn("tui.login()", "execStdErr", err.Error())
-		return func() tea.Msg {
-			// Do not return the execStdErr as an error
-			return loginFinishedMsg{}
-		}
-	}
-
-	var stdOutAsErr error
-	if len(out) > 0 {
-		stdOutAsErr = errors.New(string(out))
-		log.Warn("tui.login()", "stdOutAsErr", stdOutAsErr.Error())
-		return func() tea.Msg {
-			return loginFinishedMsg{stdOutAsErr}
-		}
-	}
+	}()
 
 	return func() tea.Msg {
 		return loginFinishedMsg{}
