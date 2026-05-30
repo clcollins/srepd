@@ -113,6 +113,9 @@ type model struct {
 	chordPending bool
 	// chordPrefix is the configurable prefix key for chord commands (default "ctrl+x").
 	chordPrefix string
+	// chordHelpActive is true when chord help is being displayed in the help
+	// section at the bottom of the screen, temporarily replacing the regular help.
+	chordHelpActive bool
 
 	// claudeQuerying is true while a Claude CLI query is in progress
 	claudeQuerying bool

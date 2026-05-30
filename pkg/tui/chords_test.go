@@ -76,6 +76,78 @@ func TestChord_ValidSecondKey(t *testing.T) {
 	})
 }
 
+func TestChordShowHelp_SetsChordHelpActive(t *testing.T) {
+	t.Run("pressing ctrl+x ? sets chordHelpActive and expands help", func(t *testing.T) {
+		m := createTestModel()
+		m.chordPrefix = "ctrl+x"
+		m.help = newHelp()
+		m.chordPending = true
+
+		// Press '?' to trigger chord help
+		questionKeyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+		result, _ := m.Update(questionKeyMsg)
+		updatedModel := result.(model)
+
+		assert.True(t, updatedModel.chordHelpActive,
+			"chordHelpActive should be true after chord help is triggered")
+		assert.True(t, updatedModel.help.ShowAll,
+			"help.ShowAll should be true to display full chord help")
+	})
+}
+
+func TestChordShowHelp_DoesNotSetStatus(t *testing.T) {
+	t.Run("chord help does not use the status bar", func(t *testing.T) {
+		m := createTestModel()
+		m.chordPrefix = "ctrl+x"
+		m.help = newHelp()
+		m.chordPending = true
+		m.status = ""
+
+		// Press '?' to trigger chord help
+		questionKeyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+		result, _ := m.Update(questionKeyMsg)
+		updatedModel := result.(model)
+
+		assert.Empty(t, updatedModel.status,
+			"status bar should remain empty when chord help is shown")
+	})
+}
+
+func TestChordHelp_ClearedOnKeypress(t *testing.T) {
+	t.Run("any keypress clears chordHelpActive", func(t *testing.T) {
+		m := createTestModel()
+		m.chordPrefix = "ctrl+x"
+		m.help = newHelp()
+		m.chordHelpActive = true
+		m.help.ShowAll = true
+
+		// Press any key (e.g., 'j' for down)
+		jKeyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+		result, _ := m.Update(jKeyMsg)
+		updatedModel := result.(model)
+
+		assert.False(t, updatedModel.chordHelpActive,
+			"chordHelpActive should be cleared after any keypress")
+	})
+
+	t.Run("pressing chord prefix while chord help is active clears it and enters chord mode", func(t *testing.T) {
+		m := createTestModel()
+		m.chordPrefix = "ctrl+x"
+		m.help = newHelp()
+		m.chordHelpActive = true
+		m.help.ShowAll = true
+
+		// Press ctrl+x again
+		result, _ := m.Update(chordPrefixKeyMsg())
+		updatedModel := result.(model)
+
+		assert.False(t, updatedModel.chordHelpActive,
+			"chordHelpActive should be cleared when entering new chord mode")
+		assert.True(t, updatedModel.chordPending,
+			"chordPending should be set after pressing chord prefix")
+	})
+}
+
 func TestChord_UnknownSecondKey(t *testing.T) {
 	t.Run("pressing unknown second key shows error status", func(t *testing.T) {
 		m := createTestModel()
@@ -214,6 +286,48 @@ func TestChordHelpText(t *testing.T) {
 		text := chordHelpText("ctrl+x")
 		assert.NotEmpty(t, text, "chord help text should not be empty")
 		assert.Contains(t, text, "ctrl+x", "help text should mention the prefix")
+	})
+}
+
+func TestChordHelp_ViewRendersChordKeymap(t *testing.T) {
+	t.Run("View renders chord help bindings when chordHelpActive", func(t *testing.T) {
+		m := createTestModel()
+		m.chordPrefix = "ctrl+x"
+		m.help = newHelp()
+		m.help.ShowAll = true
+		m.chordHelpActive = true
+
+		// Set window size so View can render
+		windowSize = tea.WindowSizeMsg{Width: 120, Height: 40}
+
+		view := m.View()
+
+		// The chord help should contain chord-specific entries
+		assert.Contains(t, view, "show chord help",
+			"View should render chord help descriptions when chordHelpActive is true")
+		assert.Contains(t, view, "view debug log",
+			"View should render chord debug log description when chordHelpActive is true")
+	})
+}
+
+func TestChordKeymap_ImplementsHelpKeyMap(t *testing.T) {
+	t.Run("chordKeymap ShortHelp returns dismissal hint", func(t *testing.T) {
+		km := chordKeymap{prefix: "ctrl+x"}
+		short := km.ShortHelp()
+		assert.NotEmpty(t, short, "ShortHelp should return at least one binding")
+	})
+
+	t.Run("chordKeymap FullHelp returns chord bindings", func(t *testing.T) {
+		km := chordKeymap{prefix: "ctrl+x"}
+		full := km.FullHelp()
+		assert.NotEmpty(t, full, "FullHelp should return at least one column")
+		// Should have bindings for each chord registry entry
+		totalBindings := 0
+		for _, col := range full {
+			totalBindings += len(col)
+		}
+		assert.GreaterOrEqual(t, totalBindings, len(chordRegistry),
+			"FullHelp should have at least as many bindings as chord registry entries")
 	})
 }
 
