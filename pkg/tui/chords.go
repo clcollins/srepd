@@ -90,10 +90,9 @@ func (k chordKeymap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{bindings}
 }
 
-// chordViewLog is a placeholder for the future debug log viewer (Issue #203).
+// chordViewLog opens the debug log viewer (same as ctrl+l).
 func chordViewLog(m model) (tea.Model, tea.Cmd) {
-	m.setStatus("debug log viewer not yet implemented")
-	return m, nil
+	return m, readLogFile(m.logFilePath)
 }
 
 // chordHelpText generates a human-readable help string listing all chord commands.

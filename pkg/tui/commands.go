@@ -201,6 +201,13 @@ type waitForSelectedIncidentThenDoMsg struct {
 type TickMsg struct {
 }
 
+// clearFlashMsg is sent after a flash notification's display duration has elapsed.
+// The status is only cleared if it still matches the original flash message,
+// preventing newer messages from being prematurely dismissed.
+type clearFlashMsg struct {
+	message string
+}
+
 type PollIncidentsMsg struct{}
 
 // logFileContentMsg is a message containing the contents of the debug log file.

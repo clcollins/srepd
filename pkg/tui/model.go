@@ -37,15 +37,6 @@ type confirmActionState struct {
 	action tea.Cmd // Command to execute on 'y'
 }
 
-// actionLogEntry stores a record of a write action performed on an incident
-type actionLogEntry struct {
-	key       string    // Keypress that triggered action (e.g., "a", "^e", "n", "%R" for resolved)
-	id        string    // Incident ID
-	summary   string    // Incident summary/title
-	action    string    // Action performed (e.g., "acknowledge", "re-escalate", "resolved")
-	timestamp time.Time // When the entry was added (used for aging out resolved incidents)
-}
-
 var initialScheduledJobs = []*scheduledJob{
 	{
 		jobMsg:    func() tea.Msg { return PollIncidentsMsg{} },
@@ -60,10 +51,8 @@ type model struct {
 	editor   []string
 	launcher launcher.ClusterLauncher
 
-	table          table.Model
-	actionLogTable table.Model
-	actionLog      []actionLogEntry
-	input          textinput.Model
+	table table.Model
+	input textinput.Model
 	// This is a hack since viewport.Model doesn't have a Focused() method
 	viewingIncident  bool
 	incidentViewer   viewport.Model
@@ -95,7 +84,6 @@ type model struct {
 	autoAcknowledge bool
 	autoRefresh     bool
 	teamMode        bool
-	showActionLog   bool
 	showLowUrgency  bool
 	debug           bool
 
@@ -159,8 +147,6 @@ func InitialModel(
 		debug:            debug,
 		help:             newHelp(),
 		table:            newTableWithStyles(),
-		actionLogTable:   newActionLogTable(),
-		actionLog:        []actionLogEntry{},
 		input:            newTextInput(),
 		incidentViewer:   newIncidentViewer(),
 		logViewer:        newLogViewer(),
@@ -224,8 +210,6 @@ func InitialModelWithConfig(
 		debug:            debug,
 		help:             newHelp(),
 		table:            newTableWithStyles(),
-		actionLogTable:   newActionLogTable(),
-		actionLog:        []actionLogEntry{},
 		input:            newTextInput(),
 		incidentViewer:   newIncidentViewer(),
 		spinner:          s,
@@ -409,66 +393,15 @@ func (m *model) toggleHelp() {
 	m.help.ShowAll = !m.help.ShowAll
 }
 
-// addActionLogEntry adds an action to the action log, maintaining only the last 5 entries
-func (m *model) addActionLogEntry(key, id, summary, action string) {
-	log.Debug("addActionLogEntry", "key", key, "id", id, "summary", summary, "action", action)
-	entry := actionLogEntry{
-		key:       key,
-		id:        id,
-		summary:   summary,
-		action:    action,
-		timestamp: time.Now(),
-	}
-
-	// Prepend new entry
-	m.actionLog = append([]actionLogEntry{entry}, m.actionLog...)
-
-	// Keep only last 5 entries
-	if len(m.actionLog) > 5 {
-		m.actionLog = m.actionLog[:5]
-	}
-
-	// Update action log table rows
-	m.updateActionLogTable()
-}
-
-// updateActionLogTable refreshes the action log table with current entries
-func (m *model) updateActionLogTable() {
-	var rows []table.Row
-	for _, entry := range m.actionLog {
-		// 4 columns matching main table: keypress, ID, summary, action
-		rows = append(rows, table.Row{entry.key, entry.id, entry.summary, entry.action})
-	}
-	m.actionLogTable.SetRows(rows)
-}
-
-// ageOutResolvedIncidents removes resolved incidents from the action log that are older than maxStaleAge
-// Also ensures the action log never exceeds 5 entries total
-func (m *model) ageOutResolvedIncidents(maxAge time.Duration) {
-	var kept []actionLogEntry
-	for _, entry := range m.actionLog {
-		// Only age out resolved incidents (key == "%R")
-		if entry.key == "%R" {
-			age := time.Since(entry.timestamp)
-			if age < maxAge {
-				kept = append(kept, entry)
-			} else {
-				log.Debug("ageOutResolvedIncidents", "removing aged out resolved incident", "incident", entry.id, "age", age)
-			}
-		} else {
-			// Keep all non-resolved entries (user actions)
-			kept = append(kept, entry)
-		}
-	}
-
-	// Ensure we don't exceed 5 entries total (newest entries are at the front)
-	if len(kept) > 5 {
-		log.Debug("ageOutResolvedIncidents", "trimming action log from", len(kept), "to 5 entries")
-		kept = kept[:5]
-	}
-
-	m.actionLog = kept
-	m.updateActionLogTable()
+// flashNotification sets a status message that auto-dismisses after 4 seconds.
+// The clearFlashMsg handler only clears the status if it still matches, so newer
+// messages are not prematurely dismissed.
+func (m *model) flashNotification(msg string) tea.Cmd {
+	m.setStatus(msg)
+	flashMsg := msg
+	return tea.Tick(4*time.Second, func(time.Time) tea.Msg {
+		return clearFlashMsg{message: flashMsg}
+	})
 }
 
 // findRowIndex returns the index of the row in rows whose incident ID column
@@ -485,12 +418,6 @@ func findRowIndex(rows []table.Row, incidentID string) int {
 func newTableWithStyles() table.Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(tableStyle)
-	return t
-}
-
-func newActionLogTable() table.Model {
-	t := table.New(table.WithFocused(false))
-	t.SetStyles(actionLogTableStyle)
 	return t
 }
 

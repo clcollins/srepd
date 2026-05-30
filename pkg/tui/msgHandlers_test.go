@@ -347,13 +347,13 @@ func TestClusterSelect_ClearedOnViewTransition(t *testing.T) {
 		"Cluster select options should be cleared on view transition")
 }
 
-// viewLogKeyMsg returns a tea.KeyMsg that matches the ViewLog key binding (ctrl+d).
+// viewLogKeyMsg returns a tea.KeyMsg that matches the ViewLog key binding (ctrl+l).
 func viewLogKeyMsg() tea.KeyMsg {
-	return tea.KeyMsg{Type: tea.KeyCtrlD}
+	return tea.KeyMsg{Type: tea.KeyCtrlL}
 }
 
 func TestViewLogKey_OpensLogViewer(t *testing.T) {
-	// Scenario: Pressing ctrl+d in table mode should trigger a readLogFile command
+	// Scenario: Pressing ctrl+l in table mode should trigger a readLogFile command
 	// which, when its message arrives, sets viewingLog=true.
 
 	m := createTestModel()
@@ -361,13 +361,13 @@ func TestViewLogKey_OpensLogViewer(t *testing.T) {
 	m.table.Focus()
 	m.logFilePath = "/tmp/test-srepd-debug.log"
 
-	// Press ctrl+d
+	// Press ctrl+l
 	result, cmd := m.Update(viewLogKeyMsg())
 	updatedModel := result.(model)
 
 	// The model should NOT yet be viewingLog (that happens on logFileContentMsg)
 	// But a command should be returned (readLogFile)
-	assert.NotNil(t, cmd, "ctrl+d should return a command to read the log file")
+	assert.NotNil(t, cmd, "ctrl+l should return a command to read the log file")
 	assert.False(t, updatedModel.viewingLog, "viewingLog should not be set until content arrives")
 }
 
@@ -424,7 +424,6 @@ func TestLogViewer_WindowResize(t *testing.T) {
 
 	m := model{
 		table:          newTableWithStyles(),
-		actionLogTable: newActionLogTable(),
 		incidentViewer: newIncidentViewer(),
 		logViewer:      newLogViewer(),
 		help:           newHelp(),
@@ -443,11 +442,11 @@ func TestLogViewer_WindowResize(t *testing.T) {
 }
 
 func TestViewLogKey_InKeymap(t *testing.T) {
-	// Scenario: ctrl+d should be registered in the keymap as ViewLog.
+	// Scenario: ctrl+l should be registered in the keymap as ViewLog.
 
-	// Check that the binding exists and matches ctrl+d
+	// Check that the binding exists and matches ctrl+l
 	keys := defaultKeyMap.ViewLog.Keys()
-	assert.Contains(t, keys, "ctrl+d", "ViewLog binding should include ctrl+d")
+	assert.Contains(t, keys, "ctrl+l", "ViewLog binding should include ctrl+l")
 }
 
 func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
