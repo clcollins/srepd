@@ -109,6 +109,12 @@ docs/plans/       Plan documents (one per PR)
 - Superseded plans are preserved with a note at the top pointing
   to the replacement
 - CI enforces plan document presence for every PR
+- When a PR fixes issues introduced by a previous PR, the fixing
+  PR's plan document must include a "Lessons Learned" section
+  describing: what went wrong, why it happened, and how to prevent
+  it in the future
+- The fixing PR should also update the original plan document's
+  "Lessons Learned" section with a cross-reference to the fix
 
 ## Version Control
 
