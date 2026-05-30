@@ -108,10 +108,10 @@ type model struct {
 	// claudeQuerying is true while a Claude CLI query is in progress
 	claudeQuerying bool
 
-	// Incident viewer tab state
-	activeTab      int // 0=details, 1=alerts, 2=notes
-	activeAlertIdx int // which alert is shown (0-based) in the alerts tab
-	activeNoteIdx  int // which note is shown (0-based) in the notes tab
+	// Incident viewer section state (details always visible at top)
+	activeSection  int // 0=alerts, 1=notes — which section Tab/number keys operate on
+	activeAlertIdx int // which alert is shown (0-based) in the alerts section
+	activeNoteIdx  int // which note is shown (0-based) in the notes section
 }
 
 func InitialModel(
@@ -253,8 +253,8 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	m.pendingConfirmation = nil
 	m.clusterSelectMode = false
 	m.clusterSelectOptions = nil
-	// Reset tab state
-	m.activeTab = 0
+	// Reset section state
+	m.activeSection = 0
 	m.activeAlertIdx = 0
 	m.activeNoteIdx = 0
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)

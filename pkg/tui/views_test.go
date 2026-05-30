@@ -960,6 +960,113 @@ func TestIncidentViewerNoBorder(t *testing.T) {
 	assert.False(t, vp.Style.GetBorderRight(), "viewport should not have a right border")
 }
 
+func TestRenderSectionHeader(t *testing.T) {
+	tests := []struct {
+		name             string
+		sectionName      string
+		count            int
+		active           bool
+		loading          bool
+		expectedContains []string
+	}{
+		{
+			name:             "Active alerts section with count",
+			sectionName:      "Alerts",
+			count:            3,
+			active:           true,
+			loading:          false,
+			expectedContains: []string{">>", "Alerts", "(3)", "Tab: cycle", "Up/Down: select section"},
+		},
+		{
+			name:             "Inactive notes section with count",
+			sectionName:      "Notes",
+			count:            2,
+			active:           false,
+			loading:          false,
+			expectedContains: []string{"> ", "Notes", "(2)"},
+		},
+		{
+			name:             "Active section loading",
+			sectionName:      "Alerts",
+			count:            0,
+			active:           true,
+			loading:          true,
+			expectedContains: []string{">>", "Alerts", "(...)"},
+		},
+		{
+			name:             "Inactive section loading",
+			sectionName:      "Notes",
+			count:            0,
+			active:           false,
+			loading:          true,
+			expectedContains: []string{"> ", "Notes", "(...)"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := renderSectionHeader(tt.sectionName, tt.count, tt.active, tt.loading)
+
+			for _, expected := range tt.expectedContains {
+				assert.Contains(t, result, expected, "section header should contain %q", expected)
+			}
+
+			if !tt.active {
+				// Inactive sections should NOT have the help text
+				assert.NotContains(t, result, "Tab: cycle", "inactive section should not show help text")
+			}
+		})
+	}
+}
+
+func TestTemplateAlwaysShowsDetails(t *testing.T) {
+	t.Run("template always renders details at top regardless of active section", func(t *testing.T) {
+		incident := &pagerduty.Incident{}
+		incident.ID = "Q999"
+		incident.Summary = "Always Visible Details"
+		incident.HTMLURL = "https://example.com/incidents/Q999"
+		incident.Title = "Always Visible Incident Title"
+		incident.Status = "triggered"
+		incident.Urgency = "high"
+		incident.Service.Summary = "test-service"
+
+		// Test with alerts section active
+		m := model{
+			selectedIncident:     incident,
+			activeSection:        sectionAlerts,
+			incidentNotesLoaded:  true,
+			incidentAlertsLoaded: true,
+			incidentCache:        make(map[string]*cachedIncidentData),
+			selectedIncidentAlerts: []pagerduty.IncidentAlert{
+				{
+					APIObject: pagerduty.APIObject{ID: "A1", HTMLURL: "https://example.com/alerts/A1"},
+					Service:   pagerduty.APIObject{Summary: "Alert Service"},
+					Status:    "triggered",
+				},
+			},
+			selectedIncidentNotes: []pagerduty.IncidentNote{
+				{
+					ID:      "N1",
+					User:    pagerduty.APIObject{Summary: "SRE User"},
+					Content: "A test note",
+				},
+			},
+		}
+
+		content, err := m.template()
+		assert.NoError(t, err)
+
+		// Details should always be present
+		assert.Contains(t, content, "Q999", "details section should always show incident ID")
+		assert.Contains(t, content, "Always Visible Incident Title", "details should show title")
+		assert.Contains(t, content, "test-service", "details should show service")
+
+		// Both section headers should be visible
+		assert.Contains(t, content, "Alerts", "alerts section header should be visible")
+		assert.Contains(t, content, "Notes", "notes section header should be visible")
+	})
+}
+
 func TestSummarizeAlerts_NoDetailsField(t *testing.T) {
 	alerts := []pagerduty.IncidentAlert{
 		{
