@@ -2,6 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -1623,4 +1626,75 @@ func TestWindowSizeMsgHandler_SmallWindow(t *testing.T) {
 				"viewport height must be positive to avoid panic in visibleLines")
 		})
 	}
+}
+
+func TestLogFilePathForOS(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err, "should be able to get user home dir")
+
+	tests := []struct {
+		name     string
+		goos     string
+		expected string
+	}{
+		{
+			name:     "Linux returns XDG config path",
+			goos:     "linux",
+			expected: filepath.Join(home, ".config", "srepd", "debug.log"),
+		},
+		{
+			name:     "Darwin returns Library/Logs path",
+			goos:     "darwin",
+			expected: filepath.Join(home, "Library", "Logs", "srepd.log"),
+		},
+		{
+			name:     "Unsupported OS returns empty string",
+			goos:     "windows",
+			expected: "",
+		},
+		{
+			name:     "Empty OS string returns empty string",
+			goos:     "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := logFilePathForOS(tt.goos)
+			assert.Equal(t, tt.expected, result, "logFilePathForOS(%q) mismatch", tt.goos)
+		})
+	}
+}
+
+func TestDefaultLogFilePath(t *testing.T) {
+	t.Run("returns non-empty path on supported platforms", func(t *testing.T) {
+		// defaultLogFilePath() calls logFilePathForOS(runtime.GOOS)
+		// On Linux (CI) and macOS (dev), it should return a valid path
+		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+			t.Skip("test only runs on linux or darwin")
+		}
+
+		result := defaultLogFilePath()
+		assert.NotEmpty(t, result, "defaultLogFilePath should return a non-empty path on %s", runtime.GOOS)
+
+		// Verify it uses the correct OS-specific path segment
+		switch runtime.GOOS {
+		case "linux":
+			assert.Contains(t, result, filepath.Join(".config", "srepd", "debug.log"),
+				"Linux path should contain .config/srepd/debug.log")
+		case "darwin":
+			assert.Contains(t, result, filepath.Join("Library", "Logs", "srepd.log"),
+				"Darwin path should contain Library/Logs/srepd.log")
+		}
+	})
+}
+
+func TestDefaultLogFilePath_MatchesLogFilePathForOS(t *testing.T) {
+	t.Run("defaultLogFilePath is consistent with logFilePathForOS for current OS", func(t *testing.T) {
+		expected := logFilePathForOS(runtime.GOOS)
+		actual := defaultLogFilePath()
+		assert.Equal(t, expected, actual,
+			"defaultLogFilePath() should equal logFilePathForOS(runtime.GOOS)")
+	})
 }

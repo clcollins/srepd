@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"charm.land/glamour/v2"
@@ -212,6 +214,8 @@ func InitialModelWithConfig(
 		table:            newTableWithStyles(),
 		input:            newTextInput(),
 		incidentViewer:   newIncidentViewer(),
+		logViewer:        newLogViewer(),
+		logFilePath:      defaultLogFilePath(),
 		spinner:          s,
 		markdownRenderer: renderer,
 		apiInProgress:    false,
@@ -446,11 +450,27 @@ func newLogViewer() viewport.Model {
 	return vp
 }
 
-// defaultLogFilePath returns the default path for the srepd debug log file.
-func defaultLogFilePath() string {
+// logFilePathForOS returns the platform-appropriate log file path for the
+// given GOOS value. This is separated from defaultLogFilePath so it can be
+// tested with arbitrary OS values (runtime.GOOS is a compile-time constant).
+func logFilePathForOS(goos string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return home + "/.config/srepd/debug.log"
+
+	switch goos {
+	case "linux":
+		return filepath.Join(home, ".config", "srepd", "debug.log")
+	case "darwin":
+		return filepath.Join(home, "Library", "Logs", "srepd.log")
+	default:
+		return ""
+	}
+}
+
+// defaultLogFilePath returns the default path for the srepd debug log file,
+// selected based on the current operating system.
+func defaultLogFilePath() string {
+	return logFilePathForOS(runtime.GOOS)
 }
