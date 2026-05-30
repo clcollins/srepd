@@ -161,6 +161,11 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConfirmationInput(msg.(tea.KeyMsg))
 	}
 
+	// Clear chord help overlay on any keypress so the regular help returns
+	if m.chordHelpActive {
+		m.chordHelpActive = false
+	}
+
 	keyStr := msg.(tea.KeyMsg).String()
 
 	// Chord state machine: runs before focus-mode dispatch so chords work

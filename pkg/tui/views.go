@@ -182,7 +182,9 @@ func (m model) View() string {
 
 	// Choose the appropriate keymap based on focus mode
 	var helpKeyMap help.KeyMap
-	if m.input.Focused() {
+	if m.chordHelpActive {
+		helpKeyMap = chordKeymap{prefix: m.chordPrefix}
+	} else if m.input.Focused() {
 		helpKeyMap = inputModeKeyMap
 	} else {
 		helpKeyMap = defaultKeyMap

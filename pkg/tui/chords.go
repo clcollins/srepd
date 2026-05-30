@@ -57,10 +57,37 @@ func resolveChord(key string) *chordAction {
 	return nil
 }
 
-// chordShowHelp displays the list of available chord commands in the status bar.
+// chordShowHelp displays the list of available chord commands in the help
+// section at the bottom of the screen, temporarily replacing the regular help.
 func chordShowHelp(m model) (tea.Model, tea.Cmd) {
-	m.setStatus(chordHelpText(m.chordPrefix))
+	m.chordHelpActive = true
+	m.help.ShowAll = true
 	return m, nil
+}
+
+// chordKeymap implements help.KeyMap to display chord bindings in the help section.
+type chordKeymap struct {
+	prefix string
+}
+
+func (k chordKeymap) ShortHelp() []key.Binding {
+	return []key.Binding{
+		key.NewBinding(
+			key.WithKeys("any"),
+			key.WithHelp("any key", "dismiss chord help"),
+		),
+	}
+}
+
+func (k chordKeymap) FullHelp() [][]key.Binding {
+	var bindings []key.Binding
+	for _, entry := range chordRegistry {
+		bindings = append(bindings, key.NewBinding(
+			key.WithKeys(k.prefix+" "+entry.Key),
+			key.WithHelp(k.prefix+" "+entry.Key, entry.Description),
+		))
+	}
+	return [][]key.Binding{bindings}
 }
 
 // chordViewLog is a placeholder for the future debug log viewer (Issue #203).
