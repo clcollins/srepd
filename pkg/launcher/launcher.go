@@ -70,7 +70,7 @@ func NewClusterLauncherWithToolbox(terminal string, clusterLoginCommand string, 
 	}
 
 	if inToolbox {
-		log.Info("Toolbox detected: terminal commands will be prefixed with flatpak-spawn --host")
+		log.Debug("Toolbox detected: terminal commands will be prefixed with flatpak-spawn --host")
 	}
 
 	err := launcher.validate()

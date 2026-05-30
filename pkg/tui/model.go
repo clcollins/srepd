@@ -389,7 +389,7 @@ func (m *model) syncSelectedIncidentToHighlightedRow() tea.Cmd {
 }
 
 func (m *model) setStatus(msg string) {
-	log.Info("setStatus", "status", msg)
+	log.Debug("setStatus", "status", msg)
 	m.status = msg
 }
 

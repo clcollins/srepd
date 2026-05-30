@@ -120,6 +120,11 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, hasClaudeCode func() bool
 		return m, nil
 	}
 
+	incidentID := ""
+	if m.selectedIncident != nil {
+		incidentID = m.selectedIncident.ID
+	}
+	log.Info("claude query initiated", "incident_id", incidentID, "prompt", truncatePrompt(msg.prompt, 80))
 	m.setStatus(fmt.Sprintf("querying Claude: %s", truncatePrompt(msg.prompt, 40)))
 	m.claudeQuerying = true
 	m.apiInProgress = true
@@ -160,6 +165,7 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 	m.incidentViewer.SetContent(content)
 	m.incidentViewer.GotoTop()
 	m.viewingIncident = true
+	log.Info("claude response received")
 	m.setStatus("Claude response received")
 
 	return m, nil
