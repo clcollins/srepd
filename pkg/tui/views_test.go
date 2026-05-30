@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"testing"
 
+	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1064,6 +1065,60 @@ func TestTemplateAlwaysShowsDetails(t *testing.T) {
 		// Both section headers should be visible
 		assert.Contains(t, content, "Alerts", "alerts section header should be visible")
 		assert.Contains(t, content, "Notes", "notes section header should be visible")
+	})
+}
+
+func TestRenderIncidentMarkdown_NilRenderer(t *testing.T) {
+	t.Run("returns plain content when renderer is nil", func(t *testing.T) {
+		m := &model{
+			markdownRenderer: nil,
+		}
+
+		content := "# Test Heading\n\nSome **bold** text"
+		result, err := renderIncidentMarkdown(m, content)
+
+		assert.NoError(t, err, "should not error with nil renderer")
+		assert.Equal(t, content, result, "should return content unchanged when renderer is nil")
+	})
+}
+
+func TestRenderIncidentMarkdown_WithRenderer(t *testing.T) {
+	t.Run("returns rendered markdown content when renderer is available", func(t *testing.T) {
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithWordWrap(100),
+		)
+		require.NoError(t, err, "should create renderer without error")
+
+		m := &model{
+			markdownRenderer: renderer,
+		}
+
+		content := "# Test Heading\n\nSome **bold** text"
+		result, err := renderIncidentMarkdown(m, content)
+
+		assert.NoError(t, err, "should not error with valid renderer")
+		assert.NotEqual(t, content, result, "rendered content should differ from raw content")
+		assert.Contains(t, result, "Test Heading", "rendered content should contain the heading text")
+		assert.Contains(t, result, "bold", "rendered content should contain the bold text")
+	})
+}
+
+func TestRenderIncidentMarkdown_EmptyContent(t *testing.T) {
+	t.Run("handles empty content gracefully", func(t *testing.T) {
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithWordWrap(100),
+		)
+		require.NoError(t, err, "should create renderer without error")
+
+		m := &model{
+			markdownRenderer: renderer,
+		}
+
+		result, err := renderIncidentMarkdown(m, "")
+
+		assert.NoError(t, err, "should not error on empty content")
+		// Glamour may add whitespace but should not error
+		_ = result
 	})
 }
 
