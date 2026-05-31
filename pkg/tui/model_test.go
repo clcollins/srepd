@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1657,6 +1659,167 @@ func TestNumberKeys_JumpToIndex(t *testing.T) {
 			if tt.activeSection == sectionNotes {
 				assert.Equal(t, tt.expectedNoteIdx, updatedModel.activeNoteIdx)
 			}
+		})
+	}
+}
+
+// captureLogOutput runs a function while capturing log output at the given level.
+// Returns the captured log output as a string.
+func captureLogOutput(level log.Level, fn func()) string {
+	var buf bytes.Buffer
+	logger := log.NewWithOptions(os.Stderr, log.Options{})
+	logger.SetOutput(&buf)
+	logger.SetLevel(level)
+
+	origLogger := log.Default()
+	log.SetDefault(logger)
+	defer log.SetDefault(origLogger)
+
+	fn()
+	return buf.String()
+}
+
+func TestSetStatusLogsAtDebugLevel(t *testing.T) {
+	t.Run("setStatus logs at DEBUG not INFO", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := log.NewWithOptions(os.Stderr, log.Options{})
+		logger.SetOutput(&buf)
+		logger.SetLevel(log.InfoLevel)
+
+		// Temporarily replace the default logger
+		origLogger := log.Default()
+		log.SetDefault(logger)
+		defer log.SetDefault(origLogger)
+
+		m := createTestModel()
+
+		// With INFO level, setStatus should NOT produce output (it logs at DEBUG)
+		buf.Reset()
+		m.setStatus("showing 1/1 incident...")
+		assert.Empty(t, buf.String(), "setStatus should not produce output at INFO level")
+		assert.Equal(t, "showing 1/1 incident...", m.status, "status should still be set on the model")
+
+		// With DEBUG level, setStatus SHOULD produce output
+		logger.SetLevel(log.DebugLevel)
+		buf.Reset()
+		m.setStatus("got incident Q123")
+		assert.NotEmpty(t, buf.String(), "setStatus should produce output at DEBUG level")
+		assert.Contains(t, buf.String(), "got incident Q123", "log output should contain the status message")
+	})
+}
+
+func TestSREActionsLogAtInfoLevel(t *testing.T) {
+	tests := []struct {
+		name          string
+		msg           tea.Msg
+		setupModel    func(*model)
+		expectedInLog string
+		description   string
+	}{
+		{
+			name: "acknowledged incidents logs at INFO",
+			msg: acknowledgedIncidentsMsg{
+				incidents: []pagerduty.Incident{
+					{APIObject: pagerduty.APIObject{ID: "Q123"}},
+				},
+				err: nil,
+			},
+			setupModel: func(m *model) {
+				m.config = &pd.Config{
+					CurrentUser: &pagerduty.User{
+						APIObject: pagerduty.APIObject{ID: "U123"},
+					},
+				}
+			},
+			expectedInLog: "acknowledged incident",
+			description:   "acknowledging an incident should produce an INFO log",
+		},
+		{
+			name: "re-escalated incidents logs at INFO",
+			msg:  reEscalatedIncidentsMsg([]pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "Q456"}}}),
+			setupModel: func(m *model) {
+				m.config = &pd.Config{
+					CurrentUser: &pagerduty.User{
+						APIObject: pagerduty.APIObject{ID: "U123"},
+					},
+				}
+			},
+			expectedInLog: "re-escalated incident",
+			description:   "re-escalating an incident should produce an INFO log",
+		},
+		{
+			name: "note added logs at INFO",
+			msg: addedIncidentNoteMsg{
+				note: &pagerduty.IncidentNote{ID: "N123", Content: "test note"},
+				err:  nil,
+			},
+			setupModel: func(m *model) {
+				m.selectedIncident = &pagerduty.Incident{
+					APIObject: pagerduty.APIObject{ID: "Q789"},
+				}
+			},
+			expectedInLog: "added note",
+			description:   "adding a note should produce an INFO log",
+		},
+		{
+			name: "login finished successfully logs at INFO",
+			msg:  loginFinishedMsg{err: nil},
+			setupModel: func(m *model) {
+				m.selectedIncident = &pagerduty.Incident{
+					APIObject: pagerduty.APIObject{ID: "Q111"},
+				}
+			},
+			expectedInLog: "login completed",
+			description:   "successful login should produce an INFO log",
+		},
+		{
+			name: "resolved incidents logs at INFO",
+			msg: updatedIncidentListMsg{
+				incidents: []pagerduty.Incident{
+					{APIObject: pagerduty.APIObject{ID: "Q456"}, Title: "Incident 2"},
+				},
+				err: nil,
+			},
+			setupModel: func(m *model) {
+				m.config = &pd.Config{
+					CurrentUser: &pagerduty.User{
+						APIObject: pagerduty.APIObject{ID: "U123"},
+					},
+				}
+				m.incidentList = []pagerduty.Incident{
+					{
+						APIObject:          pagerduty.APIObject{ID: "Q123"},
+						Title:              "Incident 1",
+						Service:            pagerduty.APIObject{Summary: "svc-1"},
+						LastStatusChangeAt: time.Now().Format(time.RFC3339),
+					},
+					{
+						APIObject:          pagerduty.APIObject{ID: "Q456"},
+						Title:              "Incident 2",
+						Service:            pagerduty.APIObject{Summary: "svc-2"},
+						LastStatusChangeAt: time.Now().Format(time.RFC3339),
+					},
+				}
+			},
+			expectedInLog: "incident resolved",
+			description:   "resolved incidents should produce an INFO log",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModel()
+			if tt.setupModel != nil {
+				tt.setupModel(&m)
+			}
+
+			output := captureLogOutput(log.InfoLevel, func() {
+				result, _ := m.Update(tt.msg)
+				m = result.(model)
+			})
+
+			assert.Contains(t, output, tt.expectedInLog,
+				"%s: expected INFO log containing %q", tt.description, tt.expectedInLog)
 		})
 	}
 }
