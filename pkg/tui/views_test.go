@@ -514,11 +514,11 @@ func TestIncidentTemplate_AlertRendersAsMarkdownLink(t *testing.T) {
 
 	result := renderAlertsTestContent(t, summary)
 
-	// SOP should render as a markdown link using ToLink
-	assert.Contains(t, result, "[SOP](https://example.com/sop/cluster-operator-down)")
+	// SOP should render as a markdown link with filename
+	assert.Contains(t, result, "[cluster-operator-down](https://example.com/sop/cluster-operator-down)")
 
-	// Alert PD URL should render as a markdown link using ToLink
-	assert.Contains(t, result, "[ALERT001](https://example.pagerduty.com/alerts/ALERT001)")
+	// Alert name should render as a markdown link to the alert
+	assert.Contains(t, result, "[ClusterOperatorDown](https://example.pagerduty.com/alerts/ALERT001)")
 }
 
 func TestIncidentTemplate_AlertRendersSOPNoneWhenMissing(t *testing.T) {
@@ -609,8 +609,8 @@ func TestIncidentTemplate_AlertNameAsHeading(t *testing.T) {
 
 	result := renderAlertsTestContent(t, summary)
 
-	// Alert name should appear as a ### heading
-	assert.Contains(t, result, "### KubePersistentVolumeFillingUp (triggered)")
+	// Alert name should appear as a link
+	assert.Contains(t, result, "[KubePersistentVolumeFillingUp](https://example.pagerduty.com/alerts/ALERT004)")
 }
 
 func TestIncidentTemplate_AlertWithEmptyName(t *testing.T) {
@@ -639,9 +639,8 @@ func TestIncidentTemplate_AlertWithEmptyName(t *testing.T) {
 
 	result := renderAlertsTestContent(t, summary)
 
-	// Should still render gracefully with empty fields
-	// The heading should fall back to the alert ID when Name is empty
-	assert.Contains(t, result, "### ALERT005 (triggered)")
+	// Should fall back to alert ID as link text when Name is empty
+	assert.Contains(t, result, "[ALERT005](https://example.pagerduty.com/alerts/ALERT005)")
 	// Should contain _none_ for SOP
 	assert.Contains(t, result, "_none_")
 }
@@ -775,10 +774,10 @@ func TestAlertTab_ShowsSingleAlert(t *testing.T) {
 		require.NoError(t, err)
 		result := buf.String()
 
-		assert.Contains(t, result, "KubePodNotReady")
+		assert.Contains(t, result, "[KubePodNotReady](https://example.pagerduty.com/alerts/ALERT020)")
 		assert.Contains(t, result, "my-cluster-id")
-		assert.Contains(t, result, "1/5")         // 1-based display of index 0 out of 5
-		assert.NotContains(t, result, "ALERT999") // Does not contain other alerts
+		assert.Contains(t, result, "1/5")
+		assert.NotContains(t, result, "ALERT999")
 	})
 }
 
@@ -973,14 +972,12 @@ func TestIncidentTemplate_SpacingBetweenAlerts(t *testing.T) {
 
 	result := renderAlertsTestContent(t, summary)
 
-	// Both alerts should be present
-	assert.Contains(t, result, "### FirstAlert (triggered)")
-	assert.Contains(t, result, "### SecondAlert (triggered)")
+	// Both alerts should be present as links
+	assert.Contains(t, result, "[FirstAlert]")
+	assert.Contains(t, result, "[SecondAlert]")
 
-	// There should be a horizontal rule (---) between alerts for clear visual separation
+	// There should be a horizontal rule (---) between alerts
 	assert.Contains(t, result, "---")
-	// The separator should appear between the two alerts, with the ---
-	// separating the first alert's details from the second alert's heading
 	assert.Contains(t, result, "* Created: 2025-01-01\n\n---\n")
 	assert.Contains(t, result, "---\n\n### Alert 2/2")
 }
@@ -1096,8 +1093,8 @@ func TestRenderTabContent_AlertsTab(t *testing.T) {
 
 		content, err := m.renderTabContent()
 		assert.NoError(t, err)
-		assert.Contains(t, content, "A1")
-		assert.Contains(t, content, "A2")
+		assert.Contains(t, content, "**A1**")
+		assert.Contains(t, content, "**A2**")
 		assert.Contains(t, content, "1/2")
 		assert.Contains(t, content, "2/2")
 	})

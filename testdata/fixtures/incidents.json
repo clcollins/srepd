@@ -420,9 +420,9 @@
       {
         "at": "2026-05-28T03:00:00Z",
         "assignee": {
-          "id": "PDEV_USER_003",
+          "id": "PDEV_USER_001",
           "type": "user_reference",
-          "summary": "Bob Oncall"
+          "summary": "Dev User"
         }
       }
     ],
