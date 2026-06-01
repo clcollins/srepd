@@ -93,9 +93,11 @@ type fixtureAck struct {
 type fixtureAlert struct {
 	ID        string                 `json:"id"`
 	Type      string                 `json:"type"`
+	HTMLURL   string                 `json:"html_url"`
 	Status    string                 `json:"status"`
 	CreatedAt string                 `json:"created_at"`
 	Service   fixtureServiceRef      `json:"service"`
+	Incident  fixtureAPIRef          `json:"incident"`
 	Body      map[string]interface{} `json:"body"`
 }
 
@@ -328,8 +330,9 @@ func convertFixtureIncident(fi fixtureIncident) *pagerduty.Incident {
 func convertFixtureAlert(fa fixtureAlert) pagerduty.IncidentAlert {
 	return pagerduty.IncidentAlert{
 		APIObject: pagerduty.APIObject{
-			ID:   fa.ID,
-			Type: fa.Type,
+			ID:      fa.ID,
+			Type:    fa.Type,
+			HTMLURL: fa.HTMLURL,
 		},
 		Status:    fa.Status,
 		CreatedAt: fa.CreatedAt,
@@ -337,6 +340,10 @@ func convertFixtureAlert(fa fixtureAlert) pagerduty.IncidentAlert {
 			ID:      fa.Service.ID,
 			Type:    fa.Service.Type,
 			Summary: fa.Service.Summary,
+		},
+		Incident: pagerduty.APIReference{
+			ID:   fa.Incident.ID,
+			Type: fa.Incident.Type,
 		},
 		Body: fa.Body,
 	}
