@@ -323,4 +323,125 @@ func TestClaudeResponse_RendersWithPrefix(t *testing.T) {
 	// The actual prefix is added in the Update handler
 }
 
+func TestDefaultHasClaudeCode_NoPanic(t *testing.T) {
+	t.Run("defaultHasClaudeCode does not panic", func(t *testing.T) {
+		// defaultHasClaudeCode wraps launcher.HasClaudeCode which calls exec.LookPath.
+		// In a test environment where 'claude' is not installed, it should return false
+		// without panicking.
+		assert.NotPanics(t, func() {
+			result := defaultHasClaudeCode()
+			// In most test environments, claude CLI is not installed
+			// We just verify the function runs without panic and returns a bool
+			_ = result
+		}, "defaultHasClaudeCode should not panic regardless of claude installation status")
+	})
+}
+
+func TestTruncatePrompt(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{
+			name:     "short string not truncated",
+			input:    "hello",
+			maxLen:   10,
+			expected: "hello",
+		},
+		{
+			name:     "exact length not truncated",
+			input:    "hello",
+			maxLen:   5,
+			expected: "hello",
+		},
+		{
+			name:     "long string truncated with ellipsis",
+			input:    "this is a long prompt that should be truncated",
+			maxLen:   20,
+			expected: "this is a long promp...",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			maxLen:   10,
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := truncatePrompt(tt.input, tt.maxLen)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestBuildClaudeEnvVars_NilIncident(t *testing.T) {
+	alerts := []pagerduty.IncidentAlert{
+		{
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": "cluster-abc",
+					"alert_name": "TestAlert",
+				},
+			},
+		},
+	}
+
+	env := buildClaudeEnvVars(nil, alerts)
+
+	envMap := make(map[string]string)
+	for _, e := range env {
+		for i := 0; i < len(e); i++ {
+			if e[i] == '=' {
+				envMap[e[:i]] = e[i+1:]
+				break
+			}
+		}
+	}
+
+	// Should not have incident-level vars
+	_, hasIncidentID := envMap["PAGERDUTY_INCIDENT_ID"]
+	assert.False(t, hasIncidentID, "nil incident should not produce PAGERDUTY_INCIDENT_ID")
+
+	// Should still have cluster and alert vars
+	assert.Equal(t, "cluster-abc", envMap["PAGERDUTY_CLUSTER_ID"])
+	assert.Equal(t, "TestAlert", envMap["PAGERDUTY_ALERT_NAMES"])
+}
+
+func TestBuildClaudeEnvVars_NoAlerts(t *testing.T) {
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{
+			ID:      "PD789",
+			HTMLURL: "https://pagerduty.com/incidents/PD789",
+		},
+		Title:   "No Alerts Incident",
+		Urgency: "low",
+		Status:  "acknowledged",
+		Service: pagerduty.APIObject{Summary: "some-service"},
+	}
+
+	env := buildClaudeEnvVars(incident, nil)
+
+	envMap := make(map[string]string)
+	for _, e := range env {
+		for i := 0; i < len(e); i++ {
+			if e[i] == '=' {
+				envMap[e[:i]] = e[i+1:]
+				break
+			}
+		}
+	}
+
+	assert.Equal(t, "PD789", envMap["PAGERDUTY_INCIDENT_ID"])
+	assert.Equal(t, "No Alerts Incident", envMap["PAGERDUTY_INCIDENT_TITLE"])
+	// No cluster or alert vars expected
+	_, hasCluster := envMap["PAGERDUTY_CLUSTER_ID"]
+	assert.False(t, hasCluster, "no alerts means no cluster ID")
+	_, hasAlertNames := envMap["PAGERDUTY_ALERT_NAMES"]
+	assert.False(t, hasAlertNames, "no alerts means no alert names")
+}
+
 // Helper to create a model with a table for input focus testing

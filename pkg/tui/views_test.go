@@ -1151,3 +1151,21 @@ func TestSummarizeAlerts_NoDetailsField(t *testing.T) {
 	assert.Equal(t, "abc-123", result[0].Cluster)
 	assert.Equal(t, "https://example.com/sop", result[0].Link)
 }
+
+func TestRenderIncidentMarkdown_PlainText(t *testing.T) {
+	t.Run("plain text returns without error", func(t *testing.T) {
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithWordWrap(100),
+		)
+		require.NoError(t, err)
+
+		m := &model{
+			markdownRenderer: renderer,
+		}
+		content := "Just plain text with no markdown formatting"
+		result, err := renderIncidentMarkdown(m, content)
+
+		assert.NoError(t, err, "should not error on plain text")
+		assert.Contains(t, result, "Just plain text", "plain text content should be preserved")
+	})
+}

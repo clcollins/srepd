@@ -2439,3 +2439,220 @@ func TestSilenceIncidents_MultipleIncidents(t *testing.T) {
 	assert.Len(t, msg.incidents, 3)
 	assert.Equal(t, uint(2), msg.level)
 }
+
+func TestAddNoteToIncident_Success(t *testing.T) {
+	// Create a temp file with known content including comment lines
+	tmpDir := t.TempDir()
+	tmpFile, err := os.CreateTemp(tmpDir, "note-test-*")
+	assert.NoError(t, err)
+
+	noteContent := "This is a real note\n# This is a comment\nMore note content\n"
+	_, err = tmpFile.WriteString(noteContent)
+	assert.NoError(t, err)
+	err = tmpFile.Sync()
+	assert.NoError(t, err)
+
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+	}
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "TEST_INC_001"},
+	}
+
+	cmd := addNoteToIncident(mockConfig, incident, tmpFile)
+	result := cmd()
+
+	msg, ok := result.(addedIncidentNoteMsg)
+	assert.True(t, ok, "expected addedIncidentNoteMsg")
+	assert.NoError(t, msg.err, "should not return an error for valid note")
+	assert.NotNil(t, msg.note, "note should not be nil")
+	assert.NotEmpty(t, msg.note.Content, "note content should not be empty")
+	// Comments should be stripped
+	assert.NotContains(t, msg.note.Content, "# This is a comment",
+		"comment lines should be removed from note content")
+	assert.Contains(t, msg.note.Content, "This is a real note",
+		"non-comment content should be preserved")
+}
+
+func TestAddNoteToIncident_EmptyContent(t *testing.T) {
+	// Create a temp file with only comments (empty after stripping)
+	tmpDir := t.TempDir()
+	tmpFile, err := os.CreateTemp(tmpDir, "note-test-*")
+	assert.NoError(t, err)
+
+	noteContent := "# Only a comment\n# Another comment\n"
+	_, err = tmpFile.WriteString(noteContent)
+	assert.NoError(t, err)
+	err = tmpFile.Sync()
+	assert.NoError(t, err)
+
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+	}
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "TEST_INC_002"},
+	}
+
+	cmd := addNoteToIncident(mockConfig, incident, tmpFile)
+	result := cmd()
+
+	msg, ok := result.(addedIncidentNoteMsg)
+	assert.True(t, ok, "expected addedIncidentNoteMsg")
+	assert.Nil(t, msg.note, "note should be nil when content is empty after stripping comments")
+	assert.Error(t, msg.err, "should return an error for empty note content")
+	assert.Contains(t, msg.err.Error(), nilNoteErr, "error should indicate empty note content")
+}
+
+func TestAddNoteToIncident_ErrorPostingNote(t *testing.T) {
+	// Create a temp file with valid content but use "err" incident ID to trigger mock error
+	tmpDir := t.TempDir()
+	tmpFile, err := os.CreateTemp(tmpDir, "note-test-*")
+	assert.NoError(t, err)
+
+	noteContent := "Valid note content\n"
+	_, err = tmpFile.WriteString(noteContent)
+	assert.NoError(t, err)
+	err = tmpFile.Sync()
+	assert.NoError(t, err)
+
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+	}
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "err"}, // "err" triggers mock error in CreateIncidentNoteWithContext
+	}
+
+	cmd := addNoteToIncident(mockConfig, incident, tmpFile)
+	result := cmd()
+
+	msg, ok := result.(addedIncidentNoteMsg)
+	assert.True(t, ok, "expected addedIncidentNoteMsg")
+	assert.Error(t, msg.err, "should return an error when PostNote fails")
+}
+
+func TestAddNoteToIncident_FileReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile, err := os.CreateTemp(tmpDir, "note-dead-*")
+	assert.NoError(t, err)
+	// Remove the backing file so ReadFile inside addNoteToIncident fails.
+	// The *os.File handle is still valid (Name() works) but the path is gone.
+	err = os.Remove(tmpFile.Name())
+	assert.NoError(t, err)
+
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+	}
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "TEST_INC_003"},
+	}
+
+	cmd := addNoteToIncident(mockConfig, incident, tmpFile)
+	result := cmd()
+
+	msg, ok := result.(errMsg)
+	assert.True(t, ok, "expected errMsg when file cannot be read")
+	assert.Error(t, msg.error, "should return an error when file cannot be read")
+}
+
+func TestOpenEditorCmd_ArgumentAssembly(t *testing.T) {
+	tests := []struct {
+		name       string
+		editor     []string
+		initialMsg []string
+	}{
+		{
+			name:       "single word editor with no initial message",
+			editor:     []string{"vim"},
+			initialMsg: nil,
+		},
+		{
+			name:       "editor with flags",
+			editor:     []string{"vim", "-u", "NONE"},
+			initialMsg: nil,
+		},
+		{
+			name:       "editor with initial message",
+			editor:     []string{"nano"},
+			initialMsg: []string{"# Initial content\n"},
+		},
+		{
+			name:       "editor with multiple initial messages",
+			editor:     []string{"vi"},
+			initialMsg: []string{"Line 1\n", "Line 2\n"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// openEditorCmd creates a temp file and returns a tea.Cmd
+			// We can't easily test the tea.ExecProcess return, but we can
+			// verify it doesn't panic and returns a non-nil cmd
+			cmd := openEditorCmd(tt.editor, tt.initialMsg...)
+
+			// The returned cmd should not be nil (it's either tea.ExecProcess or errMsg)
+			assert.NotNil(t, cmd, "openEditorCmd should return a non-nil command")
+		})
+	}
+}
+
+func TestRenderIncident_WithTemplate(t *testing.T) {
+	m := &model{
+		selectedIncident: &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{
+				ID:      "Q123",
+				HTMLURL: "https://example.com/incidents/Q123",
+			},
+			Title:   "Test Incident",
+			Status:  "triggered",
+			Urgency: "high",
+			Service: pagerduty.APIObject{Summary: "test-service"},
+		},
+		incidentAlertsLoaded: true,
+		incidentNotesLoaded:  true,
+		incidentCache:        make(map[string]*cachedIncidentData),
+	}
+
+	// Create a renderer for testing
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithWordWrap(100),
+	)
+	assert.NoError(t, err)
+	m.markdownRenderer = renderer
+
+	cmd := renderIncident(m)
+	result := cmd()
+
+	msg, ok := result.(renderedIncidentMsg)
+	assert.True(t, ok, "expected renderedIncidentMsg")
+	assert.NoError(t, msg.err, "should not return an error")
+	assert.NotEmpty(t, msg.content, "content should not be empty")
+	assert.Contains(t, msg.content, "Q123", "rendered content should contain incident ID")
+}
+
+func TestRenderIncident_NilRenderer(t *testing.T) {
+	m := &model{
+		selectedIncident: &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{
+				ID:      "Q456",
+				HTMLURL: "https://example.com/incidents/Q456",
+			},
+			Title:   "Test Incident No Renderer",
+			Status:  "acknowledged",
+			Urgency: "low",
+			Service: pagerduty.APIObject{Summary: "another-service"},
+		},
+		incidentAlertsLoaded: true,
+		incidentNotesLoaded:  true,
+		markdownRenderer:     nil, // No renderer
+		incidentCache:        make(map[string]*cachedIncidentData),
+	}
+
+	cmd := renderIncident(m)
+	result := cmd()
+
+	msg, ok := result.(renderedIncidentMsg)
+	assert.True(t, ok, "expected renderedIncidentMsg")
+	assert.NoError(t, msg.err, "should not return an error even without renderer")
+	assert.NotEmpty(t, msg.content, "content should not be empty (plain text fallback)")
+	assert.Contains(t, msg.content, "Q456", "plain text content should contain incident ID")
+}
