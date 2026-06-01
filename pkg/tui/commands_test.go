@@ -2272,7 +2272,7 @@ func TestRenderIncident_ValidModel(t *testing.T) {
 				Service:          pagerduty.APIObject{Summary: "test-service"},
 				EscalationPolicy: pagerduty.APIObject{Summary: "test-policy"},
 			},
-			activeSection:        0,
+			activeTab:            0,
 			incidentAlertsLoaded: true,
 			incidentNotesLoaded:  true,
 			incidentCache:        make(map[string]*cachedIncidentData),
@@ -2309,7 +2309,7 @@ func TestRenderIncident_WithMarkdownRenderer(t *testing.T) {
 				Service:          pagerduty.APIObject{Summary: "rendered-service"},
 				EscalationPolicy: pagerduty.APIObject{Summary: "rendered-policy"},
 			},
-			activeSection:        0,
+			activeTab:            0,
 			incidentAlertsLoaded: true,
 			incidentNotesLoaded:  true,
 			incidentCache:        make(map[string]*cachedIncidentData),
@@ -2343,7 +2343,7 @@ func TestRenderIncident_WithAlerts(t *testing.T) {
 				Service:          pagerduty.APIObject{Summary: "alert-service"},
 				EscalationPolicy: pagerduty.APIObject{Summary: "alert-policy"},
 			},
-			activeSection:        tabAlerts,
+			activeTab:            tabAlerts,
 			incidentAlertsLoaded: true,
 			incidentNotesLoaded:  true,
 			selectedIncidentAlerts: []pagerduty.IncidentAlert{
@@ -2359,8 +2359,7 @@ func TestRenderIncident_WithAlerts(t *testing.T) {
 					},
 				},
 			},
-			activeAlertIdx: 0,
-			incidentCache:  make(map[string]*cachedIncidentData),
+			incidentCache: make(map[string]*cachedIncidentData),
 		}
 
 		cmd := renderIncident(m)
