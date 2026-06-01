@@ -5,6 +5,15 @@ import (
 	"testing"
 )
 
+func TestHasClaudeCode_PublicWrapper(t *testing.T) {
+	// HasClaudeCode() is a one-line wrapper around hasClaudeCodeWith(exec.LookPath).
+	// It should return a bool without panicking regardless of whether claude is installed.
+	got := HasClaudeCode()
+	// We cannot assert the value since it depends on the test environment,
+	// but we verify the function completes without error.
+	_ = got
+}
+
 func TestHasClaudeCode_NotInstalled(t *testing.T) {
 	// When exec.LookPath cannot find "claude", HasClaudeCode returns false
 	lookPath := func(file string) (string, error) {
