@@ -444,11 +444,11 @@ func TestAddNoteTemplate(t *testing.T) {
 	}
 }
 
-// renderTestTemplate is a helper that executes the incidentTemplate with funcMap
+// renderTestTemplate is a helper that executes the detailsTabTemplate with funcMap
 // against the given incidentSummary and returns the rendered string.
 func renderTestTemplate(t *testing.T, summary incidentSummary) string {
 	t.Helper()
-	tmpl, err := template.New("incident").Funcs(funcMap).Parse(incidentTemplate)
+	tmpl, err := template.New("details").Funcs(funcMap).Parse(detailsTabTemplate)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -456,6 +456,36 @@ func renderTestTemplate(t *testing.T, summary incidentSummary) string {
 	require.NoError(t, err)
 
 	return buf.String()
+}
+
+func renderAlertsTestContent(t *testing.T, summary incidentSummary) string {
+	t.Helper()
+	m := model{
+		selectedIncident:       &pagerduty.Incident{},
+		incidentAlertsLoaded:   true,
+		incidentNotesLoaded:    true,
+		activeTab:              tabAlerts,
+		selectedIncidentAlerts: []pagerduty.IncidentAlert{},
+		incidentCache:          make(map[string]*cachedIncidentData),
+	}
+	result, err := m.renderAlertsTab(summary)
+	require.NoError(t, err)
+	return result
+}
+
+func renderNotesTestContent(t *testing.T, summary incidentSummary) string {
+	t.Helper()
+	m := model{
+		selectedIncident:      &pagerduty.Incident{},
+		incidentAlertsLoaded:  true,
+		incidentNotesLoaded:   true,
+		activeTab:             tabNotes,
+		selectedIncidentNotes: []pagerduty.IncidentNote{},
+		incidentCache:         make(map[string]*cachedIncidentData),
+	}
+	result, err := m.renderNotesTab(summary)
+	require.NoError(t, err)
+	return result
 }
 
 func TestIncidentTemplate_AlertRendersAsMarkdownLink(t *testing.T) {
@@ -482,7 +512,7 @@ func TestIncidentTemplate_AlertRendersAsMarkdownLink(t *testing.T) {
 		},
 	}
 
-	result := renderTestTemplate(t, summary)
+	result := renderAlertsTestContent(t, summary)
 
 	// SOP should render as a markdown link using ToLink
 	assert.Contains(t, result, "[SOP](https://example.com/sop/cluster-operator-down)")
@@ -515,7 +545,7 @@ func TestIncidentTemplate_AlertRendersSOPNoneWhenMissing(t *testing.T) {
 		},
 	}
 
-	result := renderTestTemplate(t, summary)
+	result := renderAlertsTestContent(t, summary)
 
 	// When Link is empty, SOP should show _none_
 	assert.Contains(t, result, "_none_")
@@ -577,7 +607,7 @@ func TestIncidentTemplate_AlertNameAsHeading(t *testing.T) {
 		},
 	}
 
-	result := renderTestTemplate(t, summary)
+	result := renderAlertsTestContent(t, summary)
 
 	// Alert name should appear as a ### heading
 	assert.Contains(t, result, "### KubePersistentVolumeFillingUp (triggered)")
@@ -607,7 +637,7 @@ func TestIncidentTemplate_AlertWithEmptyName(t *testing.T) {
 		},
 	}
 
-	result := renderTestTemplate(t, summary)
+	result := renderAlertsTestContent(t, summary)
 
 	// Should still render gracefully with empty fields
 	// The heading should fall back to the alert ID when Name is empty
@@ -634,10 +664,10 @@ func TestIncidentTemplate_BoldIncidentID(t *testing.T) {
 				Status:       "triggered",
 				Acknowledged: []string{"User"},
 			},
-			expected: "# **INC001** - triggered",
+			expected: "# INC001 - triggered",
 		},
 		{
-			name: "incident ID is bold with priority",
+			name: "incident ID shown with priority",
 			summary: incidentSummary{
 				ID:           "INC002",
 				Title:        "Test",
@@ -649,7 +679,7 @@ func TestIncidentTemplate_BoldIncidentID(t *testing.T) {
 				Priority:     "P1",
 				Acknowledged: []string{"User"},
 			},
-			expected: "# P1 **INC002** - triggered",
+			expected: "# P1 INC002 - triggered",
 		},
 	}
 
@@ -718,7 +748,11 @@ func TestDetailsTab_Template(t *testing.T) {
 
 func TestAlertTab_ShowsSingleAlert(t *testing.T) {
 	t.Run("alert tab template renders a single alert", func(t *testing.T) {
-		data := singleAlertTabData{
+		data := struct {
+			Alert alertSummary
+			Index int
+			Total int
+		}{
 			Alert: alertSummary{
 				ID:      "ALERT020",
 				Name:    "KubePodNotReady",
@@ -750,7 +784,11 @@ func TestAlertTab_ShowsSingleAlert(t *testing.T) {
 
 func TestNoteTab_ShowsSingleNote(t *testing.T) {
 	t.Run("note tab template renders a single note", func(t *testing.T) {
-		data := singleNoteTabData{
+		data := struct {
+			Note  noteSummary
+			Index int
+			Total int
+		}{
 			Note: noteSummary{
 				ID:      "NOTE020",
 				User:    "Jane SRE",
@@ -832,7 +870,7 @@ func TestTabHeader_Rendering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderTabHeader(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
+			result := renderTabBar(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
 
 			for _, expected := range tt.expectedContains {
 				assert.Contains(t, result, expected, "tab header should contain %q", expected)
@@ -864,11 +902,10 @@ func TestIncidentTemplate_NotesIndented(t *testing.T) {
 		},
 	}
 
-	result := renderTestTemplate(t, summary)
+	result := renderNotesTestContent(t, summary)
 
-	// Notes should have 2-space indented blockquote and attribution
-	assert.Contains(t, result, "  > This is a note")
-	assert.Contains(t, result, "  -- John Doe @ 2025-01-02")
+	assert.Contains(t, result, "> This is a note")
+	assert.Contains(t, result, "-- John Doe @ 2025-01-02")
 }
 
 func TestIncidentTemplate_AlertDetailsIndented(t *testing.T) {
@@ -895,12 +932,11 @@ func TestIncidentTemplate_AlertDetailsIndented(t *testing.T) {
 		},
 	}
 
-	result := renderTestTemplate(t, summary)
+	result := renderAlertsTestContent(t, summary)
 
-	// Alert detail bullet points should have 2-space indent
-	assert.Contains(t, result, "  * Cluster: abc-123")
-	assert.Contains(t, result, "  * Service: AlertSvc")
-	assert.Contains(t, result, "  * Created: 2025-01-01")
+	assert.Contains(t, result, "* Cluster: abc-123")
+	assert.Contains(t, result, "* Service: AlertSvc")
+	assert.Contains(t, result, "* Created: 2025-01-01")
 }
 
 func TestIncidentTemplate_SpacingBetweenAlerts(t *testing.T) {
@@ -935,7 +971,7 @@ func TestIncidentTemplate_SpacingBetweenAlerts(t *testing.T) {
 		},
 	}
 
-	result := renderTestTemplate(t, summary)
+	result := renderAlertsTestContent(t, summary)
 
 	// Both alerts should be present
 	assert.Contains(t, result, "### FirstAlert (triggered)")
@@ -945,9 +981,8 @@ func TestIncidentTemplate_SpacingBetweenAlerts(t *testing.T) {
 	assert.Contains(t, result, "---")
 	// The separator should appear between the two alerts, with the ---
 	// separating the first alert's details from the second alert's heading
-	assert.Contains(t, result, "  * Created: 2025-01-01\n\n---\n")
-	// The second alert heading should follow after the separator
-	assert.Contains(t, result, "---\n\n\n### SecondAlert")
+	assert.Contains(t, result, "* Created: 2025-01-01\n\n---\n")
+	assert.Contains(t, result, "---\n\n### Alert 2/2")
 }
 
 func TestIncidentViewerNoBorder(t *testing.T) {
@@ -961,82 +996,89 @@ func TestIncidentViewerNoBorder(t *testing.T) {
 	assert.False(t, vp.Style.GetBorderRight(), "viewport should not have a right border")
 }
 
-func TestRenderSectionHeader(t *testing.T) {
+func TestRenderTabBar(t *testing.T) {
 	tests := []struct {
 		name             string
-		sectionName      string
-		count            int
-		active           bool
-		loading          bool
+		activeTab        int
+		alertCount       int
+		noteCount        int
+		alertsLoading    bool
+		notesLoading     bool
 		expectedContains []string
 	}{
 		{
-			name:             "Active alerts section with count",
-			sectionName:      "Alerts",
-			count:            3,
-			active:           true,
-			loading:          false,
-			expectedContains: []string{">>", "Alerts", "(3)", "Tab: cycle", "Up/Down: select section"},
+			name:             "Details tab active",
+			activeTab:        tabDetails,
+			alertCount:       3,
+			noteCount:        2,
+			expectedContains: []string{"Details", "Alerts (3)", "Notes (2)"},
 		},
 		{
-			name:             "Inactive notes section with count",
-			sectionName:      "Notes",
-			count:            2,
-			active:           false,
-			loading:          false,
-			expectedContains: []string{"> ", "Notes", "(2)"},
+			name:             "Alerts loading shows ellipsis",
+			activeTab:        tabAlerts,
+			alertCount:       0,
+			noteCount:        1,
+			alertsLoading:    true,
+			expectedContains: []string{"Alerts (...)", "Notes (1)"},
 		},
 		{
-			name:             "Active section loading",
-			sectionName:      "Alerts",
-			count:            0,
-			active:           true,
-			loading:          true,
-			expectedContains: []string{">>", "Alerts", "(...)"},
-		},
-		{
-			name:             "Inactive section loading",
-			sectionName:      "Notes",
-			count:            0,
-			active:           false,
-			loading:          true,
-			expectedContains: []string{"> ", "Notes", "(...)"},
+			name:             "Notes loading shows ellipsis",
+			activeTab:        tabNotes,
+			alertCount:       2,
+			noteCount:        0,
+			notesLoading:     true,
+			expectedContains: []string{"Alerts (2)", "Notes (...)"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderSectionHeader(tt.sectionName, tt.count, tt.active, tt.loading)
+			result := renderTabBar(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
 
 			for _, expected := range tt.expectedContains {
-				assert.Contains(t, result, expected, "section header should contain %q", expected)
-			}
-
-			if !tt.active {
-				// Inactive sections should NOT have the help text
-				assert.NotContains(t, result, "Tab: cycle", "inactive section should not show help text")
+				assert.Contains(t, result, expected, "tab bar should contain %q", expected)
 			}
 		})
 	}
 }
 
-func TestTemplateAlwaysShowsDetails(t *testing.T) {
-	t.Run("template always renders details at top regardless of active section", func(t *testing.T) {
+func TestRenderTabContent_DetailsTab(t *testing.T) {
+	t.Run("details tab shows incident metadata", func(t *testing.T) {
 		incident := &pagerduty.Incident{}
 		incident.ID = "Q999"
-		incident.Summary = "Always Visible Details"
 		incident.HTMLURL = "https://example.com/incidents/Q999"
-		incident.Title = "Always Visible Incident Title"
+		incident.Title = "Tab Test Incident"
 		incident.Status = "triggered"
 		incident.Urgency = "high"
 		incident.Service.Summary = "test-service"
 
-		// Test with alerts section active
 		m := model{
 			selectedIncident:     incident,
-			activeSection:        sectionAlerts,
+			activeTab:            tabDetails,
 			incidentNotesLoaded:  true,
 			incidentAlertsLoaded: true,
+			incidentCache:        make(map[string]*cachedIncidentData),
+		}
+
+		content, err := m.renderTabContent()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "Q999")
+		assert.Contains(t, content, "Tab Test Incident")
+		assert.Contains(t, content, "test-service")
+	})
+}
+
+func TestRenderTabContent_AlertsTab(t *testing.T) {
+	t.Run("alerts tab shows all alerts", func(t *testing.T) {
+		incident := &pagerduty.Incident{}
+		incident.ID = "Q999"
+		incident.Service.Summary = "svc"
+
+		m := model{
+			selectedIncident:     incident,
+			activeTab:            tabAlerts,
+			incidentAlertsLoaded: true,
+			incidentNotesLoaded:  true,
 			incidentCache:        make(map[string]*cachedIncidentData),
 			selectedIncidentAlerts: []pagerduty.IncidentAlert{
 				{
@@ -1044,27 +1086,20 @@ func TestTemplateAlwaysShowsDetails(t *testing.T) {
 					Service:   pagerduty.APIObject{Summary: "Alert Service"},
 					Status:    "triggered",
 				},
-			},
-			selectedIncidentNotes: []pagerduty.IncidentNote{
 				{
-					ID:      "N1",
-					User:    pagerduty.APIObject{Summary: "SRE User"},
-					Content: "A test note",
+					APIObject: pagerduty.APIObject{ID: "A2", HTMLURL: "https://example.com/alerts/A2"},
+					Service:   pagerduty.APIObject{Summary: "Alert Service 2"},
+					Status:    "resolved",
 				},
 			},
 		}
 
-		content, err := m.template()
+		content, err := m.renderTabContent()
 		assert.NoError(t, err)
-
-		// Details should always be present
-		assert.Contains(t, content, "Q999", "details section should always show incident ID")
-		assert.Contains(t, content, "Always Visible Incident Title", "details should show title")
-		assert.Contains(t, content, "test-service", "details should show service")
-
-		// Both section headers should be visible
-		assert.Contains(t, content, "Alerts", "alerts section header should be visible")
-		assert.Contains(t, content, "Notes", "notes section header should be visible")
+		assert.Contains(t, content, "A1")
+		assert.Contains(t, content, "A2")
+		assert.Contains(t, content, "1/2")
+		assert.Contains(t, content, "2/2")
 	})
 }
 

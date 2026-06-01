@@ -233,7 +233,7 @@ type renderedIncidentMsg struct {
 
 func renderIncident(m *model) tea.Cmd {
 	return func() tea.Msg {
-		t, err := m.template()
+		t, err := m.renderTabContent()
 		if err != nil {
 			return errMsg{err}
 		}

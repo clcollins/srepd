@@ -592,76 +592,25 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Return immediately - no need to process anything else or update viewport
 			return m, prefetchCmd
 
-		// Up/Down: switch which section (Alerts/Notes) is active
+		// Up/Down: scroll viewport within the active tab
 		case key.Matches(msg, defaultKeyMap.Up):
-			m.activeSection = (m.activeSection + sectionCount - 1) % sectionCount
-			return m, func() tea.Msg { return renderIncidentMsg("section switch") }
+			m.incidentViewer, _ = m.incidentViewer.Update(msg)
+			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Down):
-			m.activeSection = (m.activeSection + 1) % sectionCount
-			return m, func() tea.Msg { return renderIncidentMsg("section switch") }
-
-		// Tab/Shift+Tab: cycle items within the active section
-		case key.Matches(msg, defaultKeyMap.TabNext):
-			switch m.activeSection {
-			case sectionAlerts:
-				if len(m.selectedIncidentAlerts) > 0 {
-					m.activeAlertIdx = (m.activeAlertIdx + 1) % len(m.selectedIncidentAlerts)
-					return m, func() tea.Msg { return renderIncidentMsg("alert next") }
-				}
-			case sectionNotes:
-				if len(m.selectedIncidentNotes) > 0 {
-					m.activeNoteIdx = (m.activeNoteIdx + 1) % len(m.selectedIncidentNotes)
-					return m, func() tea.Msg { return renderIncidentMsg("note next") }
-				}
-			}
+			m.incidentViewer, _ = m.incidentViewer.Update(msg)
 			return m, nil
+
+		// Tab/Shift+Tab: switch between tabs
+		case key.Matches(msg, defaultKeyMap.TabNext):
+			m.activeTab = (m.activeTab + 1) % tabCount
+			m.incidentViewer.GotoTop()
+			return m, func() tea.Msg { return renderIncidentMsg("tab switch") }
 
 		case key.Matches(msg, defaultKeyMap.TabPrev):
-			switch m.activeSection {
-			case sectionAlerts:
-				if len(m.selectedIncidentAlerts) > 0 {
-					m.activeAlertIdx = (m.activeAlertIdx + len(m.selectedIncidentAlerts) - 1) % len(m.selectedIncidentAlerts)
-					return m, func() tea.Msg { return renderIncidentMsg("alert prev") }
-				}
-			case sectionNotes:
-				if len(m.selectedIncidentNotes) > 0 {
-					m.activeNoteIdx = (m.activeNoteIdx + len(m.selectedIncidentNotes) - 1) % len(m.selectedIncidentNotes)
-					return m, func() tea.Msg { return renderIncidentMsg("note prev") }
-				}
-			}
-			return m, nil
-
-		// Item navigation: left/right also cycle within the active section
-		case key.Matches(msg, defaultKeyMap.ItemNext):
-			switch m.activeSection {
-			case sectionAlerts:
-				if len(m.selectedIncidentAlerts) > 0 {
-					m.activeAlertIdx = (m.activeAlertIdx + 1) % len(m.selectedIncidentAlerts)
-					return m, func() tea.Msg { return renderIncidentMsg("alert next") }
-				}
-			case sectionNotes:
-				if len(m.selectedIncidentNotes) > 0 {
-					m.activeNoteIdx = (m.activeNoteIdx + 1) % len(m.selectedIncidentNotes)
-					return m, func() tea.Msg { return renderIncidentMsg("note next") }
-				}
-			}
-			return m, nil
-
-		case key.Matches(msg, defaultKeyMap.ItemPrev):
-			switch m.activeSection {
-			case sectionAlerts:
-				if len(m.selectedIncidentAlerts) > 0 {
-					m.activeAlertIdx = (m.activeAlertIdx + len(m.selectedIncidentAlerts) - 1) % len(m.selectedIncidentAlerts)
-					return m, func() tea.Msg { return renderIncidentMsg("alert prev") }
-				}
-			case sectionNotes:
-				if len(m.selectedIncidentNotes) > 0 {
-					m.activeNoteIdx = (m.activeNoteIdx + len(m.selectedIncidentNotes) - 1) % len(m.selectedIncidentNotes)
-					return m, func() tea.Msg { return renderIncidentMsg("note prev") }
-				}
-			}
-			return m, nil
+			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
+			m.incidentViewer.GotoTop()
+			return m, func() tea.Msg { return renderIncidentMsg("tab switch") }
 
 		case key.Matches(msg, defaultKeyMap.Refresh):
 			if m.selectedIncident == nil {
@@ -747,27 +696,6 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, func() tea.Msg { return openSOPMsg("sop") }
 
-		default:
-			// Number keys 1-9 jump to specific alert/note index in the active section
-			keyStr := msg.String()
-			if len(keyStr) == 1 && keyStr[0] >= '1' && keyStr[0] <= '9' {
-				idx := int(keyStr[0]-'0') - 1
-				switch m.activeSection {
-				case sectionAlerts:
-					if idx < len(m.selectedIncidentAlerts) {
-						m.activeAlertIdx = idx
-						m.incidentViewer.GotoTop()
-						return m, func() tea.Msg { return renderIncidentMsg("alert jump") }
-					}
-				case sectionNotes:
-					if idx < len(m.selectedIncidentNotes) {
-						m.activeNoteIdx = idx
-						m.incidentViewer.GotoTop()
-						return m, func() tea.Msg { return renderIncidentMsg("note jump") }
-					}
-				}
-				return m, nil
-			}
 		}
 	}
 

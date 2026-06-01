@@ -148,7 +148,12 @@ func (m model) View() string {
 		s.WriteString(tableContainerStyle.Render(m.logViewer.View()))
 
 	case m.viewingIncident:
-		s.WriteString(tableContainerStyle.Render(m.incidentViewer.View()))
+		tabBar := renderTabBar(m.activeTab,
+			len(m.selectedIncidentAlerts), len(m.selectedIncidentNotes),
+			!m.incidentAlertsLoaded, !m.incidentNotesLoaded)
+		s.WriteString(tabBar)
+		s.WriteString("\n")
+		s.WriteString(tabWindowStyle.Render(m.incidentViewer.View()))
 
 	default:
 		s.WriteString(tableContainerStyle.Render(m.table.View()))
@@ -314,30 +319,33 @@ func refreshArea(autoRefresh bool, autoAck bool, showLowUrgency bool) string {
 	return fstring
 }
 
-func (m model) template() (string, error) {
-	// Progressive rendering: show what we have, mark missing parts as loading
+func (m model) renderTabContent() (string, error) {
 	var alerts []pagerduty.IncidentAlert
 	var notes []pagerduty.IncidentNote
 
 	if m.incidentAlertsLoaded {
 		alerts = m.selectedIncidentAlerts
-	} else {
-		alerts = nil
 	}
-
 	if m.incidentNotesLoaded {
 		notes = m.selectedIncidentNotes
-	} else {
-		notes = nil
 	}
 
 	summary := summarize(m.selectedIncident, alerts, notes)
 	summary.AlertsLoading = !m.incidentAlertsLoaded
 	summary.NotesLoading = !m.incidentNotesLoaded
 
-	var content strings.Builder
+	switch m.activeTab {
+	case tabDetails:
+		return m.renderDetailsTab(summary)
+	case tabAlerts:
+		return m.renderAlertsTab(summary)
+	case tabNotes:
+		return m.renderNotesTab(summary)
+	}
+	return "", nil
+}
 
-	// 1. Always render details at the top
+func (m model) renderDetailsTab(summary incidentSummary) (string, error) {
 	tmpl, err := template.New("details").Funcs(funcMap).Parse(detailsTabTemplate)
 	if err != nil {
 		return "", err
@@ -347,90 +355,70 @@ func (m model) template() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	content.WriteString(o.String())
-	content.WriteString("\n---\n")
+	return o.String(), nil
+}
 
-	// 2. Render both sections with active/inactive markers
-	// Active section comes first, inactive section second
-	sections := []int{sectionAlerts, sectionNotes}
-	for _, section := range sections {
-		sectionContent, sectionErr := m.renderSection(section, summary)
-		if sectionErr != nil {
-			return "", sectionErr
-		}
-		content.WriteString(sectionContent)
+func (m model) renderAlertsTab(summary incidentSummary) (string, error) {
+	if summary.AlertsLoading {
+		return "\n_Loading alerts..._\n", nil
+	}
+	if len(summary.Alerts) == 0 {
+		return "\n_No alerts_\n", nil
 	}
 
+	var content strings.Builder
+	for i, a := range summary.Alerts {
+		tmpl, err := template.New("alert").Funcs(funcMap).Parse(alertTabTemplate)
+		if err != nil {
+			return "", err
+		}
+		data := struct {
+			Alert alertSummary
+			Index int
+			Total int
+		}{Alert: a, Index: i, Total: len(summary.Alerts)}
+		o := new(bytes.Buffer)
+		err = tmpl.Execute(o, data)
+		if err != nil {
+			return "", err
+		}
+		content.WriteString(o.String())
+		if i < len(summary.Alerts)-1 {
+			content.WriteString("\n---\n")
+		}
+	}
 	return content.String(), nil
 }
 
-// renderSection renders a single section (alerts or notes) with its header and content.
-func (m model) renderSection(section int, summary incidentSummary) (string, error) {
-	var content strings.Builder
-	isActive := section == m.activeSection
-
-	switch section {
-	case sectionAlerts:
-		header := renderSectionHeader("Alerts", len(summary.Alerts), isActive, summary.AlertsLoading)
-		content.WriteString("\n" + header + "\n")
-
-		if summary.AlertsLoading {
-			content.WriteString("\n_Loading alerts..._\n")
-		} else if len(summary.Alerts) == 0 {
-			content.WriteString("\n_No alerts_\n")
-		} else {
-			idx := m.activeAlertIdx
-			if idx >= len(summary.Alerts) {
-				idx = len(summary.Alerts) - 1
-			}
-			data := singleAlertTabData{
-				Alert: summary.Alerts[idx],
-				Index: idx,
-				Total: len(summary.Alerts),
-			}
-			tmpl, err := template.New("alert").Funcs(funcMap).Parse(alertSectionTemplate)
-			if err != nil {
-				return "", err
-			}
-			o := new(bytes.Buffer)
-			err = tmpl.Execute(o, data)
-			if err != nil {
-				return "", err
-			}
-			content.WriteString(o.String())
-		}
-
-	case sectionNotes:
-		header := renderSectionHeader("Notes", len(summary.Notes), isActive, summary.NotesLoading)
-		content.WriteString("\n" + header + "\n")
-
-		if summary.NotesLoading {
-			content.WriteString("\n_Loading notes..._\n")
-		} else if len(summary.Notes) == 0 {
-			content.WriteString("\n_No notes_\n")
-		} else {
-			idx := m.activeNoteIdx
-			if idx >= len(summary.Notes) {
-				idx = len(summary.Notes) - 1
-			}
-			data := singleNoteTabData{
-				Note:  summary.Notes[idx],
-				Index: idx,
-				Total: len(summary.Notes),
-			}
-			tmpl, err := template.New("note").Funcs(funcMap).Parse(noteSectionTemplate)
-			if err != nil {
-				return "", err
-			}
-			o := new(bytes.Buffer)
-			err = tmpl.Execute(o, data)
-			if err != nil {
-				return "", err
-			}
-			content.WriteString(o.String())
-		}
+func (m model) renderNotesTab(summary incidentSummary) (string, error) {
+	if summary.NotesLoading {
+		return "\n_Loading notes..._\n", nil
+	}
+	if len(summary.Notes) == 0 {
+		return "\n_No notes_\n", nil
 	}
 
+	var content strings.Builder
+	for i, n := range summary.Notes {
+		tmpl, err := template.New("note").Funcs(funcMap).Parse(noteTabTemplate)
+		if err != nil {
+			return "", err
+		}
+		data := struct {
+			Note  noteSummary
+			Index int
+			Total int
+		}{Note: n, Index: i, Total: len(summary.Notes)}
+		o := new(bytes.Buffer)
+		err = tmpl.Execute(o, data)
+		if err != nil {
+			return "", err
+		}
+		content.WriteString(o.String())
+		if i < len(summary.Notes)-1 {
+			content.WriteString("\n---\n")
+		}
+	}
 	return content.String(), nil
 }
 
@@ -618,63 +606,6 @@ var funcMap = template.FuncMap{
 	},
 }
 
-const incidentTemplate = `
-{{- if .Priority -}}
-# {{ .Priority }} **{{ .ID }}** - {{ .Status }}
-{{- else -}}
-# **{{ .ID }}** - {{ .Status }}
-{{- end }}
-
-{{ ToLink .Title .HTMLURL }}
-
-* Service: {{ .Service }}
-* Urgency: {{ .Urgency }}
-* Created: {{ .Created }}
-
-{{ if not .Acknowledged -}}
-Assigned to:{{ range $assignee := .Assigned }}
-+ *{{ $assignee }}* *(not yet acknowledged)*
-{{ end }}
-{{- else -}}
-{{ $length := len .Acknowledged }}
-Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
-{{ if Last $i $length }}**{{ $ack }}**{{ else }}**{{ $ack }},**{{ end }}
-{{ end }}
-{{- end -}}
-
-## Notes
-
-{{ if .NotesLoading }}
-_Loading notes..._
-{{ else if .Notes }}
-{{ range $note := .Notes }}
-  > {{ $note.Content }}
-  -- {{ $note.User }} @ {{ $note.Created }}
-{{ end }}
-{{ else }}
-_none_
-{{ end }}
-
-## Alerts{{ if not .AlertsLoading }} ({{ len .Alerts }}){{ end }}
-
-{{ if .AlertsLoading }}
-_Loading alerts..._
-{{ else }}
-{{ $alertLen := len .Alerts }}{{ range $i, $alert := .Alerts }}
-### {{ if $alert.Name }}{{ $alert.Name }}{{ else }}{{ $alert.ID }}{{ end }} ({{ $alert.Status }}){{ if $alert.Severity }} [{{ $alert.Severity }}]{{ end }}{{ if $alert.AlertType }} ({{ $alert.AlertType }}){{ end }}
-
-  * Cluster: {{ $alert.Cluster }}
-  * SOP: {{ if $alert.Link }}{{ ToLink "SOP" $alert.Link }}{{ else }}_none_{{ end }}
-  * Alert: {{ ToLink $alert.ID $alert.HTMLURL }}
-  * Service: {{ $alert.Service }}
-  * Created: {{ $alert.Created }}
-
-{{ if not (Last $i $alertLen) }}---{{ end }}
-
-{{ end }}
-{{ end }}
-`
-
 func renderIncidentMarkdown(m *model, content string) (string, error) {
 	// If no renderer available, return plain content
 	if m.markdownRenderer == nil {
@@ -691,15 +622,6 @@ func renderIncidentMarkdown(m *model, content string) (string, error) {
 	return str, nil
 }
 
-// Section constants (details always visible, these are the selectable sections)
-const (
-	sectionAlerts = 0
-	sectionNotes  = 1
-	sectionCount  = 2
-)
-
-// Tab constants are kept as aliases for backward compatibility with tests
-// that reference them, but the tab-based navigation is replaced by sections.
 const (
 	tabDetails = 0
 	tabAlerts  = 1
@@ -707,74 +629,63 @@ const (
 	tabCount   = 3
 )
 
-// singleAlertTabData is the data passed to the alertTabTemplate
-type singleAlertTabData struct {
-	Alert alertSummary
-	Index int // 0-based
-	Total int
+func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
+	border := lipgloss.RoundedBorder()
+	border.BottomLeft = left
+	border.Bottom = middle
+	border.BottomRight = right
+	return border
 }
 
-// singleNoteTabData is the data passed to the noteTabTemplate
-type singleNoteTabData struct {
-	Note  noteSummary
-	Index int // 0-based
-	Total int
-}
+var (
+	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
+	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
+	tabHighlightColor = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
+	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(tabHighlightColor).Padding(0, 1)
+	activeTabStyle    = inactiveTabStyle.Border(activeTabBorder, true)
+	tabWindowStyle    = lipgloss.NewStyle().BorderForeground(tabHighlightColor).Border(lipgloss.NormalBorder()).UnsetBorderTop()
+)
 
-// renderSectionHeader renders a section header with an active/inactive marker.
-// Active sections use a filled triangle, inactive use a hollow triangle.
-// Example: ">> Alerts (3)                    [Tab: cycle | Up/Down: select section]"
-func renderSectionHeader(name string, count int, active bool, loading bool) string {
-	var marker string
-	if active {
-		marker = ">>"
-	} else {
-		marker = "> "
-	}
-
-	var countStr string
-	if loading {
-		countStr = "(...)"
-	} else {
-		countStr = fmt.Sprintf("(%d)", count)
-	}
-
-	header := fmt.Sprintf("%s %s %s", marker, name, countStr)
-	if active {
-		header += "                    [Tab: cycle | Up/Down: select section]"
-	}
-	return header
-}
-
-// renderTabHeader renders the tab bar with counts and highlights the active tab.
-// Kept for backward compatibility with tests.
-// Example: " [Details]  Alerts (5)  Notes (3) "
-func renderTabHeader(activeTab int, alertCount int, noteCount int, alertsLoading bool, notesLoading bool) string {
-	tabs := make([]string, tabCount)
-	tabs[tabDetails] = "Details"
+func renderTabBar(activeTab int, alertCount int, noteCount int, alertsLoading bool, notesLoading bool) string {
+	tabLabels := make([]string, tabCount)
+	tabLabels[tabDetails] = "Details"
 
 	if alertsLoading {
-		tabs[tabAlerts] = "Alerts (...)"
+		tabLabels[tabAlerts] = "Alerts (...)"
 	} else {
-		tabs[tabAlerts] = fmt.Sprintf("Alerts (%d)", alertCount)
+		tabLabels[tabAlerts] = fmt.Sprintf("Alerts (%d)", alertCount)
 	}
 
 	if notesLoading {
-		tabs[tabNotes] = "Notes (...)"
+		tabLabels[tabNotes] = "Notes (...)"
 	} else {
-		tabs[tabNotes] = fmt.Sprintf("Notes (%d)", noteCount)
+		tabLabels[tabNotes] = fmt.Sprintf("Notes (%d)", noteCount)
 	}
 
-	var parts []string
-	for i, tab := range tabs {
-		if i == activeTab {
-			parts = append(parts, fmt.Sprintf("[%s]", tab))
+	var renderedTabs []string
+	for i, label := range tabLabels {
+		var style lipgloss.Style
+		isFirst, isLast, isActive := i == 0, i == len(tabLabels)-1, i == activeTab
+		if isActive {
+			style = activeTabStyle
 		} else {
-			parts = append(parts, fmt.Sprintf(" %s ", tab))
+			style = inactiveTabStyle
 		}
+		border, _, _, _, _ := style.GetBorder()
+		if isFirst && isActive {
+			border.BottomLeft = "│"
+		} else if isFirst && !isActive {
+			border.BottomLeft = "├"
+		} else if isLast && isActive {
+			border.BottomRight = "│"
+		} else if isLast && !isActive {
+			border.BottomRight = "┤"
+		}
+		style = style.Border(border)
+		renderedTabs = append(renderedTabs, style.Render(label))
 	}
 
-	return strings.Join(parts, " ")
+	return lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 }
 
 // detailsTabTemplate renders only the incident metadata (no alerts or notes)
@@ -823,25 +734,6 @@ const noteTabTemplate = `
 > {{ .Note.Content }}
 
 -- {{ .Note.User }} @ {{ .Note.Created }}
-`
-
-// alertSectionTemplate renders a single alert in the section layout
-const alertSectionTemplate = `
-**Alert {{ add1 .Index }}/{{ .Total }}**: {{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }} ({{ .Alert.Status }}){{ if .Alert.Severity }} [{{ .Alert.Severity }}]{{ end }}{{ if .Alert.AlertType }} ({{ .Alert.AlertType }}){{ end }}
-
-  * Cluster: {{ .Alert.Cluster }}
-  * SOP: {{ if .Alert.Link }}{{ ToLink "SOP" .Alert.Link }}{{ else }}_none_{{ end }}
-  * Alert: {{ ToLink .Alert.ID .Alert.HTMLURL }}
-  * Service: {{ .Alert.Service }}
-  * Created: {{ .Alert.Created }}
-`
-
-// noteSectionTemplate renders a single note in the section layout
-const noteSectionTemplate = `
-**Note {{ add1 .Index }}/{{ .Total }}**
-
-  > {{ .Note.Content }}
-  -- {{ .Note.User }} @ {{ .Note.Created }}
 `
 
 const noteTemplate = `
