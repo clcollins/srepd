@@ -268,6 +268,48 @@ func TestClusterLauncherValidation(t *testing.T) {
 	}
 }
 
+func TestProfile_ReturnsDetectedProfile(t *testing.T) {
+	tests := []struct {
+		name            string
+		terminal        string
+		loginCommand    string
+		expectedProfile string
+	}{
+		{
+			name:            "gnome-terminal detected as SeparatorProfile",
+			terminal:        "gnome-terminal",
+			loginCommand:    "ocm backplane login %%CLUSTER_ID%%",
+			expectedProfile: "separator (gnome-terminal)",
+		},
+		{
+			name:            "tmux detected as SeparatorProfile",
+			terminal:        "tmux new-window -n %%CLUSTER_ID%%",
+			loginCommand:    "ocm-container -C %%CLUSTER_ID%%",
+			expectedProfile: "separator (tmux)",
+		},
+		{
+			name:            "konsole detected as FlagProfile",
+			terminal:        "konsole",
+			loginCommand:    "ocm backplane login %%CLUSTER_ID%%",
+			expectedProfile: "flag[-e] (konsole)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			launcher, err := NewClusterLauncherWithToolbox(
+				tt.terminal,
+				tt.loginCommand,
+				"false",
+				func() bool { return false },
+			)
+			assert.NoError(t, err)
+			assert.NotNil(t, launcher.Profile(), "Profile() should not return nil")
+			assert.Equal(t, tt.expectedProfile, launcher.Profile().Name())
+		})
+	}
+}
+
 func TestLoginCommandBuild(t *testing.T) {
 	tests := []struct {
 		name         string

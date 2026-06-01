@@ -485,6 +485,24 @@ func TestDevClient_ImplementsInterface(t *testing.T) {
 	var _ PagerDutyClientInterface = (*DevPagerDutyClient)(nil)
 }
 
+func TestNewDevConfig_Success(t *testing.T) {
+	config, err := NewDevConfig(testFixturesDir)
+	require.NoError(t, err)
+
+	assert.NotNil(t, config.Client, "Client should be set")
+	assert.NotNil(t, config.CurrentUser, "CurrentUser should be set")
+	assert.Equal(t, "PDEV_USER_001", config.CurrentUser.ID)
+	assert.NotEmpty(t, config.Teams, "Teams should not be empty")
+	assert.NotEmpty(t, config.TeamsMemberIDs, "TeamsMemberIDs should not be empty")
+	assert.NotEmpty(t, config.EscalationPolicies, "EscalationPolicies should not be empty")
+}
+
+func TestNewDevConfig_NonexistentDir(t *testing.T) {
+	_, err := NewDevConfig("/nonexistent/path/to/fixtures")
+	assert.Error(t, err, "should return error for nonexistent fixtures directory")
+	assert.Contains(t, err.Error(), "NewDevConfig")
+}
+
 // newTestDevClient creates a DevPagerDutyClient loaded with test fixtures
 func newTestDevClient(t *testing.T) *DevPagerDutyClient {
 	t.Helper()

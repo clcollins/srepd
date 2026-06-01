@@ -3,9 +3,7 @@ package pd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -416,60 +414,10 @@ func TestGetUser_Error(t *testing.T) {
 	assert.Nil(t, user)
 }
 
-// newConfigFromClient is a test helper that mirrors NewConfig but accepts
-// a pre-built mock client instead of creating a real PagerDuty client from a token.
-// This allows testing NewConfig's validation logic without hitting the PD API.
-func newConfigFromClient(client PagerDutyClient, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
-	var c Config
-	var err error
-
-	c.Client = client
-
-	ctx, cancel := contextWithTimeout()
-	defer cancel()
-
-	c.CurrentUser, err = c.Client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
-	if err != nil {
-		return &c, fmt.Errorf("pd.NewConfig(): failed to retrieve PagerDuty user: %v", err)
-	}
-
-	c.Teams, err = GetTeams(c.Client, teams)
-	if err != nil {
-		return &c, fmt.Errorf("pd.NewConfig(): failed to get team(s) `%v`: %v", teams, err)
-	}
-
-	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
-	if err != nil {
-		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
-	}
-
-	_, ok := escalation_policies["default"]
-	if !ok {
-		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `default` key")
-	}
-	_, ok = escalation_policies["silent_default"]
-	if !ok {
-		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `silent_default` key")
-	}
-
-	c.EscalationPolicies = make(map[string]*pagerduty.EscalationPolicy)
-
-	for key, value := range escalation_policies {
-		c.EscalationPolicies[strings.ToUpper(key)], err = GetEscalationPolicy(c.Client, value, pagerduty.GetEscalationPolicyOptions{})
-		if err != nil {
-			return &c, fmt.Errorf("pd.NewConfig(): failed to get escalation policy: (%s: %s) %v", key, value, err)
-		}
-	}
-
-	for _, i := range ignoredUsers {
-		user, err := GetUser(c.Client, i, pagerduty.GetUserOptions{})
-		if err != nil {
-			return &c, fmt.Errorf("pd.NewConfig(): failed to get user for ignore list `%v`: %v", i, err)
-		}
-		c.IgnoredUsers = append(c.IgnoredUsers, user)
-	}
-
-	return &c, nil
+// Tests for newClient (returns non-nil RateLimitedClient)
+func TestNewClient(t *testing.T) {
+	client := newClient("test-token")
+	assert.NotNil(t, client, "newClient should return a non-nil client")
 }
 
 func TestNewConfig_Success(t *testing.T) {
@@ -479,7 +427,7 @@ func TestNewConfig_Success(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	config, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, config)
@@ -499,7 +447,7 @@ func TestNewConfig_MissingDefaultPolicy(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must contain a `default` key")
@@ -511,7 +459,7 @@ func TestNewConfig_MissingSilentDefaultPolicy(t *testing.T) {
 		"default": "POLICY1",
 	}
 
-	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must contain a `silent_default` key")
@@ -525,7 +473,7 @@ func TestNewConfig_BadEscalationPolicy(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get escalation policy")
@@ -538,7 +486,7 @@ func TestNewConfig_WithIgnoredUsers(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	config, err := newConfigFromClient(mockClient, []string{"team1"}, policies, []string{"USER1", "USER2"})
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"USER1", "USER2"})
 
 	assert.NoError(t, err)
 	assert.Len(t, config.IgnoredUsers, 2)
@@ -554,7 +502,7 @@ func TestNewConfig_BadIgnoredUser(t *testing.T) {
 	}
 
 	// "err" ID triggers mock error in GetUserWithContext
-	_, err := newConfigFromClient(mockClient, []string{"team1"}, policies, []string{"err"})
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"err"})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get user for ignore list")
@@ -567,7 +515,7 @@ func TestNewConfig_MultipleTeams(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	config, err := newConfigFromClient(mockClient, []string{"team1", "team2", "team3"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1", "team2", "team3"}, policies, nil)
 
 	assert.NoError(t, err)
 	assert.Len(t, config.Teams, 3)
@@ -581,7 +529,7 @@ func TestNewConfig_PolicyKeysUppercased(t *testing.T) {
 		"custom_service": "POLICY3",
 	}
 
-	config, err := newConfigFromClient(mockClient, []string{"team1"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
 
 	assert.NoError(t, err)
 	// Keys should be uppercased

@@ -60,11 +60,18 @@ type Config struct {
 	IgnoredUsers []*pagerduty.User
 }
 
+// NewConfig creates a new Config, initializing a real PagerDuty client from the token.
 func NewConfig(token string, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
+	return NewConfigWithClient(newClient(token), teams, escalation_policies, ignoredUsers)
+}
+
+// NewConfigWithClient creates a Config using a pre-existing client.
+// This enables testing with MockPagerDutyClient.
+func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
 	var c Config
 	var err error
 
-	c.Client = newClient(token)
+	c.Client = client
 
 	ctx, cancel := contextWithTimeout()
 	defer cancel()

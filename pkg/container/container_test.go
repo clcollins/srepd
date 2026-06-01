@@ -8,6 +8,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestIsRunningInToolbox_PublicWrapper(t *testing.T) {
+	// IsRunningInToolbox() is a one-line wrapper around
+	// checkToolbox(defaultToolboxEnvPath, os.Getenv).
+	// It should return a bool without panicking regardless of environment.
+	got := IsRunningInToolbox()
+	// We cannot assert a specific value since it depends on the test environment
+	// (this test runner IS in a toolbox, so it will return true). Verify the
+	// function completes without error.
+	_ = got
+}
+
 func TestIsRunningInToolbox_FileExists(t *testing.T) {
 	// Create a temporary file to simulate /run/.toolboxenv
 	tmpDir := t.TempDir()
