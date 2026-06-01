@@ -666,6 +666,81 @@ func TestViewLogKey_InKeymap(t *testing.T) {
 	assert.Contains(t, keys, "ctrl+l", "ViewLog binding should include ctrl+l")
 }
 
+func TestSetStatusMsgHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		msg            setStatusMsg
+		expectedStatus string
+	}{
+		{
+			name:           "sets status from message",
+			msg:            setStatusMsg{"loading incidents..."},
+			expectedStatus: "loading incidents...",
+		},
+		{
+			name:           "sets empty status",
+			msg:            setStatusMsg{""},
+			expectedStatus: "",
+		},
+		{
+			name:           "sets error-like status",
+			msg:            setStatusMsg{"no incident selected"},
+			expectedStatus: "no incident selected",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModel()
+			m.status = "previous status"
+
+			result, cmd := m.setStatusMsgHandler(tt.msg)
+			updatedModel := result.(model)
+
+			assert.Equal(t, tt.expectedStatus, updatedModel.status,
+				"status should be set to message value")
+			assert.Nil(t, cmd, "setStatusMsgHandler should not return a command")
+		})
+	}
+}
+
+func TestErrMsgHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		err            error
+		expectedStatus string
+	}{
+		{
+			name:           "sets error and status from error message",
+			err:            fmt.Errorf("test error occurred"),
+			expectedStatus: "test error occurred",
+		},
+		{
+			name:           "handles wrapped error",
+			err:            fmt.Errorf("outer: %w", fmt.Errorf("inner error")),
+			expectedStatus: "outer: inner error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModel()
+			m.status = "previous status"
+			m.err = nil
+
+			msg := errMsg{tt.err}
+			result, cmd := m.errMsgHandler(msg)
+			updatedModel := result.(model)
+
+			assert.Equal(t, tt.expectedStatus, updatedModel.status,
+				"status should be set to error message")
+			assert.NotNil(t, updatedModel.err, "err should be set on model")
+			assert.Equal(t, msg, updatedModel.err, "err should match the errMsg")
+			assert.Nil(t, cmd, "errMsgHandler should not return a command")
+		})
+	}
+}
+
 func TestTableMode_UnAckKeyWithNoSelectedIncident(t *testing.T) {
 	// Scenario: The table has rows with incidents highlighted, but
 	// selectedIncident is nil. Pressing UnAck key should sync the highlighted

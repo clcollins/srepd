@@ -2086,3 +2086,83 @@ func TestDefaultLogFilePath_MatchesLogFilePathForOS(t *testing.T) {
 			"defaultLogFilePath() should equal logFilePathForOS(runtime.GOOS)")
 	})
 }
+
+func TestToggleHelp(t *testing.T) {
+	tests := []struct {
+		name           string
+		initialShowAll bool
+		expectedAfter  bool
+	}{
+		{
+			name:           "toggle from false to true",
+			initialShowAll: false,
+			expectedAfter:  true,
+		},
+		{
+			name:           "toggle from true to false",
+			initialShowAll: true,
+			expectedAfter:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModel()
+			m.help = newHelp()
+			m.help.ShowAll = tt.initialShowAll
+
+			m.toggleHelp()
+
+			assert.Equal(t, tt.expectedAfter, m.help.ShowAll,
+				"help.ShowAll should toggle from %v to %v", tt.initialShowAll, tt.expectedAfter)
+		})
+	}
+}
+
+func TestToggleHelp_DoubleToggle(t *testing.T) {
+	t.Run("double toggle returns to original state", func(t *testing.T) {
+		m := createTestModel()
+		m.help = newHelp()
+		m.help.ShowAll = false
+
+		m.toggleHelp()
+		assert.True(t, m.help.ShowAll, "first toggle should set ShowAll to true")
+
+		m.toggleHelp()
+		assert.False(t, m.help.ShowAll, "second toggle should set ShowAll back to false")
+	})
+}
+
+func TestInitialModelWithConfig_FieldInitialization(t *testing.T) {
+	mockConfig := &pd.Config{
+		Client: &pd.MockPagerDutyClient{},
+		CurrentUser: &pagerduty.User{
+			APIObject: pagerduty.APIObject{ID: "U123"},
+		},
+	}
+	editor := []string{"vim"}
+	launcher := launcher.ClusterLauncher{}
+	debug := true
+
+	result, cmd := InitialModelWithConfig(mockConfig, editor, launcher, debug)
+
+	assert.NotNil(t, result, "model should not be nil")
+	assert.NotNil(t, cmd, "cmd should not be nil")
+
+	m, ok := result.(model)
+	assert.True(t, ok, "result should be a model")
+
+	// Verify field assignments
+	assert.Equal(t, editor, m.editor, "editor should be set")
+	assert.True(t, m.debug, "debug should be set to true")
+	assert.NotNil(t, m.config, "config should be set")
+	assert.Equal(t, mockConfig, m.config, "config should match input")
+
+	// Verify initialized components
+	assert.NotNil(t, m.incidentCache, "incidentCache should be initialized")
+	assert.NotNil(t, m.scheduledJobs, "scheduledJobs should be initialized")
+	assert.True(t, m.autoRefresh, "autoRefresh should default to true")
+	assert.True(t, m.showLowUrgency, "showLowUrgency should default to true")
+	assert.False(t, m.apiInProgress, "apiInProgress should default to false")
+	assert.Empty(t, m.status, "status should default to empty")
+}

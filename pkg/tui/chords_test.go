@@ -358,3 +358,28 @@ func TestChord_WorksInIncidentViewMode(t *testing.T) {
 			"chordPending should be set in incident view mode")
 	})
 }
+
+func TestChordViewLog_ReturnsCommand(t *testing.T) {
+	t.Run("chordViewLog returns a non-nil tea.Cmd", func(t *testing.T) {
+		m := createTestModel()
+		m.logFilePath = "/tmp/test-srepd-debug.log"
+
+		_, cmd := chordViewLog(m)
+		assert.NotNil(t, cmd, "chordViewLog should return a non-nil command")
+	})
+
+	t.Run("chordViewLog command reads log file", func(t *testing.T) {
+		m := createTestModel()
+		m.logFilePath = "/tmp/nonexistent-srepd-chord-test.log"
+
+		_, cmd := chordViewLog(m)
+		assert.NotNil(t, cmd, "should return a command")
+
+		// Execute the command to verify it produces a logFileContentMsg
+		result := cmd()
+		msg, ok := result.(logFileContentMsg)
+		assert.True(t, ok, "command should produce a logFileContentMsg, got %T", result)
+		assert.Contains(t, string(msg), "No log file found",
+			"should indicate log file not found for nonexistent path")
+	})
+}
