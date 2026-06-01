@@ -604,6 +604,13 @@ var funcMap = template.FuncMap{
 	"add1": func(i int) int {
 		return i + 1
 	},
+	"SOPName": func(url string) string {
+		parts := strings.Split(url, "/")
+		if len(parts) > 0 {
+			return parts[len(parts)-1]
+		}
+		return url
+	},
 }
 
 func renderIncidentMarkdown(m *model, content string) (string, error) {
@@ -714,15 +721,15 @@ Acknowledged by: {{ range $i, $ack := .Acknowledged -}}
 {{- end -}}
 `
 
-// alertTabTemplate renders a single alert with navigation header (kept for backward compatibility)
 const alertTabTemplate = `
 ### Alert {{ add1 .Index }}/{{ .Total }}
 
-### {{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }} ({{ .Alert.Status }}){{ if .Alert.Severity }} [{{ .Alert.Severity }}]{{ end }}{{ if .Alert.AlertType }} ({{ .Alert.AlertType }}){{ end }}
+**{{ .Alert.ID }}** ({{ .Alert.Status }}){{ if .Alert.Severity }} [{{ .Alert.Severity }}]{{ end }}{{ if .Alert.AlertType }} ({{ .Alert.AlertType }}){{ end }}
+
+{{ if .Alert.HTMLURL }}{{ if .Alert.Name }}{{ ToLink .Alert.Name .Alert.HTMLURL }}{{ else }}{{ ToLink .Alert.ID .Alert.HTMLURL }}{{ end }}{{ else }}{{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }}{{ end }}
 
 * Cluster: {{ .Alert.Cluster }}
-* SOP: {{ if .Alert.Link }}{{ ToLink "SOP" .Alert.Link }}{{ else }}_none_{{ end }}
-* Alert: {{ ToLink .Alert.ID .Alert.HTMLURL }}
+* SOP: {{ if .Alert.Link }}{{ ToLink (SOPName .Alert.Link) .Alert.Link }}{{ else }}_none_{{ end }}
 * Service: {{ .Alert.Service }}
 * Created: {{ .Alert.Created }}
 `
