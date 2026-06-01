@@ -22,6 +22,11 @@
           "ocm_link": "https://console.redhat.com/openshift/details/e7c5363a-b69b-47bf-98ff-edf99fc3ea25",
           "resolved": ""
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_001",
+      "incident": {
+        "id": "PDEV_INC_001",
+        "type": "incident_reference"
       }
     }
   ],
@@ -48,6 +53,11 @@
           "ocm_link": "https://console.redhat.com/openshift/details/b2d4e6f8-1234-5678-9abc-def012345678",
           "resolved": ""
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_002A",
+      "incident": {
+        "id": "PDEV_INC_002",
+        "type": "incident_reference"
       }
     },
     {
@@ -72,6 +82,11 @@
           "ocm_link": "https://console.redhat.com/openshift/details/b2d4e6f8-1234-5678-9abc-def012345678",
           "resolved": ""
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_002B",
+      "incident": {
+        "id": "PDEV_INC_002",
+        "type": "incident_reference"
       }
     },
     {
@@ -96,6 +111,11 @@
           "ocm_link": "https://console.redhat.com/openshift/details/b2d4e6f8-1234-5678-9abc-def012345678",
           "resolved": ""
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_002C",
+      "incident": {
+        "id": "PDEV_INC_002",
+        "type": "incident_reference"
       }
     }
   ],
@@ -119,6 +139,11 @@
           "num_resolved": "0",
           "resolved": ""
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_003",
+      "incident": {
+        "id": "PDEV_INC_003",
+        "type": "incident_reference"
       }
     }
   ],
@@ -146,6 +171,11 @@
           "ocm_link": "https://console.redhat.com/openshift/details/a4ba96fe-ac69-4573-a78b-17d38eeaab99",
           "resolved": "\n\n"
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_004",
+      "incident": {
+        "id": "PDEV_INC_004",
+        "type": "incident_reference"
       }
     }
   ],
@@ -170,6 +200,11 @@
           "num_resolved": "0",
           "resolved": "\n\n"
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_005",
+      "incident": {
+        "id": "PDEV_INC_005",
+        "type": "incident_reference"
       }
     }
   ],
@@ -191,9 +226,16 @@
           "last healthy check-in": "2026-05-28T08:50:00.000Z",
           "name": "testcluster.5uqt.p1.openshiftapps.com",
           "notes": "cluster_id: 06f058a0-35fa-42c5-83a1-f39184fee819\nrunbook: https://github.com/openshift/ops-sop/blob/master/v4/alerts/cluster_has_gone_missing.md\n",
-          "tags": ["hive-production"],
+          "tags": [
+            "hive-production"
+          ],
           "token": "e686efc420"
         }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_006",
+      "incident": {
+        "id": "PDEV_INC_006",
+        "type": "incident_reference"
       }
     }
   ],
@@ -204,33 +246,701 @@
       "type": "alert",
       "status": "triggered",
       "created_at": "2026-05-28T07:00:00Z",
-      "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"},
-      "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1a\n - namespace = openshift-machine-api\n - severity = critical\nAnnotations:\n - description = MHC worker-us-east-1a short-circuited\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1a\n - namespace = openshift-machine-api\n - severity = critical\nAnnotations:\n - description = MHC worker-us-east-1a short-circuited\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_01",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
     },
-    {"id": "PDEV_ALERT_008_02", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:01Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1b\n - namespace = openshift-machine-api\nAnnotations:\n - description = MHC worker-us-east-1b short-circuited\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_03", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:02Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1c\nAnnotations:\n - description = MHC worker-us-east-1c short-circuited\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_04", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:03Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1d\nAnnotations:\n - description = MHC worker-us-east-1d short-circuited", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_05", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:04Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1e", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_06", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:05Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1f", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_07", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:06Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_08", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:07Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_09", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:08Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2c", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_10", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:09Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_11", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:10Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_12", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:11Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1c", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_13", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:12Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-1a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_14", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:13Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-1b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_15", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:14Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-2a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_16", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:15Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-2b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_17", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:16Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ca-central-1a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_18", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:17Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ca-central-1b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_19", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:18Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-sa-east-1a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_20", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:19Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-sa-east-1b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_21", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:20Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-me-south-1a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_22", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:21Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-me-south-1b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_23", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:22Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-af-south-1a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_24", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:23Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-af-south-1b", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}},
-    {"id": "PDEV_ALERT_008_25", "type": "alert", "status": "triggered", "created_at": "2026-05-28T07:00:24Z", "service": {"id": "PDEV_SVC_008", "type": "service_reference", "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"}, "body": {"type": "alert_body", "details": {"alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE", "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001", "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-central-1a", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"}}}
+    {
+      "id": "PDEV_ALERT_008_02",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:01Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1b\n - namespace = openshift-machine-api\nAnnotations:\n - description = MHC worker-us-east-1b short-circuited\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_02",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_03",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:02Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1c\nAnnotations:\n - description = MHC worker-us-east-1c short-circuited\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_03",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_04",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:03Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1d\nAnnotations:\n - description = MHC worker-us-east-1d short-circuited",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_04",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_05",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:04Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1e",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_05",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_06",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:05Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1f",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_06",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_07",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:06Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_07",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_08",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:07Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_08",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_09",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:08Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2c",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_09",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_10",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:09Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_10",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_11",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:10Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_11",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_12",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:11Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1c",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_12",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_13",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:12Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-1a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_13",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_14",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:13Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-1b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_14",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_15",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:14Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-2a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_15",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_16",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:15Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-2b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_16",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_17",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:16Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ca-central-1a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_17",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_18",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:17Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ca-central-1b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_18",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_19",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:18Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-sa-east-1a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_19",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_20",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:19Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-sa-east-1b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_20",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_21",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:20Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-me-south-1a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_21",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_22",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:21Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-me-south-1b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_22",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_23",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:22Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-af-south-1a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_23",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_24",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:23Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-af-south-1b",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_24",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    },
+    {
+      "id": "PDEV_ALERT_008_25",
+      "type": "alert",
+      "status": "triggered",
+      "created_at": "2026-05-28T07:00:24Z",
+      "service": {
+        "id": "PDEV_SVC_008",
+        "type": "service_reference",
+        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
+          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-central-1a",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_25",
+      "incident": {
+        "id": "PDEV_INC_008",
+        "type": "incident_reference"
+      }
+    }
   ],
   "PDEV_INC_009": [
     {
@@ -238,24 +948,84 @@
       "type": "alert",
       "status": "triggered",
       "created_at": "2026-05-28T06:00:00Z",
-      "service": {"id": "PDEV_SVC_009", "type": "service_reference", "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"},
-      "body": {"type": "alert_body", "details": {"alert_name": "console-ErrorBudgetBurn", "cluster_id": "aaaaaaaa-1111-2222-3333-444444444444", "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning too fast\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/aaaaaaaa-1111-2222-3333-444444444444"}}
+      "service": {
+        "id": "PDEV_SVC_009",
+        "type": "service_reference",
+        "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "console-ErrorBudgetBurn",
+          "cluster_id": "aaaaaaaa-1111-2222-3333-444444444444",
+          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning too fast\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/aaaaaaaa-1111-2222-3333-444444444444"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_009A",
+      "incident": {
+        "id": "PDEV_INC_009",
+        "type": "incident_reference"
+      }
     },
     {
       "id": "PDEV_ALERT_009B",
       "type": "alert",
       "status": "triggered",
       "created_at": "2026-05-28T06:01:00Z",
-      "service": {"id": "PDEV_SVC_009", "type": "service_reference", "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"},
-      "body": {"type": "alert_body", "details": {"alert_name": "console-ErrorBudgetBurn", "cluster_id": "bbbbbbbb-5555-6666-7777-888888888888", "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on second cluster\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/bbbbbbbb-5555-6666-7777-888888888888"}}
+      "service": {
+        "id": "PDEV_SVC_009",
+        "type": "service_reference",
+        "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "console-ErrorBudgetBurn",
+          "cluster_id": "bbbbbbbb-5555-6666-7777-888888888888",
+          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on second cluster\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/bbbbbbbb-5555-6666-7777-888888888888"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_009B",
+      "incident": {
+        "id": "PDEV_INC_009",
+        "type": "incident_reference"
+      }
     },
     {
       "id": "PDEV_ALERT_009C",
       "type": "alert",
       "status": "triggered",
       "created_at": "2026-05-28T06:02:00Z",
-      "service": {"id": "PDEV_SVC_009", "type": "service_reference", "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"},
-      "body": {"type": "alert_body", "details": {"alert_name": "console-ErrorBudgetBurn", "cluster_id": "cccccccc-9999-aaaa-bbbb-cccccccccccc", "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on third cluster\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/cccccccc-9999-aaaa-bbbb-cccccccccccc"}}
+      "service": {
+        "id": "PDEV_SVC_009",
+        "type": "service_reference",
+        "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "console-ErrorBudgetBurn",
+          "cluster_id": "cccccccc-9999-aaaa-bbbb-cccccccccccc",
+          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on third cluster\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/cccccccc-9999-aaaa-bbbb-cccccccccccc"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_009C",
+      "incident": {
+        "id": "PDEV_INC_009",
+        "type": "incident_reference"
+      }
     }
   ],
   "PDEV_INC_010": [
@@ -264,8 +1034,28 @@
       "type": "alert",
       "status": "triggered",
       "created_at": "2026-05-28T05:00:00Z",
-      "service": {"id": "PDEV_SVC_010", "type": "service_reference", "summary": "osd-ackedcluster.ghi4.p1.openshiftapps.com-hive-cluster"},
-      "body": {"type": "alert_body", "details": {"alert_name": "api-ErrorBudgetBurn", "cluster_id": "dddddddd-1234-5678-9012-eeeeeeeeeeee", "firing": "Labels:\n - alertname = api-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = API error budget burning fast\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/api-ErrorBudgetBurn.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/dddddddd-1234-5678-9012-eeeeeeeeeeee"}}
+      "service": {
+        "id": "PDEV_SVC_010",
+        "type": "service_reference",
+        "summary": "osd-ackedcluster.ghi4.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "api-ErrorBudgetBurn",
+          "cluster_id": "dddddddd-1234-5678-9012-eeeeeeeeeeee",
+          "firing": "Labels:\n - alertname = api-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = API error budget burning fast\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/api-ErrorBudgetBurn.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/dddddddd-1234-5678-9012-eeeeeeeeeeee"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_010",
+      "incident": {
+        "id": "PDEV_INC_010",
+        "type": "incident_reference"
+      }
     }
   ],
   "PDEV_INC_011": [
@@ -274,8 +1064,28 @@
       "type": "alert",
       "status": "triggered",
       "created_at": "2026-05-28T04:00:00Z",
-      "service": {"id": "PDEV_SVC_011", "type": "service_reference", "summary": "osd-mutatedtitle.jkl5.p1.openshiftapps.com-hive-cluster"},
-      "body": {"type": "alert_body", "details": {"alert_name": "CannotRetrieveUpdatesSRE", "cluster_id": "ffffffff-abcd-ef01-2345-678901234567", "firing": "Labels:\n - alertname = CannotRetrieveUpdatesSRE\n - severity = critical\nAnnotations:\n - description = Unable to retrieve cluster updates\nSource: https://console.redhat.com/monitoring", "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/CannotRetrieveUpdatesSRE.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/ffffffff-abcd-ef01-2345-678901234567"}}
+      "service": {
+        "id": "PDEV_SVC_011",
+        "type": "service_reference",
+        "summary": "osd-mutatedtitle.jkl5.p1.openshiftapps.com-hive-cluster"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "CannotRetrieveUpdatesSRE",
+          "cluster_id": "ffffffff-abcd-ef01-2345-678901234567",
+          "firing": "Labels:\n - alertname = CannotRetrieveUpdatesSRE\n - severity = critical\nAnnotations:\n - description = Unable to retrieve cluster updates\nSource: https://console.redhat.com/monitoring",
+          "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/CannotRetrieveUpdatesSRE.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/ffffffff-abcd-ef01-2345-678901234567"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_011",
+      "incident": {
+        "id": "PDEV_INC_011",
+        "type": "incident_reference"
+      }
     }
   ],
   "PDEV_INC_012": [
@@ -284,8 +1094,30 @@
       "type": "alert",
       "status": "triggered",
       "created_at": "2026-05-28T03:00:00Z",
-      "service": {"id": "PDEV_SVC_012", "type": "service_reference", "summary": "rhobs-hcp-prod-critical-us-west-2"},
-      "body": {"type": "alert_body", "details": {"alert_name": "KubeAPIErrorBudgetBurn", "cluster_id": "1b20416f-4022-4ce8-8bde-5a6e450114eb", "dashboard": "https://grafana.app-sre.devshift.net/d/cf6ntunq7rb40c/rhobs-next-central-rosa-hcp-dashboard?orgId=1&var-cluster_id=1b20416f-4022-4ce8-8bde-5a6e450114eb", "firing": "\n\n  - alertname: KubeAPIErrorBudgetBurn\n    cluster_id: 1b20416f-4022-4ce8-8bde-5a6e450114eb\n    namespace: ocm-production-1b20416f-4022\n    description: KubeAPI error budget is burning for HCP 1b20416f-4022-4ce8-8bde-5a6e450114eb\n\n", "link": "https://github.com/openshift/ops-sop/blob/master/hypershift/alerts/KubeAPIErrorBudgetBurn.md", "num_firing": "1", "num_resolved": "0", "ocm_link": "https://console.redhat.com/openshift/details/1b20416f-4022-4ce8-8bde-5a6e450114eb", "resolved": "\n\n"}}
+      "service": {
+        "id": "PDEV_SVC_012",
+        "type": "service_reference",
+        "summary": "rhobs-hcp-prod-critical-us-west-2"
+      },
+      "body": {
+        "type": "alert_body",
+        "details": {
+          "alert_name": "KubeAPIErrorBudgetBurn",
+          "cluster_id": "1b20416f-4022-4ce8-8bde-5a6e450114eb",
+          "dashboard": "https://grafana.app-sre.devshift.net/d/cf6ntunq7rb40c/rhobs-next-central-rosa-hcp-dashboard?orgId=1&var-cluster_id=1b20416f-4022-4ce8-8bde-5a6e450114eb",
+          "firing": "\n\n  - alertname: KubeAPIErrorBudgetBurn\n    cluster_id: 1b20416f-4022-4ce8-8bde-5a6e450114eb\n    namespace: ocm-production-1b20416f-4022\n    description: KubeAPI error budget is burning for HCP 1b20416f-4022-4ce8-8bde-5a6e450114eb\n\n",
+          "link": "https://github.com/openshift/ops-sop/blob/master/hypershift/alerts/KubeAPIErrorBudgetBurn.md",
+          "num_firing": "1",
+          "num_resolved": "0",
+          "ocm_link": "https://console.redhat.com/openshift/details/1b20416f-4022-4ce8-8bde-5a6e450114eb",
+          "resolved": "\n\n"
+        }
+      },
+      "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_012",
+      "incident": {
+        "id": "PDEV_INC_012",
+        "type": "incident_reference"
+      }
     }
   ]
 }
