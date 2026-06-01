@@ -196,6 +196,7 @@ func InitialModelWithConfig(
 
 	// Create markdown renderer once
 	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStylePath("dark"),
 		glamour.WithWordWrap(100),
 	)
 	if err != nil {
