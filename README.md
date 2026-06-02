@@ -59,6 +59,7 @@ SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment varia
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
 | `ignoredusers` | `[]string` | (none) | PagerDuty user IDs to exclude |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
+| `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 
 ### Example
 
