@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/alert"
 )
 
 const (
@@ -591,7 +592,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"%%INCIDENT_ID%%": m.selectedIncident.ID,
 		}
 
-		log.Info("login initiated", "incident_id", m.selectedIncident.ID, "cluster_id", cluster)
+		log.Info("login initiated",
+			"user_id", m.config.CurrentUser.ID,
+			"incident_id", m.selectedIncident.ID,
+			"cluster_id", cluster,
+			"reason", m.selectedIncident.HTMLURL,
+			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
 		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case clusterSelectedMsg:
@@ -608,7 +614,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"%%INCIDENT_ID%%": m.selectedIncident.ID,
 		}
 
-		log.Info("login initiated", "incident_id", m.selectedIncident.ID, "cluster_id", cluster)
+		log.Info("login initiated",
+			"user_id", m.config.CurrentUser.ID,
+			"incident_id", m.selectedIncident.ID,
+			"cluster_id", cluster,
+			"reason", m.selectedIncident.HTMLURL,
+			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
 		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case loginFinishedMsg:
@@ -840,7 +851,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reEscalatedIncidentsMsg:
 		m.apiInProgress = false
 		incidentIDs := strings.Join(getIDsFromIncidents(msg), " ")
-		log.Info("re-escalated incident", "incident_id", incidentIDs)
+		log.Info("re-escalated incident",
+			"user_id", m.config.CurrentUser.ID,
+			"incident_id", incidentIDs,
+			"reason", func() string {
+				if m.selectedIncident != nil {
+					return m.selectedIncident.HTMLURL
+				}
+				return ""
+			}(),
+			"alert", func() string {
+				if m.selectedIncident != nil {
+					return alert.ExtractAlertName(m.selectedIncident.Title)
+				}
+				return ""
+			}())
 
 		return m, tea.Batch(
 			m.flashNotification(fmt.Sprintf("Re-escalated %s", incidentIDs)),
@@ -854,7 +879,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		incidentID := m.selectedIncident.ID
-		log.Info("silenced incident", "incident_id", incidentID)
+		log.Info("silenced incident",
+			"user_id", m.config.CurrentUser.ID,
+			"incident_id", incidentID,
+			"reason", m.selectedIncident.HTMLURL,
+			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
 		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
 
 		m.apiInProgress = true
