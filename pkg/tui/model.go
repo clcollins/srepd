@@ -117,6 +117,13 @@ type model struct {
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
 
+	// Merge mode state
+	mergeMode           bool
+	mergeSourceIncident *pagerduty.Incident
+	mergeTargetID       string
+	mergeTable          table.Model
+	mergeTeamMode       bool
+
 	// Auto-update state
 	devMode          bool
 	updateAvailable  bool

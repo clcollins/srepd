@@ -145,6 +145,10 @@ func (m model) View() string {
 	case m.viewingLog:
 		s.WriteString(tableContainerStyle.Render(m.logViewer.View()))
 
+	case m.mergeMode:
+		s.WriteString(fmt.Sprintf("  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID))
+		s.WriteString(tableContainerStyle.Render(m.mergeTable.View()))
+
 	case m.viewingIncident:
 		tabBar := renderTabBar(m.activeTab,
 			len(m.selectedIncidentAlerts), len(m.selectedIncidentNotes),

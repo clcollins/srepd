@@ -606,6 +606,24 @@ func (d *DevPagerDutyClient) ManageIncidentsWithContext(_ context.Context, _ str
 	}, nil
 }
 
+func (d *DevPagerDutyClient) MergeIncidentsWithContext(_ context.Context, _ string, targetID string, sources []pagerduty.MergeIncidentsOptions) (*pagerduty.Incident, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	target, ok := d.incidents[targetID]
+	if !ok {
+		return nil, fmt.Errorf("DevPagerDutyClient: target incident %q not found", targetID)
+	}
+
+	for _, src := range sources {
+		delete(d.incidents, src.ID)
+		log.Debug("DevPagerDutyClient.MergeIncidents", "merged", src.ID, "into", targetID)
+	}
+
+	copy := *target
+	return &copy, nil
+}
+
 // NewDevConfig creates a pd.Config using the DevPagerDutyClient, bypassing live PD API calls.
 // This is used when --dev mode is active.
 func NewDevConfig(fixturesDir string) (*Config, error) {

@@ -208,6 +208,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case m.err != nil:
 		return switchErrorFocusMode(m, msg)
 
+	case m.mergeMode:
+		return switchMergeFocusMode(m, msg)
+
 	case m.viewingLog:
 		return switchLogFocusMode(m, msg)
 
@@ -463,6 +466,23 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, parseTemplateForNote(m.selectedIncident)
+
+		case key.Matches(msg, defaultKeyMap.Merge):
+			if m.table.SelectedRow() == nil {
+				m.setStatus("no incident highlighted")
+				return m, nil
+			}
+			m.syncSelectedIncidentToHighlightedRow()
+			if m.selectedIncident == nil {
+				m.setStatus("no incident selected")
+				return m, nil
+			}
+			m.mergeMode = true
+			m.mergeSourceIncident = m.selectedIncident
+			m.mergeTeamMode = m.teamMode
+			m.mergeTable = newTableWithStyles()
+			m.rebuildMergeTable()
+			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Login):
 			// Login uses doIfIncidentSelected() instead of the standard sync pattern

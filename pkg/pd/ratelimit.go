@@ -251,3 +251,13 @@ func (c *RateLimitedClient) ManageIncidentsWithContext(ctx context.Context, emai
 	})
 	return result, err
 }
+
+func (c *RateLimitedClient) MergeIncidentsWithContext(ctx context.Context, from string, id string, o []pagerduty.MergeIncidentsOptions) (*pagerduty.Incident, error) {
+	var result *pagerduty.Incident
+	err := c.withRetry(ctx, func() error {
+		var innerErr error
+		result, innerErr = c.inner.MergeIncidentsWithContext(ctx, from, id, o)
+		return innerErr
+	})
+	return result, err
+}
