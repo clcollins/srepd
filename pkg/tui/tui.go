@@ -594,7 +594,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		log.Info("login initiated",
 			"user_id", m.config.CurrentUser.ID,
-			"incident_id", m.selectedIncident.ID,
 			"cluster_id", cluster,
 			"reason", m.selectedIncident.HTMLURL,
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
@@ -616,7 +615,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		log.Info("login initiated",
 			"user_id", m.config.CurrentUser.ID,
-			"incident_id", m.selectedIncident.ID,
 			"cluster_id", cluster,
 			"reason", m.selectedIncident.HTMLURL,
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
@@ -853,7 +851,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		incidentIDs := strings.Join(getIDsFromIncidents(msg), " ")
 		log.Info("re-escalated incident",
 			"user_id", m.config.CurrentUser.ID,
-			"incident_id", incidentIDs,
 			"reason", func() string {
 				if m.selectedIncident != nil {
 					return m.selectedIncident.HTMLURL
@@ -881,7 +878,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		incidentID := m.selectedIncident.ID
 		log.Info("silenced incident",
 			"user_id", m.config.CurrentUser.ID,
-			"incident_id", incidentID,
 			"reason", m.selectedIncident.HTMLURL,
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
 		policyKey := getEscalationPolicyKey(m.selectedIncident.Service.ID, m.config.EscalationPolicies)
