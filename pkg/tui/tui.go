@@ -40,6 +40,7 @@ func (m model) Init() tea.Cmd {
 		tea.SetWindowTitle(title),
 		m.spinner.Tick,
 		func() tea.Msg { return updateIncidentListMsg("sender: Init") },
+		checkForUpdate(m.devMode, ""),
 	)
 
 }
@@ -896,6 +897,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case claudeResponseMsg:
 		return m.handleClaudeResponse(msg)
+
+	case updateAvailableMsg:
+		m.updateAvailable = true
+		m.updateVersion = msg.latest
+		m.updateReleaseURL = msg.releaseURL
+		return m, nil
 	}
 
 	return m, tea.Batch(cmds...)
