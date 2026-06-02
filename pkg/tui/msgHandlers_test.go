@@ -479,13 +479,15 @@ func TestIncidentViewMode_RefreshWithNilSelectedIncident(t *testing.T) {
 		"No command should be returned when selectedIncident is nil")
 }
 
-func TestClusterSelect_DigitSelectsCluster(t *testing.T) {
+func TestClusterSelect_EnterSelectsCluster(t *testing.T) {
 	m := createTestModel()
 	m.clusterSelectMode = true
 	m.clusterSelectOptions = []string{"cluster-abc", "cluster-def", "cluster-ghi"}
+	cols := []table.Column{{Title: "Cluster ID", Width: 40}}
+	rows := []table.Row{{"cluster-abc"}, {"cluster-def"}, {"cluster-ghi"}}
+	m.clusterSelectTable = table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true))
 
-	// Press '2' to select the second cluster
-	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}
+	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.Update(keyMsg)
 	updatedModel := result.(model)
 
@@ -493,18 +495,19 @@ func TestClusterSelect_DigitSelectsCluster(t *testing.T) {
 		"Cluster select mode should be cleared after selection")
 	assert.Nil(t, updatedModel.clusterSelectOptions,
 		"Cluster select options should be cleared after selection")
-
-	// The command should produce a clusterSelectedMsg with the chosen cluster
 	assert.NotNil(t, cmd, "A command should be returned after selection")
 	msg := cmd()
-	assert.Equal(t, clusterSelectedMsg("cluster-def"), msg,
-		"Should select the second cluster")
+	assert.Equal(t, clusterSelectedMsg("cluster-abc"), msg,
+		"Should select the highlighted cluster")
 }
 
 func TestClusterSelect_EscCancels(t *testing.T) {
 	m := createTestModel()
 	m.clusterSelectMode = true
 	m.clusterSelectOptions = []string{"cluster-abc", "cluster-def"}
+	cols := []table.Column{{Title: "Cluster ID", Width: 40}}
+	rows := []table.Row{{"cluster-abc"}, {"cluster-def"}}
+	m.clusterSelectTable = table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true))
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEsc}
 	result, cmd := m.Update(keyMsg)
@@ -517,38 +520,6 @@ func TestClusterSelect_EscCancels(t *testing.T) {
 	assert.Contains(t, updatedModel.status, "cancelled",
 		"Status should indicate cancellation")
 	assert.Nil(t, cmd, "No command should be returned on cancel")
-}
-
-func TestClusterSelect_OutOfRangeIgnored(t *testing.T) {
-	m := createTestModel()
-	m.clusterSelectMode = true
-	m.clusterSelectOptions = []string{"cluster-abc"}
-
-	// Press '5' which is out of range (only 1 option)
-	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}}
-	result, cmd := m.Update(keyMsg)
-	updatedModel := result.(model)
-
-	assert.True(t, updatedModel.clusterSelectMode,
-		"Cluster select mode should remain active for out-of-range digit")
-	assert.NotNil(t, updatedModel.clusterSelectOptions,
-		"Cluster select options should remain for out-of-range digit")
-	assert.Nil(t, cmd, "No command for out-of-range digit")
-}
-
-func TestClusterSelect_OtherKeysIgnored(t *testing.T) {
-	m := createTestModel()
-	m.clusterSelectMode = true
-	m.clusterSelectOptions = []string{"cluster-abc", "cluster-def"}
-
-	// Press 'a' which is not a valid key in cluster selection mode
-	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
-	result, cmd := m.Update(keyMsg)
-	updatedModel := result.(model)
-
-	assert.True(t, updatedModel.clusterSelectMode,
-		"Cluster select mode should remain active for non-digit keys")
-	assert.Nil(t, cmd, "No command for non-digit keys")
 }
 
 func TestClusterSelect_ClearedOnViewTransition(t *testing.T) {

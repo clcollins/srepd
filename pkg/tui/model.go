@@ -101,6 +101,8 @@ type model struct {
 	// because the incident has alerts referencing multiple distinct cluster_ids.
 	clusterSelectMode    bool
 	clusterSelectOptions []string
+	clusterSelectTable   table.Model
+	clusterSelectPrompt  string
 
 	// chordPending is true when the chord prefix key has been pressed and
 	// the system is waiting for the second key to complete the chord.

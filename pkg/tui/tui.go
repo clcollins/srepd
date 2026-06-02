@@ -570,18 +570,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cluster = clusters[0]
 			m.setStatus(fmt.Sprintf("logging into cluster %s", cluster))
 		default:
-			// Multiple distinct clusters - ask the user to choose
+			// Multiple distinct clusters - open scrollable selection view
 			m.clusterSelectMode = true
 			m.clusterSelectOptions = clusters
-			var prompt strings.Builder
-			prompt.WriteString("Select cluster: ")
-			for i, c := range clusters {
-				if i > 0 {
-					prompt.WriteString(", ")
-				}
-				fmt.Fprintf(&prompt, "[%d] %s", i+1, c)
+			m.clusterSelectPrompt = "Select cluster to log into (Enter=select, Esc=cancel):"
+			clusterServices := mapClusterServices(m.selectedIncidentAlerts)
+			cols := []table.Column{
+				{Title: "Cluster ID", Width: 40},
+				{Title: "Service", Width: 50},
 			}
-			m.setStatus(prompt.String())
+			var rows []table.Row
+			for _, c := range clusters {
+				rows = append(rows, table.Row{c, clusterServices[c]})
+			}
+			m.clusterSelectTable = table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true))
+			m.clusterSelectTable.SetStyles(tableStyle)
 			return m, nil
 		}
 

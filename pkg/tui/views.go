@@ -145,6 +145,10 @@ func (m model) View() string {
 	case m.viewingLog:
 		s.WriteString(tableContainerStyle.Render(m.logViewer.View()))
 
+	case m.clusterSelectMode:
+		s.WriteString("  " + m.clusterSelectPrompt + "\n")
+		s.WriteString(tableContainerStyle.Render(m.clusterSelectTable.View()))
+
 	case m.mergeMode:
 		fmt.Fprintf(&s, "  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID)
 		s.WriteString(tableContainerStyle.Render(m.mergeTable.View()))
@@ -233,13 +237,8 @@ func (m model) renderHeader() string {
 		assignedTo = "Team"
 	}
 
-	// When a cluster selection or confirmation prompt is active, show it in the
-	// status area instead of the normal status text, using the warning style to
-	// draw attention
 	var statusContent string
-	if m.clusterSelectMode {
-		statusContent = warningStyle.Render(m.status)
-	} else if m.pendingConfirmation != nil {
+	if m.pendingConfirmation != nil {
 		statusContent = warningStyle.Render(m.pendingConfirmation.prompt)
 	} else {
 		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View())
