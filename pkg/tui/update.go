@@ -174,7 +174,7 @@ func selfUpdate(assetURL string, binaryPath string) error {
 				return fmt.Errorf("create temp file failed: %w", err)
 			}
 			if _, err := io.Copy(f, tr); err != nil {
-				f.Close() //nolint:errcheck
+				f.Close()          //nolint:errcheck
 				os.Remove(tmpPath) //nolint:errcheck
 				return fmt.Errorf("write failed: %w", err)
 			}
