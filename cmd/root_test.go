@@ -356,6 +356,7 @@ func TestBindArgsToViper(t *testing.T) {
 			cmd.Flags().BoolP("debug", "d", false, "enable debug logging")
 			cmd.Flags().BoolP("dev", "D", false, "enable dev mode")
 			cmd.Flags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
+			cmd.Flags().BoolP("update", "U", false, "update srepd")
 
 			err := cmd.Flags().Set("debug", tt.debugFlag)
 			require.NoError(t, err)
@@ -381,6 +382,7 @@ func TestBindArgsToViper_FlagNotSet_UsesDefault(t *testing.T) {
 	cmd.Flags().BoolP("debug", "d", false, "enable debug logging")
 	cmd.Flags().BoolP("dev", "D", false, "enable dev mode")
 	cmd.Flags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
+	cmd.Flags().BoolP("update", "U", false, "update srepd")
 
 	// Do not set any flags -- they should retain their defaults
 	bindArgsToViper(cmd)
@@ -388,6 +390,7 @@ func TestBindArgsToViper_FlagNotSet_UsesDefault(t *testing.T) {
 	assert.Equal(t, false, viper.GetBool("debug"), "debug should default to false")
 	assert.Equal(t, false, viper.GetBool("dev"), "dev should default to false")
 	assert.Equal(t, "testdata/fixtures", viper.GetString("fixtures_dir"), "fixtures_dir should default to testdata/fixtures")
+	assert.Equal(t, false, viper.GetBool("update"), "update should default to false")
 }
 
 func TestConfigureLogging_SetsLogWriter(t *testing.T) {
