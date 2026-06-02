@@ -192,7 +192,7 @@ func validateConfig() error {
 	for k := range optionalKeys {
 		_, ok := settings[k]
 		if !ok {
-			log.Warn("cmd.validateConfig()", "msg", "missing optional key", "key", k, "default_value", defaultOptionalKeys[k])
+			log.Debug("cmd.validateConfig()", "msg", "missing optional key", "key", k, "default_value", defaultOptionalKeys[k])
 			viper.Set(k, defaultOptionalKeys[k])
 		}
 	}
