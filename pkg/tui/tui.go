@@ -574,10 +574,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clusterSelectMode = true
 			m.clusterSelectOptions = clusters
 			m.clusterSelectPrompt = "Select cluster to log into (Enter=select, Esc=cancel):"
-			cols := []table.Column{{Title: "Cluster ID", Width: 60}}
+			clusterServices := mapClusterServices(m.selectedIncidentAlerts)
+			cols := []table.Column{
+				{Title: "Cluster ID", Width: 40},
+				{Title: "Service", Width: 50},
+			}
 			var rows []table.Row
 			for _, c := range clusters {
-				rows = append(rows, table.Row{c})
+				rows = append(rows, table.Row{c, clusterServices[c]})
 			}
 			m.clusterSelectTable = table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true))
 			m.clusterSelectTable.SetStyles(tableStyle)

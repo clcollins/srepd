@@ -884,6 +884,19 @@ func getUniqueClusters(alerts []pagerduty.IncidentAlert) []string {
 	return clusters
 }
 
+func mapClusterServices(alerts []pagerduty.IncidentAlert) map[string]string {
+	result := make(map[string]string)
+	for _, a := range alerts {
+		cluster := getDetailFieldFromAlert("cluster_id", a)
+		if cluster != "" {
+			if _, exists := result[cluster]; !exists {
+				result[cluster] = a.Service.Summary
+			}
+		}
+	}
+	return result
+}
+
 // getEscalationPolicyKey is a helper function to determine the escalation policy key
 func getEscalationPolicyKey(serviceID string, policies map[string]*pagerduty.EscalationPolicy) string {
 	if _, ok := policies[serviceID]; ok {
