@@ -121,14 +121,14 @@ readme-check: ## Ensure README is updated when config/keys/flags change
 	NEEDS_README=false; \
 	for f in $$CHANGED; do \
 		case "$$f" in \
-			pkg/tui/keymap.go|cmd/config.go|cmd/root.go|pkg/tui/commands.go) NEEDS_README=true ;; \
+			pkg/tui/keymap.go|cmd/root.go|pkg/tui/commands.go) NEEDS_README=true ;; \
 		esac; \
 	done; \
 	if [ "$$NEEDS_README" = "true" ]; then \
 		if ! echo "$$CHANGED" | grep -q "README.md"; then \
-			echo "ERROR: Changes to keymap.go, config.go, root.go, or commands.go require a README.md update"; \
+			echo "ERROR: Changes to keymap.go, root.go, or commands.go require a README.md update"; \
 			echo "Changed files that trigger this check:"; \
-			echo "$$CHANGED" | grep -E "keymap.go|config.go|root.go|commands.go"; \
+			echo "$$CHANGED" | grep -E "keymap.go|root.go|commands.go"; \
 			exit 1; \
 		fi; \
 		echo "README.md update found - OK"; \
