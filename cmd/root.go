@@ -77,14 +77,6 @@ but rather a simple tool to make on-call tasks easier.`,
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 
-		if viper.GetBool("update") {
-			if err := tui.RunSelfUpdate(); err != nil {
-				fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
-				os.Exit(1)
-			}
-			os.Exit(0)
-		}
-
 		if viper.GetBool("dev") {
 			runDevMode()
 			return
@@ -164,10 +156,6 @@ func bindArgsToViper(cmd *cobra.Command) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = viper.BindPFlag("update", cmd.Flags().Lookup("update"))
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 type cliFlag struct {
@@ -192,7 +180,6 @@ func init() {
 		{"bool", "debug", "d", "false", "enable debug logging"},
 		{"bool", "dev", "D", "false", "enable dev mode with fixture data (no PagerDuty connection required)"},
 		{"string", "fixtures-dir", "F", "testdata/fixtures", "path to fixture data directory for dev mode"},
-		{"bool", "update", "U", "false", "update srepd to the latest release and exit"},
 		// TODO - For some reason the parsed cluster-login-command flag does not work (the "%%" is stripped out)
 		// Commenting out the config options for now, as the config file is the preferred method
 		// {"string", "token", "T", "", "PagerDuty API token"},
