@@ -91,12 +91,17 @@ func parseOSDHive(n *NormalizedAlert, title string, alert pagerduty.IncidentAler
 		}
 	}
 
-	// Extract namespace from firing field if available
+	// Extract namespace and description from firing field if available
 	firingText := getDetail("firing", alert)
 	if firingText != "" {
 		firingFields := ParseFiring(firingText)
 		if ns, ok := firingFields["namespace"]; ok {
 			n.Namespace = ns
+		}
+		if desc, ok := firingFields["description"]; ok {
+			n.Description = desc
+		} else if msg, ok := firingFields["message"]; ok {
+			n.Description = msg
 		}
 	}
 }
@@ -204,12 +209,15 @@ func parseRHOBSHCP(n *NormalizedAlert, title string, alert pagerduty.IncidentAle
 	// Extract region from service name: rhobs-hcp-{env}-{severity?}-{region}
 	n.Region = extractRHOBSRegion(n.ServiceName)
 
-	// Extract namespace from firing if available
+	// Extract namespace and description from firing if available
 	firingText := getDetail("firing", alert)
 	if firingText != "" {
 		firingFields := ParseFiring(firingText)
 		if ns, ok := firingFields["namespace"]; ok {
 			n.Namespace = ns
+		}
+		if desc, ok := firingFields["description"]; ok {
+			n.Description = desc
 		}
 	}
 }

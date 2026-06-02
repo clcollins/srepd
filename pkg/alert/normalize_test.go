@@ -477,3 +477,41 @@ func TestNormalizeAlert_OSDHive_SeverityNormalization(t *testing.T) {
 		})
 	}
 }
+
+func TestRHOBSHCP_ExtractsNamespaceAndDescription(t *testing.T) {
+	alert := pagerduty.IncidentAlert{
+		Service: pagerduty.APIObject{Summary: "rhobs-hcp-prod-critical-us-west-2"},
+		Body: map[string]interface{}{
+			"details": map[string]interface{}{
+				"alert_name": "ClusterOperatorDown",
+				"cluster_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+				"firing":     "\n\n  - alertname: ClusterOperatorDown\n    cluster_id: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\n    namespace: ocm-production-aaaabbbbccccddddeeee-test-us-east-2\n    description: The ingress operator is unavailable for aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.\n\n",
+				"link":       "https://github.com/openshift/ops-sop/blob/master/hypershift/alerts/ClusterOperatorDown.md",
+			},
+		},
+	}
+
+	result := NormalizeAlert("rhobs-hcp-prod-critical-us-west-2", "[HCP] [RHOBS] (Critical) ClusterOperatorDown for HCP: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", alert)
+
+	assert.Equal(t, "ocm-production-aaaabbbbccccddddeeee-test-us-east-2", result.Namespace)
+	assert.Equal(t, "The ingress operator is unavailable for aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.", result.Description)
+}
+
+func TestOSDHive_ExtractsNamespaceAndMessage(t *testing.T) {
+	alert := pagerduty.IncidentAlert{
+		Service: pagerduty.APIObject{Summary: "osd-testcluster.p1.openshiftapps.com-hive-cluster"},
+		Body: map[string]interface{}{
+			"details": map[string]interface{}{
+				"alert_name": "PruningCronjobErrorSRE",
+				"cluster_id": "11111111-2222-3333-4444-555555555555",
+				"firing":     "Labels:\n - alertname = PruningCronjobErrorSRE\n - namespace = openshift-sre-pruning\n - severity = critical\nAnnotations:\n - message = SRE Pruning Job openshift-sre-pruning/builds-pruner is taking more than thirty minutes to complete.\n - summary = SRE pruning cronjob error\nSource: https://console.redhat.com/monitoring",
+				"link":       "https://github.com/openshift/ops-sop/blob/master/v4/alerts/PruningCronjobErrorSRE.md",
+			},
+		},
+	}
+
+	result := NormalizeAlert("osd-testcluster.p1.openshiftapps.com-hive-cluster", "PruningCronjobErrorSRE CRITICAL (1)", alert)
+
+	assert.Equal(t, "openshift-sre-pruning", result.Namespace)
+	assert.Equal(t, "SRE Pruning Job openshift-sre-pruning/builds-pruner is taking more than thirty minutes to complete.", result.Description)
+}
