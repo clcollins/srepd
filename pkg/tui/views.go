@@ -146,7 +146,7 @@ func (m model) View() string {
 		s.WriteString(tableContainerStyle.Render(m.logViewer.View()))
 
 	case m.mergeMode:
-		s.WriteString(fmt.Sprintf("  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID))
+		fmt.Fprintf(&s, "  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID)
 		s.WriteString(tableContainerStyle.Render(m.mergeTable.View()))
 
 	case m.viewingIncident:

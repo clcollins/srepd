@@ -78,7 +78,7 @@ func switchMergeFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Enter):
 			selectedRow := m.mergeTable.SelectedRow()
-			if selectedRow == nil || len(selectedRow) < 2 {
+			if len(selectedRow) < 2 {
 				m.setStatus("no incident selected")
 				return m, nil
 			}
