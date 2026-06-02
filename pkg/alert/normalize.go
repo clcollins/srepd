@@ -28,9 +28,9 @@ type NormalizedAlert struct {
 	DashboardLink string   // Grafana/monitoring dashboard URL
 	ClusterName   string   // Human-readable cluster name or URL
 	Region        string   // AWS region (e.g., "us-east-1")
-	Namespace   string // Kubernetes namespace
-	Description string // Alert description from firing field
-	Condition   string // Failure condition (e.g., "ProvisionFailed")
+	Namespace     string   // Kubernetes namespace
+	Description   string   // Alert description from firing field
+	Condition     string   // Failure condition (e.g., "ProvisionFailed")
 	Reason        string   // Failure reason (e.g., "BootstrapFailed")
 	Tags          []string // SRE-added title tags: ["SL Sent", "OHSS-54318", ...]
 	FiringCount   int      // Number of firing alerts
