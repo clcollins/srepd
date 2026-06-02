@@ -206,11 +206,11 @@ ensure-goreleaser: ## Ensure goreleaser is installed
 	@which goreleaser >/dev/null 2>&1 || go install github.com/goreleaser/goreleaser/v2@${GORELEASER_VERSION}
 
 .PHONY: release
-release: ensure-goreleaser ## Create a release using goreleaser
+release: ensure-goreleaser ## Create a release using goreleaser (RELEASE_NOTES=/path/to/notes.md optional)
 	@echo "Creating a release..."
 	GITHUB_TOKEN=$$(jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token) && \
 	export GITHUB_TOKEN && \
-	goreleaser release --clean
+	goreleaser release --clean --parallelism 1 $(if $(RELEASE_NOTES),--release-notes $(RELEASE_NOTES),)
 
 .PHONY: clean
 clean: ## Clean up build artifacts
