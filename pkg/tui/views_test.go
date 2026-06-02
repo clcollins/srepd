@@ -1201,3 +1201,99 @@ func TestRenderIncidentMarkdown_PlainText(t *testing.T) {
 		assert.Contains(t, result, "Just plain text", "plain text content should be preserved")
 	})
 }
+
+func TestRenderHeader_Layout(t *testing.T) {
+	t.Run("header uses 4/6 and 2/6 proportional widths", func(t *testing.T) {
+		windowSize.Width = 120
+
+		m := createTestModel()
+		m.status = "showing 5/5 incidents"
+
+		result := m.renderHeader()
+
+		assert.Contains(t, result, "showing 5/5 incidents", "header should contain status")
+		assert.Contains(t, result, "Showing assigned to You", "header should contain assignee")
+	})
+
+	t.Run("header shows Team when teamMode is true", func(t *testing.T) {
+		windowSize.Width = 120
+
+		m := createTestModel()
+		m.teamMode = true
+
+		result := m.renderHeader()
+
+		assert.Contains(t, result, "Showing assigned to Team")
+	})
+}
+
+func TestRenderBottomStatus_Layout(t *testing.T) {
+	t.Run("shows version string when no update available", func(t *testing.T) {
+		windowSize.Width = 120
+
+		m := createTestModel()
+		m.updateAvailable = false
+
+		result := m.renderBottomStatus()
+
+		assert.Contains(t, result, versionString(), "should show version string")
+	})
+
+	t.Run("shows selected incident ID on left", func(t *testing.T) {
+		windowSize.Width = 120
+
+		m := createTestModel()
+		m.selectedIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "Q123TEST"},
+		}
+
+		result := m.renderBottomStatus()
+
+		assert.Contains(t, result, "Q123TEST", "should contain selected incident ID")
+	})
+
+	t.Run("shows three columns when update available", func(t *testing.T) {
+		windowSize.Width = 120
+
+		m := createTestModel()
+		m.updateAvailable = true
+		m.updateVersion = "v2.0.0"
+		m.selectedIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "QINC001"},
+		}
+
+		result := m.renderBottomStatus()
+
+		assert.Contains(t, result, "QINC001", "left column should show incident ID")
+		assert.Contains(t, result, "An update is available: v2.0.0", "center column should show update notice")
+		assert.Contains(t, result, Version, "right column should show current version")
+		assert.Contains(t, result, "v2.0.0", "right column should show new version")
+	})
+
+	t.Run("footer scales with window width", func(t *testing.T) {
+		m := createTestModel()
+		m.updateAvailable = true
+		m.updateVersion = "v3.0.0"
+
+		windowSize.Width = 80
+		narrow := m.renderBottomStatus()
+
+		windowSize.Width = 200
+		wide := m.renderBottomStatus()
+
+		assert.NotEqual(t, len(narrow), len(wide), "footer should have different widths at different terminal sizes")
+		assert.Contains(t, narrow, "An update is available: v3.0.0")
+		assert.Contains(t, wide, "An update is available: v3.0.0")
+	})
+
+	t.Run("empty when no incident selected and no update", func(t *testing.T) {
+		windowSize.Width = 120
+
+		m := createTestModel()
+
+		result := m.renderBottomStatus()
+
+		assert.Contains(t, result, versionString(), "should still show version")
+		assert.NotContains(t, result, "An update is available", "should not show update notice")
+	})
+}

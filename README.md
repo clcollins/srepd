@@ -29,6 +29,15 @@ make install        # install to $GOPATH/bin
 go install .        # standard go install
 ```
 
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `srepd` | Start the TUI |
+| `srepd update` | Update to the latest release in place |
+| `srepd --version` | Print version and git SHA |
+| `srepd --dev` | Run with fixture data (no PD connection) |
+
 ## Configuration
 
 SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Generate a sample config with `srepd config --create` or validate with `srepd config --validate`.

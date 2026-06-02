@@ -44,6 +44,10 @@ var initialScheduledJobs = []*scheduledJob{
 		jobMsg:    func() tea.Msg { return PollIncidentsMsg{} },
 		frequency: time.Second * 15,
 	},
+	{
+		jobMsg:    checkForUpdate(false, ""),
+		frequency: time.Hour,
+	},
 }
 
 type model struct {
@@ -112,6 +116,12 @@ type model struct {
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
+
+	// Auto-update state
+	devMode          bool
+	updateAvailable  bool
+	updateVersion    string
+	updateReleaseURL string
 }
 
 func InitialModel(
@@ -223,6 +233,7 @@ func InitialModelWithConfig(
 		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
 		autoRefresh:      true,
 		showLowUrgency:   true,
+		devMode:          true,
 	}
 
 	m.config = config

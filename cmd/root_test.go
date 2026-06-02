@@ -356,7 +356,6 @@ func TestBindArgsToViper(t *testing.T) {
 			cmd.Flags().BoolP("debug", "d", false, "enable debug logging")
 			cmd.Flags().BoolP("dev", "D", false, "enable dev mode")
 			cmd.Flags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
-
 			err := cmd.Flags().Set("debug", tt.debugFlag)
 			require.NoError(t, err)
 			err = cmd.Flags().Set("dev", tt.devFlag)
@@ -381,7 +380,6 @@ func TestBindArgsToViper_FlagNotSet_UsesDefault(t *testing.T) {
 	cmd.Flags().BoolP("debug", "d", false, "enable debug logging")
 	cmd.Flags().BoolP("dev", "D", false, "enable dev mode")
 	cmd.Flags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
-
 	// Do not set any flags -- they should retain their defaults
 	bindArgsToViper(cmd)
 

@@ -92,8 +92,6 @@ var (
 			BorderForeground(srepdPallet.normal.border).
 			BorderBackground(srepdPallet.normal.background)
 
-	assignedStringWidth = len("Showing assigned to User") + 2
-
 	paddedStyle = mainStyle.Padding(0, 2, 0, 1)
 
 	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#5C5C5C"})
@@ -243,13 +241,14 @@ func (m model) renderHeader() string {
 		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View())
 	}
 
+	leftWidth := windowSize.Width * 4 / 6
+	rightWidth := windowSize.Width - leftWidth
+
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-
-			paddedStyle.Width(windowSize.Width-assignedStringWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Render(statusContent),
-
-			paddedStyle.Render(assigneeArea(assignedTo)),
+			paddedStyle.Width(leftWidth).Render(statusContent),
+			paddedStyle.Width(rightWidth).Align(lipgloss.Right).Render(assigneeArea(assignedTo)),
 		),
 	)
 
@@ -261,22 +260,45 @@ func (m model) renderBottomStatus() string {
 	var s strings.Builder
 	var selectedID string
 
-	// Show selected incident (always synced to highlighted row)
 	if m.selectedIncident != nil {
 		selectedID = m.selectedIncident.ID
-	} else {
-		selectedID = ""
 	}
 
-	versionWidth := len(GitSHA) + 2
+	if m.updateAvailable {
+		versionDisplay := updateString(Version, m.updateVersion)
 
-	s.WriteString(
-		lipgloss.JoinHorizontal(
-			0.2,
-			mutedStyle.Width(windowSize.Width-versionWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
-			mutedStyle.Padding(0, 2, 0, 1).Render(GitSHA),
-		),
-	)
+		updateNotice := fmt.Sprintf("An update is available: %s", m.updateVersion)
+		updateStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(srepdPallet.selected.text).
+			Background(srepdPallet.selected.background).
+			Padding(0, 1).
+			Align(lipgloss.Center)
+
+		sideWidth := windowSize.Width / 6
+		centerWidth := windowSize.Width - (sideWidth * 2)
+
+		s.WriteString(
+			lipgloss.JoinHorizontal(
+				0.2,
+				mutedStyle.Width(sideWidth).Padding(0, 0, 0, 1).Render(selectedID),
+				updateStyle.Width(centerWidth).Render(updateNotice),
+				mutedStyle.Width(sideWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
+			),
+		)
+	} else {
+		versionDisplay := versionString()
+		rightCol := paddedStyle.Render(versionDisplay)
+		rightWidth := lipgloss.Width(rightCol)
+
+		s.WriteString(
+			lipgloss.JoinHorizontal(
+				0.2,
+				mutedStyle.Width(windowSize.Width-rightWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
+				rightCol,
+			),
+		)
+	}
 
 	return s.String()
 }
