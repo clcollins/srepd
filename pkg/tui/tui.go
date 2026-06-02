@@ -923,6 +923,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case claudeResponseMsg:
 		return m.handleClaudeResponse(msg)
 
+	case mergeIncidentMsg:
+		if m.mergeSourceIncident == nil || m.mergeTargetID == "" {
+			m.setStatus("merge failed - missing source or target")
+			return m, nil
+		}
+		sourceID := m.mergeSourceIncident.ID
+		targetID := m.mergeTargetID
+		m.mergeMode = false
+		m.mergeSourceIncident = nil
+		m.mergeTargetID = ""
+		m.table.Focus()
+		m.apiInProgress = true
+		return m, tea.Batch(m.spinner.Tick, mergeIncidents(m.config, sourceID, targetID))
+
+	case mergedIncidentMsg:
+		m.apiInProgress = false
+		if msg.err != nil {
+			return m, func() tea.Msg { return errMsg{msg.err} }
+		}
+		log.Info("merged incident",
+			"user_id", m.config.CurrentUser.ID,
+			"source", msg.sourceID,
+			"target", msg.targetID)
+		return m, tea.Batch(
+			m.flashNotification(fmt.Sprintf("Merged %s into %s", msg.sourceID, msg.targetID)),
+			func() tea.Msg { return updateIncidentListMsg("sender: mergedIncidentMsg") },
+		)
+
 	case updateAvailableMsg:
 		m.updateAvailable = true
 		m.updateVersion = msg.latest

@@ -145,6 +145,10 @@ func (m model) View() string {
 	case m.viewingLog:
 		s.WriteString(tableContainerStyle.Render(m.logViewer.View()))
 
+	case m.mergeMode:
+		fmt.Fprintf(&s, "  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID)
+		s.WriteString(tableContainerStyle.Render(m.mergeTable.View()))
+
 	case m.viewingIncident:
 		tabBar := renderTabBar(m.activeTab,
 			len(m.selectedIncidentAlerts), len(m.selectedIncidentNotes),
@@ -497,18 +501,20 @@ func summarizeNotes(n []pagerduty.IncidentNote) []noteSummary {
 }
 
 type alertSummary struct {
-	ID        string
-	Name      string
-	Link      string
-	HTMLURL   string
-	Service   string
-	Created   string
-	Status    string
-	Incident  string
-	Cluster   string
-	Severity  string
-	Tags      []string
-	AlertType string
+	ID          string
+	Name        string
+	Link        string
+	HTMLURL     string
+	Service     string
+	Created     string
+	Status      string
+	Incident    string
+	Cluster     string
+	Severity    string
+	Tags        []string
+	AlertType   string
+	Namespace   string
+	Description string
 }
 
 func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
@@ -539,18 +545,20 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 		}
 
 		s = append(s, alertSummary{
-			ID:        alt.ID,
-			Name:      name,
-			Link:      link,
-			Cluster:   cluster,
-			HTMLURL:   alt.HTMLURL,
-			Service:   alt.Service.Summary,
-			Created:   alt.CreatedAt,
-			Status:    alt.Status,
-			Incident:  alt.Incident.ID,
-			Severity:  normalized.Severity,
-			Tags:      normalized.Tags,
-			AlertType: normalized.AlertType,
+			ID:          alt.ID,
+			Name:        name,
+			Link:        link,
+			Cluster:     cluster,
+			HTMLURL:     alt.HTMLURL,
+			Service:     alt.Service.Summary,
+			Created:     alt.CreatedAt,
+			Status:      alt.Status,
+			Incident:    alt.Incident.ID,
+			Severity:    normalized.Severity,
+			Tags:        normalized.Tags,
+			AlertType:   normalized.AlertType,
+			Namespace:   normalized.Namespace,
+			Description: normalized.Description,
 		})
 
 	}
@@ -751,9 +759,14 @@ const alertTabTemplate = `
 {{ if .Alert.HTMLURL }}{{ if .Alert.Name }}{{ ToLink .Alert.Name .Alert.HTMLURL }}{{ else }}{{ ToLink .Alert.ID .Alert.HTMLURL }}{{ end }}{{ else }}{{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }}{{ end }}
 
 * Cluster: {{ .Alert.Cluster }}
+{{ if .Alert.Namespace }}* Namespace: {{ .Alert.Namespace }}
+{{ end -}}
 * SOP: {{ if .Alert.Link }}{{ ToLink (SOPName .Alert.Link) .Alert.Link }}{{ else }}_none_{{ end }}
 * Service: {{ .Alert.Service }}
 * Created: {{ .Alert.Created }}
+{{ if .Alert.Description }}
+> {{ .Alert.Description }}
+{{ end -}}
 `
 
 // noteTabTemplate renders a single note with navigation header (kept for backward compatibility)

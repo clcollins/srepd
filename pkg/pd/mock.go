@@ -239,3 +239,13 @@ func (m *MockPagerDutyClient) ListOnCallsWithContext(ctx context.Context, opts p
 		OnCalls: []pagerduty.OnCall{},
 	}, nil
 }
+
+func (m *MockPagerDutyClient) MergeIncidentsWithContext(ctx context.Context, from string, id string, o []pagerduty.MergeIncidentsOptions) (*pagerduty.Incident, error) {
+	m.recordCall("MergeIncidentsWithContext")
+	if id == "err" {
+		return nil, ErrMockError
+	}
+	return &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: id},
+	}, nil
+}
