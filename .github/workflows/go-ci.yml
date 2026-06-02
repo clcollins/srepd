@@ -14,7 +14,7 @@ jobs:
   plan-doc:
     name: Plan Document
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
 
     steps:
       - name: Checkout repository
@@ -28,7 +28,7 @@ jobs:
   readme-check:
     name: README Update Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-readme')
 
     steps:
       - name: Checkout repository
