@@ -234,6 +234,6 @@ func RunSelfUpdate() error {
 	}
 
 	log.Info("Updated successfully", "version", release.TagName)
-	fmt.Printf("Updated srepd to %s. Restart to use the new version.\n", release.TagName)
+	fmt.Printf("Updated srepd to %s\n", release.TagName)
 	return nil
 }

@@ -44,13 +44,14 @@ const tickInterval = 1
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "srepd",
-	Short: "TUI for common SREP PagerDuty on-call tasks",
-	Long: `'srepd' is a TUI application for common PagerDuty 
-on-call tasks.  It is intended to be used by SREs to perform 
-such tasks as acknowledging incidents, adding notes, 
+	Use:     "srepd",
+	Short:   "TUI for common SREP PagerDuty on-call tasks",
+	Version: tui.Version + " (" + tui.GitSHA + ")",
+	Long: `'srepd' is a TUI application for common PagerDuty
+on-call tasks.  It is intended to be used by SREs to perform
+such tasks as acknowledging incidents, adding notes,
 reassigning to the next on-call, etc.  It is not intended
-to be a full-featured PagerDuty client, or kitchen sink, 
+to be a full-featured PagerDuty client, or kitchen sink,
 but rather a simple tool to make on-call tasks easier.`,
 
 	PreRun: func(cmd *cobra.Command, args []string) {
