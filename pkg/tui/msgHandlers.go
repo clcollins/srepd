@@ -130,10 +130,7 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// If cluster selection mode is active, only accept digit keys and Escape/quit
-	if m.clusterSelectMode {
-		return m.handleClusterSelectInput(msg.(tea.KeyMsg))
-	}
+	// Cluster selection mode is handled as a view in the switch below
 
 	// If a confirmation prompt is active, only accept y/n/Escape/quit
 	if m.pendingConfirmation != nil {
@@ -150,7 +147,7 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Chord state machine: runs before focus-mode dispatch so chords work
 	// in both table and incident-view modes. Disabled during input and error modes
 	// (those are handled below in the focus-mode switch).
-	if !m.input.Focused() && m.err == nil {
+	if !m.input.Focused() && m.err == nil && !m.clusterSelectMode {
 		// 1. If chord pending and Escape: cancel chord
 		if m.chordPending && keyStr == "esc" {
 			m.chordPending = false
@@ -208,6 +205,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case m.err != nil:
 		return switchErrorFocusMode(m, msg)
 
+	case m.clusterSelectMode:
+		return switchClusterSelectFocusMode(m, msg)
+
 	case m.mergeMode:
 		return switchMergeFocusMode(m, msg)
 
@@ -227,34 +227,39 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleClusterSelectInput processes keypresses while cluster selection mode is active.
-// Accepts digit keys 1-9 to select a cluster, Escape to cancel, and quit keys to exit.
-func (m model) handleClusterSelectInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, defaultKeyMap.Quit) {
-		return m, tea.Quit
-	}
+func switchClusterSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, defaultKeyMap.Quit):
+			return m, tea.Quit
 
-	keyStr := msg.String()
-	switch keyStr {
-	case "esc":
-		m.clusterSelectMode = false
-		m.clusterSelectOptions = nil
-		m.setStatus("cluster selection cancelled")
-		return m, nil
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		idx := int(keyStr[0]-'0') - 1
-		if idx < len(m.clusterSelectOptions) {
-			selected := m.clusterSelectOptions[idx]
+		case key.Matches(msg, defaultKeyMap.Back):
 			m.clusterSelectMode = false
 			m.clusterSelectOptions = nil
+			m.setStatus("cluster selection cancelled")
+			m.table.Focus()
+			return m, nil
+
+		case key.Matches(msg, defaultKeyMap.Enter):
+			selectedRow := m.clusterSelectTable.SelectedRow()
+			if len(selectedRow) < 1 {
+				m.setStatus("no cluster selected")
+				return m, nil
+			}
+			selected := selectedRow[0]
+			m.clusterSelectMode = false
+			m.clusterSelectOptions = nil
+			m.table.Focus()
 			return m, func() tea.Msg { return clusterSelectedMsg(selected) }
+
+		default:
+			var cmd tea.Cmd
+			m.clusterSelectTable, cmd = m.clusterSelectTable.Update(msg)
+			return m, cmd
 		}
-		// Index out of range - ignore
-		return m, nil
-	default:
-		// Ignore all other keys while cluster selection is active
-		return m, nil
 	}
+	return m, nil
 }
 
 // handleConfirmationInput processes keypresses while a confirmation prompt is active.
