@@ -993,10 +993,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clusterCache[msg.clusterID] = msg.info
 		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
+		var cmds []tea.Cmd
+		cmds = append(cmds, m.flashNotification(fmt.Sprintf("OCM enriched cluster %s", msg.clusterID)))
 		if m.viewingIncident {
-			return m, func() tea.Msg { return renderIncidentMsg("cluster info arrived") }
+			cmds = append(cmds, func() tea.Msg { return renderIncidentMsg("cluster info arrived") })
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case ocmServiceLogsMsg:
 		if msg.err != nil {
