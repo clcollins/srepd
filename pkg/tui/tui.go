@@ -485,6 +485,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			state := stateShorthand(i, m.config.CurrentUser.ID)
 			if AssignedToUser(i, m.config.CurrentUser.ID) || m.teamMode {
 				serviceName := i.Service.Summary
+				// Populate incidentClusterMap from cache if not already set
+				if _, mapped := m.incidentClusterMap[i.ID]; !mapped {
+					if cached, exists := m.incidentCache[i.ID]; exists && cached.alertsLoaded {
+						ids := getUniqueClusters(cached.alerts)
+						if len(ids) > 0 {
+							if m.incidentClusterMap == nil {
+								m.incidentClusterMap = make(map[string][]string)
+							}
+							m.incidentClusterMap[i.ID] = ids
+						}
+					}
+				}
 				if clusterIDs, ok := m.incidentClusterMap[i.ID]; ok {
 					for _, clusterID := range clusterIDs {
 						if info, exists := m.clusterCache[clusterID]; exists {
