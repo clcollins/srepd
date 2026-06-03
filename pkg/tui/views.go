@@ -614,9 +614,15 @@ func (m model) renderLimitedSupportTab() (string, error) {
 }
 
 func (m model) sortedClusterIDs() []string {
+	if m.selectedIncident == nil {
+		return nil
+	}
+	incidentClusters := m.incidentClusterMap[m.selectedIncident.ID]
 	var ids []string
-	for id := range m.clusterCache {
-		ids = append(ids, id)
+	for _, id := range incidentClusters {
+		if _, ok := m.clusterCache[id]; ok {
+			ids = append(ids, id)
+		}
 	}
 	slices.Sort(ids)
 	return ids
@@ -889,24 +895,35 @@ func (m model) renderTabBar() string {
 		tabLabels[tabNotes] = fmt.Sprintf("Notes (%d)", len(m.selectedIncidentNotes))
 	}
 
-	clusterCount := len(m.clusterCache)
+	// Scope OCM tab counts to the current incident's clusters
+	var incidentClusters []string
+	if m.selectedIncident != nil {
+		incidentClusters = m.incidentClusterMap[m.selectedIncident.ID]
+	}
+
+	clusterCount := 0
+	for _, id := range incidentClusters {
+		if _, ok := m.clusterCache[id]; ok {
+			clusterCount++
+		}
+	}
 	tabLabels[tabCluster] = fmt.Sprintf("Cluster (%d)", clusterCount)
 
 	reportCount := 0
-	for _, reports := range m.clusterReportCache {
-		reportCount += len(reports)
+	for _, id := range incidentClusters {
+		reportCount += len(m.clusterReportCache[id])
 	}
 	tabLabels[tabClusterReports] = fmt.Sprintf("Reports (%d)", reportCount)
 
 	logCount := 0
-	for _, logs := range m.serviceLogCache {
-		logCount += len(logs)
+	for _, id := range incidentClusters {
+		logCount += len(m.serviceLogCache[id])
 	}
 	tabLabels[tabServiceLogs] = fmt.Sprintf("SLs (%d)", logCount)
 
 	lsCount := 0
-	for _, reasons := range m.limitedSupportCache {
-		lsCount += len(reasons)
+	for _, id := range incidentClusters {
+		lsCount += len(m.limitedSupportCache[id])
 	}
 	tabLabels[tabLimitedSupport] = fmt.Sprintf("LS History (%d)", lsCount)
 

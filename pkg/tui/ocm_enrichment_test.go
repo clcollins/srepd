@@ -206,15 +206,23 @@ func TestInitialModelWithConfig_MapsInitialized(t *testing.T) {
 	})
 }
 
+const testClusterID = "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"
+
+func setupModelWithCluster(m *model) {
+	m.selectedIncident = &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "INC001"}}
+	m.incidentClusterMap = map[string][]string{"INC001": {testClusterID}}
+}
+
 func TestRenderClusterTab_WithData(t *testing.T) {
 	t.Run("renders cluster info when cached", func(t *testing.T) {
 		m := createTestModel()
+		setupModelWithCluster(&m)
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
-				ID:          "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
-				DisplayName: "Test Cluster",
-				Name:        "test",
-				ExternalID:  "aaaa-bbbb",
+			testClusterID: {
+				ID:          testClusterID,
+				DisplayName: "fake-osd-webapp.7x9k.p1.example.org",
+				Name:        "fake-osd-webapp",
+				ExternalID:  "00000000-fake-uuid-test-999999999999",
 				State:       "ready",
 				Region:      "us-east-1",
 				Version:     "4.16.5",
@@ -223,7 +231,7 @@ func TestRenderClusterTab_WithData(t *testing.T) {
 
 		content, err := m.renderClusterTab()
 		assert.NoError(t, err)
-		assert.Contains(t, content, "Test Cluster")
+		assert.Contains(t, content, "fake-osd-webapp.7x9k.p1.example.org")
 		assert.Contains(t, content, "us-east-1")
 		assert.Contains(t, content, "1/1")
 	})
@@ -244,11 +252,12 @@ func TestRenderClusterTab_NoOCM(t *testing.T) {
 func TestRenderServiceLogsTab_WithData(t *testing.T) {
 	t.Run("renders service logs when cached", func(t *testing.T) {
 		m := createTestModel()
+		setupModelWithCluster(&m)
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+			testClusterID: {ID: testClusterID},
 		}
 		m.serviceLogCache = map[string][]ocm.ServiceLog{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
+			testClusterID: {
 				{Summary: "Cluster entered limited support due to unsupported configuration", Severity: "Warning", Description: "Details here"},
 			},
 		}
@@ -264,11 +273,12 @@ func TestRenderServiceLogsTab_WithData(t *testing.T) {
 func TestRenderLimitedSupportTab_WithData(t *testing.T) {
 	t.Run("renders limited support reasons when cached", func(t *testing.T) {
 		m := createTestModel()
+		setupModelWithCluster(&m)
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+			testClusterID: {ID: testClusterID},
 		}
 		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
+			testClusterID: {
 				{Summary: "Customer modification", DetectionType: "manual"},
 			},
 		}
@@ -283,33 +293,39 @@ func TestRenderLimitedSupportTab_WithData(t *testing.T) {
 func TestRenderClusterReportsTab_WithData(t *testing.T) {
 	t.Run("renders reports when cached", func(t *testing.T) {
 		m := createTestModel()
+		setupModelWithCluster(&m)
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+			testClusterID: {ID: testClusterID},
 		}
 		m.clusterReportCache = map[string][]ocm.ClusterReport{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
-				{Title: "Health Check", Summary: "All good"},
+			testClusterID: {
+				{Title: "Cluster Operator Status", Summary: "3 operators degraded"},
 			},
 		}
 
 		content, err := m.renderClusterReportsTab()
 		assert.NoError(t, err)
-		assert.Contains(t, content, "Health Check")
-		assert.Contains(t, content, "All good")
+		assert.Contains(t, content, "Cluster Operator Status")
+		assert.Contains(t, content, "3 operators degraded")
 	})
 }
 
 func TestSortedClusterIDs(t *testing.T) {
-	t.Run("returns sorted cluster IDs", func(t *testing.T) {
+	t.Run("returns sorted cluster IDs scoped to incident", func(t *testing.T) {
 		m := createTestModel()
+		c1 := "1a2b3c4dfakeidtest9i0j"
+		c2 := "5m6n7o8pfakeidtest3u4v"
+		c3 := "9z8y7x6wfakeidtest1r0q"
+		m.selectedIncident = &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "INC001"}}
+		m.incidentClusterMap = map[string][]string{"INC001": {c3, c1, c2}}
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"9z8y7x6w5v4u3t2s1r0q": {ID: "9z8y7x6w5v4u3t2s1r0q"},
-			"1a2b3c4d5e6f7g8h9i0j": {ID: "1a2b3c4d5e6f7g8h9i0j"},
-			"5m6n7o8p9q0r1s2t3u4v": {ID: "5m6n7o8p9q0r1s2t3u4v"},
+			c1: {ID: c1},
+			c2: {ID: c2},
+			c3: {ID: c3},
 		}
 
 		ids := m.sortedClusterIDs()
-		assert.Equal(t, []string{"1a2b3c4d5e6f7g8h9i0j", "5m6n7o8p9q0r1s2t3u4v", "9z8y7x6w5v4u3t2s1r0q"}, ids)
+		assert.Equal(t, []string{c1, c2, c3}, ids)
 	})
 }
 
