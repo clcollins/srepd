@@ -498,6 +498,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 					}
+					if len(clusterIDs) > 1 {
+						serviceName = fmt.Sprintf("%s (+%d)", serviceName, len(clusterIDs)-1)
+					}
 				}
 				rows = append(rows, table.Row{state, i.ID, i.Title, serviceName})
 			}
