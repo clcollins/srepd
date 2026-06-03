@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	"github.com/clcollins/srepd/pkg/ocm"
 )
 
 const (
@@ -953,6 +954,57 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flashNotification(fmt.Sprintf("Merged %s into %s", msg.sourceID, msg.targetID)),
 			func() tea.Msg { return updateIncidentListMsg("sender: mergedIncidentMsg") },
 		)
+
+	case clusterInfoMsg:
+		if msg.err != nil {
+			log.Debug("ocm.GetCluster failed", "cluster_id", msg.clusterID, "error", msg.err)
+			return m, nil
+		}
+		if m.clusterCache == nil {
+			m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		}
+		m.clusterCache[msg.clusterID] = msg.info
+		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
+		if m.viewingIncident {
+			return m, func() tea.Msg { return renderIncidentMsg("cluster info arrived") }
+		}
+		return m, nil
+
+	case ocmServiceLogsMsg:
+		if msg.err != nil {
+			log.Debug("ocm.GetServiceLogs failed", "cluster_id", msg.clusterID, "error", msg.err)
+			return m, nil
+		}
+		if m.serviceLogCache == nil {
+			m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		}
+		m.serviceLogCache[msg.clusterID] = msg.logs
+		log.Debug("ocm.GetServiceLogs cached", "cluster_id", msg.clusterID, "count", len(msg.logs))
+		return m, nil
+
+	case clusterReportsMsg:
+		if msg.err != nil {
+			log.Debug("ocm.GetClusterReports failed", "cluster_id", msg.clusterID, "error", msg.err)
+			return m, nil
+		}
+		if m.clusterReportCache == nil {
+			m.clusterReportCache = make(map[string][]ocm.ClusterReport)
+		}
+		m.clusterReportCache[msg.clusterID] = msg.reports
+		log.Debug("ocm.GetClusterReports cached", "cluster_id", msg.clusterID, "count", len(msg.reports))
+		return m, nil
+
+	case limitedSupportMsg:
+		if msg.err != nil {
+			log.Debug("ocm.GetLimitedSupportHistory failed", "cluster_id", msg.clusterID, "error", msg.err)
+			return m, nil
+		}
+		if m.limitedSupportCache == nil {
+			m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		}
+		m.limitedSupportCache[msg.clusterID] = msg.reasons
+		log.Debug("ocm.GetLimitedSupportHistory cached", "cluster_id", msg.clusterID, "count", len(msg.reasons))
+		return m, nil
 
 	case updateAvailableMsg:
 		m.updateAvailable = true

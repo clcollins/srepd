@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
@@ -126,8 +127,15 @@ type model struct {
 	mergeTable          table.Model
 	mergeTeamMode       bool
 
+	// OCM enrichment state
+	ocmClient           ocm.OCMClient
+	clusterCache        map[string]*ocm.ClusterInfo
+	serviceLogCache     map[string][]ocm.ServiceLog
+	clusterReportCache  map[string][]ocm.ClusterReport
+	limitedSupportCache map[string][]ocm.LimitedSupportReason
+
 	// Auto-update state
-	devMode          bool
+	devMode bool
 	updateAvailable  bool
 	updateVersion    string
 	updateReleaseURL string
@@ -278,6 +286,11 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	m.clusterSelectOptions = nil
 	// Reset tab state
 	m.activeTab = 0
+	// Clear OCM enrichment caches
+	m.clusterCache = make(map[string]*ocm.ClusterInfo)
+	m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+	m.clusterReportCache = make(map[string][]ocm.ClusterReport)
+	m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 
