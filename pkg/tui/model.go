@@ -130,8 +130,8 @@ type model struct {
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
-	clusterEnrichInFlight map[string]bool // cluster IDs currently being enriched
-	clusterEnrichFailed   map[string]int  // failure count per cluster ID
+	clusterEnrichInFlight map[string]bool     // cluster IDs currently being enriched
+	clusterEnrichFailed   map[string]int      // failure count per cluster ID
 	clusterCache          map[string]*ocm.ClusterInfo
 	serviceLogCache       map[string][]ocm.ServiceLog
 	clusterReportCache    map[string][]ocm.ClusterReport

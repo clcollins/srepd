@@ -24,7 +24,7 @@ func TestMockClient_GetCluster(t *testing.T) {
 			Organization:  "Fake Aeronautical Ltd",
 		}
 
-		info, err := mock.GetCluster(context.Background(),"1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		info, err := mock.GetCluster(context.Background(), "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 
 		assert.NoError(t, err)
 		assert.Equal(t, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", info.ID)
@@ -37,7 +37,7 @@ func TestMockClient_GetCluster(t *testing.T) {
 	t.Run("returns error for unknown cluster", func(t *testing.T) {
 		mock := NewMockClient()
 
-		_, err := mock.GetCluster(context.Background(),"nonexistent")
+		_, err := mock.GetCluster(context.Background(), "nonexistent")
 
 		assert.Error(t, err)
 	})
@@ -58,7 +58,7 @@ func TestMockClient_GetServiceLogs(t *testing.T) {
 			},
 		}
 
-		logs, err := mock.GetServiceLogs(context.Background(),"1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "00000000-fake-uuid-test-999999999999")
+		logs, err := mock.GetServiceLogs(context.Background(), "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "00000000-fake-uuid-test-999999999999")
 
 		assert.NoError(t, err)
 		assert.Len(t, logs, 1)
@@ -69,7 +69,7 @@ func TestMockClient_GetServiceLogs(t *testing.T) {
 	t.Run("returns empty list for unknown cluster", func(t *testing.T) {
 		mock := NewMockClient()
 
-		logs, err := mock.GetServiceLogs(context.Background(),"nonexistent", "")
+		logs, err := mock.GetServiceLogs(context.Background(), "nonexistent", "")
 
 		assert.NoError(t, err)
 		assert.Empty(t, logs)
@@ -87,7 +87,7 @@ func TestMockClient_GetClusterReports(t *testing.T) {
 			},
 		}
 
-		reports, err := mock.GetClusterReports(context.Background(),"1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		reports, err := mock.GetClusterReports(context.Background(), "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 
 		assert.NoError(t, err)
 		assert.Len(t, reports, 1)
@@ -97,7 +97,7 @@ func TestMockClient_GetClusterReports(t *testing.T) {
 	t.Run("returns empty list for unknown cluster", func(t *testing.T) {
 		mock := NewMockClient()
 
-		reports, err := mock.GetClusterReports(context.Background(),"nonexistent")
+		reports, err := mock.GetClusterReports(context.Background(), "nonexistent")
 
 		assert.NoError(t, err)
 		assert.Empty(t, reports)
@@ -117,7 +117,7 @@ func TestMockClient_GetLimitedSupportHistory(t *testing.T) {
 			},
 		}
 
-		reasons, err := mock.GetLimitedSupportHistory(context.Background(),"1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		reasons, err := mock.GetLimitedSupportHistory(context.Background(), "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 
 		assert.NoError(t, err)
 		assert.Len(t, reasons, 1)
@@ -127,7 +127,7 @@ func TestMockClient_GetLimitedSupportHistory(t *testing.T) {
 	t.Run("returns empty list for unknown cluster", func(t *testing.T) {
 		mock := NewMockClient()
 
-		reasons, err := mock.GetLimitedSupportHistory(context.Background(),"nonexistent")
+		reasons, err := mock.GetLimitedSupportHistory(context.Background(), "nonexistent")
 
 		assert.NoError(t, err)
 		assert.Empty(t, reasons)
@@ -162,7 +162,7 @@ func TestLoadMockClientFromFixtures(t *testing.T) {
 		mock, err := LoadMockClientFromFixtures("../../testdata/fixtures")
 		assert.NoError(t, err)
 
-		info, getErr := mock.GetCluster(context.Background(),"e7c5363a-fake-uuid-test-edf99fc3ea25")
+		info, getErr := mock.GetCluster(context.Background(), "e7c5363a-fake-uuid-test-edf99fc3ea25")
 		assert.NoError(t, getErr)
 		assert.Equal(t, "fake-osd-webapp.7x9k.p1.example.org", info.DisplayName)
 		assert.Equal(t, "us-east-1", info.Region)

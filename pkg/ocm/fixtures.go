@@ -112,16 +112,7 @@ func loadServiceLogFixtures(path string, mock *MockClient) error {
 	for id, fls := range logs {
 		var serviceLogs []ServiceLog
 		for _, fl := range fls {
-			serviceLogs = append(serviceLogs, ServiceLog{
-				Timestamp:    fl.Timestamp,
-				Severity:     fl.Severity,
-				ServiceName:  fl.ServiceName,
-				Summary:      fl.Summary,
-				Description:  fl.Description,
-				ClusterID:    fl.ClusterID,
-				ClusterUUID:  fl.ClusterUUID,
-				InternalOnly: fl.InternalOnly,
-			})
+			serviceLogs = append(serviceLogs, ServiceLog(fl))
 		}
 		mock.ServiceLogs[id] = serviceLogs
 	}
@@ -143,12 +134,7 @@ func loadClusterReportFixtures(path string, mock *MockClient) error {
 	for id, frs := range reports {
 		var clusterReports []ClusterReport
 		for _, fr := range frs {
-			clusterReports = append(clusterReports, ClusterReport{
-				Title:     fr.Title,
-				Summary:   fr.Summary,
-				Details:   fr.Details,
-				CreatedAt: fr.CreatedAt,
-			})
+			clusterReports = append(clusterReports, ClusterReport(fr))
 		}
 		mock.ClusterReports[id] = clusterReports
 	}
@@ -170,13 +156,7 @@ func loadLimitedSupportFixtures(path string, mock *MockClient) error {
 	for id, frs := range reasons {
 		var lsReasons []LimitedSupportReason
 		for _, fr := range frs {
-			lsReasons = append(lsReasons, LimitedSupportReason{
-				ID:            fr.ID,
-				Summary:       fr.Summary,
-				Details:       fr.Details,
-				DetectionType: fr.DetectionType,
-				CreatedAt:     fr.CreatedAt,
-			})
+			lsReasons = append(lsReasons, LimitedSupportReason(fr))
 		}
 		mock.LimitedSupport[id] = lsReasons
 	}
