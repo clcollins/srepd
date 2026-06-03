@@ -499,7 +499,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					if len(clusterIDs) > 1 {
-						serviceName = fmt.Sprintf("%s (+%d)", serviceName, len(clusterIDs)-1)
+						suffix := fmt.Sprintf(" (+%d)", len(clusterIDs)-1)
+						cols := m.table.Columns()
+						if len(cols) >= 4 {
+							maxWidth := cols[3].Width - len(suffix) - 3
+							if maxWidth > 0 && len(serviceName) > maxWidth {
+								serviceName = serviceName[:maxWidth] + "..."
+							}
+						}
+						serviceName = serviceName + suffix
 					}
 				}
 				rows = append(rows, table.Row{state, i.ID, i.Title, serviceName})
