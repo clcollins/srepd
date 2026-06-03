@@ -173,6 +173,13 @@ func parseAppSRE(n *NormalizedAlert, title string, alert pagerduty.IncidentAlert
 		if region, ok := firingFields["region"]; ok {
 			n.Region = region
 		}
+
+		// Cluster ID from firing labels (fallback when not a top-level detail)
+		if n.ClusterID == "" {
+			if cid, ok := firingFields["cluster_id"]; ok {
+				n.ClusterID = cid
+			}
+		}
 	}
 }
 

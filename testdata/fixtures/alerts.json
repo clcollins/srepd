@@ -8,18 +8,18 @@
       "service": {
         "id": "PDEV_SVC_001",
         "type": "service_reference",
-        "summary": "osd-testcluster.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-webapp.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "ClusterOperatorDown",
-          "cluster_id": "e7c5363a-b69b-47bf-98ff-edf99fc3ea25",
-          "firing": "Labels:\n - alertname = ClusterOperatorDown\n - container = kube-rbac-proxy\n - endpoint = metrics\n - namespace = openshift-ingress-operator\n - pod = ingress-operator-5b7c8d9f6-abc12\n - prometheus = openshift-monitoring/k8s\n - severity = critical\nAnnotations:\n - description = The ingress cluster operator has not been available for 10 minutes.\n - summary = Cluster operator ingress is not available\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "e7c5363a-fake-uuid-test-edf99fc3ea25",
+          "firing": "Labels:\n - alertname = ClusterOperatorDown\n - container = kube-rbac-proxy\n - endpoint = metrics\n - namespace = openshift-ingress-operator\n - pod = ingress-operator-5b7c8d9f6-abc12\n - prometheus = openshift-monitoring/k8s\n - severity = critical\nAnnotations:\n - description = The ingress cluster operator has not been available for 10 minutes.\n - summary = Cluster operator ingress is not available\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/ClusterOperatorDown.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/e7c5363a-b69b-47bf-98ff-edf99fc3ea25",
+          "ocm_link": "https://console.example.org/openshift/details/e7c5363a-fake-uuid-test-edf99fc3ea25",
           "resolved": ""
         }
       },
@@ -39,18 +39,18 @@
       "service": {
         "id": "PDEV_SVC_002",
         "type": "service_reference",
-        "summary": "osd-multicluster.abc1.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-rosa-multi.abc1.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "etcdDatabaseQuotaLowSpace",
-          "cluster_id": "b2d4e6f8-1234-5678-9abc-def012345678",
-          "firing": "Labels:\n - alertname = etcdDatabaseQuotaLowSpace\n - namespace = openshift-etcd\n - pod = etcd-master-0\n - severity = critical\nAnnotations:\n - description = etcd database running out of space\n - summary = etcd running low on disk space\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "b2d4e6f8-fake-uuid-test-def012345678",
+          "firing": "Labels:\n - alertname = etcdDatabaseQuotaLowSpace\n - namespace = openshift-etcd\n - pod = etcd-master-0\n - severity = critical\nAnnotations:\n - description = etcd database running out of space\n - summary = etcd running low on disk space\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/etcdDatabaseQuotaLowSpace.md",
           "num_firing": "3",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/b2d4e6f8-1234-5678-9abc-def012345678",
+          "ocm_link": "https://console.example.org/openshift/details/b2d4e6f8-fake-uuid-test-def012345678",
           "resolved": ""
         }
       },
@@ -68,18 +68,18 @@
       "service": {
         "id": "PDEV_SVC_002",
         "type": "service_reference",
-        "summary": "osd-multicluster.abc1.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-rosa-multi.abc1.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "etcdMembersDown",
-          "cluster_id": "b2d4e6f8-1234-5678-9abc-def012345678",
-          "firing": "Labels:\n - alertname = etcdMembersDown\n - namespace = openshift-etcd\n - severity = critical\nAnnotations:\n - description = etcd cluster members are down\n - summary = etcd member is down\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "b2d4e6f8-fake-uuid-test-def012345678",
+          "firing": "Labels:\n - alertname = etcdMembersDown\n - namespace = openshift-etcd\n - severity = critical\nAnnotations:\n - description = etcd cluster members are down\n - summary = etcd member is down\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/etcdMembersDown.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/b2d4e6f8-1234-5678-9abc-def012345678",
+          "ocm_link": "https://console.example.org/openshift/details/b2d4e6f8-fake-uuid-test-def012345678",
           "resolved": ""
         }
       },
@@ -97,18 +97,18 @@
       "service": {
         "id": "PDEV_SVC_002",
         "type": "service_reference",
-        "summary": "osd-multicluster.abc1.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-rosa-multi.abc1.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "etcdHighCommitDurations",
-          "cluster_id": "b2d4e6f8-1234-5678-9abc-def012345678",
-          "firing": "Labels:\n - alertname = etcdHighCommitDurations\n - namespace = openshift-etcd\n - severity = warning\nAnnotations:\n - description = etcd commit durations are too high\n - summary = etcd high commit durations\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "b2d4e6f8-fake-uuid-test-def012345678",
+          "firing": "Labels:\n - alertname = etcdHighCommitDurations\n - namespace = openshift-etcd\n - severity = warning\nAnnotations:\n - description = etcd commit durations are too high\n - summary = etcd high commit durations\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/etcdHighCommitDurations.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/b2d4e6f8-1234-5678-9abc-def012345678",
+          "ocm_link": "https://console.example.org/openshift/details/b2d4e6f8-fake-uuid-test-def012345678",
           "resolved": ""
         }
       },
@@ -133,8 +133,8 @@
       "body": {
         "type": "alert_body",
         "details": {
-          "cluster_id": "2qjmjvgq7808oqt2hrg190r76h7v4etu",
-          "firing": "Labels:\n - alertname = ClusterProvisioningDelay - production\n - cluster = hivep04ew2\n - cluster_deployment = edf-mas\n - condition = ProvisionFailed\n - endpoint = metrics\n - environment = production\n - image_set = openshift-v4.21.16\n - job = hive-controllers\n - namespace = hive\n - platform = gcp\n - prometheus = openshift-customer-monitoring/app-sre\n - reason = UnknownError\n - severity = high\n - team = srep\nAnnotations:\n - message = cluster edf-mas has been in ProvisionFailed condition for over 4 hours. SOP: https://github.com/openshift/ops-sop/blob/master/v4/alerts/ClusterProvisioningDelay.md\n - runbook = https://github.com/openshift/ops-sop/blob/master/v4/alerts/ClusterProvisioningDelay.md\nSource: https://prometheus.app-sre.devshift.net",
+          "cluster_id": "fakeid0000000000000000000000002",
+          "firing": "Labels:\n - alertname = ClusterProvisioningDelay - production\n - cluster = hivep04ew2\n - cluster_deployment = edf-mas\n - condition = ProvisionFailed\n - endpoint = metrics\n - environment = production\n - image_set = openshift-v4.21.16\n - job = hive-controllers\n - namespace = hive\n - platform = gcp\n - prometheus = openshift-customer-monitoring/app-sre\n - reason = UnknownError\n - severity = high\n - team = srep\nAnnotations:\n - message = cluster edf-mas has been in ProvisionFailed condition for over 4 hours. SOP: https://github.com/openshift/ops-sop/blob/master/v4/alerts/ClusterProvisioningDelay.md\n - runbook = https://github.com/openshift/ops-sop/blob/master/v4/alerts/ClusterProvisioningDelay.md\nSource: https://prometheus.app-sre.example.org",
           "num_firing": "1",
           "num_resolved": "0",
           "resolved": ""
@@ -162,13 +162,13 @@
         "type": "alert_body",
         "details": {
           "alert_name": "ClusterOperatorDown",
-          "cluster_id": "a4ba96fe-ac69-4573-a78b-17d38eeaab99",
-          "dashboard": "https://grafana.app-sre.devshift.net/d/cf6ntunq7rb40c/rhobs-next-central-rosa-hcp-dashboard?orgId=1&var-cluster_id=a4ba96fe-ac69-4573-a78b-17d38eeaab99",
-          "firing": "\n\n  - alertname: ClusterOperatorDown\n    cluster_id: a4ba96fe-ac69-4573-a78b-17d38eeaab99\n    namespace: ocm-production-a4ba96fe-ac69-4573\n    description: The ingress operator is unavailable for HCP a4ba96fe-ac69-4573-a78b-17d38eeaab99\n\n",
+          "cluster_id": "a4ba96fe-fake-uuid-test-17d38eeaab99",
+          "dashboard": "https://grafana.app-sre.example.org/d/cf6ntunq7rb40c/rhobs-next-central-rosa-hcp-dashboard?orgId=1&var-cluster_id=a4ba96fe-fake-uuid-test-17d38eeaab99",
+          "firing": "\n\n  - alertname: ClusterOperatorDown\n    cluster_id: a4ba96fe-fake-uuid-test-17d38eeaab99\n    namespace: ocm-production-a4ba96fe-ac69-4573\n    description: The ingress operator is unavailable for HCP a4ba96fe-fake-uuid-test-17d38eeaab99\n\n",
           "link": "https://github.com/openshift/ops-sop/blob/master/hypershift/alerts/ClusterOperatorDown.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/a4ba96fe-ac69-4573-a78b-17d38eeaab99",
+          "ocm_link": "https://console.example.org/openshift/details/a4ba96fe-fake-uuid-test-17d38eeaab99",
           "resolved": "\n\n"
         }
       },
@@ -222,10 +222,10 @@
       "body": {
         "type": "alert_body",
         "details": {
-          "cluster_id": "06f058a0-35fa-42c5-83a1-f39184fee819",
+          "cluster_id": "06f058a0-fake-uuid-test-f39184fee819",
           "last healthy check-in": "2026-05-28T08:50:00.000Z",
-          "name": "testcluster.5uqt.p1.openshiftapps.com",
-          "notes": "cluster_id: 06f058a0-35fa-42c5-83a1-f39184fee819\nrunbook: https://github.com/openshift/ops-sop/blob/master/v4/alerts/cluster_has_gone_missing.md\n",
+          "name": "fake-dms-webapp.5uqt.p1.example.org",
+          "notes": "cluster_id: 06f058a0-fake-uuid-test-f39184fee819\nrunbook: https://github.com/openshift/ops-sop/blob/master/v4/alerts/cluster_has_gone_missing.md\n",
           "tags": [
             "hive-production"
           ],
@@ -249,18 +249,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
-          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1a\n - namespace = openshift-machine-api\n - severity = critical\nAnnotations:\n - description = MHC worker-us-east-1a short-circuited\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1a\n - namespace = openshift-machine-api\n - severity = critical\nAnnotations:\n - description = MHC worker-us-east-1a short-circuited\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_01",
@@ -277,18 +277,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
-          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1b\n - namespace = openshift-machine-api\nAnnotations:\n - description = MHC worker-us-east-1b short-circuited\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1b\n - namespace = openshift-machine-api\nAnnotations:\n - description = MHC worker-us-east-1b short-circuited\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_02",
@@ -305,18 +305,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
-          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1c\nAnnotations:\n - description = MHC worker-us-east-1c short-circuited\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
+          "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1c\nAnnotations:\n - description = MHC worker-us-east-1c short-circuited\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_03",
@@ -333,18 +333,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1d\nAnnotations:\n - description = MHC worker-us-east-1d short-circuited",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_04",
@@ -361,18 +361,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1e",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_05",
@@ -389,18 +389,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-east-1f",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_06",
@@ -417,18 +417,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_07",
@@ -445,18 +445,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_08",
@@ -473,18 +473,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-us-west-2c",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_09",
@@ -501,18 +501,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_10",
@@ -529,18 +529,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_11",
@@ -557,18 +557,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-west-1c",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_12",
@@ -585,18 +585,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-1a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_13",
@@ -613,18 +613,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-1b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_14",
@@ -641,18 +641,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-2a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_15",
@@ -669,18 +669,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ap-southeast-2b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_16",
@@ -697,18 +697,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ca-central-1a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_17",
@@ -725,18 +725,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-ca-central-1b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_18",
@@ -753,18 +753,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-sa-east-1a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_19",
@@ -781,18 +781,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-sa-east-1b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_20",
@@ -809,18 +809,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-me-south-1a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_21",
@@ -837,18 +837,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-me-south-1b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_22",
@@ -865,18 +865,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-af-south-1a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_23",
@@ -893,18 +893,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-af-south-1b",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_24",
@@ -921,18 +921,18 @@
       "service": {
         "id": "PDEV_SVC_008",
         "type": "service_reference",
-        "summary": "osd-largecluster.xyz9.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-large-mhc.xyz9.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "MachineHealthCheckUnterminatedShortCircuitSRE",
-          "cluster_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+          "cluster_id": "c1d2e3f4-fake-uuid-test-123456789001",
           "firing": "Labels:\n - alertname = MachineHealthCheckUnterminatedShortCircuitSRE\n - name = worker-eu-central-1a",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/MachineHealthCheckUnterminatedShortCircuitSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/c1d2e3f4-5678-9abc-def0-123456789001"
+          "ocm_link": "https://console.example.org/openshift/details/c1d2e3f4-fake-uuid-test-123456789001"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_008_25",
@@ -951,18 +951,18 @@
       "service": {
         "id": "PDEV_SVC_009",
         "type": "service_reference",
-        "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-multi2.def3.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "console-ErrorBudgetBurn",
-          "cluster_id": "aaaaaaaa-1111-2222-3333-444444444444",
-          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning too fast\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d",
+          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning too fast\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/aaaaaaaa-1111-2222-3333-444444444444"
+          "ocm_link": "https://console.example.org/openshift/details/3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_009A",
@@ -979,18 +979,18 @@
       "service": {
         "id": "PDEV_SVC_009",
         "type": "service_reference",
-        "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-multi2.def3.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "console-ErrorBudgetBurn",
-          "cluster_id": "bbbbbbbb-5555-6666-7777-888888888888",
-          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on second cluster\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "7f2e8d4a-fake-uuid-test-1b9c3a5d7e0f",
+          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on second cluster\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/bbbbbbbb-5555-6666-7777-888888888888"
+          "ocm_link": "https://console.example.org/openshift/details/7f2e8d4a-fake-uuid-test-1b9c3a5d7e0f"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_009B",
@@ -1007,18 +1007,18 @@
       "service": {
         "id": "PDEV_SVC_009",
         "type": "service_reference",
-        "summary": "osd-multicluster2.def3.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-multi2.def3.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "console-ErrorBudgetBurn",
-          "cluster_id": "cccccccc-9999-aaaa-bbbb-cccccccccccc",
-          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on third cluster\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "5d1a8f3e-fake-uuid-test-9c2b4e6d0a7f",
+          "firing": "Labels:\n - alertname = console-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = Console error budget burning fast on third cluster\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/console-ErrorBudgetBurn.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/cccccccc-9999-aaaa-bbbb-cccccccccccc"
+          "ocm_link": "https://console.example.org/openshift/details/5d1a8f3e-fake-uuid-test-9c2b4e6d0a7f"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_009C",
@@ -1037,18 +1037,18 @@
       "service": {
         "id": "PDEV_SVC_010",
         "type": "service_reference",
-        "summary": "osd-ackedcluster.ghi4.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-acked-prod.ghi4.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "api-ErrorBudgetBurn",
-          "cluster_id": "dddddddd-1234-5678-9012-eeeeeeeeeeee",
-          "firing": "Labels:\n - alertname = api-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = API error budget burning fast\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c",
+          "firing": "Labels:\n - alertname = api-ErrorBudgetBurn\n - severity = critical\nAnnotations:\n - description = API error budget burning fast\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/api-ErrorBudgetBurn.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/dddddddd-1234-5678-9012-eeeeeeeeeeee"
+          "ocm_link": "https://console.example.org/openshift/details/2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_010",
@@ -1067,18 +1067,18 @@
       "service": {
         "id": "PDEV_SVC_011",
         "type": "service_reference",
-        "summary": "osd-mutatedtitle.jkl5.p1.openshiftapps.com-hive-cluster"
+        "summary": "osd-fake-mutated-svc.jkl5.p1.example.org-hive-cluster"
       },
       "body": {
         "type": "alert_body",
         "details": {
           "alert_name": "CannotRetrieveUpdatesSRE",
-          "cluster_id": "ffffffff-abcd-ef01-2345-678901234567",
-          "firing": "Labels:\n - alertname = CannotRetrieveUpdatesSRE\n - severity = critical\nAnnotations:\n - description = Unable to retrieve cluster updates\nSource: https://console.redhat.com/monitoring",
+          "cluster_id": "8e1d3c5b-fake-uuid-test-4a6f2d8e0b7c",
+          "firing": "Labels:\n - alertname = CannotRetrieveUpdatesSRE\n - severity = critical\nAnnotations:\n - description = Unable to retrieve cluster updates\nSource: https://console.example.org/monitoring",
           "link": "https://github.com/openshift/ops-sop/blob/master/v4/alerts/CannotRetrieveUpdatesSRE.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/ffffffff-abcd-ef01-2345-678901234567"
+          "ocm_link": "https://console.example.org/openshift/details/8e1d3c5b-fake-uuid-test-4a6f2d8e0b7c"
         }
       },
       "html_url": "https://example.pagerduty.com/alerts/PDEV_ALERT_011",
@@ -1103,13 +1103,13 @@
         "type": "alert_body",
         "details": {
           "alert_name": "KubeAPIErrorBudgetBurn",
-          "cluster_id": "1b20416f-4022-4ce8-8bde-5a6e450114eb",
-          "dashboard": "https://grafana.app-sre.devshift.net/d/cf6ntunq7rb40c/rhobs-next-central-rosa-hcp-dashboard?orgId=1&var-cluster_id=1b20416f-4022-4ce8-8bde-5a6e450114eb",
-          "firing": "\n\n  - alertname: KubeAPIErrorBudgetBurn\n    cluster_id: 1b20416f-4022-4ce8-8bde-5a6e450114eb\n    namespace: ocm-production-1b20416f-4022\n    description: KubeAPI error budget is burning for HCP 1b20416f-4022-4ce8-8bde-5a6e450114eb\n\n",
+          "cluster_id": "1b20416f-fake-uuid-test-5a6e450114eb",
+          "dashboard": "https://grafana.app-sre.example.org/d/cf6ntunq7rb40c/rhobs-next-central-rosa-hcp-dashboard?orgId=1&var-cluster_id=1b20416f-fake-uuid-test-5a6e450114eb",
+          "firing": "\n\n  - alertname: KubeAPIErrorBudgetBurn\n    cluster_id: 1b20416f-fake-uuid-test-5a6e450114eb\n    namespace: ocm-production-1b20416f-4022\n    description: KubeAPI error budget is burning for HCP 1b20416f-fake-uuid-test-5a6e450114eb\n\n",
           "link": "https://github.com/openshift/ops-sop/blob/master/hypershift/alerts/KubeAPIErrorBudgetBurn.md",
           "num_firing": "1",
           "num_resolved": "0",
-          "ocm_link": "https://console.redhat.com/openshift/details/1b20416f-4022-4ce8-8bde-5a6e450114eb",
+          "ocm_link": "https://console.example.org/openshift/details/1b20416f-fake-uuid-test-5a6e450114eb",
           "resolved": "\n\n"
         }
       },

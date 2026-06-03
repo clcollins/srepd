@@ -379,7 +379,7 @@ func TestRenderBottomStatus_ShowsGitSHA(t *testing.T) {
 
 func TestSummarizeAlerts_EmptyAlerts(t *testing.T) {
 	// Empty alert slice should return nil (empty) summary slice
-	result := summarizeAlerts([]pagerduty.IncidentAlert{})
+	result := summarizeAlerts([]pagerduty.IncidentAlert{}, nil)
 
 	assert.Nil(t, result, "summarizeAlerts with empty input should return nil")
 }
@@ -401,7 +401,7 @@ func TestSummarizeAlerts_AlertWithNilBody(t *testing.T) {
 	}
 
 	// Should not panic
-	result := summarizeAlerts(alerts)
+	result := summarizeAlerts(alerts, nil)
 
 	assert.Len(t, result, 1, "should return exactly one alert summary")
 	assert.Equal(t, "ALERT_NIL_BODY", result[0].ID, "alert ID should be preserved")
@@ -869,7 +869,17 @@ func TestTabHeader_Rendering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderTabBar(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
+			m := createTestModel()
+			m.activeTab = tt.activeTab
+			m.incidentAlertsLoaded = !tt.alertsLoading
+			m.incidentNotesLoaded = !tt.notesLoading
+			for i := 0; i < tt.alertCount; i++ {
+				m.selectedIncidentAlerts = append(m.selectedIncidentAlerts, pagerduty.IncidentAlert{})
+			}
+			for i := 0; i < tt.noteCount; i++ {
+				m.selectedIncidentNotes = append(m.selectedIncidentNotes, pagerduty.IncidentNote{})
+			}
+			result := m.renderTabBar()
 
 			for _, expected := range tt.expectedContains {
 				assert.Contains(t, result, expected, "tab header should contain %q", expected)
@@ -1030,7 +1040,17 @@ func TestRenderTabBar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderTabBar(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
+			m := createTestModel()
+			m.activeTab = tt.activeTab
+			m.incidentAlertsLoaded = !tt.alertsLoading
+			m.incidentNotesLoaded = !tt.notesLoading
+			for i := 0; i < tt.alertCount; i++ {
+				m.selectedIncidentAlerts = append(m.selectedIncidentAlerts, pagerduty.IncidentAlert{})
+			}
+			for i := 0; i < tt.noteCount; i++ {
+				m.selectedIncidentNotes = append(m.selectedIncidentNotes, pagerduty.IncidentNote{})
+			}
+			result := m.renderTabBar()
 
 			for _, expected := range tt.expectedContains {
 				assert.Contains(t, result, expected, "tab bar should contain %q", expected)
@@ -1175,7 +1195,7 @@ func TestSummarizeAlerts_NoDetailsField(t *testing.T) {
 		},
 	}
 
-	result := summarizeAlerts(alerts)
+	result := summarizeAlerts(alerts, nil)
 
 	assert.Len(t, result, 1)
 	assert.Equal(t, "ALERT001", result[0].ID)

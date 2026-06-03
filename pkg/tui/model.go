@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 )
 
@@ -126,6 +127,15 @@ type model struct {
 	mergeTable          table.Model
 	mergeTeamMode       bool
 
+	// OCM enrichment state
+	ocmClient             ocm.OCMClient
+	incidentClusterMap    map[string][]string // incident ID → cluster IDs
+	clusterEnrichInFlight map[string]bool     // cluster IDs currently being enriched
+	clusterEnrichFailed   map[string]int      // failure count per cluster ID
+	clusterCache          map[string]*ocm.ClusterInfo
+	serviceLogCache       map[string][]ocm.ServiceLog
+	limitedSupportCache   map[string][]ocm.LimitedSupportReason
+
 	// Auto-update state
 	devMode          bool
 	updateAvailable  bool
@@ -141,6 +151,7 @@ func InitialModel(
 	editor []string,
 	launcher launcher.ClusterLauncher,
 	debug bool,
+	ocmClient ocm.OCMClient,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -161,24 +172,31 @@ func InitialModel(
 
 	m := model{
 
-		editor:           editor,
-		launcher:         launcher,
-		debug:            debug,
-		help:             newHelp(),
-		table:            newTableWithStyles(),
-		input:            newTextInput(),
-		incidentViewer:   newIncidentViewer(),
-		logViewer:        newLogViewer(),
-		logFilePath:      defaultLogFilePath(),
-		spinner:          s,
-		markdownRenderer: renderer,
-		apiInProgress:    false,
-		status:           "",
-		incidentCache:    make(map[string]*cachedIncidentData),
-		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:      true,     // Start watching for updates on startup
-		showLowUrgency:   true,     // Show all urgencies by default
-		chordPrefix:      "ctrl+x", // Default chord prefix
+		editor:                editor,
+		launcher:              launcher,
+		debug:                 debug,
+		help:                  newHelp(),
+		table:                 newTableWithStyles(),
+		input:                 newTextInput(),
+		incidentViewer:        newIncidentViewer(),
+		logViewer:             newLogViewer(),
+		logFilePath:           defaultLogFilePath(),
+		spinner:               s,
+		markdownRenderer:      renderer,
+		apiInProgress:         false,
+		status:                "",
+		incidentCache:         make(map[string]*cachedIncidentData),
+		scheduledJobs:         append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:           true, // Start watching for updates on startup
+		showLowUrgency:        true, // Show all urgencies by default
+		ocmClient:             ocmClient,
+		incidentClusterMap:    make(map[string][]string),
+		clusterEnrichInFlight: make(map[string]bool),
+		clusterEnrichFailed:   make(map[string]int),
+		clusterCache:          make(map[string]*ocm.ClusterInfo),
+		serviceLogCache:       make(map[string][]ocm.ServiceLog),
+		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
+		chordPrefix:           "ctrl+x", // Default chord prefix
 	}
 
 	// This is an ugly way to handle this error
@@ -202,11 +220,13 @@ func InitialModel(
 
 // InitialModelWithConfig creates the initial TUI model using a pre-built pd.Config.
 // This is used by dev mode to bypass live PagerDuty API initialization.
+// The ocmClient parameter is optional — pass nil to disable OCM features.
 func InitialModelWithConfig(
 	config *pd.Config,
 	editor []string,
 	launcher launcher.ClusterLauncher,
 	debug bool,
+	ocmClient ocm.OCMClient,
 ) (tea.Model, tea.Cmd) {
 
 	s := spinner.New()
@@ -225,24 +245,31 @@ func InitialModelWithConfig(
 
 	m := model{
 
-		editor:           editor,
-		launcher:         launcher,
-		debug:            debug,
-		help:             newHelp(),
-		table:            newTableWithStyles(),
-		input:            newTextInput(),
-		incidentViewer:   newIncidentViewer(),
-		logViewer:        newLogViewer(),
-		logFilePath:      defaultLogFilePath(),
-		spinner:          s,
-		markdownRenderer: renderer,
-		apiInProgress:    false,
-		status:           "",
-		incidentCache:    make(map[string]*cachedIncidentData),
-		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:      true,
-		showLowUrgency:   true,
-		devMode:          true,
+		editor:                editor,
+		launcher:              launcher,
+		debug:                 debug,
+		help:                  newHelp(),
+		table:                 newTableWithStyles(),
+		input:                 newTextInput(),
+		incidentViewer:        newIncidentViewer(),
+		logViewer:             newLogViewer(),
+		logFilePath:           defaultLogFilePath(),
+		spinner:               s,
+		markdownRenderer:      renderer,
+		apiInProgress:         false,
+		status:                "",
+		incidentCache:         make(map[string]*cachedIncidentData),
+		scheduledJobs:         append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:           true,
+		showLowUrgency:        true,
+		devMode:               true,
+		ocmClient:             ocmClient,
+		incidentClusterMap:    make(map[string][]string),
+		clusterEnrichInFlight: make(map[string]bool),
+		clusterEnrichFailed:   make(map[string]int),
+		clusterCache:          make(map[string]*ocm.ClusterInfo),
+		serviceLogCache:       make(map[string][]ocm.ServiceLog),
+		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
 	}
 
 	m.config = config
@@ -261,8 +288,6 @@ func InitialModelWithConfig(
 func (m *model) clearSelectedIncident(reason interface{}) {
 	if m.selectedIncident != nil {
 		log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident.ID, "cleared", false)
-		// Don't return here - we still want to clear out any notes/alerts and viewingIncident
-		// even if the incident might be nil
 	}
 	m.selectedIncident = nil
 	m.selectedIncidentNotes = nil
@@ -282,6 +307,35 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 }
 
 // syncSelectedIncidentToHighlightedRow updates m.selectedIncident to match the currently
+func (m *model) clearOCMCacheForIncident(incidentID string) {
+	clusterIDs, ok := m.incidentClusterMap[incidentID]
+	if !ok {
+		return
+	}
+	delete(m.incidentClusterMap, incidentID)
+	for _, cid := range clusterIDs {
+		stillReferenced := false
+		for _, otherClusters := range m.incidentClusterMap {
+			for _, other := range otherClusters {
+				if other == cid {
+					stillReferenced = true
+					break
+				}
+			}
+			if stillReferenced {
+				break
+			}
+		}
+		if !stillReferenced {
+			delete(m.clusterCache, cid)
+			delete(m.serviceLogCache, cid)
+			delete(m.limitedSupportCache, cid)
+			delete(m.clusterEnrichInFlight, cid)
+		}
+	}
+	log.Debug("clearOCMCacheForIncident", "incident_id", incidentID)
+}
+
 // highlighted table row. Sets to nil if no row is highlighted. Uses cached data if available,
 // otherwise uses stub data from m.incidentList.
 //

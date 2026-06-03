@@ -1,0 +1,44 @@
+{
+  "e7c5363a-fake-uuid-test-edf99fc3ea25": [
+    {
+      "timestamp": "2026-05-28T14:00:00Z",
+      "severity": "Warning",
+      "service_name": "SREManualAction",
+      "summary": "Customer notified of ClusterOperatorDown",
+      "description": "SRE team contacted customer regarding ingress operator unavailability. Customer acknowledged and is investigating network configuration changes.",
+      "cluster_id": "cluster-osd-001",
+      "cluster_uuid": "e7c5363a-fake-uuid-test-edf99fc3ea25"
+    },
+    {
+      "timestamp": "2026-05-28T12:30:00Z",
+      "severity": "Info",
+      "service_name": "ClusterStateUpdate",
+      "summary": "Cluster entered limited support",
+      "description": "Cluster entered limited support due to customer modification of ingress configuration.",
+      "cluster_id": "cluster-osd-001",
+      "cluster_uuid": "e7c5363a-fake-uuid-test-edf99fc3ea25"
+    }
+  ],
+  "b2d4e6f8-fake-uuid-test-def012345678": [
+    {
+      "timestamp": "2026-05-28T13:00:00Z",
+      "severity": "Error",
+      "service_name": "etcdHealthCheck",
+      "summary": "etcd cluster health degraded",
+      "description": "etcd members reporting high commit durations. Disk I/O may be constrained. Investigating storage performance.",
+      "cluster_id": "cluster-osd-002",
+      "cluster_uuid": "b2d4e6f8-fake-uuid-test-def012345678"
+    }
+  ],
+  "a4ba96fe-fake-uuid-test-17d38eeaab99": [
+    {
+      "timestamp": "2026-05-28T10:30:00Z",
+      "severity": "Warning",
+      "service_name": "HCPHealthCheck",
+      "summary": "HCP control plane ingress degraded",
+      "description": "The hosted control plane ingress operator has been unavailable for 10 minutes. Automated remediation in progress.",
+      "cluster_id": "cluster-hcp-001",
+      "cluster_uuid": "a4ba96fe-fake-uuid-test-17d38eeaab99"
+    }
+  ]
+}

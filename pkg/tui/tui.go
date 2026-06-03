@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	"github.com/clcollins/srepd/pkg/ocm"
 )
 
 const (
@@ -355,9 +356,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.apiInProgress = false
 			}
 
+			// Map incident → cluster IDs and trigger OCM enrichment for uncached clusters
+			clusterIDs := getUniqueClusters(msg.alerts)
+			log.Debug("gotIncidentAlertsMsg", "incident_id", msg.incidentID, "alert_count", len(msg.alerts), "cluster_ids", clusterIDs)
+			if len(clusterIDs) > 0 {
+				if m.incidentClusterMap == nil {
+					m.incidentClusterMap = make(map[string][]string)
+				}
+				if m.clusterEnrichInFlight == nil {
+					m.clusterEnrichInFlight = make(map[string]bool)
+				}
+				m.incidentClusterMap[msg.incidentID] = clusterIDs
+			}
+			var uncachedClusters []string
+			for _, id := range clusterIDs {
+				if _, cached := m.clusterCache[id]; cached {
+					continue
+				}
+				if m.clusterEnrichInFlight[id] {
+					continue
+				}
+				if m.clusterEnrichFailed[id] >= 3 {
+					continue
+				}
+				uncachedClusters = append(uncachedClusters, id)
+				m.clusterEnrichInFlight[id] = true
+			}
+			enrichCmds := enrichClusters(m.ocmClient, uncachedClusters, m.devMode)
+			if len(enrichCmds) > 0 {
+				cmds = append(cmds, enrichCmds...)
+			}
+
 			// Re-render if we're viewing the incident to show the alerts progressively
 			if m.viewingIncident && m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
-				return m, func() tea.Msg { return renderIncidentMsg("alerts arrived") }
+				return m, tea.Batch(append(cmds, func() tea.Msg { return renderIncidentMsg("alerts arrived") })...)
 			}
 		}
 
@@ -448,8 +480,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			} else {
-				// Incident no longer in list - remove from cache
+				// Incident no longer in list - remove from cache and OCM data
 				delete(m.incidentCache, id)
+				m.clearOCMCacheForIncident(id)
 				log.Debug("Update", "updatedIncidentListMsg", "removing cached data for incident no longer in list", "incident", id)
 			}
 		}
@@ -470,7 +503,45 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, i := range filteredIncidents {
 			state := stateShorthand(i, m.config.CurrentUser.ID)
 			if AssignedToUser(i, m.config.CurrentUser.ID) || m.teamMode {
-				rows = append(rows, table.Row{state, i.ID, i.Title, i.Service.Summary})
+				serviceName := i.Service.Summary
+				// Populate incidentClusterMap from cache if not already set
+				if _, mapped := m.incidentClusterMap[i.ID]; !mapped {
+					if cached, exists := m.incidentCache[i.ID]; exists && cached.alertsLoaded {
+						ids := getUniqueClusters(cached.alerts)
+						if len(ids) > 0 {
+							if m.incidentClusterMap == nil {
+								m.incidentClusterMap = make(map[string][]string)
+							}
+							m.incidentClusterMap[i.ID] = ids
+						}
+					}
+				}
+				if clusterIDs, ok := m.incidentClusterMap[i.ID]; ok {
+					for _, clusterID := range clusterIDs {
+						if info, exists := m.clusterCache[clusterID]; exists {
+							displayName := info.DisplayName
+							if displayName == "" {
+								displayName = info.Name
+							}
+							if displayName != "" {
+								serviceName = displayName
+								break
+							}
+						}
+					}
+					if len(clusterIDs) > 1 {
+						suffix := fmt.Sprintf(" (+%d)", len(clusterIDs)-1)
+						cols := m.table.Columns()
+						if len(cols) >= 4 {
+							maxWidth := cols[3].Width - len(suffix) - 3
+							if maxWidth > 0 && len(serviceName) > maxWidth {
+								serviceName = serviceName[:maxWidth] + "..."
+							}
+						}
+						serviceName = serviceName + suffix
+					}
+				}
+				rows = append(rows, table.Row{state, i.ID, i.Title, serviceName})
 			}
 		}
 
@@ -493,6 +564,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("showing %d/%d incident%s...", len(m.table.Rows()), totalIncidentCount, filterSuffix))
 		} else {
 			m.setStatus(fmt.Sprintf("showing %d/%d incidents%s...", len(m.table.Rows()), totalIncidentCount, filterSuffix))
+		}
+
+		// In dev mode, pre-fetch alerts for all incidents so OCM enrichment
+		// covers the full list, not just the highlighted incident.
+		if m.devMode && m.ocmClient != nil {
+			for _, i := range m.incidentList {
+				if _, cached := m.incidentCache[i.ID]; !cached {
+					id := i.ID
+					cmds = append(cmds, getIncidentAlerts(m.config, id))
+				}
+			}
 		}
 
 		// Re-sync selectedIncident to match highlighted row
@@ -953,6 +1035,82 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flashNotification(fmt.Sprintf("Merged %s into %s", msg.sourceID, msg.targetID)),
 			func() tea.Msg { return updateIncidentListMsg("sender: mergedIncidentMsg") },
 		)
+
+	case clusterInfoMsg:
+		delete(m.clusterEnrichInFlight, msg.clusterID)
+		if msg.err != nil {
+			log.Debug("ocm.GetCluster failed", "cluster_id", msg.clusterID, "error", msg.err)
+			if m.clusterEnrichFailed == nil {
+				m.clusterEnrichFailed = make(map[string]int)
+			}
+			m.clusterEnrichFailed[msg.clusterID]++
+			return m, m.flashNotification(fmt.Sprintf("OCM: cluster lookup failed for %s", msg.clusterID))
+		}
+		if m.clusterCache == nil {
+			m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		}
+		m.clusterCache[msg.clusterID] = msg.info
+		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
+
+		// Phase 2: dispatch service logs and limited support using the
+		// OCM internal ID for the API call but the PD cluster ID as cache key.
+		// Skip if already cached (prevents duplicate calls from repeated alerts).
+		internalID := msg.info.ID
+		externalID := msg.info.ExternalID
+		cacheKey := msg.clusterID
+		var phase2Cmds []tea.Cmd
+		if m.ocmClient != nil {
+			if _, cached := m.serviceLogCache[cacheKey]; !cached {
+				phase2Cmds = append(phase2Cmds,
+					getOCMServiceLogs(m.ocmClient, internalID, externalID, cacheKey),
+				)
+			}
+			if _, cached := m.limitedSupportCache[cacheKey]; !cached {
+				phase2Cmds = append(phase2Cmds,
+					getLimitedSupportHistory(m.ocmClient, internalID, cacheKey),
+				)
+			}
+		}
+
+		// Rebuild table immediately so display names update
+		incidents := m.incidentList
+		clusterID := msg.clusterID
+		flashMsg := fmt.Sprintf("OCM enriched cluster %s", clusterID)
+		rebuildAndFlash := tea.Sequence(
+			func() tea.Msg { return updatedIncidentListMsg{incidents, nil} },
+			func() tea.Msg { return setStatusMsg{flashMsg} },
+			tea.Tick(4*time.Second, func(time.Time) tea.Msg { return clearFlashMsg{message: flashMsg} }),
+		)
+
+		allCmds := append(phase2Cmds, rebuildAndFlash)
+		if m.viewingIncident {
+			allCmds = append(allCmds, func() tea.Msg { return renderIncidentMsg("cluster info arrived") })
+		}
+		return m, tea.Batch(allCmds...)
+
+	case ocmServiceLogsMsg:
+		if msg.err != nil {
+			log.Debug("ocm.GetServiceLogs failed", "cluster_id", msg.clusterID, "error", msg.err)
+			return m, nil
+		}
+		if m.serviceLogCache == nil {
+			m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		}
+		m.serviceLogCache[msg.clusterID] = msg.logs
+		log.Debug("ocm.GetServiceLogs cached", "cluster_id", msg.clusterID, "count", len(msg.logs))
+		return m, nil
+
+	case limitedSupportMsg:
+		if msg.err != nil {
+			log.Debug("ocm.GetLimitedSupportHistory failed", "cluster_id", msg.clusterID, "error", msg.err)
+			return m, nil
+		}
+		if m.limitedSupportCache == nil {
+			m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		}
+		m.limitedSupportCache[msg.clusterID] = msg.reasons
+		log.Debug("ocm.GetLimitedSupportHistory cached", "cluster_id", msg.clusterID, "count", len(msg.reasons))
+		return m, nil
 
 	case updateAvailableMsg:
 		m.updateAvailable = true

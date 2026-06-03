@@ -15,11 +15,14 @@ A PagerDuty terminal user interface focused on common SRE tasks.
 ## Features
 
 * View and manage PagerDuty incidents with team and individual views
-* Acknowledge, re-escalate, and silence incidents with confirmation prompts
+* Acknowledge, re-escalate, silence, and merge incidents with confirmation prompts
 * Open SOP/runbook links and incidents directly from alerts
 * Log into clusters via ocm-container or ocm backplane with multi-cluster selection
 * Add notes, auto-refresh with selection preservation, auto-acknowledge when on-call
 * PagerDuty environment variables passed automatically to terminal sessions
+* OCM integration: cluster enrichment with display names, service logs, limited support history
+* 6-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History
+* Auto-update notification and `srepd update` self-update command
 
 ## Installation
 
@@ -86,6 +89,20 @@ Supported terminals: gnome-terminal, ptyxis, wezterm, blackbox, tmux, konsole, a
 Flatpak-installed terminals are also supported using their application ID (e.g., `org.kde.konsole`).
 
 When running inside a Fedora Toolbox, terminal commands are automatically prefixed with `flatpak-spawn --host` (controlled by `toolbox_mode`).
+
+## OCM Integration
+
+SREPD enriches PagerDuty incident data with cluster details from the OpenShift Cluster Manager (OCM) API. On startup, it connects to the production OCM API using tokens from `~/.config/ocm/ocm.json`. If tokens are expired, a browser window opens for auth code login.
+
+Enriched data includes:
+* **Cluster display names** replace PD service names in the incident table (e.g., `mycluster.abc1.p1.example.org` instead of `osd-mycluster.abc1.p1.example.org-hive-cluster`)
+* **Impacted Clusters** section on the Details tab lists all clusters in the incident
+* **Cluster tab** shows OCM cluster details: name, ID, state, region, provider, version, CCS, Hypershift
+* **Service Logs tab** shows recent service logs per cluster
+* **Limited Support History tab** shows LS reasons per cluster
+* Multi-cluster incidents show `(+N)` in the service column
+
+OCM features are optional — if OCM is not configured, the remaining TUI functions normally.
 
 ## Key Bindings
 

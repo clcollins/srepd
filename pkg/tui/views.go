@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	"github.com/clcollins/srepd/pkg/ocm"
 )
 
 const (
@@ -154,9 +155,7 @@ func (m model) View() string {
 		s.WriteString(tableContainerStyle.Render(m.mergeTable.View()))
 
 	case m.viewingIncident:
-		tabBar := renderTabBar(m.activeTab,
-			len(m.selectedIncidentAlerts), len(m.selectedIncidentNotes),
-			!m.incidentAlertsLoaded, !m.incidentNotesLoaded)
+		tabBar := m.renderTabBar()
 		s.WriteString(tabBar)
 		s.WriteString("\n")
 		s.WriteString(tabWindowStyle.Render(m.incidentViewer.View()))
@@ -355,7 +354,7 @@ func (m model) renderTabContent() (string, error) {
 		notes = m.selectedIncidentNotes
 	}
 
-	summary := summarize(m.selectedIncident, alerts, notes)
+	summary := summarize(m.selectedIncident, alerts, notes, m.clusterCache)
 	summary.AlertsLoading = !m.incidentAlertsLoaded
 	summary.NotesLoading = !m.incidentNotesLoaded
 
@@ -366,6 +365,12 @@ func (m model) renderTabContent() (string, error) {
 		return m.renderAlertsTab(summary)
 	case tabNotes:
 		return m.renderNotesTab(summary)
+	case tabCluster:
+		return m.renderClusterTab()
+	case tabServiceLogs:
+		return m.renderServiceLogsTab()
+	case tabLimitedSupport:
+		return m.renderLimitedSupportTab()
 	}
 	return "", nil
 }
@@ -380,7 +385,29 @@ func (m model) renderDetailsTab(summary incidentSummary) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return o.String(), nil
+
+	content := o.String()
+
+	// Add impacted clusters section if we have cluster data
+	clusterIDs := getUniqueClusters(m.selectedIncidentAlerts)
+	if len(clusterIDs) > 0 {
+		var clusters strings.Builder
+		clusters.WriteString("\n## Impacted Clusters:\n\n")
+		for _, id := range clusterIDs {
+			if info, ok := m.clusterCache[id]; ok {
+				displayName := info.DisplayName
+				if displayName == "" {
+					displayName = info.Name
+				}
+				fmt.Fprintf(&clusters, "* %s (%s)\n", displayName, id)
+			} else {
+				fmt.Fprintf(&clusters, "* %s\n", id)
+			}
+		}
+		content += clusters.String()
+	}
+
+	return content, nil
 }
 
 func (m model) renderAlertsTab(summary incidentSummary) (string, error) {
@@ -423,8 +450,14 @@ func (m model) renderNotesTab(summary incidentSummary) (string, error) {
 		return "\n_No notes_\n", nil
 	}
 
+	sorted := make([]noteSummary, len(summary.Notes))
+	copy(sorted, summary.Notes)
+	slices.SortFunc(sorted, func(a, b noteSummary) int {
+		return strings.Compare(b.Created, a.Created)
+	})
+
 	var content strings.Builder
-	for i, n := range summary.Notes {
+	for i, n := range sorted {
 		tmpl, err := template.New("note").Funcs(funcMap).Parse(noteTabTemplate)
 		if err != nil {
 			return "", err
@@ -445,6 +478,124 @@ func (m model) renderNotesTab(summary incidentSummary) (string, error) {
 		}
 	}
 	return content.String(), nil
+}
+
+func (m model) renderClusterTab() (string, error) {
+	if len(m.clusterCache) == 0 {
+		if m.ocmClient == nil {
+			return "\n_OCM not connected_\n", nil
+		}
+		return "\n_Loading cluster info..._\n", nil
+	}
+
+	var content strings.Builder
+	clusters := m.sortedClusterIDs()
+	for i, id := range clusters {
+		info := m.clusterCache[id]
+		fmt.Fprintf(&content, "### Cluster %d/%d\n\n", i+1, len(clusters))
+		fmt.Fprintf(&content, "* Name: %s\n", info.Name)
+		fmt.Fprintf(&content, "* Display Name: %s\n", info.DisplayName)
+		fmt.Fprintf(&content, "* ID: %s\n", info.ID)
+		fmt.Fprintf(&content, "* External ID: %s\n", info.ExternalID)
+		fmt.Fprintf(&content, "* State: %s\n", info.State)
+		fmt.Fprintf(&content, "* Region: %s\n", info.Region)
+		fmt.Fprintf(&content, "* Cloud Provider: %s\n", info.CloudProvider)
+		fmt.Fprintf(&content, "* Version: %s\n", info.Version)
+		fmt.Fprintf(&content, "* Hypershift: %v\n", info.Hypershift)
+		fmt.Fprintf(&content, "* CCS: %v\n", info.CCS)
+		fmt.Fprintf(&content, "* Organization: %s\n", info.Organization)
+		if i < len(clusters)-1 {
+			content.WriteString("\n---\n")
+		}
+	}
+	return content.String(), nil
+}
+
+func (m model) renderServiceLogsTab() (string, error) {
+	if len(m.serviceLogCache) == 0 {
+		if m.ocmClient == nil {
+			return "\n_OCM not connected_\n", nil
+		}
+		return "\n_Loading service logs..._\n", nil
+	}
+
+	var allLogs []ocm.ServiceLog
+	for _, id := range m.sortedClusterIDs() {
+		allLogs = append(allLogs, m.serviceLogCache[id]...)
+	}
+	slices.SortFunc(allLogs, func(a, b ocm.ServiceLog) int {
+		return strings.Compare(b.Timestamp, a.Timestamp)
+	})
+
+	total := len(allLogs)
+	var content strings.Builder
+	for i, l := range allLogs {
+		fmt.Fprintf(&content, "### Service Log %d/%d\n\n", i+1, total)
+		fmt.Fprintf(&content, "* Severity: %s\n", l.Severity)
+		fmt.Fprintf(&content, "* Service: %s\n", l.ServiceName)
+		fmt.Fprintf(&content, "* Timestamp: %s\n", l.Timestamp)
+		fmt.Fprintf(&content, "* Summary: %s\n", l.Summary)
+		if l.Description != "" {
+			fmt.Fprintf(&content, "\n> %s\n", l.Description)
+		}
+		if i < total-1 {
+			content.WriteString("\n---\n")
+		}
+	}
+	return content.String(), nil
+}
+
+func (m model) renderLimitedSupportTab() (string, error) {
+	if len(m.limitedSupportCache) == 0 {
+		if m.ocmClient == nil {
+			return "\n_OCM not connected_\n", nil
+		}
+		return "\n_No limited support history_\n", nil
+	}
+
+	var allReasons []ocm.LimitedSupportReason
+	for _, id := range m.sortedClusterIDs() {
+		allReasons = append(allReasons, m.limitedSupportCache[id]...)
+	}
+
+	if len(allReasons) == 0 {
+		return "\n_No limited support history_\n", nil
+	}
+
+	slices.SortFunc(allReasons, func(a, b ocm.LimitedSupportReason) int {
+		return strings.Compare(b.CreatedAt, a.CreatedAt)
+	})
+
+	total := len(allReasons)
+	var content strings.Builder
+	for i, r := range allReasons {
+		fmt.Fprintf(&content, "### Limited Support %d/%d\n\n", i+1, total)
+		fmt.Fprintf(&content, "* Summary: %s\n", r.Summary)
+		fmt.Fprintf(&content, "* Detection: %s\n", r.DetectionType)
+		fmt.Fprintf(&content, "* Created: %s\n", r.CreatedAt)
+		if r.Details != "" {
+			fmt.Fprintf(&content, "\n> %s\n", r.Details)
+		}
+		if i < total-1 {
+			content.WriteString("\n---\n")
+		}
+	}
+	return content.String(), nil
+}
+
+func (m model) sortedClusterIDs() []string {
+	if m.selectedIncident == nil {
+		return nil
+	}
+	incidentClusters := m.incidentClusterMap[m.selectedIncident.ID]
+	var ids []string
+	for _, id := range incidentClusters {
+		if _, ok := m.clusterCache[id]; ok {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 func addNoteTemplate(id string, title string, service string) (string, error) {
@@ -470,9 +621,9 @@ func addNoteTemplate(id string, title string, service string) (string, error) {
 	return o.String(), nil
 }
 
-func summarize(i *pagerduty.Incident, a []pagerduty.IncidentAlert, n []pagerduty.IncidentNote) incidentSummary {
+func summarize(i *pagerduty.Incident, a []pagerduty.IncidentAlert, n []pagerduty.IncidentNote, clusterCache map[string]*ocm.ClusterInfo) incidentSummary {
 	summary := summarizeIncident(i)
-	summary.Alerts = summarizeAlerts(a)
+	summary.Alerts = summarizeAlerts(a, clusterCache)
 	summary.Notes = summarizeNotes(n)
 	return summary
 }
@@ -514,9 +665,10 @@ type alertSummary struct {
 	AlertType   string
 	Namespace   string
 	Description string
+	ClusterName string
 }
 
-func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
+func summarizeAlerts(a []pagerduty.IncidentAlert, clusterCache map[string]*ocm.ClusterInfo) []alertSummary {
 	var s []alertSummary
 
 	for _, alt := range a {
@@ -543,11 +695,22 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 			link = getDetailFieldFromAlert("link", alt)
 		}
 
+		var clusterName string
+		if clusterCache != nil && cluster != "" {
+			if info, ok := clusterCache[cluster]; ok {
+				clusterName = info.DisplayName
+				if clusterName == "" {
+					clusterName = info.Name
+				}
+			}
+		}
+
 		s = append(s, alertSummary{
 			ID:          alt.ID,
 			Name:        name,
 			Link:        link,
 			Cluster:     cluster,
+			ClusterName: clusterName,
 			HTMLURL:     alt.HTMLURL,
 			Service:     alt.Service.Summary,
 			Created:     alt.CreatedAt,
@@ -659,10 +822,13 @@ func renderIncidentMarkdown(m *model, content string) (string, error) {
 }
 
 const (
-	tabDetails = 0
-	tabAlerts  = 1
-	tabNotes   = 2
-	tabCount   = 3
+	tabDetails        = 0
+	tabAlerts         = 1
+	tabNotes          = 2
+	tabCluster        = 3
+	tabServiceLogs    = 4
+	tabLimitedSupport = 5
+	tabCount          = 6
 )
 
 func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
@@ -682,26 +848,52 @@ var (
 	tabWindowStyle    = lipgloss.NewStyle().BorderForeground(tabHighlightColor).Border(lipgloss.NormalBorder()).UnsetBorderTop()
 )
 
-func renderTabBar(activeTab int, alertCount int, noteCount int, alertsLoading bool, notesLoading bool) string {
+func (m model) renderTabBar() string {
 	tabLabels := make([]string, tabCount)
 	tabLabels[tabDetails] = "Details"
 
-	if alertsLoading {
+	if !m.incidentAlertsLoaded {
 		tabLabels[tabAlerts] = "Alerts (...)"
 	} else {
-		tabLabels[tabAlerts] = fmt.Sprintf("Alerts (%d)", alertCount)
+		tabLabels[tabAlerts] = fmt.Sprintf("Alerts (%d)", len(m.selectedIncidentAlerts))
 	}
 
-	if notesLoading {
+	if !m.incidentNotesLoaded {
 		tabLabels[tabNotes] = "Notes (...)"
 	} else {
-		tabLabels[tabNotes] = fmt.Sprintf("Notes (%d)", noteCount)
+		tabLabels[tabNotes] = fmt.Sprintf("Notes (%d)", len(m.selectedIncidentNotes))
 	}
+
+	// Scope OCM tab counts to the current incident's clusters
+	var incidentClusters []string
+	if m.selectedIncident != nil {
+		incidentClusters = m.incidentClusterMap[m.selectedIncident.ID]
+	}
+
+	clusterCount := 0
+	for _, id := range incidentClusters {
+		if _, ok := m.clusterCache[id]; ok {
+			clusterCount++
+		}
+	}
+	tabLabels[tabCluster] = fmt.Sprintf("Cluster (%d)", clusterCount)
+
+	logCount := 0
+	for _, id := range incidentClusters {
+		logCount += len(m.serviceLogCache[id])
+	}
+	tabLabels[tabServiceLogs] = fmt.Sprintf("SLs (%d)", logCount)
+
+	lsCount := 0
+	for _, id := range incidentClusters {
+		lsCount += len(m.limitedSupportCache[id])
+	}
+	tabLabels[tabLimitedSupport] = fmt.Sprintf("LS History (%d)", lsCount)
 
 	var renderedTabs []string
 	for i, label := range tabLabels {
 		var style lipgloss.Style
-		isFirst, isLast, isActive := i == 0, i == len(tabLabels)-1, i == activeTab
+		isFirst, isLast, isActive := i == 0, i == len(tabLabels)-1, i == m.activeTab
 		if isActive {
 			style = activeTabStyle
 		} else {
@@ -757,7 +949,7 @@ const alertTabTemplate = `
 
 {{ if .Alert.HTMLURL }}{{ if .Alert.Name }}{{ ToLink .Alert.Name .Alert.HTMLURL }}{{ else }}{{ ToLink .Alert.ID .Alert.HTMLURL }}{{ end }}{{ else }}{{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }}{{ end }}
 
-* Cluster: {{ .Alert.Cluster }}
+* Cluster: {{ if .Alert.ClusterName }}{{ .Alert.ClusterName }} ({{ .Alert.Cluster }}){{ else }}{{ .Alert.Cluster }}{{ end }}
 {{ if .Alert.Namespace }}* Namespace: {{ .Alert.Namespace }}
 {{ end -}}
 * SOP: {{ if .Alert.Link }}{{ ToLink (SOPName .Alert.Link) .Alert.Link }}{{ else }}_none_{{ end }}
