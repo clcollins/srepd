@@ -367,8 +367,6 @@ func (m model) renderTabContent() (string, error) {
 		return m.renderNotesTab(summary)
 	case tabCluster:
 		return m.renderClusterTab()
-	case tabClusterReports:
-		return m.renderClusterReportsTab()
 	case tabServiceLogs:
 		return m.renderServiceLogsTab()
 	case tabLimitedSupport:
@@ -452,8 +450,14 @@ func (m model) renderNotesTab(summary incidentSummary) (string, error) {
 		return "\n_No notes_\n", nil
 	}
 
+	sorted := make([]noteSummary, len(summary.Notes))
+	copy(sorted, summary.Notes)
+	slices.SortFunc(sorted, func(a, b noteSummary) int {
+		return strings.Compare(b.Created, a.Created)
+	})
+
 	var content strings.Builder
-	for i, n := range summary.Notes {
+	for i, n := range sorted {
 		tmpl, err := template.New("note").Funcs(funcMap).Parse(noteTabTemplate)
 		if err != nil {
 			return "", err
@@ -507,40 +511,6 @@ func (m model) renderClusterTab() (string, error) {
 	return content.String(), nil
 }
 
-func (m model) renderClusterReportsTab() (string, error) {
-	if len(m.clusterReportCache) == 0 {
-		if m.ocmClient == nil {
-			return "\n_OCM not connected_\n", nil
-		}
-		return "\n_Loading cluster reports..._\n", nil
-	}
-
-	var content strings.Builder
-	idx := 0
-	total := 0
-	for _, reports := range m.clusterReportCache {
-		total += len(reports)
-	}
-
-	for _, id := range m.sortedClusterIDs() {
-		reports := m.clusterReportCache[id]
-		for _, r := range reports {
-			idx++
-			fmt.Fprintf(&content, "### Report %d/%d\n\n", idx, total)
-			fmt.Fprintf(&content, "**%s**\n\n", r.Title)
-			fmt.Fprintf(&content, "* Created: %s\n\n", r.CreatedAt)
-			fmt.Fprintf(&content, "%s\n", r.Summary)
-			if r.Details != "" {
-				fmt.Fprintf(&content, "\n> %s\n", r.Details)
-			}
-			if idx < total {
-				content.WriteString("\n---\n")
-			}
-		}
-	}
-	return content.String(), nil
-}
-
 func (m model) renderServiceLogsTab() (string, error) {
 	if len(m.serviceLogCache) == 0 {
 		if m.ocmClient == nil {
@@ -549,28 +519,27 @@ func (m model) renderServiceLogsTab() (string, error) {
 		return "\n_Loading service logs..._\n", nil
 	}
 
-	var content strings.Builder
-	idx := 0
-	total := 0
-	for _, logs := range m.serviceLogCache {
-		total += len(logs)
-	}
-
+	var allLogs []ocm.ServiceLog
 	for _, id := range m.sortedClusterIDs() {
-		logs := m.serviceLogCache[id]
-		for _, l := range logs {
-			idx++
-			fmt.Fprintf(&content, "### Service Log %d/%d\n\n", idx, total)
-			fmt.Fprintf(&content, "* Severity: %s\n", l.Severity)
-			fmt.Fprintf(&content, "* Service: %s\n", l.ServiceName)
-			fmt.Fprintf(&content, "* Timestamp: %s\n", l.Timestamp)
-			fmt.Fprintf(&content, "* Summary: %s\n", l.Summary)
-			if l.Description != "" {
-				fmt.Fprintf(&content, "\n> %s\n", l.Description)
-			}
-			if idx < total {
-				content.WriteString("\n---\n")
-			}
+		allLogs = append(allLogs, m.serviceLogCache[id]...)
+	}
+	slices.SortFunc(allLogs, func(a, b ocm.ServiceLog) int {
+		return strings.Compare(b.Timestamp, a.Timestamp)
+	})
+
+	total := len(allLogs)
+	var content strings.Builder
+	for i, l := range allLogs {
+		fmt.Fprintf(&content, "### Service Log %d/%d\n\n", i+1, total)
+		fmt.Fprintf(&content, "* Severity: %s\n", l.Severity)
+		fmt.Fprintf(&content, "* Service: %s\n", l.ServiceName)
+		fmt.Fprintf(&content, "* Timestamp: %s\n", l.Timestamp)
+		fmt.Fprintf(&content, "* Summary: %s\n", l.Summary)
+		if l.Description != "" {
+			fmt.Fprintf(&content, "\n> %s\n", l.Description)
+		}
+		if i < total-1 {
+			content.WriteString("\n---\n")
 		}
 	}
 	return content.String(), nil
@@ -584,31 +553,31 @@ func (m model) renderLimitedSupportTab() (string, error) {
 		return "\n_No limited support history_\n", nil
 	}
 
-	var content strings.Builder
-	idx := 0
-	total := 0
-	for _, reasons := range m.limitedSupportCache {
-		total += len(reasons)
+	var allReasons []ocm.LimitedSupportReason
+	for _, id := range m.sortedClusterIDs() {
+		allReasons = append(allReasons, m.limitedSupportCache[id]...)
 	}
 
-	if total == 0 {
+	if len(allReasons) == 0 {
 		return "\n_No limited support history_\n", nil
 	}
 
-	for _, id := range m.sortedClusterIDs() {
-		reasons := m.limitedSupportCache[id]
-		for _, r := range reasons {
-			idx++
-			fmt.Fprintf(&content, "### Limited Support %d/%d\n\n", idx, total)
-			fmt.Fprintf(&content, "* Summary: %s\n", r.Summary)
-			fmt.Fprintf(&content, "* Detection: %s\n", r.DetectionType)
-			fmt.Fprintf(&content, "* Created: %s\n", r.CreatedAt)
-			if r.Details != "" {
-				fmt.Fprintf(&content, "\n> %s\n", r.Details)
-			}
-			if idx < total {
-				content.WriteString("\n---\n")
-			}
+	slices.SortFunc(allReasons, func(a, b ocm.LimitedSupportReason) int {
+		return strings.Compare(b.CreatedAt, a.CreatedAt)
+	})
+
+	total := len(allReasons)
+	var content strings.Builder
+	for i, r := range allReasons {
+		fmt.Fprintf(&content, "### Limited Support %d/%d\n\n", i+1, total)
+		fmt.Fprintf(&content, "* Summary: %s\n", r.Summary)
+		fmt.Fprintf(&content, "* Detection: %s\n", r.DetectionType)
+		fmt.Fprintf(&content, "* Created: %s\n", r.CreatedAt)
+		if r.Details != "" {
+			fmt.Fprintf(&content, "\n> %s\n", r.Details)
+		}
+		if i < total-1 {
+			content.WriteString("\n---\n")
 		}
 	}
 	return content.String(), nil
@@ -857,10 +826,9 @@ const (
 	tabAlerts         = 1
 	tabNotes          = 2
 	tabCluster        = 3
-	tabClusterReports = 4
-	tabServiceLogs    = 5
-	tabLimitedSupport = 6
-	tabCount          = 7
+	tabServiceLogs    = 4
+	tabLimitedSupport = 5
+	tabCount          = 6
 )
 
 func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
@@ -909,12 +877,6 @@ func (m model) renderTabBar() string {
 		}
 	}
 	tabLabels[tabCluster] = fmt.Sprintf("Cluster (%d)", clusterCount)
-
-	reportCount := 0
-	for _, id := range incidentClusters {
-		reportCount += len(m.clusterReportCache[id])
-	}
-	tabLabels[tabClusterReports] = fmt.Sprintf("Reports (%d)", reportCount)
 
 	logCount := 0
 	for _, id := range incidentClusters {

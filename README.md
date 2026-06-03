@@ -21,7 +21,7 @@ A PagerDuty terminal user interface focused on common SRE tasks.
 * Add notes, auto-refresh with selection preservation, auto-acknowledge when on-call
 * PagerDuty environment variables passed automatically to terminal sessions
 * OCM integration: cluster enrichment with display names, service logs, limited support history
-* 7-tab incident viewer: Details, Alerts, Notes, Cluster, Reports, SLs, LS History
+* 6-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History
 * Auto-update notification and `srepd update` self-update command
 
 ## Installation

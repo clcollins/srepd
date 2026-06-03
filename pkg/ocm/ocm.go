@@ -29,14 +29,6 @@ type ServiceLog struct {
 	InternalOnly bool
 }
 
-// ClusterReport represents a cluster report entry.
-type ClusterReport struct {
-	Title     string
-	Summary   string
-	Details   string
-	CreatedAt string
-}
-
 // LimitedSupportReason represents a limited support reason entry.
 type LimitedSupportReason struct {
 	ID            string
@@ -50,7 +42,6 @@ type LimitedSupportReason struct {
 type OCMClient interface {
 	GetCluster(ctx context.Context, clusterID string) (*ClusterInfo, error)
 	GetServiceLogs(ctx context.Context, clusterID, externalID string) ([]ServiceLog, error)
-	GetClusterReports(ctx context.Context, clusterID string) ([]ClusterReport, error)
 	GetLimitedSupportHistory(ctx context.Context, clusterID string) ([]LimitedSupportReason, error)
 	Close()
 }

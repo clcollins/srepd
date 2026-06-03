@@ -32,13 +32,6 @@ type fixtureServiceLog struct {
 	InternalOnly bool   `json:"internal_only"`
 }
 
-type fixtureClusterReport struct {
-	Title     string `json:"title"`
-	Summary   string `json:"summary"`
-	Details   string `json:"details"`
-	CreatedAt string `json:"created_at"`
-}
-
 type fixtureLimitedSupport struct {
 	ID            string `json:"id"`
 	Summary       string `json:"summary"`
@@ -56,9 +49,6 @@ func LoadMockClientFromFixtures(dir string) (*MockClient, error) {
 	}
 	if err := loadServiceLogFixtures(filepath.Join(dir, "servicelogs.json"), mock); err != nil {
 		return mock, fmt.Errorf("loading service log fixtures: %w", err)
-	}
-	if err := loadClusterReportFixtures(filepath.Join(dir, "clusterreports.json"), mock); err != nil {
-		return mock, fmt.Errorf("loading cluster report fixtures: %w", err)
 	}
 	if err := loadLimitedSupportFixtures(filepath.Join(dir, "limitedsupport.json"), mock); err != nil {
 		return mock, fmt.Errorf("loading limited support fixtures: %w", err)
@@ -115,28 +105,6 @@ func loadServiceLogFixtures(path string, mock *MockClient) error {
 			serviceLogs = append(serviceLogs, ServiceLog(fl))
 		}
 		mock.ServiceLogs[id] = serviceLogs
-	}
-	return nil
-}
-
-func loadClusterReportFixtures(path string, mock *MockClient) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	var reports map[string][]fixtureClusterReport
-	if err := json.Unmarshal(data, &reports); err != nil {
-		return err
-	}
-	for id, frs := range reports {
-		var clusterReports []ClusterReport
-		for _, fr := range frs {
-			clusterReports = append(clusterReports, ClusterReport(fr))
-		}
-		mock.ClusterReports[id] = clusterReports
 	}
 	return nil
 }

@@ -9,7 +9,6 @@ import (
 type MockClient struct {
 	Clusters       map[string]*ClusterInfo
 	ServiceLogs    map[string][]ServiceLog
-	ClusterReports map[string][]ClusterReport
 	LimitedSupport map[string][]LimitedSupportReason
 }
 
@@ -18,7 +17,6 @@ func NewMockClient() *MockClient {
 	return &MockClient{
 		Clusters:       make(map[string]*ClusterInfo),
 		ServiceLogs:    make(map[string][]ServiceLog),
-		ClusterReports: make(map[string][]ClusterReport),
 		LimitedSupport: make(map[string][]LimitedSupportReason),
 	}
 }
@@ -37,14 +35,6 @@ func (m *MockClient) GetServiceLogs(_ context.Context, clusterID, _ string) ([]S
 		return []ServiceLog{}, nil
 	}
 	return logs, nil
-}
-
-func (m *MockClient) GetClusterReports(_ context.Context, clusterID string) ([]ClusterReport, error) {
-	reports, ok := m.ClusterReports[clusterID]
-	if !ok {
-		return []ClusterReport{}, nil
-	}
-	return reports, nil
 }
 
 func (m *MockClient) GetLimitedSupportHistory(_ context.Context, clusterID string) ([]LimitedSupportReason, error) {

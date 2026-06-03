@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -32,9 +33,6 @@ func createMockOCMClient() *ocm.MockClient {
 			Description: "Customer replaced default IngressController with custom configuration that removed required SRE annotations. Cluster monitoring is degraded.",
 			ClusterID:   "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
 		},
-	}
-	mock.ClusterReports["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ocm.ClusterReport{
-		{Title: "Health Check", Summary: "All good", CreatedAt: "2026-06-01T10:00:00Z"},
 	}
 	mock.LimitedSupport["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ocm.LimitedSupportReason{
 		{ID: "ls-1", Summary: "Customer modification", CreatedAt: "2026-05-15T08:00:00Z"},
@@ -74,7 +72,7 @@ func TestGetServiceLogs_Success(t *testing.T) {
 	t.Run("returns serviceLogsMsg with logs", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		cmd := getOCMServiceLogs(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "00000000-fake-uuid-test-999999999999")
+		cmd := getOCMServiceLogs(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "00000000-fake-uuid-test-999999999999", "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		msg := cmd()
 
 		logsMsg, ok := msg.(ocmServiceLogsMsg)
@@ -85,25 +83,11 @@ func TestGetServiceLogs_Success(t *testing.T) {
 	})
 }
 
-func TestGetClusterReports_Success(t *testing.T) {
-	t.Run("returns clusterReportsMsg with reports", func(t *testing.T) {
-		mock := createMockOCMClient()
-
-		cmd := getClusterReports(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
-		msg := cmd()
-
-		reportsMsg, ok := msg.(clusterReportsMsg)
-		assert.True(t, ok)
-		assert.NoError(t, reportsMsg.err)
-		assert.Len(t, reportsMsg.reports, 1)
-	})
-}
-
 func TestGetLimitedSupportHistory_Success(t *testing.T) {
 	t.Run("returns limitedSupportMsg with reasons", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		cmd := getLimitedSupportHistory(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		cmd := getLimitedSupportHistory(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		msg := cmd()
 
 		lsMsg, ok := msg.(limitedSupportMsg)
@@ -132,6 +116,119 @@ func TestClusterInfoMsg_UpdatesCache(t *testing.T) {
 
 		assert.Contains(t, updated.clusterCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.Equal(t, "fake-staging-api.4m2n.s1.example.org", updated.clusterCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"].DisplayName)
+	})
+}
+
+func TestClusterInfoMsg_ErrorTracksFailure(t *testing.T) {
+	t.Run("clusterInfoMsg with error increments failure count", func(t *testing.T) {
+		m := createTestModel()
+		m.clusterEnrichInFlight = map[string]bool{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": true}
+
+		msg := clusterInfoMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			err:       fmt.Errorf("cluster not found"),
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.Equal(t, 1, updated.clusterEnrichFailed["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"])
+		assert.False(t, updated.clusterEnrichInFlight["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"])
+	})
+}
+
+func TestServiceLogsMsg_UpdatesCache(t *testing.T) {
+	t.Run("ocmServiceLogsMsg stores logs in cache", func(t *testing.T) {
+		m := createTestModel()
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+
+		msg := ocmServiceLogsMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			logs:      []ocm.ServiceLog{{Summary: "test log", Severity: "Info"}},
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.Contains(t, updated.serviceLogCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.Len(t, updated.serviceLogCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
+	})
+
+	t.Run("ocmServiceLogsMsg with error does not populate cache", func(t *testing.T) {
+		m := createTestModel()
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+
+		msg := ocmServiceLogsMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			err:       fmt.Errorf("fetch failed"),
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.Empty(t, updated.serviceLogCache)
+	})
+}
+
+func TestLimitedSupportMsg_UpdatesCache(t *testing.T) {
+	t.Run("limitedSupportMsg stores reasons in cache", func(t *testing.T) {
+		m := createTestModel()
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+
+		msg := limitedSupportMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			reasons:   []ocm.LimitedSupportReason{{Summary: "test reason"}},
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.Contains(t, updated.limitedSupportCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.Len(t, updated.limitedSupportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
+	})
+
+	t.Run("limitedSupportMsg with error does not populate cache", func(t *testing.T) {
+		m := createTestModel()
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+
+		msg := limitedSupportMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			err:       fmt.Errorf("fetch failed"),
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.Empty(t, updated.limitedSupportCache)
+	})
+}
+
+func TestClusterInfoMsg_SkipsPhase2WhenCached(t *testing.T) {
+	t.Run("phase 2 skipped when service logs already cached", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = createMockOCMClient()
+		m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		m.serviceLogCache = map[string][]ocm.ServiceLog{
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {{Summary: "already cached"}},
+		}
+		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {},
+		}
+		m.clusterEnrichInFlight = map[string]bool{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": true}
+
+		msg := clusterInfoMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			info: &ocm.ClusterInfo{
+				ID:         "internal-id-fake-0000",
+				ExternalID: "00000000-fake-uuid-test-999999999999",
+			},
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		// Cache should still have the original service logs
+		assert.Equal(t, "already cached", updated.serviceLogCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"][0].Summary)
 	})
 }
 
@@ -202,7 +299,6 @@ func TestInitialModelWithConfig_MapsInitialized(t *testing.T) {
 		assert.NotNil(t, m.incidentClusterMap, "incidentClusterMap should be initialized")
 		assert.NotNil(t, m.clusterCache, "clusterCache should be initialized")
 		assert.NotNil(t, m.serviceLogCache, "serviceLogCache should be initialized")
-		assert.NotNil(t, m.clusterReportCache, "clusterReportCache should be initialized")
 		assert.NotNil(t, m.limitedSupportCache, "limitedSupportCache should be initialized")
 	})
 }
@@ -291,23 +387,63 @@ func TestRenderLimitedSupportTab_WithData(t *testing.T) {
 	})
 }
 
-func TestRenderClusterReportsTab_WithData(t *testing.T) {
-	t.Run("renders reports when cached", func(t *testing.T) {
+func TestRenderServiceLogsTab_NoOCM(t *testing.T) {
+	t.Run("shows OCM not connected when client is nil", func(t *testing.T) {
 		m := createTestModel()
-		setupModelWithCluster(&m)
-		m.clusterCache = map[string]*ocm.ClusterInfo{
-			testClusterID: {ID: testClusterID},
-		}
-		m.clusterReportCache = map[string][]ocm.ClusterReport{
-			testClusterID: {
-				{Title: "Cluster Operator Status", Summary: "3 operators degraded"},
-			},
-		}
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		m.ocmClient = nil
 
-		content, err := m.renderClusterReportsTab()
+		content, err := m.renderServiceLogsTab()
 		assert.NoError(t, err)
-		assert.Contains(t, content, "Cluster Operator Status")
-		assert.Contains(t, content, "3 operators degraded")
+		assert.Contains(t, content, "OCM not connected")
+	})
+}
+
+func TestRenderLimitedSupportTab_NoOCM(t *testing.T) {
+	t.Run("shows OCM not connected when client is nil", func(t *testing.T) {
+		m := createTestModel()
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		m.ocmClient = nil
+
+		content, err := m.renderLimitedSupportTab()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "OCM not connected")
+	})
+}
+
+func TestRenderClusterTab_Loading(t *testing.T) {
+	t.Run("shows loading message when client connected but no data", func(t *testing.T) {
+		m := createTestModel()
+		m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		m.ocmClient = createMockOCMClient()
+
+		content, err := m.renderClusterTab()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "Loading cluster info")
+	})
+}
+
+func TestRenderServiceLogsTab_Loading(t *testing.T) {
+	t.Run("shows loading message when client connected but no data", func(t *testing.T) {
+		m := createTestModel()
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		m.ocmClient = createMockOCMClient()
+
+		content, err := m.renderServiceLogsTab()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "Loading service logs")
+	})
+}
+
+func TestRenderLimitedSupportTab_Empty(t *testing.T) {
+	t.Run("shows no history when client connected but no data", func(t *testing.T) {
+		m := createTestModel()
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		m.ocmClient = createMockOCMClient()
+
+		content, err := m.renderLimitedSupportTab()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "No limited support history")
 	})
 }
 
@@ -340,7 +476,6 @@ func TestCacheCleanup_ClearSelectedDoesNotTouchOCM(t *testing.T) {
 		m.incidentClusterMap = map[string][]string{"INC001": {c1}}
 		m.clusterCache = map[string]*ocm.ClusterInfo{c1: {ID: c1}}
 		m.serviceLogCache = map[string][]ocm.ServiceLog{c1: {{Summary: "log"}}}
-		m.clusterReportCache = map[string][]ocm.ClusterReport{c1: {{Title: "report"}}}
 		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{c1: {{Summary: "reason"}}}
 
 		m.clearSelectedIncident("refresh")
@@ -348,7 +483,6 @@ func TestCacheCleanup_ClearSelectedDoesNotTouchOCM(t *testing.T) {
 		// OCM caches should be PRESERVED on clearSelectedIncident
 		assert.Contains(t, m.clusterCache, c1)
 		assert.Contains(t, m.serviceLogCache, c1)
-		assert.Contains(t, m.clusterReportCache, c1)
 		assert.Contains(t, m.limitedSupportCache, c1)
 		assert.Contains(t, m.incidentClusterMap, "INC001")
 	})
@@ -390,9 +524,6 @@ func TestCacheCleanup_RemovedFromList(t *testing.T) {
 		m.serviceLogCache = map[string][]ocm.ServiceLog{
 			c1: {{Summary: "log c1"}},
 			c2: {{Summary: "log c2"}},
-		}
-		m.clusterReportCache = map[string][]ocm.ClusterReport{
-			c1: {{Title: "report c1"}},
 		}
 		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{
 			c1: {{Summary: "reason c1"}},

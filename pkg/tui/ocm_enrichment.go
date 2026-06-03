@@ -23,12 +23,6 @@ type ocmServiceLogsMsg struct {
 	err       error
 }
 
-type clusterReportsMsg struct {
-	clusterID string
-	reports   []ocm.ClusterReport
-	err       error
-}
-
 type limitedSupportMsg struct {
 	clusterID string
 	reasons   []ocm.LimitedSupportReason
@@ -72,35 +66,24 @@ func getClusterInfo(client ocm.OCMClient, clusterID string) tea.Cmd {
 	}
 }
 
-func getOCMServiceLogs(client ocm.OCMClient, clusterID, externalID string) tea.Cmd {
+func getOCMServiceLogs(client ocm.OCMClient, clusterID, externalID, cacheKey string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
 		defer cancel()
 		log.Debug("ocm.GetServiceLogs", "cluster_id", clusterID)
 		logs, err := client.GetServiceLogs(ctx, clusterID, externalID)
 		log.Debug("ocm.GetServiceLogs", "cluster_id", clusterID, "count", len(logs))
-		return ocmServiceLogsMsg{clusterID: clusterID, logs: logs, err: err}
+		return ocmServiceLogsMsg{clusterID: cacheKey, logs: logs, err: err}
 	}
 }
 
-func getClusterReports(client ocm.OCMClient, clusterID string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
-		defer cancel()
-		log.Debug("ocm.GetClusterReports", "cluster_id", clusterID)
-		reports, err := client.GetClusterReports(ctx, clusterID)
-		log.Debug("ocm.GetClusterReports", "cluster_id", clusterID, "count", len(reports))
-		return clusterReportsMsg{clusterID: clusterID, reports: reports, err: err}
-	}
-}
-
-func getLimitedSupportHistory(client ocm.OCMClient, clusterID string) tea.Cmd {
+func getLimitedSupportHistory(client ocm.OCMClient, clusterID, cacheKey string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
 		defer cancel()
 		log.Debug("ocm.GetLimitedSupportHistory", "cluster_id", clusterID)
 		reasons, err := client.GetLimitedSupportHistory(ctx, clusterID)
 		log.Debug("ocm.GetLimitedSupportHistory", "cluster_id", clusterID, "count", len(reasons))
-		return limitedSupportMsg{clusterID: clusterID, reasons: reasons, err: err}
+		return limitedSupportMsg{clusterID: cacheKey, reasons: reasons, err: err}
 	}
 }

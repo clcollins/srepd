@@ -202,17 +202,18 @@ func clusterFromResponse(cluster *cmv1.Cluster) *ClusterInfo {
 }
 
 func (c *Client) GetServiceLogs(ctx context.Context, clusterID, externalID string) ([]ServiceLog, error) {
-	log.Debug("ocm.GetServiceLogs", "cluster_id", clusterID)
+	log.Debug("ocm.GetServiceLogs", "cluster_id", clusterID, "external_id", externalID)
 
 	request := c.conn.ServiceLogs().V1().Clusters().ClusterLogs().List().
 		ClusterID(clusterID).
 		ClusterUUID(externalID).
-		Parameter("orderBy", "timestamp desc").
+		Order("timestamp desc").
 		Size(50)
 
 	response, err := request.SendContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("service log fetch failed: %w", err)
+		log.Debug("ocm.GetServiceLogs error detail", "cluster_id", clusterID, "error", err.Error())
+		return nil, fmt.Errorf("service log fetch failed for %s: %w", clusterID, err)
 	}
 
 	var logs []ServiceLog
@@ -232,11 +233,6 @@ func (c *Client) GetServiceLogs(ctx context.Context, clusterID, externalID strin
 
 	log.Debug("ocm.GetServiceLogs", "cluster_id", clusterID, "count", len(logs))
 	return logs, nil
-}
-
-func (c *Client) GetClusterReports(_ context.Context, clusterID string) ([]ClusterReport, error) {
-	log.Debug("ocm.GetClusterReports", "cluster_id", clusterID)
-	return []ClusterReport{}, nil
 }
 
 func (c *Client) GetLimitedSupportHistory(ctx context.Context, clusterID string) ([]LimitedSupportReason, error) {

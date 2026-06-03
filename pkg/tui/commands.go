@@ -874,8 +874,12 @@ func getSOPLink(alerts []pagerduty.IncidentAlert) (string, bool) {
 func getUniqueClusters(alerts []pagerduty.IncidentAlert) []string {
 	seen := make(map[string]bool)
 	var clusters []string
-	for _, alert := range alerts {
-		cluster := getDetailFieldFromAlert("cluster_id", alert)
+	for _, a := range alerts {
+		cluster := getDetailFieldFromAlert("cluster_id", a)
+		if cluster == "" {
+			normalized := alert.NormalizeAlert(a.Service.Summary, "", a)
+			cluster = normalized.ClusterID
+		}
 		if cluster != "" && !seen[cluster] {
 			seen[cluster] = true
 			clusters = append(clusters, cluster)
@@ -888,6 +892,10 @@ func mapClusterServices(alerts []pagerduty.IncidentAlert) map[string]string {
 	result := make(map[string]string)
 	for _, a := range alerts {
 		cluster := getDetailFieldFromAlert("cluster_id", a)
+		if cluster == "" {
+			normalized := alert.NormalizeAlert(a.Service.Summary, "", a)
+			cluster = normalized.ClusterID
+		}
 		if cluster != "" {
 			if _, exists := result[cluster]; !exists {
 				result[cluster] = a.Service.Summary

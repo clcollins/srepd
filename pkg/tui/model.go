@@ -134,7 +134,6 @@ type model struct {
 	clusterEnrichFailed   map[string]int      // failure count per cluster ID
 	clusterCache          map[string]*ocm.ClusterInfo
 	serviceLogCache       map[string][]ocm.ServiceLog
-	clusterReportCache    map[string][]ocm.ClusterReport
 	limitedSupportCache   map[string][]ocm.LimitedSupportReason
 
 	// Auto-update state
@@ -196,7 +195,6 @@ func InitialModel(
 		clusterEnrichFailed:   make(map[string]int),
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
-		clusterReportCache:    make(map[string][]ocm.ClusterReport),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
 		chordPrefix:           "ctrl+x", // Default chord prefix
 	}
@@ -271,7 +269,6 @@ func InitialModelWithConfig(
 		clusterEnrichFailed:   make(map[string]int),
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
-		clusterReportCache:    make(map[string][]ocm.ClusterReport),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
 	}
 
@@ -332,7 +329,6 @@ func (m *model) clearOCMCacheForIncident(incidentID string) {
 		if !stillReferenced {
 			delete(m.clusterCache, cid)
 			delete(m.serviceLogCache, cid)
-			delete(m.clusterReportCache, cid)
 			delete(m.limitedSupportCache, cid)
 			delete(m.clusterEnrichInFlight, cid)
 		}

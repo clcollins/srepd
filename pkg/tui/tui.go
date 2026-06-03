@@ -358,6 +358,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Map incident → cluster IDs and trigger OCM enrichment for uncached clusters
 			clusterIDs := getUniqueClusters(msg.alerts)
+			log.Debug("gotIncidentAlertsMsg", "incident_id", msg.incidentID, "alert_count", len(msg.alerts), "cluster_ids", clusterIDs)
 			if len(clusterIDs) > 0 {
 				if m.incidentClusterMap == nil {
 					m.incidentClusterMap = make(map[string][]string)
@@ -1051,17 +1052,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clusterCache[msg.clusterID] = msg.info
 		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
 
-		// Phase 2: now that we have the internal OCM ID, dispatch
-		// service logs, cluster reports, and limited support lookups
+		// Phase 2: dispatch service logs and limited support using the
+		// OCM internal ID for the API call but the PD cluster ID as cache key.
+		// Skip if already cached (prevents duplicate calls from repeated alerts).
 		internalID := msg.info.ID
 		externalID := msg.info.ExternalID
+		cacheKey := msg.clusterID
 		var phase2Cmds []tea.Cmd
 		if m.ocmClient != nil {
-			phase2Cmds = append(phase2Cmds,
-				getOCMServiceLogs(m.ocmClient, internalID, externalID),
-				getClusterReports(m.ocmClient, internalID),
-				getLimitedSupportHistory(m.ocmClient, internalID),
-			)
+			if _, cached := m.serviceLogCache[cacheKey]; !cached {
+				phase2Cmds = append(phase2Cmds,
+					getOCMServiceLogs(m.ocmClient, internalID, externalID, cacheKey),
+				)
+			}
+			if _, cached := m.limitedSupportCache[cacheKey]; !cached {
+				phase2Cmds = append(phase2Cmds,
+					getLimitedSupportHistory(m.ocmClient, internalID, cacheKey),
+				)
+			}
 		}
 
 		// Rebuild table immediately so display names update
@@ -1090,18 +1098,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.serviceLogCache[msg.clusterID] = msg.logs
 		log.Debug("ocm.GetServiceLogs cached", "cluster_id", msg.clusterID, "count", len(msg.logs))
-		return m, nil
-
-	case clusterReportsMsg:
-		if msg.err != nil {
-			log.Debug("ocm.GetClusterReports failed", "cluster_id", msg.clusterID, "error", msg.err)
-			return m, nil
-		}
-		if m.clusterReportCache == nil {
-			m.clusterReportCache = make(map[string][]ocm.ClusterReport)
-		}
-		m.clusterReportCache[msg.clusterID] = msg.reports
-		log.Debug("ocm.GetClusterReports cached", "cluster_id", msg.clusterID, "count", len(msg.reports))
 		return m, nil
 
 	case limitedSupportMsg:

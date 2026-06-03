@@ -2,9 +2,12 @@ package ocm
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMockClient_GetCluster(t *testing.T) {
@@ -76,34 +79,6 @@ func TestMockClient_GetServiceLogs(t *testing.T) {
 	})
 }
 
-func TestMockClient_GetClusterReports(t *testing.T) {
-	t.Run("returns reports for known cluster", func(t *testing.T) {
-		mock := NewMockClient()
-		mock.ClusterReports["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ClusterReport{
-			{
-				Title:     "Cluster Operator Status",
-				Summary:   "Cluster is healthy",
-				CreatedAt: "2026-06-01T10:00:00Z",
-			},
-		}
-
-		reports, err := mock.GetClusterReports(context.Background(), "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
-
-		assert.NoError(t, err)
-		assert.Len(t, reports, 1)
-		assert.Equal(t, "Cluster Operator Status", reports[0].Title)
-	})
-
-	t.Run("returns empty list for unknown cluster", func(t *testing.T) {
-		mock := NewMockClient()
-
-		reports, err := mock.GetClusterReports(context.Background(), "nonexistent")
-
-		assert.NoError(t, err)
-		assert.Empty(t, reports)
-	})
-}
-
 func TestMockClient_GetLimitedSupportHistory(t *testing.T) {
 	t.Run("returns limited support reasons for known cluster", func(t *testing.T) {
 		mock := NewMockClient()
@@ -140,6 +115,51 @@ func TestClientInterface(t *testing.T) {
 	})
 }
 
+func TestMockClient_Close(t *testing.T) {
+	t.Run("close is a no-op", func(t *testing.T) {
+		mock := NewMockClient()
+		mock.Close()
+	})
+}
+
+func TestSanitizeSearchValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"no quotes", "abc123", "abc123"},
+		{"single quote", "ab'c", "ab''c"},
+		{"multiple quotes", "a'b'c", "a''b''c"},
+		{"empty string", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, sanitizeSearchValue(tt.input))
+		})
+	}
+}
+
+func TestClusterIDPattern(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		valid bool
+	}{
+		{"uuid format", "e7c5363a-fake-uuid-test-edf99fc3ea25", true},
+		{"alphanumeric", "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", true},
+		{"with underscore", "cluster_id_123", true},
+		{"empty", "", false},
+		{"sql injection", "'; DROP TABLE --", false},
+		{"spaces", "cluster id", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.valid, clusterIDPattern.MatchString(tt.input))
+		})
+	}
+}
+
 func TestLoadMockClientFromFixtures(t *testing.T) {
 	t.Run("loads all fixture types from directory", func(t *testing.T) {
 		mock, err := LoadMockClientFromFixtures("../../testdata/fixtures")
@@ -147,7 +167,6 @@ func TestLoadMockClientFromFixtures(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, mock.Clusters, "should load cluster fixtures")
 		assert.NotEmpty(t, mock.ServiceLogs, "should load service log fixtures")
-		assert.NotEmpty(t, mock.ClusterReports, "should load cluster report fixtures")
 		assert.NotEmpty(t, mock.LimitedSupport, "should load limited support fixtures")
 	})
 
@@ -156,6 +175,33 @@ func TestLoadMockClientFromFixtures(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Empty(t, mock.Clusters)
+	})
+
+	t.Run("handles malformed cluster JSON", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "clusters.json"), []byte("{invalid json}"), 0644))
+		_, err := LoadMockClientFromFixtures(dir)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "loading cluster fixtures")
+	})
+
+	t.Run("handles malformed service log JSON", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "clusters.json"), []byte("{}"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "servicelogs.json"), []byte("not json"), 0644))
+		_, err := LoadMockClientFromFixtures(dir)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "loading service log fixtures")
+	})
+
+	t.Run("handles malformed limited support JSON", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "clusters.json"), []byte("{}"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "servicelogs.json"), []byte("{}"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "limitedsupport.json"), []byte("[bad]"), 0644))
+		_, err := LoadMockClientFromFixtures(dir)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "loading limited support fixtures")
 	})
 
 	t.Run("cluster fixture data is correct", func(t *testing.T) {
