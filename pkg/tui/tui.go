@@ -993,14 +993,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clusterCache[msg.clusterID] = msg.info
 		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
-		var cmds []tea.Cmd
-		cmds = append(cmds, m.flashNotification(fmt.Sprintf("OCM enriched cluster %s", msg.clusterID)))
-		// Rebuild table rows immediately so display names update without waiting for poll
-		cmds = append(cmds, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} })
+		// Rebuild table, then flash so the notification appears after "showing N/N" is set
+		enrichCmds := tea.Sequence(
+			func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} },
+			m.flashNotification(fmt.Sprintf("OCM enriched cluster %s", msg.clusterID)),
+		)
 		if m.viewingIncident {
-			cmds = append(cmds, func() tea.Msg { return renderIncidentMsg("cluster info arrived") })
+			return m, tea.Batch(enrichCmds, func() tea.Msg { return renderIncidentMsg("cluster info arrived") })
 		}
-		return m, tea.Batch(cmds...)
+		return m, enrichCmds
 
 	case ocmServiceLogsMsg:
 		if msg.err != nil {
