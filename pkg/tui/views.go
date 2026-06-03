@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	"github.com/clcollins/srepd/pkg/ocm"
 )
 
 const (
@@ -353,7 +354,7 @@ func (m model) renderTabContent() (string, error) {
 		notes = m.selectedIncidentNotes
 	}
 
-	summary := summarize(m.selectedIncident, alerts, notes)
+	summary := summarize(m.selectedIncident, alerts, notes, m.clusterCache)
 	summary.AlertsLoading = !m.incidentAlertsLoaded
 	summary.NotesLoading = !m.incidentNotesLoaded
 
@@ -386,7 +387,29 @@ func (m model) renderDetailsTab(summary incidentSummary) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return o.String(), nil
+
+	content := o.String()
+
+	// Add impacted clusters section if we have cluster data
+	clusterIDs := getUniqueClusters(m.selectedIncidentAlerts)
+	if len(clusterIDs) > 0 {
+		var clusters strings.Builder
+		clusters.WriteString("\n## Impacted Clusters:\n\n")
+		for _, id := range clusterIDs {
+			if info, ok := m.clusterCache[id]; ok {
+				displayName := info.DisplayName
+				if displayName == "" {
+					displayName = info.Name
+				}
+				fmt.Fprintf(&clusters, "* %s (%s)\n", displayName, id)
+			} else {
+				fmt.Fprintf(&clusters, "* %s\n", id)
+			}
+		}
+		content += clusters.String()
+	}
+
+	return content, nil
 }
 
 func (m model) renderAlertsTab(summary incidentSummary) (string, error) {
@@ -622,9 +645,9 @@ func addNoteTemplate(id string, title string, service string) (string, error) {
 	return o.String(), nil
 }
 
-func summarize(i *pagerduty.Incident, a []pagerduty.IncidentAlert, n []pagerduty.IncidentNote) incidentSummary {
+func summarize(i *pagerduty.Incident, a []pagerduty.IncidentAlert, n []pagerduty.IncidentNote, clusterCache map[string]*ocm.ClusterInfo) incidentSummary {
 	summary := summarizeIncident(i)
-	summary.Alerts = summarizeAlerts(a)
+	summary.Alerts = summarizeAlerts(a, clusterCache)
 	summary.Notes = summarizeNotes(n)
 	return summary
 }
@@ -666,9 +689,10 @@ type alertSummary struct {
 	AlertType   string
 	Namespace   string
 	Description string
+	ClusterName string
 }
 
-func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
+func summarizeAlerts(a []pagerduty.IncidentAlert, clusterCache map[string]*ocm.ClusterInfo) []alertSummary {
 	var s []alertSummary
 
 	for _, alt := range a {
@@ -695,11 +719,22 @@ func summarizeAlerts(a []pagerduty.IncidentAlert) []alertSummary {
 			link = getDetailFieldFromAlert("link", alt)
 		}
 
+		var clusterName string
+		if clusterCache != nil && cluster != "" {
+			if info, ok := clusterCache[cluster]; ok {
+				clusterName = info.DisplayName
+				if clusterName == "" {
+					clusterName = info.Name
+				}
+			}
+		}
+
 		s = append(s, alertSummary{
 			ID:          alt.ID,
 			Name:        name,
 			Link:        link,
 			Cluster:     cluster,
+			ClusterName: clusterName,
 			HTMLURL:     alt.HTMLURL,
 			Service:     alt.Service.Summary,
 			Created:     alt.CreatedAt,
@@ -934,7 +969,7 @@ const alertTabTemplate = `
 
 {{ if .Alert.HTMLURL }}{{ if .Alert.Name }}{{ ToLink .Alert.Name .Alert.HTMLURL }}{{ else }}{{ ToLink .Alert.ID .Alert.HTMLURL }}{{ end }}{{ else }}{{ if .Alert.Name }}{{ .Alert.Name }}{{ else }}{{ .Alert.ID }}{{ end }}{{ end }}
 
-* Cluster: {{ .Alert.Cluster }}
+* Cluster: {{ if .Alert.ClusterName }}{{ .Alert.ClusterName }} ({{ .Alert.Cluster }}){{ else }}{{ .Alert.Cluster }}{{ end }}
 {{ if .Alert.Namespace }}* Namespace: {{ .Alert.Namespace }}
 {{ end -}}
 * SOP: {{ if .Alert.Link }}{{ ToLink (SOPName .Alert.Link) .Alert.Link }}{{ else }}_none_{{ end }}

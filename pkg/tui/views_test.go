@@ -379,7 +379,7 @@ func TestRenderBottomStatus_ShowsGitSHA(t *testing.T) {
 
 func TestSummarizeAlerts_EmptyAlerts(t *testing.T) {
 	// Empty alert slice should return nil (empty) summary slice
-	result := summarizeAlerts([]pagerduty.IncidentAlert{})
+	result := summarizeAlerts([]pagerduty.IncidentAlert{}, nil)
 
 	assert.Nil(t, result, "summarizeAlerts with empty input should return nil")
 }
@@ -401,7 +401,7 @@ func TestSummarizeAlerts_AlertWithNilBody(t *testing.T) {
 	}
 
 	// Should not panic
-	result := summarizeAlerts(alerts)
+	result := summarizeAlerts(alerts, nil)
 
 	assert.Len(t, result, 1, "should return exactly one alert summary")
 	assert.Equal(t, "ALERT_NIL_BODY", result[0].ID, "alert ID should be preserved")
@@ -1195,7 +1195,7 @@ func TestSummarizeAlerts_NoDetailsField(t *testing.T) {
 		},
 	}
 
-	result := summarizeAlerts(alerts)
+	result := summarizeAlerts(alerts, nil)
 
 	assert.Len(t, result, 1)
 	assert.Equal(t, "ALERT001", result[0].ID)
