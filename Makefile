@@ -196,8 +196,30 @@ test-coverage-patch: ## Check coverage of changed files (approximates Codecov pa
 		echo "PASS: All changed packages meet $(PATCH_COVERAGE_TARGET)% coverage target"; \
 	fi
 
+.PHONY: test-fixtures
+test-fixtures: ## Check that fixture data contains no real UUIDs, domains, or org names
+	@echo "Checking fixture data for real values..."
+	@FAIL=false; \
+	for f in testdata/fixtures/*.json; do \
+		if grep -qP '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$$f" 2>/dev/null; then \
+			if grep -P '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$$f" | grep -qvP 'fake'; then \
+				echo "ERROR: $$f contains UUID without 'fake' marker"; \
+				FAIL=true; \
+			fi; \
+		fi; \
+		if grep -q 'openshiftapps\.com\|devshift\.net\|devshift\.org\|redhat\.pagerduty\.com\|console\.redhat\.com' "$$f" 2>/dev/null; then \
+			echo "ERROR: $$f contains real domain"; \
+			FAIL=true; \
+		fi; \
+	done; \
+	if [ "$$FAIL" = "true" ]; then \
+		echo "FAIL: fixture data contains real values"; \
+		exit 1; \
+	fi; \
+	echo "All fixture data is properly sanitized."
+
 .PHONY: test-all
-test-all: fmt-check vet lint test test-race ## Run all checks
+test-all: fmt-check vet lint test test-race test-fixtures ## Run all checks
 	@echo "All checks passed."
 
 .PHONY: ensure-goreleaser
