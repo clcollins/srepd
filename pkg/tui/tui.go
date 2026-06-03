@@ -364,7 +364,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.incidentClusterMap[msg.incidentID] = clusterIDs
 			}
-			enrichCmds := enrichClusters(m.ocmClient, clusterIDs)
+			enrichCmds := enrichClusters(m.ocmClient, clusterIDs, m.devMode)
 			if len(enrichCmds) > 0 {
 				cmds = append(cmds, enrichCmds...)
 			}

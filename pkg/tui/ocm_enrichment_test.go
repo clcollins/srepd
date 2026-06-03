@@ -140,7 +140,7 @@ func TestEnrichClusters_DispatchesCommands(t *testing.T) {
 		mock := createMockOCMClient()
 
 		clusterIDs := []string{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "2a3b4c5dfakeidtest0i1j2k3l4m5n6o"}
-		cmds := enrichClusters(mock, clusterIDs)
+		cmds := enrichClusters(mock, clusterIDs, false)
 
 		assert.Len(t, cmds, 8, "should return 4 commands per cluster (info, logs, reports, limited support)")
 	})
@@ -148,12 +148,12 @@ func TestEnrichClusters_DispatchesCommands(t *testing.T) {
 	t.Run("enrichClusters returns nil for empty cluster list", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		cmds := enrichClusters(mock, []string{})
+		cmds := enrichClusters(mock, []string{}, false)
 		assert.Empty(t, cmds)
 	})
 
 	t.Run("enrichClusters returns nil when client is nil", func(t *testing.T) {
-		cmds := enrichClusters(nil, []string{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"})
+		cmds := enrichClusters(nil, []string{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"}, false)
 		assert.Empty(t, cmds)
 	})
 }

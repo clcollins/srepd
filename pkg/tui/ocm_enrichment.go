@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ocm"
@@ -30,19 +32,33 @@ type limitedSupportMsg struct {
 	err       error
 }
 
-func enrichClusters(client ocm.OCMClient, clusterIDs []string) []tea.Cmd {
+func enrichClusters(client ocm.OCMClient, clusterIDs []string, devMode bool) []tea.Cmd {
 	if client == nil || len(clusterIDs) == 0 {
 		return nil
 	}
 	var cmds []tea.Cmd
 	for _, id := range clusterIDs {
 		cid := id
-		cmds = append(cmds,
+		clusterCmds := []tea.Cmd{
 			getClusterInfo(client, cid),
 			getOCMServiceLogs(client, cid, ""),
 			getClusterReports(client, cid),
 			getLimitedSupportHistory(client, cid),
-		)
+		}
+		// In dev mode, delay enrichment by 1s to simulate the real-world
+		// async flow where alerts arrive first and OCM data follows.
+		// Without this, fixture data enriches instantly and the SRE
+		// never sees the service name change or the flash notification.
+		if devMode {
+			for _, cmd := range clusterCmds {
+				delayedCmd := cmd
+				cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg {
+					return delayedCmd()
+				}))
+			}
+		} else {
+			cmds = append(cmds, clusterCmds...)
+		}
 	}
 	return cmds
 }
