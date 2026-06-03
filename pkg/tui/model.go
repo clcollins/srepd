@@ -210,11 +210,13 @@ func InitialModel(
 
 // InitialModelWithConfig creates the initial TUI model using a pre-built pd.Config.
 // This is used by dev mode to bypass live PagerDuty API initialization.
+// The ocmClient parameter is optional — pass nil to disable OCM features.
 func InitialModelWithConfig(
 	config *pd.Config,
 	editor []string,
 	launcher launcher.ClusterLauncher,
 	debug bool,
+	ocmClient ocm.OCMClient,
 ) (tea.Model, tea.Cmd) {
 
 	s := spinner.New()
@@ -250,7 +252,12 @@ func InitialModelWithConfig(
 		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
 		autoRefresh:      true,
 		showLowUrgency:   true,
-		devMode:          true,
+		devMode:   true,
+		ocmClient: ocmClient,
+		clusterCache:        make(map[string]*ocm.ClusterInfo),
+		serviceLogCache:     make(map[string][]ocm.ServiceLog),
+		clusterReportCache:  make(map[string][]ocm.ClusterReport),
+		limitedSupportCache: make(map[string][]ocm.LimitedSupportReason),
 	}
 
 	m.config = config

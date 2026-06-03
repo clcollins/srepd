@@ -333,7 +333,7 @@ func TestDevModeFieldSet(t *testing.T) {
 			Client: &pd.MockPagerDutyClient{},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false)
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil)
 		m := teaModel.(model)
 
 		assert.True(t, m.devMode, "devMode should be true for InitialModelWithConfig")

@@ -1,0 +1,80 @@
+{
+  "e7c5363a-b69b-47bf-98ff-edf99fc3ea25": {
+    "id": "cluster-osd-001",
+    "external_id": "e7c5363a-b69b-47bf-98ff-edf99fc3ea25",
+    "name": "testcluster",
+    "display_name": "Test OSD Cluster",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "aws",
+    "version": "4.16.5",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "Example Corp"
+  },
+  "b2d4e6f8-1234-5678-9abc-def012345678": {
+    "id": "cluster-osd-002",
+    "external_id": "b2d4e6f8-1234-5678-9abc-def012345678",
+    "name": "multicluster",
+    "display_name": "Multi-Alert Cluster",
+    "state": "ready",
+    "region": "us-west-2",
+    "cloud_provider": "aws",
+    "version": "4.17.1",
+    "hypershift": false,
+    "ccs": false,
+    "organization": "Dev Testing Inc"
+  },
+  "a4ba96fe-ac69-4573-a78b-17d38eeaab99": {
+    "id": "cluster-hcp-001",
+    "external_id": "a4ba96fe-ac69-4573-a78b-17d38eeaab99",
+    "name": "hcp-cluster",
+    "display_name": "HCP Test Cluster",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "aws",
+    "version": "4.16.3",
+    "hypershift": true,
+    "ccs": true,
+    "organization": "HCP Customer"
+  },
+  "1b20416f-4022-4ce8-8bde-5a6e450114eb": {
+    "id": "cluster-hcp-002",
+    "external_id": "1b20416f-4022-4ce8-8bde-5a6e450114eb",
+    "name": "hcp-cluster-2",
+    "display_name": "HCP Warning Cluster",
+    "state": "ready",
+    "region": "us-west-2",
+    "cloud_provider": "aws",
+    "version": "4.16.3",
+    "hypershift": true,
+    "ccs": true,
+    "organization": "HCP Customer 2"
+  },
+  "06f058a0-35fa-42c5-83a1-f39184fee819": {
+    "id": "cluster-dms-001",
+    "external_id": "06f058a0-35fa-42c5-83a1-f39184fee819",
+    "name": "testcluster.5uqt",
+    "display_name": "DMS Missing Cluster",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "aws",
+    "version": "4.15.8",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "DMS Customer"
+  },
+  "c1d2e3f4-5678-9abc-def0-123456789001": {
+    "id": "cluster-large-001",
+    "external_id": "c1d2e3f4-5678-9abc-def0-123456789001",
+    "name": "largecluster",
+    "display_name": "Large MHC Cluster",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "aws",
+    "version": "4.16.5",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "Enterprise Corp"
+  }
+}

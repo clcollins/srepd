@@ -478,7 +478,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, i := range filteredIncidents {
 			state := stateShorthand(i, m.config.CurrentUser.ID)
 			if AssignedToUser(i, m.config.CurrentUser.ID) || m.teamMode {
-				rows = append(rows, table.Row{state, i.ID, i.Title, i.Service.Summary})
+				serviceName := i.Service.Summary
+				if cached, exists := m.incidentCache[i.ID]; exists && cached.alertsLoaded {
+					for _, a := range cached.alerts {
+						clusterID := getDetailFieldFromAlert("cluster_id", a)
+						if clusterID != "" {
+							if info, ok := m.clusterCache[clusterID]; ok {
+								displayName := info.DisplayName
+								if displayName == "" {
+									displayName = info.Name
+								}
+								if displayName != "" {
+									serviceName = displayName
+									break
+								}
+							}
+						}
+					}
+				}
+				rows = append(rows, table.Row{state, i.ID, i.Title, serviceName})
 			}
 		}
 

@@ -1,0 +1,11 @@
+{
+  "e7c5363a-b69b-47bf-98ff-edf99fc3ea25": [
+    {
+      "id": "ls-001",
+      "summary": "Customer modified ingress configuration",
+      "details": "Customer replaced default IngressController with custom configuration that removed required annotations.",
+      "detection_type": "manual",
+      "created_at": "2026-05-27T09:00:00Z"
+    }
+  ]
+}

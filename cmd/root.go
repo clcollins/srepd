@@ -33,6 +33,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/coreos/go-systemd/journal"
@@ -239,11 +240,18 @@ func runDevMode() {
 		log.Fatal(err)
 	}
 
+	// Load OCM mock client with fixture data for dev mode
+	ocmMock, ocmErr := ocm.LoadMockClientFromFixtures(fixturesDir)
+	if ocmErr != nil {
+		log.Warn("Dev mode: OCM fixtures not loaded", "error", ocmErr)
+	}
+
 	m, _ := tui.InitialModelWithConfig(
 		config,
 		viper.GetStringSlice("editor"),
 		devLauncher,
 		viper.GetBool("debug"),
+		ocmMock,
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
