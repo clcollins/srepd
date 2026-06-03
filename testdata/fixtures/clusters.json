@@ -76,5 +76,83 @@
     "hypershift": false,
     "ccs": true,
     "organization": "Enterprise Corp"
+  },
+  "2qjmjvgq7808oqt2hrg190r76h7v4etu": {
+    "id": "cluster-appsre-001",
+    "external_id": "2qjmjvgq7808oqt2hrg190r76h7v4etu",
+    "name": "appsre-cluster",
+    "display_name": "App-SRE Managed Cluster",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "gcp",
+    "version": "4.21.16",
+    "hypershift": false,
+    "ccs": false,
+    "organization": "App-SRE Org"
+  },
+  "aaaaaaaa-1111-2222-3333-444444444444": {
+    "id": "cluster-multi-001",
+    "external_id": "aaaaaaaa-1111-2222-3333-444444444444",
+    "name": "multicluster2-a",
+    "display_name": "Multi-Cluster Alpha",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "aws",
+    "version": "4.16.5",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "Multi-Cluster Corp"
+  },
+  "bbbbbbbb-5555-6666-7777-888888888888": {
+    "id": "cluster-multi-002",
+    "external_id": "bbbbbbbb-5555-6666-7777-888888888888",
+    "name": "multicluster2-b",
+    "display_name": "Multi-Cluster Beta",
+    "state": "ready",
+    "region": "us-west-2",
+    "cloud_provider": "aws",
+    "version": "4.16.5",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "Multi-Cluster Corp"
+  },
+  "cccccccc-9999-aaaa-bbbb-cccccccccccc": {
+    "id": "cluster-multi-003",
+    "external_id": "cccccccc-9999-aaaa-bbbb-cccccccccccc",
+    "name": "multicluster2-c",
+    "display_name": "Multi-Cluster Gamma",
+    "state": "ready",
+    "region": "eu-west-1",
+    "cloud_provider": "aws",
+    "version": "4.16.5",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "Multi-Cluster Corp"
+  },
+  "dddddddd-1234-5678-9012-eeeeeeeeeeee": {
+    "id": "cluster-acked-001",
+    "external_id": "dddddddd-1234-5678-9012-eeeeeeeeeeee",
+    "name": "ackedcluster",
+    "display_name": "Acknowledged Cluster",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "aws",
+    "version": "4.16.5",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "Acked Corp"
+  },
+  "ffffffff-abcd-ef01-2345-678901234567": {
+    "id": "cluster-mutated-001",
+    "external_id": "ffffffff-abcd-ef01-2345-678901234567",
+    "name": "mutatedtitlecluster",
+    "display_name": "Mutated Title Cluster",
+    "state": "ready",
+    "region": "us-east-1",
+    "cloud_provider": "aws",
+    "version": "4.16.5",
+    "hypershift": false,
+    "ccs": true,
+    "organization": "Mutated Corp"
   }
 }

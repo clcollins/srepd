@@ -128,8 +128,9 @@ type model struct {
 	mergeTeamMode       bool
 
 	// OCM enrichment state
-	ocmClient           ocm.OCMClient
-	clusterCache        map[string]*ocm.ClusterInfo
+	ocmClient          ocm.OCMClient
+	incidentClusterMap map[string][]string // incident ID → cluster IDs
+	clusterCache       map[string]*ocm.ClusterInfo
 	serviceLogCache     map[string][]ocm.ServiceLog
 	clusterReportCache  map[string][]ocm.ClusterReport
 	limitedSupportCache map[string][]ocm.LimitedSupportReason
@@ -149,6 +150,7 @@ func InitialModel(
 	editor []string,
 	launcher launcher.ClusterLauncher,
 	debug bool,
+	ocmClient ocm.OCMClient,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -184,8 +186,14 @@ func InitialModel(
 		status:           "",
 		incidentCache:    make(map[string]*cachedIncidentData),
 		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:      true,     // Start watching for updates on startup
-		showLowUrgency:   true,     // Show all urgencies by default
+		autoRefresh:         true,     // Start watching for updates on startup
+		showLowUrgency:     true,     // Show all urgencies by default
+		ocmClient:          ocmClient,
+		incidentClusterMap: make(map[string][]string),
+		clusterCache:       make(map[string]*ocm.ClusterInfo),
+		serviceLogCache:    make(map[string][]ocm.ServiceLog),
+		clusterReportCache: make(map[string][]ocm.ClusterReport),
+		limitedSupportCache: make(map[string][]ocm.LimitedSupportReason),
 		chordPrefix:      "ctrl+x", // Default chord prefix
 	}
 
@@ -294,6 +302,7 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	// Reset tab state
 	m.activeTab = 0
 	// Clear OCM enrichment caches
+	m.incidentClusterMap = make(map[string][]string)
 	m.clusterCache = make(map[string]*ocm.ClusterInfo)
 	m.serviceLogCache = make(map[string][]ocm.ServiceLog)
 	m.clusterReportCache = make(map[string][]ocm.ClusterReport)

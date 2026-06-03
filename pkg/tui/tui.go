@@ -356,8 +356,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.apiInProgress = false
 			}
 
-			// Trigger OCM enrichment for all unique clusters in the alerts
+			// Map incident → cluster IDs and trigger OCM enrichment
 			clusterIDs := getUniqueClusters(msg.alerts)
+			if len(clusterIDs) > 0 {
+				m.incidentClusterMap[msg.incidentID] = clusterIDs
+			}
 			enrichCmds := enrichClusters(m.ocmClient, clusterIDs)
 			if len(enrichCmds) > 0 {
 				cmds = append(cmds, enrichCmds...)
@@ -479,19 +482,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			state := stateShorthand(i, m.config.CurrentUser.ID)
 			if AssignedToUser(i, m.config.CurrentUser.ID) || m.teamMode {
 				serviceName := i.Service.Summary
-				if cached, exists := m.incidentCache[i.ID]; exists && cached.alertsLoaded {
-					for _, a := range cached.alerts {
-						clusterID := getDetailFieldFromAlert("cluster_id", a)
-						if clusterID != "" {
-							if info, ok := m.clusterCache[clusterID]; ok {
-								displayName := info.DisplayName
-								if displayName == "" {
-									displayName = info.Name
-								}
-								if displayName != "" {
-									serviceName = displayName
-									break
-								}
+				if clusterIDs, ok := m.incidentClusterMap[i.ID]; ok {
+					for _, clusterID := range clusterIDs {
+						if info, exists := m.clusterCache[clusterID]; exists {
+							displayName := info.DisplayName
+							if displayName == "" {
+								displayName = info.Name
+							}
+							if displayName != "" {
+								serviceName = displayName
+								break
 							}
 						}
 					}

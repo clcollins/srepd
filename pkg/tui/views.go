@@ -902,13 +902,13 @@ func (m model) renderTabBar() string {
 	for _, logs := range m.serviceLogCache {
 		logCount += len(logs)
 	}
-	tabLabels[tabServiceLogs] = fmt.Sprintf("SvcLogs (%d)", logCount)
+	tabLabels[tabServiceLogs] = fmt.Sprintf("SLs (%d)", logCount)
 
 	lsCount := 0
 	for _, reasons := range m.limitedSupportCache {
 		lsCount += len(reasons)
 	}
-	tabLabels[tabLimitedSupport] = fmt.Sprintf("LtdSupport (%d)", lsCount)
+	tabLabels[tabLimitedSupport] = fmt.Sprintf("LS History (%d)", lsCount)
 
 	var renderedTabs []string
 	for i, label := range tabLabels {
