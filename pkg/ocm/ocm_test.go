@@ -138,3 +138,33 @@ func TestClientInterface(t *testing.T) {
 		var _ OCMClient = (*MockClient)(nil)
 	})
 }
+
+func TestLoadMockClientFromFixtures(t *testing.T) {
+	t.Run("loads all fixture types from directory", func(t *testing.T) {
+		mock, err := LoadMockClientFromFixtures("../../testdata/fixtures")
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, mock.Clusters, "should load cluster fixtures")
+		assert.NotEmpty(t, mock.ServiceLogs, "should load service log fixtures")
+		assert.NotEmpty(t, mock.ClusterReports, "should load cluster report fixtures")
+		assert.NotEmpty(t, mock.LimitedSupport, "should load limited support fixtures")
+	})
+
+	t.Run("returns empty mock for nonexistent directory", func(t *testing.T) {
+		mock, err := LoadMockClientFromFixtures("/nonexistent/path")
+
+		assert.NoError(t, err)
+		assert.Empty(t, mock.Clusters)
+	})
+
+	t.Run("cluster fixture data is correct", func(t *testing.T) {
+		mock, err := LoadMockClientFromFixtures("../../testdata/fixtures")
+		assert.NoError(t, err)
+
+		info, getErr := mock.GetCluster("e7c5363a-b69b-47bf-98ff-edf99fc3ea25")
+		assert.NoError(t, getErr)
+		assert.Equal(t, "Test OSD Cluster", info.DisplayName)
+		assert.Equal(t, "us-east-1", info.Region)
+		assert.True(t, info.CCS)
+	})
+}

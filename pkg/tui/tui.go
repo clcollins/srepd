@@ -359,6 +359,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Map incident → cluster IDs and trigger OCM enrichment
 			clusterIDs := getUniqueClusters(msg.alerts)
 			if len(clusterIDs) > 0 {
+				if m.incidentClusterMap == nil {
+					m.incidentClusterMap = make(map[string][]string)
+				}
 				m.incidentClusterMap[msg.incidentID] = clusterIDs
 			}
 			enrichCmds := enrichClusters(m.ocmClient, clusterIDs)
