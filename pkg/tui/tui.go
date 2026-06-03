@@ -547,6 +547,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(fmt.Sprintf("showing %d/%d incidents%s...", len(m.table.Rows()), totalIncidentCount, filterSuffix))
 		}
 
+		// In dev mode, pre-fetch alerts for all incidents so OCM enrichment
+		// covers the full list, not just the highlighted incident.
+		if m.devMode && m.ocmClient != nil {
+			for _, i := range m.incidentList {
+				if _, cached := m.incidentCache[i.ID]; !cached {
+					id := i.ID
+					cmds = append(cmds, getIncidentAlerts(m.config, id))
+				}
+			}
+		}
+
 		// Re-sync selectedIncident to match highlighted row
 		// This handles cases where the incident list changed but cursor position stayed same
 		if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
