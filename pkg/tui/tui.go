@@ -356,7 +356,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.apiInProgress = false
 			}
 
-			// Map incident → cluster IDs and trigger OCM enrichment
+			// Map incident → cluster IDs and trigger OCM enrichment for uncached clusters
 			clusterIDs := getUniqueClusters(msg.alerts)
 			if len(clusterIDs) > 0 {
 				if m.incidentClusterMap == nil {
@@ -364,7 +364,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.incidentClusterMap[msg.incidentID] = clusterIDs
 			}
-			enrichCmds := enrichClusters(m.ocmClient, clusterIDs, m.devMode)
+			var uncachedClusters []string
+			for _, id := range clusterIDs {
+				if _, ok := m.clusterCache[id]; !ok {
+					uncachedClusters = append(uncachedClusters, id)
+				}
+			}
+			enrichCmds := enrichClusters(m.ocmClient, uncachedClusters, m.devMode)
 			if len(enrichCmds) > 0 {
 				cmds = append(cmds, enrichCmds...)
 			}
