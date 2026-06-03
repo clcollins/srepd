@@ -133,6 +133,29 @@ func TestClusterInfoMsg_UpdatesCache(t *testing.T) {
 	})
 }
 
+func TestEnrichClusters_DispatchesCommands(t *testing.T) {
+	t.Run("enrichClusters returns commands for each unique cluster", func(t *testing.T) {
+		mock := createMockOCMClient()
+
+		clusterIDs := []string{"cluster-aaa", "cluster-bbb"}
+		cmds := enrichClusters(mock, clusterIDs)
+
+		assert.Len(t, cmds, 8, "should return 4 commands per cluster (info, logs, reports, limited support)")
+	})
+
+	t.Run("enrichClusters returns nil for empty cluster list", func(t *testing.T) {
+		mock := createMockOCMClient()
+
+		cmds := enrichClusters(mock, []string{})
+		assert.Empty(t, cmds)
+	})
+
+	t.Run("enrichClusters returns nil when client is nil", func(t *testing.T) {
+		cmds := enrichClusters(nil, []string{"cluster-aaa"})
+		assert.Empty(t, cmds)
+	})
+}
+
 func TestCacheCleanup_OnClearSelectedIncident(t *testing.T) {
 	t.Run("clearSelectedIncident clears OCM caches", func(t *testing.T) {
 		m := createTestModel()

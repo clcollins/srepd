@@ -869,7 +869,17 @@ func TestTabHeader_Rendering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderTabBar(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
+			m := createTestModel()
+			m.activeTab = tt.activeTab
+			m.incidentAlertsLoaded = !tt.alertsLoading
+			m.incidentNotesLoaded = !tt.notesLoading
+			for i := 0; i < tt.alertCount; i++ {
+				m.selectedIncidentAlerts = append(m.selectedIncidentAlerts, pagerduty.IncidentAlert{})
+			}
+			for i := 0; i < tt.noteCount; i++ {
+				m.selectedIncidentNotes = append(m.selectedIncidentNotes, pagerduty.IncidentNote{})
+			}
+			result := m.renderTabBar()
 
 			for _, expected := range tt.expectedContains {
 				assert.Contains(t, result, expected, "tab header should contain %q", expected)
@@ -1030,7 +1040,17 @@ func TestRenderTabBar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderTabBar(tt.activeTab, tt.alertCount, tt.noteCount, tt.alertsLoading, tt.notesLoading)
+			m := createTestModel()
+			m.activeTab = tt.activeTab
+			m.incidentAlertsLoaded = !tt.alertsLoading
+			m.incidentNotesLoaded = !tt.notesLoading
+			for i := 0; i < tt.alertCount; i++ {
+				m.selectedIncidentAlerts = append(m.selectedIncidentAlerts, pagerduty.IncidentAlert{})
+			}
+			for i := 0; i < tt.noteCount; i++ {
+				m.selectedIncidentNotes = append(m.selectedIncidentNotes, pagerduty.IncidentNote{})
+			}
+			result := m.renderTabBar()
 
 			for _, expected := range tt.expectedContains {
 				assert.Contains(t, result, expected, "tab bar should contain %q", expected)

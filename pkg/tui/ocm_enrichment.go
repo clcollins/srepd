@@ -30,6 +30,23 @@ type limitedSupportMsg struct {
 	err       error
 }
 
+func enrichClusters(client ocm.OCMClient, clusterIDs []string) []tea.Cmd {
+	if client == nil || len(clusterIDs) == 0 {
+		return nil
+	}
+	var cmds []tea.Cmd
+	for _, id := range clusterIDs {
+		cid := id
+		cmds = append(cmds,
+			getClusterInfo(client, cid),
+			getOCMServiceLogs(client, cid, ""),
+			getClusterReports(client, cid),
+			getLimitedSupportHistory(client, cid),
+		)
+	}
+	return cmds
+}
+
 func getClusterInfo(client ocm.OCMClient, clusterID string) tea.Cmd {
 	return func() tea.Msg {
 		log.Debug("ocm.GetCluster", "cluster_id", clusterID)

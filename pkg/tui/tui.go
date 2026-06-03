@@ -356,9 +356,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.apiInProgress = false
 			}
 
+			// Trigger OCM enrichment for all unique clusters in the alerts
+			clusterIDs := getUniqueClusters(msg.alerts)
+			enrichCmds := enrichClusters(m.ocmClient, clusterIDs)
+			if len(enrichCmds) > 0 {
+				cmds = append(cmds, enrichCmds...)
+			}
+
 			// Re-render if we're viewing the incident to show the alerts progressively
 			if m.viewingIncident && m.selectedIncident != nil && msg.incidentID == m.selectedIncident.ID {
-				return m, func() tea.Msg { return renderIncidentMsg("alerts arrived") }
+				return m, tea.Batch(append(cmds, func() tea.Msg { return renderIncidentMsg("alerts arrived") })...)
 			}
 		}
 

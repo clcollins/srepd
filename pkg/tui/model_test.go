@@ -1218,16 +1218,22 @@ func TestTabSwitch_TabKey(t *testing.T) {
 			expectedTab: tabNotes,
 		},
 		{
-			name:        "Tab wraps from Notes to Details",
+			name:        "Tab from Notes goes to Cluster",
 			initialTab:  tabNotes,
+			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
+			expectedTab: tabCluster,
+		},
+		{
+			name:        "Tab wraps from LimitedSupport to Details",
+			initialTab:  tabLimitedSupport,
 			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
 			expectedTab: tabDetails,
 		},
 		{
-			name:        "Shift+Tab from Details goes to Notes",
+			name:        "Shift+Tab from Details goes to LimitedSupport",
 			initialTab:  tabDetails,
 			keyMsg:      tea.KeyMsg{Type: tea.KeyShiftTab},
-			expectedTab: tabNotes,
+			expectedTab: tabLimitedSupport,
 		},
 		{
 			name:        "Shift+Tab from Alerts goes to Details",
