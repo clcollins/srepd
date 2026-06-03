@@ -12,31 +12,31 @@ import (
 
 func createMockOCMClient() *ocm.MockClient {
 	mock := ocm.NewMockClient()
-	mock.Clusters["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = &ocm.ClusterInfo{
-		ID:            "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
-		ExternalID:    "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+	mock.Clusters["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = &ocm.ClusterInfo{
+		ID:            "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+		ExternalID:    "00000000-fake-uuid-test-999999999999",
 		Name:          "test-cluster",
-		DisplayName:   "prod-webapp.7x9k.p1.openshiftapps.com",
+		DisplayName:   "fake-osd-webapp.7x9k.p1.example.org",
 		State:         "ready",
 		Region:        "us-east-1",
 		CloudProvider: "aws",
 		Version:       "4.16.5",
 		CCS:           true,
 	}
-	mock.ServiceLogs["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = []ocm.ServiceLog{
+	mock.ServiceLogs["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ocm.ServiceLog{
 		{
 			Timestamp:   "2026-06-01T10:00:00Z",
 			Severity:    "Warning",
 			ServiceName: "SREManualAction",
 			Summary:     "Cluster entered limited support due to unsupported configuration",
 			Description: "Customer replaced default IngressController with custom configuration that removed required SRE annotations. Cluster monitoring is degraded.",
-			ClusterID:   "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
+			ClusterID:   "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
 		},
 	}
-	mock.ClusterReports["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = []ocm.ClusterReport{
+	mock.ClusterReports["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ocm.ClusterReport{
 		{Title: "Health Check", Summary: "All good", CreatedAt: "2026-06-01T10:00:00Z"},
 	}
-	mock.LimitedSupport["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = []ocm.LimitedSupportReason{
+	mock.LimitedSupport["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ocm.LimitedSupportReason{
 		{ID: "ls-1", Summary: "Customer modification", CreatedAt: "2026-05-15T08:00:00Z"},
 	}
 	return mock
@@ -46,14 +46,14 @@ func TestGetClusterInfo_Success(t *testing.T) {
 	t.Run("returns clusterInfoMsg with cluster data", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		cmd := getClusterInfo(mock, "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h")
+		cmd := getClusterInfo(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		msg := cmd()
 
 		infoMsg, ok := msg.(clusterInfoMsg)
 		assert.True(t, ok, "should return clusterInfoMsg")
 		assert.NoError(t, infoMsg.err)
-		assert.Equal(t, "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h", infoMsg.clusterID)
-		assert.Equal(t, "prod-webapp.7x9k.p1.openshiftapps.com", infoMsg.info.DisplayName)
+		assert.Equal(t, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", infoMsg.clusterID)
+		assert.Equal(t, "fake-osd-webapp.7x9k.p1.example.org", infoMsg.info.DisplayName)
 	})
 }
 
@@ -74,7 +74,7 @@ func TestGetServiceLogs_Success(t *testing.T) {
 	t.Run("returns serviceLogsMsg with logs", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		cmd := getOCMServiceLogs(mock, "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h", "f47ac10b-58cc-4372-a567-0e02b2c3d479")
+		cmd := getOCMServiceLogs(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "00000000-fake-uuid-test-999999999999")
 		msg := cmd()
 
 		logsMsg, ok := msg.(ocmServiceLogsMsg)
@@ -89,7 +89,7 @@ func TestGetClusterReports_Success(t *testing.T) {
 	t.Run("returns clusterReportsMsg with reports", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		cmd := getClusterReports(mock, "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h")
+		cmd := getClusterReports(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		msg := cmd()
 
 		reportsMsg, ok := msg.(clusterReportsMsg)
@@ -103,7 +103,7 @@ func TestGetLimitedSupportHistory_Success(t *testing.T) {
 	t.Run("returns limitedSupportMsg with reasons", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		cmd := getLimitedSupportHistory(mock, "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h")
+		cmd := getLimitedSupportHistory(mock, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		msg := cmd()
 
 		lsMsg, ok := msg.(limitedSupportMsg)
@@ -119,10 +119,10 @@ func TestClusterInfoMsg_UpdatesCache(t *testing.T) {
 		m.clusterCache = make(map[string]*ocm.ClusterInfo)
 
 		msg := clusterInfoMsg{
-			clusterID: "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
 			info: &ocm.ClusterInfo{
-				ID:          "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
-				DisplayName: "staging-api.4m2n.s1.devshift.org",
+				ID:          "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+				DisplayName: "fake-staging-api.4m2n.s1.example.org",
 			},
 			err: nil,
 		}
@@ -130,8 +130,8 @@ func TestClusterInfoMsg_UpdatesCache(t *testing.T) {
 		result, _ := m.Update(msg)
 		updated := result.(model)
 
-		assert.Contains(t, updated.clusterCache, "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h")
-		assert.Equal(t, "staging-api.4m2n.s1.devshift.org", updated.clusterCache["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"].DisplayName)
+		assert.Contains(t, updated.clusterCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.Equal(t, "fake-staging-api.4m2n.s1.example.org", updated.clusterCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"].DisplayName)
 	})
 }
 
@@ -139,7 +139,7 @@ func TestEnrichClusters_DispatchesCommands(t *testing.T) {
 	t.Run("enrichClusters returns commands for each unique cluster", func(t *testing.T) {
 		mock := createMockOCMClient()
 
-		clusterIDs := []string{"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h", "2a3b4c5d6e7f8g9h0i1j2k3l4m5n6o7p"}
+		clusterIDs := []string{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "2a3b4c5dfakeidtest0i1j2k3l4m5n6o"}
 		cmds := enrichClusters(mock, clusterIDs)
 
 		assert.Len(t, cmds, 8, "should return 4 commands per cluster (info, logs, reports, limited support)")
@@ -153,7 +153,7 @@ func TestEnrichClusters_DispatchesCommands(t *testing.T) {
 	})
 
 	t.Run("enrichClusters returns nil when client is nil", func(t *testing.T) {
-		cmds := enrichClusters(nil, []string{"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"})
+		cmds := enrichClusters(nil, []string{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"})
 		assert.Empty(t, cmds)
 	})
 }
@@ -174,7 +174,7 @@ func TestIncidentClusterMap_PopulatedOnAlerts(t *testing.T) {
 					APIObject: pagerduty.APIObject{ID: "A1"},
 					Body: map[string]interface{}{
 						"details": map[string]interface{}{
-							"cluster_id": "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
+							"cluster_id": "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
 						},
 					},
 				},
@@ -185,7 +185,7 @@ func TestIncidentClusterMap_PopulatedOnAlerts(t *testing.T) {
 		updated := result.(model)
 
 		assert.Contains(t, updated.incidentClusterMap, "INC001")
-		assert.Equal(t, []string{"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"}, updated.incidentClusterMap["INC001"])
+		assert.Equal(t, []string{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"}, updated.incidentClusterMap["INC001"])
 	})
 }
 
@@ -210,8 +210,8 @@ func TestRenderClusterTab_WithData(t *testing.T) {
 	t.Run("renders cluster info when cached", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {
-				ID:          "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
+				ID:          "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
 				DisplayName: "Test Cluster",
 				Name:        "test",
 				ExternalID:  "aaaa-bbbb",
@@ -245,10 +245,10 @@ func TestRenderServiceLogsTab_WithData(t *testing.T) {
 	t.Run("renders service logs when cached", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {ID: "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"},
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
 		}
 		m.serviceLogCache = map[string][]ocm.ServiceLog{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
 				{Summary: "Cluster entered limited support due to unsupported configuration", Severity: "Warning", Description: "Details here"},
 			},
 		}
@@ -265,10 +265,10 @@ func TestRenderLimitedSupportTab_WithData(t *testing.T) {
 	t.Run("renders limited support reasons when cached", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {ID: "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"},
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
 		}
 		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
 				{Summary: "Customer modification", DetectionType: "manual"},
 			},
 		}
@@ -284,10 +284,10 @@ func TestRenderClusterReportsTab_WithData(t *testing.T) {
 	t.Run("renders reports when cached", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {ID: "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"},
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
 		}
 		m.clusterReportCache = map[string][]ocm.ClusterReport{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
 				{Title: "Health Check", Summary: "All good"},
 			},
 		}
@@ -320,16 +320,16 @@ func TestCacheCleanup_OnClearSelectedIncident(t *testing.T) {
 			APIObject: pagerduty.APIObject{ID: "Q123"},
 		}
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {ID: "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"},
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
 		}
 		m.serviceLogCache = map[string][]ocm.ServiceLog{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {{Summary: "log"}},
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {{Summary: "log"}},
 		}
 		m.clusterReportCache = map[string][]ocm.ClusterReport{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {{Title: "report"}},
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {{Title: "report"}},
 		}
 		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{
-			"1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h": {{Summary: "reason"}},
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {{Summary: "reason"}},
 		}
 
 		m.clearSelectedIncident("test cleanup")

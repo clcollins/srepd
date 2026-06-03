@@ -4,7 +4,7 @@
     "name": "Dev User",
     "email": "dev@example.com",
     "type": "user",
-    "self": "https://api.pagerduty.com/users/PDEV_USER_001",
+    "self": "https://api.example.pagerduty.com/users/PDEV_USER_001",
     "html_url": "https://example.pagerduty.com/users/PDEV_USER_001"
   },
   "teams": [
@@ -12,7 +12,7 @@
       "id": "PDEV_TEAM_001",
       "name": "SREP On-Call",
       "type": "team",
-      "self": "https://api.pagerduty.com/teams/PDEV_TEAM_001",
+      "self": "https://api.example.pagerduty.com/teams/PDEV_TEAM_001",
       "html_url": "https://example.pagerduty.com/teams/PDEV_TEAM_001"
     }
   ],

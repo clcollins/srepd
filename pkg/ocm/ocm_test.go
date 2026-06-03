@@ -9,25 +9,25 @@ import (
 func TestMockClient_GetCluster(t *testing.T) {
 	t.Run("returns cluster info for known cluster", func(t *testing.T) {
 		mock := NewMockClient()
-		mock.Clusters["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = &ClusterInfo{
-			ID:            "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
-			ExternalID:    "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-			Name:          "prod-webapp",
-			DisplayName:   "prod-webapp.7x9k.p1.openshiftapps.com",
+		mock.Clusters["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = &ClusterInfo{
+			ID:            "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			ExternalID:    "00000000-fake-uuid-test-999999999999",
+			Name:          "fake-osd-webapp",
+			DisplayName:   "fake-osd-webapp.7x9k.p1.example.org",
 			State:         "ready",
 			Region:        "us-east-1",
 			CloudProvider: "aws",
 			Version:       "4.16.5",
 			Hypershift:    false,
 			CCS:           true,
-			Organization:  "Acme Industries",
+			Organization:  "Fake Aeronautical Ltd",
 		}
 
-		info, err := mock.GetCluster("1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h")
+		info, err := mock.GetCluster("1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 
 		assert.NoError(t, err)
-		assert.Equal(t, "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h", info.ID)
-		assert.Equal(t, "prod-webapp.7x9k.p1.openshiftapps.com", info.DisplayName)
+		assert.Equal(t, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g", info.ID)
+		assert.Equal(t, "fake-osd-webapp.7x9k.p1.example.org", info.DisplayName)
 		assert.Equal(t, "us-east-1", info.Region)
 		assert.Equal(t, "aws", info.CloudProvider)
 		assert.True(t, info.CCS)
@@ -45,19 +45,19 @@ func TestMockClient_GetCluster(t *testing.T) {
 func TestMockClient_GetServiceLogs(t *testing.T) {
 	t.Run("returns service logs for known cluster", func(t *testing.T) {
 		mock := NewMockClient()
-		mock.ServiceLogs["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = []ServiceLog{
+		mock.ServiceLogs["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ServiceLog{
 			{
 				Timestamp:   "2026-06-01T10:00:00Z",
 				Severity:    "Warning",
 				ServiceName: "SREManualAction",
 				Summary:     "Cluster entered limited support due to unsupported configuration",
 				Description: "Customer replaced default IngressController with custom configuration that removed required SRE annotations.",
-				ClusterID:   "1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h",
-				ClusterUUID: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+				ClusterID:   "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+				ClusterUUID: "00000000-fake-uuid-test-999999999999",
 			},
 		}
 
-		logs, err := mock.GetServiceLogs("1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h", "f47ac10b-58cc-4372-a567-0e02b2c3d479")
+		logs, err := mock.GetServiceLogs("1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "00000000-fake-uuid-test-999999999999")
 
 		assert.NoError(t, err)
 		assert.Len(t, logs, 1)
@@ -78,7 +78,7 @@ func TestMockClient_GetServiceLogs(t *testing.T) {
 func TestMockClient_GetClusterReports(t *testing.T) {
 	t.Run("returns reports for known cluster", func(t *testing.T) {
 		mock := NewMockClient()
-		mock.ClusterReports["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = []ClusterReport{
+		mock.ClusterReports["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []ClusterReport{
 			{
 				Title:     "Cluster Operator Status",
 				Summary:   "Cluster is healthy",
@@ -86,7 +86,7 @@ func TestMockClient_GetClusterReports(t *testing.T) {
 			},
 		}
 
-		reports, err := mock.GetClusterReports("1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h")
+		reports, err := mock.GetClusterReports("1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 
 		assert.NoError(t, err)
 		assert.Len(t, reports, 1)
@@ -106,7 +106,7 @@ func TestMockClient_GetClusterReports(t *testing.T) {
 func TestMockClient_GetLimitedSupportHistory(t *testing.T) {
 	t.Run("returns limited support reasons for known cluster", func(t *testing.T) {
 		mock := NewMockClient()
-		mock.LimitedSupport["1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h"] = []LimitedSupportReason{
+		mock.LimitedSupport["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = []LimitedSupportReason{
 			{
 				ID:            "ls-001",
 				Summary:       "Customer modification",
@@ -116,7 +116,7 @@ func TestMockClient_GetLimitedSupportHistory(t *testing.T) {
 			},
 		}
 
-		reasons, err := mock.GetLimitedSupportHistory("1q2w3e4r5t6y7u8i9o0p1a2s3d4f5g6h")
+		reasons, err := mock.GetLimitedSupportHistory("1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 
 		assert.NoError(t, err)
 		assert.Len(t, reasons, 1)
@@ -161,9 +161,9 @@ func TestLoadMockClientFromFixtures(t *testing.T) {
 		mock, err := LoadMockClientFromFixtures("../../testdata/fixtures")
 		assert.NoError(t, err)
 
-		info, getErr := mock.GetCluster("e7c5363a-b69b-47bf-98ff-edf99fc3ea25")
+		info, getErr := mock.GetCluster("e7c5363a-fake-uuid-test-edf99fc3ea25")
 		assert.NoError(t, getErr)
-		assert.Equal(t, "Test OSD Cluster", info.DisplayName)
+		assert.Equal(t, "fake-osd-webapp.7x9k.p1.example.org", info.DisplayName)
 		assert.Equal(t, "us-east-1", info.Region)
 		assert.True(t, info.CCS)
 	})

@@ -1,158 +1,158 @@
 {
-  "e7c5363a-b69b-47bf-98ff-edf99fc3ea25": {
+  "e7c5363a-fake-uuid-test-edf99fc3ea25": {
     "id": "cluster-osd-001",
-    "external_id": "e7c5363a-b69b-47bf-98ff-edf99fc3ea25",
-    "name": "testcluster",
-    "display_name": "Test OSD Cluster",
+    "external_id": "e7c5363a-fake-uuid-test-edf99fc3ea25",
+    "name": "fake-osd-webapp",
+    "display_name": "fake-osd-webapp.7x9k.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "aws",
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Example Corp"
+    "organization": "Fake Aeronautical Ltd"
   },
-  "b2d4e6f8-1234-5678-9abc-def012345678": {
+  "b2d4e6f8-fake-uuid-test-def012345678": {
     "id": "cluster-osd-002",
-    "external_id": "b2d4e6f8-1234-5678-9abc-def012345678",
-    "name": "multicluster",
-    "display_name": "Multi-Alert Cluster",
+    "external_id": "b2d4e6f8-fake-uuid-test-def012345678",
+    "name": "fake-rosa-multi",
+    "display_name": "fake-rosa-multi.abc1.p1.example.org",
     "state": "ready",
     "region": "us-west-2",
     "cloud_provider": "aws",
     "version": "4.17.1",
     "hypershift": false,
     "ccs": false,
-    "organization": "Dev Testing Inc"
+    "organization": "Fake Bank Ltd"
   },
-  "a4ba96fe-ac69-4573-a78b-17d38eeaab99": {
+  "a4ba96fe-fake-uuid-test-17d38eeaab99": {
     "id": "cluster-hcp-001",
-    "external_id": "a4ba96fe-ac69-4573-a78b-17d38eeaab99",
-    "name": "hcp-cluster",
-    "display_name": "HCP Test Cluster",
+    "external_id": "a4ba96fe-fake-uuid-test-17d38eeaab99",
+    "name": "fake-hcp-prod",
+    "display_name": "fake-hcp-prod.m3nq.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "aws",
     "version": "4.16.3",
     "hypershift": true,
     "ccs": true,
-    "organization": "HCP Customer"
+    "organization": "Fake United Airways"
   },
-  "1b20416f-4022-4ce8-8bde-5a6e450114eb": {
+  "1b20416f-fake-uuid-test-5a6e450114eb": {
     "id": "cluster-hcp-002",
-    "external_id": "1b20416f-4022-4ce8-8bde-5a6e450114eb",
-    "name": "hcp-cluster-2",
-    "display_name": "HCP Warning Cluster",
+    "external_id": "1b20416f-fake-uuid-test-5a6e450114eb",
+    "name": "fake-hcp-staging",
+    "display_name": "fake-hcp-staging.q8wr.p1.example.org",
     "state": "ready",
     "region": "us-west-2",
     "cloud_provider": "aws",
     "version": "4.16.3",
     "hypershift": true,
     "ccs": true,
-    "organization": "HCP Customer 2"
+    "organization": "Fake Co Industries"
   },
-  "06f058a0-35fa-42c5-83a1-f39184fee819": {
+  "06f058a0-fake-uuid-test-f39184fee819": {
     "id": "cluster-dms-001",
-    "external_id": "06f058a0-35fa-42c5-83a1-f39184fee819",
-    "name": "testcluster.5uqt",
-    "display_name": "DMS Missing Cluster",
+    "external_id": "06f058a0-fake-uuid-test-f39184fee819",
+    "name": "fake-dms-webapp",
+    "display_name": "fake-dms-webapp.5uqt.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "aws",
     "version": "4.15.8",
     "hypershift": false,
     "ccs": true,
-    "organization": "DMS Customer"
+    "organization": "Fake Logistics Corp"
   },
-  "c1d2e3f4-5678-9abc-def0-123456789001": {
+  "c1d2e3f4-fake-uuid-test-123456789001": {
     "id": "cluster-large-001",
-    "external_id": "c1d2e3f4-5678-9abc-def0-123456789001",
-    "name": "largecluster",
-    "display_name": "Large MHC Cluster",
+    "external_id": "c1d2e3f4-fake-uuid-test-123456789001",
+    "name": "fake-large-mhc",
+    "display_name": "fake-large-mhc.xyz9.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "aws",
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Enterprise Corp"
+    "organization": "Fake Enterprise Co"
   },
-  "2qjmjvgq7808oqt2hrg190r76h7v4etu": {
+  "fakeid0000000000000000000000002": {
     "id": "cluster-appsre-001",
-    "external_id": "2qjmjvgq7808oqt2hrg190r76h7v4etu",
-    "name": "appsre-cluster",
-    "display_name": "App-SRE Managed Cluster",
+    "external_id": "fakeid0000000000000000000000002",
+    "name": "fake-appsre-fleet",
+    "display_name": "fake-appsre-fleet.h2jk.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "gcp",
     "version": "4.21.16",
     "hypershift": false,
     "ccs": false,
-    "organization": "App-SRE Org"
+    "organization": "Fake Telecom Inc"
   },
-  "aaaaaaaa-1111-2222-3333-444444444444": {
+  "3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d": {
     "id": "cluster-multi-001",
-    "external_id": "aaaaaaaa-1111-2222-3333-444444444444",
-    "name": "multicluster2-a",
-    "display_name": "Multi-Cluster Alpha",
+    "external_id": "3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d",
+    "name": "fake-multi-alpha",
+    "display_name": "fake-multi-alpha.r4st.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "aws",
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Multi-Cluster Corp"
+    "organization": "Fake Global Services"
   },
-  "bbbbbbbb-5555-6666-7777-888888888888": {
+  "7f2e8d4a-fake-uuid-test-1b9c3a5d7e0f": {
     "id": "cluster-multi-002",
-    "external_id": "bbbbbbbb-5555-6666-7777-888888888888",
-    "name": "multicluster2-b",
-    "display_name": "Multi-Cluster Beta",
+    "external_id": "7f2e8d4a-fake-uuid-test-1b9c3a5d7e0f",
+    "name": "fake-multi-beta",
+    "display_name": "fake-multi-beta.u5vw.p2.example.org",
     "state": "ready",
     "region": "us-west-2",
     "cloud_provider": "aws",
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Multi-Cluster Corp"
+    "organization": "Fake Global Services"
   },
-  "cccccccc-9999-aaaa-bbbb-cccccccccccc": {
+  "5d1a8f3e-fake-uuid-test-9c2b4e6d0a7f": {
     "id": "cluster-multi-003",
-    "external_id": "cccccccc-9999-aaaa-bbbb-cccccccccccc",
-    "name": "multicluster2-c",
-    "display_name": "Multi-Cluster Gamma",
+    "external_id": "5d1a8f3e-fake-uuid-test-9c2b4e6d0a7f",
+    "name": "fake-multi-gamma",
+    "display_name": "fake-multi-gamma.w6xy.p1.example.org",
     "state": "ready",
     "region": "eu-west-1",
     "cloud_provider": "aws",
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Multi-Cluster Corp"
+    "organization": "Fake Global Services"
   },
-  "dddddddd-1234-5678-9012-eeeeeeeeeeee": {
+  "2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c": {
     "id": "cluster-acked-001",
-    "external_id": "dddddddd-1234-5678-9012-eeeeeeeeeeee",
-    "name": "ackedcluster",
-    "display_name": "Acknowledged Cluster",
+    "external_id": "2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c",
+    "name": "fake-acked-prod",
+    "display_name": "fake-acked-prod.ghi4.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "aws",
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Acked Corp"
+    "organization": "Fake Retail Group"
   },
-  "ffffffff-abcd-ef01-2345-678901234567": {
+  "8e1d3c5b-fake-uuid-test-4a6f2d8e0b7c": {
     "id": "cluster-mutated-001",
-    "external_id": "ffffffff-abcd-ef01-2345-678901234567",
-    "name": "mutatedtitlecluster",
-    "display_name": "Mutated Title Cluster",
+    "external_id": "8e1d3c5b-fake-uuid-test-4a6f2d8e0b7c",
+    "name": "fake-mutated-svc",
+    "display_name": "fake-mutated-svc.jkl5.p1.example.org",
     "state": "ready",
     "region": "us-east-1",
     "cloud_provider": "aws",
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Mutated Corp"
+    "organization": "Fake Healthcare Ltd"
   }
 }
