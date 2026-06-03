@@ -330,29 +330,48 @@ func TestSortedClusterIDs(t *testing.T) {
 }
 
 func TestCacheCleanup_OnClearSelectedIncident(t *testing.T) {
-	t.Run("clearSelectedIncident clears OCM caches", func(t *testing.T) {
+	t.Run("clears only the selected incident's cluster caches", func(t *testing.T) {
+		c1 := "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"
+		c2 := "2a3b4c5dfakeidtest0i1j2k3l4m5n6o"
 		m := createTestModel()
 		m.selectedIncident = &pagerduty.Incident{
-			APIObject: pagerduty.APIObject{ID: "Q123"},
+			APIObject: pagerduty.APIObject{ID: "INC001"},
+		}
+		m.incidentClusterMap = map[string][]string{
+			"INC001": {c1},
+			"INC002": {c2},
 		}
 		m.clusterCache = map[string]*ocm.ClusterInfo{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+			c1: {ID: c1},
+			c2: {ID: c2},
 		}
 		m.serviceLogCache = map[string][]ocm.ServiceLog{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {{Summary: "log"}},
+			c1: {{Summary: "log for c1"}},
+			c2: {{Summary: "log for c2"}},
 		}
 		m.clusterReportCache = map[string][]ocm.ClusterReport{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {{Title: "report"}},
+			c1: {{Title: "report for c1"}},
+			c2: {{Title: "report for c2"}},
 		}
 		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{
-			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {{Summary: "reason"}},
+			c1: {{Summary: "reason for c1"}},
+			c2: {{Summary: "reason for c2"}},
 		}
 
 		m.clearSelectedIncident("test cleanup")
 
-		assert.Empty(t, m.clusterCache)
-		assert.Empty(t, m.serviceLogCache)
-		assert.Empty(t, m.clusterReportCache)
-		assert.Empty(t, m.limitedSupportCache)
+		// c1 (INC001's cluster) should be cleared
+		assert.NotContains(t, m.clusterCache, c1)
+		assert.NotContains(t, m.serviceLogCache, c1)
+		assert.NotContains(t, m.clusterReportCache, c1)
+		assert.NotContains(t, m.limitedSupportCache, c1)
+		assert.NotContains(t, m.incidentClusterMap, "INC001")
+
+		// c2 (INC002's cluster) should be preserved
+		assert.Contains(t, m.clusterCache, c2)
+		assert.Contains(t, m.serviceLogCache, c2)
+		assert.Contains(t, m.clusterReportCache, c2)
+		assert.Contains(t, m.limitedSupportCache, c2)
+		assert.Contains(t, m.incidentClusterMap, "INC002")
 	})
 }

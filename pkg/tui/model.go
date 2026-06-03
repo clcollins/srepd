@@ -283,10 +283,18 @@ func InitialModelWithConfig(
 }
 
 func (m *model) clearSelectedIncident(reason interface{}) {
+	// Clear OCM enrichment caches for this incident's clusters only
 	if m.selectedIncident != nil {
 		log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident.ID, "cleared", false)
-		// Don't return here - we still want to clear out any notes/alerts and viewingIncident
-		// even if the incident might be nil
+		if clusterIDs, ok := m.incidentClusterMap[m.selectedIncident.ID]; ok {
+			for _, cid := range clusterIDs {
+				delete(m.clusterCache, cid)
+				delete(m.serviceLogCache, cid)
+				delete(m.clusterReportCache, cid)
+				delete(m.limitedSupportCache, cid)
+			}
+			delete(m.incidentClusterMap, m.selectedIncident.ID)
+		}
 	}
 	m.selectedIncident = nil
 	m.selectedIncidentNotes = nil
@@ -302,12 +310,6 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 	m.clusterSelectOptions = nil
 	// Reset tab state
 	m.activeTab = 0
-	// Clear OCM enrichment caches
-	m.incidentClusterMap = make(map[string][]string)
-	m.clusterCache = make(map[string]*ocm.ClusterInfo)
-	m.serviceLogCache = make(map[string][]ocm.ServiceLog)
-	m.clusterReportCache = make(map[string][]ocm.ClusterReport)
-	m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
 	log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident, "cleared", true, "reason", reason)
 }
 
