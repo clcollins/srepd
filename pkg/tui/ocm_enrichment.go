@@ -32,6 +32,9 @@ type limitedSupportMsg struct {
 	err       error
 }
 
+// enrichClusters dispatches phase 1 (GetCluster) for each cluster ID.
+// Phase 2 (service logs, reports, limited support) is dispatched from
+// the clusterInfoMsg handler after the internal OCM ID is resolved.
 func enrichClusters(client ocm.OCMClient, clusterIDs []string, devMode bool) []tea.Cmd {
 	if client == nil || len(clusterIDs) == 0 {
 		return nil
@@ -39,25 +42,18 @@ func enrichClusters(client ocm.OCMClient, clusterIDs []string, devMode bool) []t
 	var cmds []tea.Cmd
 	for _, id := range clusterIDs {
 		cid := id
-		clusterCmds := []tea.Cmd{
-			getClusterInfo(client, cid),
-			getOCMServiceLogs(client, cid, ""),
-			getClusterReports(client, cid),
-			getLimitedSupportHistory(client, cid),
-		}
+		cmd := getClusterInfo(client, cid)
 		// In dev mode, delay enrichment by 1s to simulate the real-world
 		// async flow where alerts arrive first and OCM data follows.
 		// Without this, fixture data enriches instantly and the SRE
 		// never sees the service name change or the flash notification.
 		if devMode {
-			for _, cmd := range clusterCmds {
-				delayedCmd := cmd
-				cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg {
-					return delayedCmd()
-				}))
-			}
+			delayedCmd := cmd
+			cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg {
+				return delayedCmd()
+			}))
 		} else {
-			cmds = append(cmds, clusterCmds...)
+			cmds = append(cmds, cmd)
 		}
 	}
 	return cmds

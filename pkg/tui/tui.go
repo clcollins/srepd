@@ -366,8 +366,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			var uncachedClusters []string
 			for _, id := range clusterIDs {
-				if _, ok := m.clusterCache[id]; !ok {
-					uncachedClusters = append(uncachedClusters, id)
+				if _, cached := m.clusterCache[id]; !cached {
+					if !m.clusterEnrichInFlight[id] {
+						uncachedClusters = append(uncachedClusters, id)
+						m.clusterEnrichInFlight[id] = true
+					}
 				}
 			}
 			enrichCmds := enrichClusters(m.ocmClient, uncachedClusters, m.devMode)
@@ -468,8 +471,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			} else {
-				// Incident no longer in list - remove from cache
+				// Incident no longer in list - remove from cache and OCM data
 				delete(m.incidentCache, id)
+				m.clearOCMCacheForIncident(id)
 				log.Debug("Update", "updatedIncidentListMsg", "removing cached data for incident no longer in list", "incident", id)
 			}
 		}
@@ -1024,6 +1028,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case clusterInfoMsg:
+		delete(m.clusterEnrichInFlight, msg.clusterID)
 		if msg.err != nil {
 			log.Debug("ocm.GetCluster failed", "cluster_id", msg.clusterID, "error", msg.err)
 			return m, nil
@@ -1033,6 +1038,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clusterCache[msg.clusterID] = msg.info
 		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
+
+		// Phase 2: now that we have the internal OCM ID, dispatch
+		// service logs, cluster reports, and limited support lookups
+		internalID := msg.info.ID
+		externalID := msg.info.ExternalID
+		var phase2Cmds []tea.Cmd
+		if m.ocmClient != nil {
+			phase2Cmds = append(phase2Cmds,
+				getOCMServiceLogs(m.ocmClient, internalID, externalID),
+				getClusterReports(m.ocmClient, internalID),
+				getLimitedSupportHistory(m.ocmClient, internalID),
+			)
+		}
+
 		// Rebuild table immediately so display names update
 		incidents := m.incidentList
 		clusterID := msg.clusterID
@@ -1042,10 +1061,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			func() tea.Msg { return setStatusMsg{flashMsg} },
 			tea.Tick(4*time.Second, func(time.Time) tea.Msg { return clearFlashMsg{message: flashMsg} }),
 		)
+
+		allCmds := append(phase2Cmds, rebuildAndFlash)
 		if m.viewingIncident {
-			return m, tea.Batch(rebuildAndFlash, func() tea.Msg { return renderIncidentMsg("cluster info arrived") })
+			allCmds = append(allCmds, func() tea.Msg { return renderIncidentMsg("cluster info arrived") })
 		}
-		return m, rebuildAndFlash
+		return m, tea.Batch(allCmds...)
 
 	case ocmServiceLogsMsg:
 		if msg.err != nil {

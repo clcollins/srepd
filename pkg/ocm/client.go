@@ -44,22 +44,61 @@ func NewClient(agentVersion string) (*Client, error) {
 	return &Client{conn: conn}, nil
 }
 
-func (c *Client) GetCluster(clusterID string) (*ClusterInfo, error) {
-	log.Debug("ocm.GetCluster", "cluster_id", clusterID)
+// GetCluster resolves a cluster key (internal ID, external UUID, name, or
+// subscription ID) to a full ClusterInfo. Uses the same two-phase lookup
+// as ocm-container: subscriptions API first, then direct cluster search.
+func (c *Client) GetCluster(key string) (*ClusterInfo, error) {
+	log.Debug("ocm.GetCluster", "cluster_id", key)
 
-	response, err := c.conn.ClustersMgmt().V1().Clusters().List().
-		Search(fmt.Sprintf("id = '%s' or external_id = '%s' or name = '%s'", clusterID, clusterID, clusterID)).
+	subsResource := c.conn.AccountsMgmt().V1().Subscriptions()
+	clustersResource := c.conn.ClustersMgmt().V1().Clusters()
+
+	// Phase 1: Search subscriptions
+	subsSearch := fmt.Sprintf(
+		"(display_name = '%s' or cluster_id = '%s' or external_cluster_id = '%s') and "+
+			"status in ('Reserved', 'Active')",
+		key, key, key,
+	)
+	subsResponse, err := subsResource.List().
+		Search(subsSearch).
+		Size(1).
+		Send()
+	if err != nil {
+		log.Debug("ocm.GetCluster", "msg", "subscription search failed, trying cluster search", "error", err)
+	}
+
+	if err == nil && subsResponse.Total() == 1 {
+		internalID, ok := subsResponse.Items().Slice()[0].GetClusterID()
+		if ok {
+			clusterResponse, clusterErr := clustersResource.Cluster(internalID).Get().Send()
+			if clusterErr == nil {
+				return clusterFromResponse(clusterResponse.Body()), nil
+			}
+			log.Debug("ocm.GetCluster", "msg", "cluster get by sub ID failed", "error", clusterErr)
+		}
+	}
+
+	// Phase 2: Direct cluster search fallback
+	clustersSearch := fmt.Sprintf(
+		"id = '%s' or name = '%s' or external_id = '%s'",
+		key, key, key,
+	)
+	clustersResponse, err := clustersResource.List().
+		Search(clustersSearch).
 		Size(1).
 		Send()
 	if err != nil {
 		return nil, fmt.Errorf("cluster search failed: %w", err)
 	}
 
-	if response.Total() == 0 {
-		return nil, fmt.Errorf("cluster %q not found", clusterID)
+	if clustersResponse.Total() == 0 {
+		return nil, fmt.Errorf("cluster %q not found", key)
 	}
 
-	cluster := response.Items().Get(0)
+	return clusterFromResponse(clustersResponse.Items().Slice()[0]), nil
+}
+
+func clusterFromResponse(cluster *cmv1.Cluster) *ClusterInfo {
 	info := &ClusterInfo{
 		ID:            cluster.ID(),
 		ExternalID:    cluster.ExternalID(),
@@ -83,7 +122,7 @@ func (c *Client) GetCluster(clusterID string) (*ClusterInfo, error) {
 		info.Organization = cluster.Subscription().ID()
 	}
 
-	return info, nil
+	return info
 }
 
 func (c *Client) GetServiceLogs(clusterID, externalID string) ([]ServiceLog, error) {
@@ -124,12 +163,11 @@ func (c *Client) GetServiceLogs(clusterID, externalID string) ([]ServiceLog, err
 
 func (c *Client) GetClusterReports(clusterID string) ([]ClusterReport, error) {
 	log.Debug("ocm.GetClusterReports", "cluster_id", clusterID)
-	// Cluster reports are not directly available as a standalone API in the OCM SDK.
-	// This would need to call the cluster-context pattern from osdctl.
-	// For now, return empty — can be implemented when the API is identified.
 	return []ClusterReport{}, nil
 }
 
+// GetLimitedSupportHistory retrieves limited support reasons using the
+// internal OCM cluster ID (not the external UUID).
 func (c *Client) GetLimitedSupportHistory(clusterID string) ([]LimitedSupportReason, error) {
 	log.Debug("ocm.GetLimitedSupportHistory", "cluster_id", clusterID)
 

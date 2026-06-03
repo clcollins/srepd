@@ -128,15 +128,16 @@ type model struct {
 	mergeTeamMode       bool
 
 	// OCM enrichment state
-	ocmClient          ocm.OCMClient
-	incidentClusterMap map[string][]string // incident ID → cluster IDs
-	clusterCache       map[string]*ocm.ClusterInfo
-	serviceLogCache     map[string][]ocm.ServiceLog
-	clusterReportCache  map[string][]ocm.ClusterReport
-	limitedSupportCache map[string][]ocm.LimitedSupportReason
+	ocmClient             ocm.OCMClient
+	incidentClusterMap    map[string][]string // incident ID → cluster IDs
+	clusterEnrichInFlight map[string]bool     // cluster IDs currently being enriched
+	clusterCache          map[string]*ocm.ClusterInfo
+	serviceLogCache       map[string][]ocm.ServiceLog
+	clusterReportCache    map[string][]ocm.ClusterReport
+	limitedSupportCache   map[string][]ocm.LimitedSupportReason
 
 	// Auto-update state
-	devMode bool
+	devMode          bool
 	updateAvailable  bool
 	updateVersion    string
 	updateReleaseURL string
@@ -171,30 +172,31 @@ func InitialModel(
 
 	m := model{
 
-		editor:           editor,
-		launcher:         launcher,
-		debug:            debug,
-		help:             newHelp(),
-		table:            newTableWithStyles(),
-		input:            newTextInput(),
-		incidentViewer:   newIncidentViewer(),
-		logViewer:        newLogViewer(),
-		logFilePath:      defaultLogFilePath(),
-		spinner:          s,
-		markdownRenderer: renderer,
-		apiInProgress:    false,
-		status:           "",
-		incidentCache:    make(map[string]*cachedIncidentData),
-		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:         true,     // Start watching for updates on startup
-		showLowUrgency:     true,     // Show all urgencies by default
-		ocmClient:          ocmClient,
-		incidentClusterMap: make(map[string][]string),
-		clusterCache:       make(map[string]*ocm.ClusterInfo),
-		serviceLogCache:    make(map[string][]ocm.ServiceLog),
-		clusterReportCache: make(map[string][]ocm.ClusterReport),
-		limitedSupportCache: make(map[string][]ocm.LimitedSupportReason),
-		chordPrefix:      "ctrl+x", // Default chord prefix
+		editor:                editor,
+		launcher:              launcher,
+		debug:                 debug,
+		help:                  newHelp(),
+		table:                 newTableWithStyles(),
+		input:                 newTextInput(),
+		incidentViewer:        newIncidentViewer(),
+		logViewer:             newLogViewer(),
+		logFilePath:           defaultLogFilePath(),
+		spinner:               s,
+		markdownRenderer:      renderer,
+		apiInProgress:         false,
+		status:                "",
+		incidentCache:         make(map[string]*cachedIncidentData),
+		scheduledJobs:         append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:           true, // Start watching for updates on startup
+		showLowUrgency:        true, // Show all urgencies by default
+		ocmClient:             ocmClient,
+		incidentClusterMap:    make(map[string][]string),
+		clusterEnrichInFlight: make(map[string]bool),
+		clusterCache:          make(map[string]*ocm.ClusterInfo),
+		serviceLogCache:       make(map[string][]ocm.ServiceLog),
+		clusterReportCache:    make(map[string][]ocm.ClusterReport),
+		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
+		chordPrefix:           "ctrl+x", // Default chord prefix
 	}
 
 	// This is an ugly way to handle this error
@@ -243,30 +245,31 @@ func InitialModelWithConfig(
 
 	m := model{
 
-		editor:           editor,
-		launcher:         launcher,
-		debug:            debug,
-		help:             newHelp(),
-		table:            newTableWithStyles(),
-		input:            newTextInput(),
-		incidentViewer:   newIncidentViewer(),
-		logViewer:        newLogViewer(),
-		logFilePath:      defaultLogFilePath(),
-		spinner:          s,
-		markdownRenderer: renderer,
-		apiInProgress:    false,
-		status:           "",
-		incidentCache:    make(map[string]*cachedIncidentData),
-		scheduledJobs:    append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:      true,
-		showLowUrgency:   true,
-		devMode:   true,
-		ocmClient:          ocmClient,
-		incidentClusterMap: make(map[string][]string),
-		clusterCache:       make(map[string]*ocm.ClusterInfo),
-		serviceLogCache:     make(map[string][]ocm.ServiceLog),
-		clusterReportCache:  make(map[string][]ocm.ClusterReport),
-		limitedSupportCache: make(map[string][]ocm.LimitedSupportReason),
+		editor:                editor,
+		launcher:              launcher,
+		debug:                 debug,
+		help:                  newHelp(),
+		table:                 newTableWithStyles(),
+		input:                 newTextInput(),
+		incidentViewer:        newIncidentViewer(),
+		logViewer:             newLogViewer(),
+		logFilePath:           defaultLogFilePath(),
+		spinner:               s,
+		markdownRenderer:      renderer,
+		apiInProgress:         false,
+		status:                "",
+		incidentCache:         make(map[string]*cachedIncidentData),
+		scheduledJobs:         append([]*scheduledJob{}, initialScheduledJobs...),
+		autoRefresh:           true,
+		showLowUrgency:        true,
+		devMode:               true,
+		ocmClient:             ocmClient,
+		incidentClusterMap:    make(map[string][]string),
+		clusterEnrichInFlight: make(map[string]bool),
+		clusterCache:          make(map[string]*ocm.ClusterInfo),
+		serviceLogCache:       make(map[string][]ocm.ServiceLog),
+		clusterReportCache:    make(map[string][]ocm.ClusterReport),
+		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
 	}
 
 	m.config = config
@@ -283,18 +286,8 @@ func InitialModelWithConfig(
 }
 
 func (m *model) clearSelectedIncident(reason interface{}) {
-	// Clear OCM enrichment caches for this incident's clusters only
 	if m.selectedIncident != nil {
 		log.Debug("clearSelectedIncident", "selectedIncident", m.selectedIncident.ID, "cleared", false)
-		if clusterIDs, ok := m.incidentClusterMap[m.selectedIncident.ID]; ok {
-			for _, cid := range clusterIDs {
-				delete(m.clusterCache, cid)
-				delete(m.serviceLogCache, cid)
-				delete(m.clusterReportCache, cid)
-				delete(m.limitedSupportCache, cid)
-			}
-			delete(m.incidentClusterMap, m.selectedIncident.ID)
-		}
 	}
 	m.selectedIncident = nil
 	m.selectedIncidentNotes = nil
@@ -314,6 +307,19 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 }
 
 // syncSelectedIncidentToHighlightedRow updates m.selectedIncident to match the currently
+func (m *model) clearOCMCacheForIncident(incidentID string) {
+	if clusterIDs, ok := m.incidentClusterMap[incidentID]; ok {
+		for _, cid := range clusterIDs {
+			delete(m.clusterCache, cid)
+			delete(m.serviceLogCache, cid)
+			delete(m.clusterReportCache, cid)
+			delete(m.limitedSupportCache, cid)
+		}
+		delete(m.incidentClusterMap, incidentID)
+		log.Debug("clearOCMCacheForIncident", "incident_id", incidentID, "clusters_cleared", len(clusterIDs))
+	}
+}
+
 // highlighted table row. Sets to nil if no row is highlighted. Uses cached data if available,
 // otherwise uses stub data from m.incidentList.
 //

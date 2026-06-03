@@ -17,13 +17,13 @@ type ClusterInfo struct {
 
 // ServiceLog represents a single service log entry.
 type ServiceLog struct {
-	Timestamp   string
-	Severity    string
-	ServiceName string
-	Summary     string
-	Description string
-	ClusterID   string
-	ClusterUUID string
+	Timestamp    string
+	Severity     string
+	ServiceName  string
+	Summary      string
+	Description  string
+	ClusterID    string
+	ClusterUUID  string
 	InternalOnly bool
 }
 

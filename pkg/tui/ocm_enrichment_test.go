@@ -142,7 +142,7 @@ func TestEnrichClusters_DispatchesCommands(t *testing.T) {
 		clusterIDs := []string{"1q2w3e4rfakeidtest9o0p1a2s3d4f5g", "2a3b4c5dfakeidtest0i1j2k3l4m5n6o"}
 		cmds := enrichClusters(mock, clusterIDs, false)
 
-		assert.Len(t, cmds, 8, "should return 4 commands per cluster (info, logs, reports, limited support)")
+		assert.Len(t, cmds, 2, "should return 1 command per cluster (phase 1 GetCluster only)")
 	})
 
 	t.Run("enrichClusters returns nil for empty cluster list", func(t *testing.T) {
@@ -162,6 +162,7 @@ func TestIncidentClusterMap_PopulatedOnAlerts(t *testing.T) {
 	t.Run("gotIncidentAlertsMsg populates incidentClusterMap", func(t *testing.T) {
 		m := createTestModel()
 		m.incidentClusterMap = make(map[string][]string)
+		m.clusterEnrichInFlight = make(map[string]bool)
 		m.selectedIncident = &pagerduty.Incident{
 			APIObject: pagerduty.APIObject{ID: "INC001"},
 		}
@@ -329,14 +330,35 @@ func TestSortedClusterIDs(t *testing.T) {
 	})
 }
 
-func TestCacheCleanup_OnClearSelectedIncident(t *testing.T) {
-	t.Run("clears only the selected incident's cluster caches", func(t *testing.T) {
+func TestCacheCleanup_ClearSelectedDoesNotTouchOCM(t *testing.T) {
+	t.Run("clearSelectedIncident does NOT clear OCM caches", func(t *testing.T) {
 		c1 := "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"
-		c2 := "2a3b4c5dfakeidtest0i1j2k3l4m5n6o"
 		m := createTestModel()
 		m.selectedIncident = &pagerduty.Incident{
 			APIObject: pagerduty.APIObject{ID: "INC001"},
 		}
+		m.incidentClusterMap = map[string][]string{"INC001": {c1}}
+		m.clusterCache = map[string]*ocm.ClusterInfo{c1: {ID: c1}}
+		m.serviceLogCache = map[string][]ocm.ServiceLog{c1: {{Summary: "log"}}}
+		m.clusterReportCache = map[string][]ocm.ClusterReport{c1: {{Title: "report"}}}
+		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{c1: {{Summary: "reason"}}}
+
+		m.clearSelectedIncident("refresh")
+
+		// OCM caches should be PRESERVED on clearSelectedIncident
+		assert.Contains(t, m.clusterCache, c1)
+		assert.Contains(t, m.serviceLogCache, c1)
+		assert.Contains(t, m.clusterReportCache, c1)
+		assert.Contains(t, m.limitedSupportCache, c1)
+		assert.Contains(t, m.incidentClusterMap, "INC001")
+	})
+}
+
+func TestCacheCleanup_RemovedFromList(t *testing.T) {
+	t.Run("OCM caches cleared when incident removed from list", func(t *testing.T) {
+		c1 := "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"
+		c2 := "2a3b4c5dfakeidtest0i1j2k3l4m5n6o"
+		m := createTestModel()
 		m.incidentClusterMap = map[string][]string{
 			"INC001": {c1},
 			"INC002": {c2},
@@ -346,32 +368,25 @@ func TestCacheCleanup_OnClearSelectedIncident(t *testing.T) {
 			c2: {ID: c2},
 		}
 		m.serviceLogCache = map[string][]ocm.ServiceLog{
-			c1: {{Summary: "log for c1"}},
-			c2: {{Summary: "log for c2"}},
+			c1: {{Summary: "log c1"}},
+			c2: {{Summary: "log c2"}},
 		}
 		m.clusterReportCache = map[string][]ocm.ClusterReport{
-			c1: {{Title: "report for c1"}},
-			c2: {{Title: "report for c2"}},
+			c1: {{Title: "report c1"}},
 		}
 		m.limitedSupportCache = map[string][]ocm.LimitedSupportReason{
-			c1: {{Summary: "reason for c1"}},
-			c2: {{Summary: "reason for c2"}},
+			c1: {{Summary: "reason c1"}},
 		}
 
-		m.clearSelectedIncident("test cleanup")
+		// Simulate INC001 being removed from list
+		m.clearOCMCacheForIncident("INC001")
 
-		// c1 (INC001's cluster) should be cleared
 		assert.NotContains(t, m.clusterCache, c1)
 		assert.NotContains(t, m.serviceLogCache, c1)
-		assert.NotContains(t, m.clusterReportCache, c1)
-		assert.NotContains(t, m.limitedSupportCache, c1)
 		assert.NotContains(t, m.incidentClusterMap, "INC001")
 
-		// c2 (INC002's cluster) should be preserved
+		// INC002 preserved
 		assert.Contains(t, m.clusterCache, c2)
-		assert.Contains(t, m.serviceLogCache, c2)
-		assert.Contains(t, m.clusterReportCache, c2)
-		assert.Contains(t, m.limitedSupportCache, c2)
 		assert.Contains(t, m.incidentClusterMap, "INC002")
 	})
 }
