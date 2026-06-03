@@ -130,7 +130,8 @@ type model struct {
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
-	clusterEnrichInFlight map[string]bool     // cluster IDs currently being enriched
+	clusterEnrichInFlight map[string]bool // cluster IDs currently being enriched
+	clusterEnrichFailed   map[string]int  // failure count per cluster ID
 	clusterCache          map[string]*ocm.ClusterInfo
 	serviceLogCache       map[string][]ocm.ServiceLog
 	clusterReportCache    map[string][]ocm.ClusterReport
@@ -192,6 +193,7 @@ func InitialModel(
 		ocmClient:             ocmClient,
 		incidentClusterMap:    make(map[string][]string),
 		clusterEnrichInFlight: make(map[string]bool),
+		clusterEnrichFailed:   make(map[string]int),
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		clusterReportCache:    make(map[string][]ocm.ClusterReport),
@@ -266,6 +268,7 @@ func InitialModelWithConfig(
 		ocmClient:             ocmClient,
 		incidentClusterMap:    make(map[string][]string),
 		clusterEnrichInFlight: make(map[string]bool),
+		clusterEnrichFailed:   make(map[string]int),
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		clusterReportCache:    make(map[string][]ocm.ClusterReport),
@@ -308,16 +311,33 @@ func (m *model) clearSelectedIncident(reason interface{}) {
 
 // syncSelectedIncidentToHighlightedRow updates m.selectedIncident to match the currently
 func (m *model) clearOCMCacheForIncident(incidentID string) {
-	if clusterIDs, ok := m.incidentClusterMap[incidentID]; ok {
-		for _, cid := range clusterIDs {
+	clusterIDs, ok := m.incidentClusterMap[incidentID]
+	if !ok {
+		return
+	}
+	delete(m.incidentClusterMap, incidentID)
+	for _, cid := range clusterIDs {
+		stillReferenced := false
+		for _, otherClusters := range m.incidentClusterMap {
+			for _, other := range otherClusters {
+				if other == cid {
+					stillReferenced = true
+					break
+				}
+			}
+			if stillReferenced {
+				break
+			}
+		}
+		if !stillReferenced {
 			delete(m.clusterCache, cid)
 			delete(m.serviceLogCache, cid)
 			delete(m.clusterReportCache, cid)
 			delete(m.limitedSupportCache, cid)
+			delete(m.clusterEnrichInFlight, cid)
 		}
-		delete(m.incidentClusterMap, incidentID)
-		log.Debug("clearOCMCacheForIncident", "incident_id", incidentID, "clusters_cleared", len(clusterIDs))
 	}
+	log.Debug("clearOCMCacheForIncident", "incident_id", incidentID)
 }
 
 // highlighted table row. Sets to nil if no row is highlighted. Uses cached data if available,

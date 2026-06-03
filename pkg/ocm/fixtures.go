@@ -22,13 +22,14 @@ type fixtureCluster struct {
 }
 
 type fixtureServiceLog struct {
-	Timestamp   string `json:"timestamp"`
-	Severity    string `json:"severity"`
-	ServiceName string `json:"service_name"`
-	Summary     string `json:"summary"`
-	Description string `json:"description"`
-	ClusterID   string `json:"cluster_id"`
-	ClusterUUID string `json:"cluster_uuid"`
+	Timestamp    string `json:"timestamp"`
+	Severity     string `json:"severity"`
+	ServiceName  string `json:"service_name"`
+	Summary      string `json:"summary"`
+	Description  string `json:"description"`
+	ClusterID    string `json:"cluster_id"`
+	ClusterUUID  string `json:"cluster_uuid"`
+	InternalOnly bool   `json:"internal_only"`
 }
 
 type fixtureClusterReport struct {
@@ -112,13 +113,14 @@ func loadServiceLogFixtures(path string, mock *MockClient) error {
 		var serviceLogs []ServiceLog
 		for _, fl := range fls {
 			serviceLogs = append(serviceLogs, ServiceLog{
-				Timestamp:   fl.Timestamp,
-				Severity:    fl.Severity,
-				ServiceName: fl.ServiceName,
-				Summary:     fl.Summary,
-				Description: fl.Description,
-				ClusterID:   fl.ClusterID,
-				ClusterUUID: fl.ClusterUUID,
+				Timestamp:    fl.Timestamp,
+				Severity:     fl.Severity,
+				ServiceName:  fl.ServiceName,
+				Summary:      fl.Summary,
+				Description:  fl.Description,
+				ClusterID:    fl.ClusterID,
+				ClusterUUID:  fl.ClusterUUID,
+				InternalOnly: fl.InternalOnly,
 			})
 		}
 		mock.ServiceLogs[id] = serviceLogs

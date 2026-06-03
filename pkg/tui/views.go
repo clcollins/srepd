@@ -489,8 +489,9 @@ func (m model) renderClusterTab() (string, error) {
 	for i, id := range clusters {
 		info := m.clusterCache[id]
 		fmt.Fprintf(&content, "### Cluster %d/%d\n\n", i+1, len(clusters))
-		fmt.Fprintf(&content, "* Display Name: %s\n", info.DisplayName)
 		fmt.Fprintf(&content, "* Name: %s\n", info.Name)
+		fmt.Fprintf(&content, "* Display Name: %s\n", info.DisplayName)
+		fmt.Fprintf(&content, "* ID: %s\n", info.ID)
 		fmt.Fprintf(&content, "* External ID: %s\n", info.ExternalID)
 		fmt.Fprintf(&content, "* State: %s\n", info.State)
 		fmt.Fprintf(&content, "* Region: %s\n", info.Region)

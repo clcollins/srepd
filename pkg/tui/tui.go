@@ -362,16 +362,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.incidentClusterMap == nil {
 					m.incidentClusterMap = make(map[string][]string)
 				}
+				if m.clusterEnrichInFlight == nil {
+					m.clusterEnrichInFlight = make(map[string]bool)
+				}
 				m.incidentClusterMap[msg.incidentID] = clusterIDs
 			}
 			var uncachedClusters []string
 			for _, id := range clusterIDs {
-				if _, cached := m.clusterCache[id]; !cached {
-					if !m.clusterEnrichInFlight[id] {
-						uncachedClusters = append(uncachedClusters, id)
-						m.clusterEnrichInFlight[id] = true
-					}
+				if _, cached := m.clusterCache[id]; cached {
+					continue
 				}
+				if m.clusterEnrichInFlight[id] {
+					continue
+				}
+				if m.clusterEnrichFailed[id] >= 3 {
+					continue
+				}
+				uncachedClusters = append(uncachedClusters, id)
+				m.clusterEnrichInFlight[id] = true
 			}
 			enrichCmds := enrichClusters(m.ocmClient, uncachedClusters, m.devMode)
 			if len(enrichCmds) > 0 {
@@ -1031,7 +1039,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		delete(m.clusterEnrichInFlight, msg.clusterID)
 		if msg.err != nil {
 			log.Debug("ocm.GetCluster failed", "cluster_id", msg.clusterID, "error", msg.err)
-			return m, nil
+			if m.clusterEnrichFailed == nil {
+				m.clusterEnrichFailed = make(map[string]int)
+			}
+			m.clusterEnrichFailed[msg.clusterID]++
+			return m, m.flashNotification(fmt.Sprintf("OCM: cluster lookup failed for %s", msg.clusterID))
 		}
 		if m.clusterCache == nil {
 			m.clusterCache = make(map[string]*ocm.ClusterInfo)

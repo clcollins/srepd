@@ -1,5 +1,7 @@
 package ocm
 
+import "context"
+
 // ClusterInfo contains enriched cluster data from the OCM API.
 type ClusterInfo struct {
 	ID            string
@@ -46,9 +48,9 @@ type LimitedSupportReason struct {
 
 // OCMClient defines the interface for OCM API operations.
 type OCMClient interface {
-	GetCluster(clusterID string) (*ClusterInfo, error)
-	GetServiceLogs(clusterID, externalID string) ([]ServiceLog, error)
-	GetClusterReports(clusterID string) ([]ClusterReport, error)
-	GetLimitedSupportHistory(clusterID string) ([]LimitedSupportReason, error)
+	GetCluster(ctx context.Context, clusterID string) (*ClusterInfo, error)
+	GetServiceLogs(ctx context.Context, clusterID, externalID string) ([]ServiceLog, error)
+	GetClusterReports(ctx context.Context, clusterID string) ([]ClusterReport, error)
+	GetLimitedSupportHistory(ctx context.Context, clusterID string) ([]LimitedSupportReason, error)
 	Close()
 }

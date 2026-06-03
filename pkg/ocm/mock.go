@@ -1,6 +1,9 @@
 package ocm
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // MockClient implements OCMClient for testing and dev mode.
 type MockClient struct {
@@ -20,7 +23,7 @@ func NewMockClient() *MockClient {
 	}
 }
 
-func (m *MockClient) GetCluster(clusterID string) (*ClusterInfo, error) {
+func (m *MockClient) GetCluster(_ context.Context, clusterID string) (*ClusterInfo, error) {
 	info, ok := m.Clusters[clusterID]
 	if !ok {
 		return nil, fmt.Errorf("cluster %q not found", clusterID)
@@ -28,7 +31,7 @@ func (m *MockClient) GetCluster(clusterID string) (*ClusterInfo, error) {
 	return info, nil
 }
 
-func (m *MockClient) GetServiceLogs(clusterID, _ string) ([]ServiceLog, error) {
+func (m *MockClient) GetServiceLogs(_ context.Context, clusterID, _ string) ([]ServiceLog, error) {
 	logs, ok := m.ServiceLogs[clusterID]
 	if !ok {
 		return []ServiceLog{}, nil
@@ -36,7 +39,7 @@ func (m *MockClient) GetServiceLogs(clusterID, _ string) ([]ServiceLog, error) {
 	return logs, nil
 }
 
-func (m *MockClient) GetClusterReports(clusterID string) ([]ClusterReport, error) {
+func (m *MockClient) GetClusterReports(_ context.Context, clusterID string) ([]ClusterReport, error) {
 	reports, ok := m.ClusterReports[clusterID]
 	if !ok {
 		return []ClusterReport{}, nil
@@ -44,7 +47,7 @@ func (m *MockClient) GetClusterReports(clusterID string) ([]ClusterReport, error
 	return reports, nil
 }
 
-func (m *MockClient) GetLimitedSupportHistory(clusterID string) ([]LimitedSupportReason, error) {
+func (m *MockClient) GetLimitedSupportHistory(_ context.Context, clusterID string) ([]LimitedSupportReason, error) {
 	reasons, ok := m.LimitedSupport[clusterID]
 	if !ok {
 		return []LimitedSupportReason{}, nil

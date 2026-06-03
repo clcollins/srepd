@@ -354,6 +354,26 @@ func TestCacheCleanup_ClearSelectedDoesNotTouchOCM(t *testing.T) {
 	})
 }
 
+func TestCacheCleanup_SharedClusterPreserved(t *testing.T) {
+	t.Run("shared cluster preserved when one incident removed", func(t *testing.T) {
+		sharedCluster := "shared0fakeidtest000000000000001"
+		m := createTestModel()
+		m.incidentClusterMap = map[string][]string{
+			"INC001": {sharedCluster},
+			"INC002": {sharedCluster},
+		}
+		m.clusterCache = map[string]*ocm.ClusterInfo{
+			sharedCluster: {ID: sharedCluster},
+		}
+
+		m.clearOCMCacheForIncident("INC001")
+
+		assert.Contains(t, m.clusterCache, sharedCluster, "shared cluster should be preserved")
+		assert.NotContains(t, m.incidentClusterMap, "INC001")
+		assert.Contains(t, m.incidentClusterMap, "INC002")
+	})
+}
+
 func TestCacheCleanup_RemovedFromList(t *testing.T) {
 	t.Run("OCM caches cleared when incident removed from list", func(t *testing.T) {
 		c1 := "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"

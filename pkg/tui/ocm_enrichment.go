@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"context"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ocm"
 )
+
+const ocmAPITimeout = 30 * time.Second
 
 type clusterInfoMsg struct {
 	clusterID string
@@ -61,16 +64,20 @@ func enrichClusters(client ocm.OCMClient, clusterIDs []string, devMode bool) []t
 
 func getClusterInfo(client ocm.OCMClient, clusterID string) tea.Cmd {
 	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
+		defer cancel()
 		log.Debug("ocm.GetCluster", "cluster_id", clusterID)
-		info, err := client.GetCluster(clusterID)
+		info, err := client.GetCluster(ctx, clusterID)
 		return clusterInfoMsg{clusterID: clusterID, info: info, err: err}
 	}
 }
 
 func getOCMServiceLogs(client ocm.OCMClient, clusterID, externalID string) tea.Cmd {
 	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
+		defer cancel()
 		log.Debug("ocm.GetServiceLogs", "cluster_id", clusterID)
-		logs, err := client.GetServiceLogs(clusterID, externalID)
+		logs, err := client.GetServiceLogs(ctx, clusterID, externalID)
 		log.Debug("ocm.GetServiceLogs", "cluster_id", clusterID, "count", len(logs))
 		return ocmServiceLogsMsg{clusterID: clusterID, logs: logs, err: err}
 	}
@@ -78,8 +85,10 @@ func getOCMServiceLogs(client ocm.OCMClient, clusterID, externalID string) tea.C
 
 func getClusterReports(client ocm.OCMClient, clusterID string) tea.Cmd {
 	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
+		defer cancel()
 		log.Debug("ocm.GetClusterReports", "cluster_id", clusterID)
-		reports, err := client.GetClusterReports(clusterID)
+		reports, err := client.GetClusterReports(ctx, clusterID)
 		log.Debug("ocm.GetClusterReports", "cluster_id", clusterID, "count", len(reports))
 		return clusterReportsMsg{clusterID: clusterID, reports: reports, err: err}
 	}
@@ -87,8 +96,10 @@ func getClusterReports(client ocm.OCMClient, clusterID string) tea.Cmd {
 
 func getLimitedSupportHistory(client ocm.OCMClient, clusterID string) tea.Cmd {
 	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
+		defer cancel()
 		log.Debug("ocm.GetLimitedSupportHistory", "cluster_id", clusterID)
-		reasons, err := client.GetLimitedSupportHistory(clusterID)
+		reasons, err := client.GetLimitedSupportHistory(ctx, clusterID)
 		log.Debug("ocm.GetLimitedSupportHistory", "cluster_id", clusterID, "count", len(reasons))
 		return limitedSupportMsg{clusterID: clusterID, reasons: reasons, err: err}
 	}

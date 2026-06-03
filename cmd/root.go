@@ -90,6 +90,17 @@ but rather a simple tool to make on-call tasks easier.`,
 			log.Fatal(err)
 		}
 
+		// Initialize OCM client (optional — silently disabled if not configured)
+		ocmClient, ocmErr := ocm.NewClient(tui.Version)
+		if ocmErr != nil {
+			log.Warn("OCM connection failed", "error", ocmErr)
+		} else if ocmClient != nil {
+			defer ocmClient.Close()
+			log.Info("OCM connected")
+		} else {
+			log.Warn("OCM not configured")
+		}
+
 		m, _ := tui.InitialModel(
 			viper.GetString("token"),
 			viper.GetStringSlice("teams"),
@@ -98,6 +109,7 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetStringSlice("editor"),
 			launcher,
 			viper.GetBool("debug"),
+			ocmClient,
 		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
