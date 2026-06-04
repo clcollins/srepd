@@ -106,12 +106,14 @@ func BuildStyles(theme Theme) Styles {
 
 	tableContainer := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
-		BorderForeground(theme.Border)
+		BorderForeground(theme.Border).
+		Foreground(theme.Text)
 
 	tableCell := lipgloss.NewStyle().Padding(0, 1)
 	tableHeader := lipgloss.NewStyle().
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder(), false, false, true).
+		BorderForeground(theme.Border).
 		Foreground(theme.Highlight).
 		Background(theme.Background)
 	tableSelected := lipgloss.NewStyle().
