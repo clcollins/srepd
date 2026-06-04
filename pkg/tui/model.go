@@ -169,12 +169,11 @@ func InitialModel(
 
 	// Create markdown renderer once - reusing it is much faster than creating new ones
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
-		glamour.WithWordWrap(100), // Default width, will be adjusted on window resize
+		glamour.WithStyles(styles.GlamourStyle),
+		glamour.WithWordWrap(100),
 	)
 	if err != nil {
 		log.Error("tui.InitialModel()", "msg", "failed to create markdown renderer", "error", err)
-		// Continue without renderer - rendering will fall back to plain text
 		renderer = nil
 	}
 
@@ -249,9 +248,8 @@ func InitialModelWithConfig(
 	s.Spinner = spinner.MiniDot
 	s.Style = lipgloss.NewStyle().Foreground(theme.Tab)
 
-	// Create markdown renderer once
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
+		glamour.WithStyles(styles.GlamourStyle),
 		glamour.WithWordWrap(100),
 	)
 	if err != nil {

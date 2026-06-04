@@ -3,6 +3,8 @@ package tui
 import (
 	"regexp"
 
+	"charm.land/glamour/v2/ansi"
+	glamourstyles "charm.land/glamour/v2/styles"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -36,6 +38,7 @@ type Styles struct {
 	ActiveTab      lipgloss.Style
 	InactiveTab    lipgloss.Style
 	TabWindow      lipgloss.Style
+	GlamourStyle   ansi.StyleConfig
 }
 
 func DefaultTheme() Theme {
@@ -94,13 +97,18 @@ func BuildStyles(theme Theme) Styles {
 
 	inactiveTab := lipgloss.NewStyle().
 		Border(inactiveTabBorder, true).
-		BorderForeground(theme.Tab).
+		BorderForeground(theme.Border).
+		Foreground(theme.Highlight).
 		Padding(0, 1)
 
-	activeTab := inactiveTab.Border(activeTabBorder, true)
+	activeTab := inactiveTab.
+		Border(activeTabBorder, true).
+		Foreground(theme.Highlight).
+		Bold(true)
 
 	tabWindow := lipgloss.NewStyle().
-		BorderForeground(theme.Tab).
+		BorderForeground(theme.Border).
+		Foreground(theme.Text).
 		Border(lipgloss.NormalBorder()).
 		UnsetBorderTop()
 
@@ -122,6 +130,8 @@ func BuildStyles(theme Theme) Styles {
 		Foreground(theme.Highlight).
 		Bold(true)
 
+	glamourStyle := buildGlamourStyle(theme)
+
 	return Styles{
 		Main:    main,
 		Padded:  padded,
@@ -141,8 +151,36 @@ func BuildStyles(theme Theme) Styles {
 			Selected: tableSelected,
 			Header:   tableHeader,
 		},
-		ActiveTab:   activeTab,
-		InactiveTab: inactiveTab,
-		TabWindow:   tabWindow,
+		ActiveTab:    activeTab,
+		InactiveTab:  inactiveTab,
+		TabWindow:    tabWindow,
+		GlamourStyle: glamourStyle,
 	}
+}
+
+func stringPtr(s string) *string { return &s }
+func boolPtr(b bool) *bool       { return &b }
+func uintPtr(u uint) *uint       { return &u }
+
+func buildGlamourStyle(theme Theme) ansi.StyleConfig {
+	style := glamourstyles.DarkStyleConfig
+	textColor := theme.Text.Dark
+	borderColor := theme.Border.Dark
+	highlightColor := theme.Highlight.Dark
+
+	style.Document.Color = &textColor
+	style.Heading.Color = &highlightColor
+	style.Heading.Bold = boolPtr(true)
+	style.H1.Color = &highlightColor
+	style.H1.BackgroundColor = nil
+	style.H1.Bold = boolPtr(true)
+	style.H2.Color = &highlightColor
+	style.H3.Color = &highlightColor
+	style.Link.Color = &borderColor
+	style.LinkText.Color = &textColor
+	style.LinkText.Bold = boolPtr(true)
+	style.Strong.Bold = boolPtr(true)
+	style.HorizontalRule.Color = &borderColor
+
+	return style
 }

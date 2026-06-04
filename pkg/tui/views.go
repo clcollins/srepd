@@ -158,7 +158,9 @@ func (m model) View() string {
 		tabBar := m.renderTabBar()
 		s.WriteString(tabBar)
 		s.WriteString("\n")
-		s.WriteString(m.styles.TabWindow.Render(m.incidentViewer.View()))
+		tabWindowBorders := m.styles.TabWindow.GetHorizontalBorderSize()
+		tabWindowWidth := windowSize.Width - m.styles.Main.GetHorizontalBorderSize() - m.styles.Main.GetHorizontalMargins() - tabWindowBorders
+		s.WriteString(m.styles.TabWindow.Width(tabWindowWidth).Render(m.incidentViewer.View()))
 
 	default:
 		s.WriteString(m.styles.TableContainer.Render(m.table.View()))
@@ -893,7 +895,7 @@ func (m model) renderTabBar() string {
 	var renderedTabs []string
 	for i, label := range tabLabels {
 		var style lipgloss.Style
-		isFirst, isLast, isActive := i == 0, i == len(tabLabels)-1, i == m.activeTab
+		isFirst, isActive := i == 0, i == m.activeTab
 		if isActive {
 			style = m.styles.ActiveTab
 		} else {
@@ -904,16 +906,25 @@ func (m model) renderTabBar() string {
 			border.BottomLeft = "│"
 		} else if isFirst && !isActive {
 			border.BottomLeft = "├"
-		} else if isLast && isActive {
-			border.BottomRight = "│"
-		} else if isLast && !isActive {
-			border.BottomRight = "┤"
 		}
 		style = style.Border(border)
 		renderedTabs = append(renderedTabs, style.Render(label))
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	tabRow := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	tabWidth := lipgloss.Width(tabRow)
+	remainingWidth := windowSize.Width - tabWidth - 1
+	if remainingWidth > 0 {
+		gapBorder := lipgloss.Border{Bottom: "─", Right: " ", BottomRight: "┐"}
+		gap := lipgloss.NewStyle().
+			BorderForeground(m.theme.Border).
+			Border(gapBorder, false, true, true, false).
+			Width(remainingWidth).
+			Render(" ")
+		tabRow = lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow, gap)
+	}
+
+	return tabRow
 }
 
 // detailsTabTemplate renders only the incident metadata (no alerts or notes)

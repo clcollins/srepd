@@ -113,7 +113,8 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		{Title: "Service", Width: columnWidth},
 	})
 
-	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth
+	tabWindowBorders := m.styles.TabWindow.GetHorizontalBorderSize()
+	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth - tabWindowBorders
 	// Account for header (2 lines), footer (1 line), help (~2 lines), bottom status (1 line), and spacing
 	reservedLines := 7 // header + footer + help + bottom status + borders/padding
 	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth - incidentVerticalScratchWidth - reservedLines
