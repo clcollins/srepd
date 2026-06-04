@@ -121,10 +121,10 @@ func BuildStyles(theme Theme) Styles {
 		Bold(true)
 
 	return Styles{
-		Main:           main,
-		Padded:         padded,
-		Muted:          lipgloss.NewStyle().Foreground(theme.Muted),
-		Warning:        lipgloss.NewStyle().Foreground(theme.Highlight).Background(theme.Warning),
+		Main:    main,
+		Padded:  padded,
+		Muted:   lipgloss.NewStyle().Foreground(theme.Muted),
+		Warning: lipgloss.NewStyle().Foreground(theme.Highlight).Background(theme.Warning),
 		Error: lipgloss.NewStyle().
 			Bold(true).
 			Width(64).

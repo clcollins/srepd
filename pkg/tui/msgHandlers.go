@@ -39,26 +39,27 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return 10
 	}(m)
 
-	verticalMargins := mainStyle.GetVerticalMargins()
-	horizontalMargins := mainStyle.GetHorizontalMargins()
-	verticalPadding := mainStyle.GetVerticalPadding()
-	horizontalPadding := mainStyle.GetHorizontalPadding()
-	verticalBorders := mainStyle.GetVerticalBorderSize()
-	horizontalBorders := mainStyle.GetHorizontalBorderSize()
+	verticalMargins := m.styles.Main.GetVerticalMargins()
+	horizontalMargins := m.styles.Main.GetHorizontalMargins()
+	verticalPadding := m.styles.Main.GetVerticalPadding()
+	horizontalPadding := m.styles.Main.GetHorizontalPadding()
+	verticalBorders := m.styles.Main.GetVerticalBorderSize()
+	horizontalBorders := m.styles.Main.GetHorizontalBorderSize()
 
-	tableVerticalMargins := tableContainerStyle.GetVerticalMargins()
-	tableHorizontalMargins := tableContainerStyle.GetHorizontalMargins()
-	tableVerticalPadding := tableContainerStyle.GetVerticalPadding()
-	tableHorizontalPadding := tableContainerStyle.GetHorizontalPadding()
-	tableVerticalBorders := tableContainerStyle.GetVerticalBorderSize()
-	tableHorizontalBorders := tableContainerStyle.GetHorizontalBorderSize()
+	tableVerticalMargins := m.styles.TableContainer.GetVerticalMargins()
+	tableHorizontalMargins := m.styles.TableContainer.GetHorizontalMargins()
+	tableVerticalPadding := m.styles.TableContainer.GetVerticalPadding()
+	tableHorizontalPadding := m.styles.TableContainer.GetHorizontalPadding()
+	tableVerticalBorders := m.styles.TableContainer.GetVerticalBorderSize()
+	tableHorizontalBorders := m.styles.TableContainer.GetHorizontalBorderSize()
 
-	cellVerticalPadding := tableCellStyle.GetVerticalPadding() * rowCount    // Number of rows
-	cellHorizontalPadding := tableCellStyle.GetHorizontalPadding() * 4       // Four columns
-	cellVerticalMargins := tableCellStyle.GetVerticalMargins() * rowCount    // Number of rows
-	cellHorizontalMargins := tableCellStyle.GetHorizontalMargins() * 4       // Four columns
-	cellVerticalBorders := tableCellStyle.GetVerticalBorderSize() * rowCount // Number of rows
-	cellHorizontalBorders := tableCellStyle.GetHorizontalBorderSize() * 4    // Four columns
+	cellStyle := m.styles.Table.Cell
+	cellVerticalPadding := cellStyle.GetVerticalPadding() * rowCount
+	cellHorizontalPadding := cellStyle.GetHorizontalPadding() * 4
+	cellVerticalMargins := cellStyle.GetVerticalMargins() * rowCount
+	cellHorizontalMargins := cellStyle.GetHorizontalMargins() * 4
+	cellVerticalBorders := cellStyle.GetVerticalBorderSize() * rowCount
+	cellHorizontalBorders := cellStyle.GetHorizontalBorderSize() * 4
 
 	estimatedExtraLinesFromComponents := 7 // TODO: figure out how to calculate this
 

@@ -105,11 +105,12 @@ but rather a simple tool to make on-call tasks easier.`,
 			viper.GetString("token"),
 			viper.GetStringSlice("teams"),
 			viper.GetStringMapString("service_escalation_policies"),
-			viper.GetStringSlice("ignoredusers"), // TODO: replace this with escalationPolicy filter
+			viper.GetStringSlice("ignoredusers"),
 			viper.GetStringSlice("editor"),
 			launcher,
 			viper.GetBool("debug"),
 			ocmClient,
+			viper.GetStringMapString("colors"),
 		)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())

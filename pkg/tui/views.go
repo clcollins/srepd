@@ -141,27 +141,27 @@ func (m model) View() string {
 		s.WriteString("\n")
 		s.WriteString(errHelpView)
 
-		return errorStyle.Render(s.String())
+		return m.styles.Error.Render(s.String())
 
 	case m.viewingLog:
-		s.WriteString(tableContainerStyle.Render(m.logViewer.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))
 
 	case m.clusterSelectMode:
 		s.WriteString("  " + m.clusterSelectPrompt + "\n")
-		s.WriteString(tableContainerStyle.Render(m.clusterSelectTable.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.clusterSelectTable.View()))
 
 	case m.mergeMode:
 		fmt.Fprintf(&s, "  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID)
-		s.WriteString(tableContainerStyle.Render(m.mergeTable.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.mergeTable.View()))
 
 	case m.viewingIncident:
 		tabBar := m.renderTabBar()
 		s.WriteString(tabBar)
 		s.WriteString("\n")
-		s.WriteString(tabWindowStyle.Render(m.incidentViewer.View()))
+		s.WriteString(m.styles.TabWindow.Render(m.incidentViewer.View()))
 
 	default:
-		s.WriteString(tableContainerStyle.Render(m.table.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.table.View()))
 		s.WriteString("\n")
 		// Render refresh status line immediately below main table
 		s.WriteString(m.renderFooter())
@@ -185,7 +185,7 @@ func (m model) View() string {
 	}
 
 	// Render help separately so we can count its lines
-	helpView := paddedStyle.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
+	helpView := m.styles.Padded.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
 
 	// Calculate how many newlines needed to push help and bottom status to terminal bottom
 	// Count lines in the rendered output so far
@@ -211,7 +211,7 @@ func (m model) View() string {
 	// Add bottom status line at terminal bottom
 	s.WriteString(m.renderBottomStatus())
 
-	return mainStyle.Render(s.String())
+	return m.styles.Main.Render(s.String())
 }
 
 func (m model) renderFooter() string {
@@ -219,7 +219,7 @@ func (m model) renderFooter() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			paddedStyle.Render(refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)),
+			m.styles.Padded.Render(refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)),
 		),
 	)
 
@@ -238,7 +238,7 @@ func (m model) renderHeader() string {
 
 	var statusContent string
 	if m.pendingConfirmation != nil {
-		statusContent = warningStyle.Render(m.pendingConfirmation.prompt)
+		statusContent = m.styles.Warning.Render(m.pendingConfirmation.prompt)
 	} else {
 		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View())
 	}
@@ -249,8 +249,8 @@ func (m model) renderHeader() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			paddedStyle.Width(leftWidth).Render(statusContent),
-			paddedStyle.Width(rightWidth).Align(lipgloss.Right).Render(assigneeArea(assignedTo)),
+			m.styles.Padded.Width(leftWidth).Render(statusContent),
+			m.styles.Padded.Width(rightWidth).Align(lipgloss.Right).Render(assigneeArea(assignedTo)),
 		),
 	)
 
@@ -272,8 +272,8 @@ func (m model) renderBottomStatus() string {
 		updateNotice := fmt.Sprintf("An update is available: %s", m.updateVersion)
 		updateStyle := lipgloss.NewStyle().
 			Bold(true).
-			Foreground(srepdPallet.selected.text).
-			Background(srepdPallet.selected.background).
+			Foreground(m.theme.Highlight).
+			Background(m.theme.Selected).
 			Padding(0, 1).
 			Align(lipgloss.Center)
 
@@ -283,20 +283,20 @@ func (m model) renderBottomStatus() string {
 		s.WriteString(
 			lipgloss.JoinHorizontal(
 				0.2,
-				mutedStyle.Width(sideWidth).Padding(0, 0, 0, 1).Render(selectedID),
+				m.styles.Muted.Width(sideWidth).Padding(0, 0, 0, 1).Render(selectedID),
 				updateStyle.Width(centerWidth).Render(updateNotice),
-				mutedStyle.Width(sideWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
+				m.styles.Muted.Width(sideWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
 			),
 		)
 	} else {
 		versionDisplay := versionString()
-		rightCol := paddedStyle.Render(versionDisplay)
+		rightCol := m.styles.Padded.Render(versionDisplay)
 		rightWidth := lipgloss.Width(rightCol)
 
 		s.WriteString(
 			lipgloss.JoinHorizontal(
 				0.2,
-				mutedStyle.Width(windowSize.Width-rightWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
+				m.styles.Muted.Width(windowSize.Width-rightWidth-m.styles.Padded.GetHorizontalPadding()-m.styles.Padded.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
 				rightCol,
 			),
 		)
@@ -895,9 +895,9 @@ func (m model) renderTabBar() string {
 		var style lipgloss.Style
 		isFirst, isLast, isActive := i == 0, i == len(tabLabels)-1, i == m.activeTab
 		if isActive {
-			style = activeTabStyle
+			style = m.styles.ActiveTab
 		} else {
-			style = inactiveTabStyle
+			style = m.styles.InactiveTab
 		}
 		border, _, _, _, _ := style.GetBorder()
 		if isFirst && isActive {

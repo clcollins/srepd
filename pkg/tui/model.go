@@ -136,6 +136,10 @@ type model struct {
 	serviceLogCache       map[string][]ocm.ServiceLog
 	limitedSupportCache   map[string][]ocm.LimitedSupportReason
 
+	// Color theme and derived styles
+	theme  Theme
+	styles Styles
+
 	// Auto-update state
 	devMode          bool
 	updateAvailable  bool
@@ -152,12 +156,16 @@ func InitialModel(
 	launcher launcher.ClusterLauncher,
 	debug bool,
 	ocmClient ocm.OCMClient,
+	colors map[string]string,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
+	theme := ThemeFromConfig(colors)
+	styles := BuildStyles(theme)
+
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	s.Style = lipgloss.NewStyle().Foreground(theme.Tab)
 
 	// Create markdown renderer once - reusing it is much faster than creating new ones
 	renderer, err := glamour.NewTermRenderer(
@@ -170,13 +178,16 @@ func InitialModel(
 		renderer = nil
 	}
 
+	t := newTableWithStyles()
+	t.SetStyles(styles.Table)
+
 	m := model{
 
 		editor:                editor,
 		launcher:              launcher,
 		debug:                 debug,
 		help:                  newHelp(),
-		table:                 newTableWithStyles(),
+		table:                 t,
 		input:                 newTextInput(),
 		incidentViewer:        newIncidentViewer(),
 		logViewer:             newLogViewer(),
@@ -187,8 +198,8 @@ func InitialModel(
 		status:                "",
 		incidentCache:         make(map[string]*cachedIncidentData),
 		scheduledJobs:         append([]*scheduledJob{}, initialScheduledJobs...),
-		autoRefresh:           true, // Start watching for updates on startup
-		showLowUrgency:        true, // Show all urgencies by default
+		autoRefresh:           true,
+		showLowUrgency:        true,
 		ocmClient:             ocmClient,
 		incidentClusterMap:    make(map[string][]string),
 		clusterEnrichInFlight: make(map[string]bool),
@@ -196,7 +207,9 @@ func InitialModel(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
-		chordPrefix:           "ctrl+x", // Default chord prefix
+		chordPrefix:           "ctrl+x",
+		theme:                 theme,
+		styles:                styles,
 	}
 
 	// This is an ugly way to handle this error
@@ -229,9 +242,12 @@ func InitialModelWithConfig(
 	ocmClient ocm.OCMClient,
 ) (tea.Model, tea.Cmd) {
 
+	theme := DefaultTheme()
+	styles := BuildStyles(theme)
+
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	s.Style = lipgloss.NewStyle().Foreground(theme.Tab)
 
 	// Create markdown renderer once
 	renderer, err := glamour.NewTermRenderer(
@@ -243,13 +259,16 @@ func InitialModelWithConfig(
 		renderer = nil
 	}
 
+	t := newTableWithStyles()
+	t.SetStyles(styles.Table)
+
 	m := model{
 
 		editor:                editor,
 		launcher:              launcher,
 		debug:                 debug,
 		help:                  newHelp(),
-		table:                 newTableWithStyles(),
+		table:                 t,
 		input:                 newTextInput(),
 		incidentViewer:        newIncidentViewer(),
 		logViewer:             newLogViewer(),
@@ -270,6 +289,8 @@ func InitialModelWithConfig(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
+		theme:                 theme,
+		styles:                styles,
 	}
 
 	m.config = config
@@ -492,7 +513,6 @@ func findRowIndex(rows []table.Row, incidentID string) int {
 
 func newTableWithStyles() table.Model {
 	t := table.New(table.WithFocused(true))
-	t.SetStyles(tableStyle)
 	return t
 }
 
