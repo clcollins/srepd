@@ -3,6 +3,7 @@ package ocm
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -63,11 +64,13 @@ func NewClient(agentVersion string) (*Client, error) {
 
 	if !armed {
 		log.Debug("ocm.NewClient", "msg", "not logged into OCM, initiating browser auth", "reason", reason)
+		fmt.Fprintln(os.Stderr, "OCM tokens expired — opening browser for authentication...")
 		token, authErr := auth.InitiateAuthCode(clientID)
 		if authErr != nil {
 			log.Debug("ocm.NewClient", "msg", "browser auth failed or cancelled", "error", authErr)
 			return nil, nil
 		}
+		fmt.Fprintln(os.Stderr, "OCM authentication successful.")
 
 		if ocmconfig.IsEncryptedToken(token) {
 			cfg.AccessToken = ""
