@@ -19,16 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
----
-
-Note on AI-Assisted Contributions
-
-Portions of this codebase were developed with the assistance of AI
-tools, including Claude by Anthropic. To the extent that AI-generated
-contributions are subject to copyright and capable of being licensed
-under applicable law, such contributions are licensed under the same
-MIT License terms stated above. The legal status of AI-generated code
-remains an evolving area of law, and this notice is provided in the
-interest of transparency. All AI-assisted contributions have been
-reviewed and approved by the project maintainers.

@@ -170,4 +170,8 @@ PRs follow TDD workflow and require a plan document in `docs/plans/`. Run `make 
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details. Portions of this codebase were developed with the assistance of AI tools. See the [AI-Assisted Contributions note](LICENSE) in the license file for details.
+MIT License. See [LICENSE](LICENSE) for details.
+
+### A Note on AI Contributions
+
+Portions of this codebase were developed with the assistance of AI tools, including Claude by Anthropic. To the extent that AI-generated contributions are subject to copyright and capable of being licensed under applicable law, such contributions are licensed under the same MIT License terms stated above. The legal status of AI-generated code remains an evolving area of law, and this notice is provided in the interest of transparency. All AI-assisted contributions have been reviewed and approved by the project maintainers.
