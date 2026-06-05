@@ -172,7 +172,7 @@ func TestGetTeamMemberIDs_MultipleTeams(t *testing.T) {
 	}
 	opts := pagerduty.ListTeamMembersOptions{Limit: 100, Offset: 0}
 
-	memberIDs, err := GetTeamMemberIDs(mockClient, teams, opts)
+	memberIDs, byTeam, err := GetTeamMemberIDs(mockClient, teams, opts)
 
 	assert.NoError(t, err)
 	assert.Len(t, memberIDs, 5)
@@ -181,6 +181,8 @@ func TestGetTeamMemberIDs_MultipleTeams(t *testing.T) {
 	assert.Contains(t, memberIDs, "USER_B1")
 	assert.Contains(t, memberIDs, "USER_B2")
 	assert.Contains(t, memberIDs, "USER_B3")
+	assert.Len(t, byTeam["TEAM_A"], 2)
+	assert.Len(t, byTeam["TEAM_B"], 3)
 }
 
 func TestGetTeamMemberIDs_PaginatedTeam(t *testing.T) {
@@ -220,17 +222,16 @@ func TestGetTeamMemberIDs_PaginatedTeam(t *testing.T) {
 	}
 	opts := pagerduty.ListTeamMembersOptions{Limit: 1, Offset: 0}
 
-	memberIDs, err := GetTeamMemberIDs(mockClient, teams, opts)
+	memberIDs, byTeam, err := GetTeamMemberIDs(mockClient, teams, opts)
 
 	assert.NoError(t, err)
-	// With the bug, team B would start at offset 2 (after team A's two pages)
-	// and would miss members. With the fix, all 3 members should be present.
 	assert.Len(t, memberIDs, 3)
 	assert.Contains(t, memberIDs, "USER_A1")
 	assert.Contains(t, memberIDs, "USER_A2")
 	assert.Contains(t, memberIDs, "USER_B1")
-	// Verify the mock was called 3 times total
 	assert.Equal(t, 3, mockClient.CallCounts["ListMembersWithContext"])
+	assert.Len(t, byTeam["TEAM_A"], 2)
+	assert.Len(t, byTeam["TEAM_B"], 1)
 	// Verify offsets: team A page 1 at 0, team A page 2 at 1, team B page 1 at 0 (reset)
 	assert.Equal(t, []uint{0, 1, 0}, mockClient.ListMembersOffsets,
 		"offset should reset to 0 for each new team")

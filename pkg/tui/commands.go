@@ -127,76 +127,59 @@ type updatedIncidentListMsg struct {
 	err       error
 }
 
-// updateIncidentList returns a command that fetches the incident list from the PagerDuty API
+// updateIncidentList returns a command that fetches the incident list from the PagerDuty API.
+// It queries per-team to avoid HTTP 414 (URI Too Long) when teams have many members.
 func updateIncidentList(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
-		opts := newListIncidentOptsFromConfig(p)
-		i, err := pd.GetIncidents(p.Client, opts)
-		return updatedIncidentListMsg{i, err}
+		if p == nil {
+			return updatedIncidentListMsg{}
+		}
+
+		ignoredIDs := ignoredUserIDs(p.IgnoredUsers)
+		seen := make(map[string]bool)
+		var allIncidents []pagerduty.Incident
+
+		for _, team := range p.Teams {
+			memberIDs := filterUserIDs(p.TeamMembersByTeam[team.ID], ignoredIDs)
+
+			opts := pagerduty.ListIncidentsOptions{
+				TeamIDs: []string{team.ID},
+				UserIDs: memberIDs,
+			}
+
+			incidents, err := pd.GetIncidents(p.Client, opts)
+			if err != nil {
+				return updatedIncidentListMsg{err: err}
+			}
+
+			for _, inc := range incidents {
+				if !seen[inc.ID] {
+					seen[inc.ID] = true
+					allIncidents = append(allIncidents, inc)
+				}
+			}
+		}
+
+		return updatedIncidentListMsg{incidents: allIncidents}
 	}
 }
 
-// newListIncidentOptsFromConfig returns a ListIncidentsOptions struct
-// maxUserIDsInQuery is the maximum number of user IDs to include in a PagerDuty
-// API query before falling back to team-based filtering. PagerDuty returns HTTP
-// 414 (URI Too Long) when the query string exceeds its limit.
-const maxUserIDsInQuery = 100
-
-// with the UserIDs and TeamIDs fields populated from the given Config
-func newListIncidentOptsFromConfig(p *pd.Config) pagerduty.ListIncidentsOptions {
-	var opts = pagerduty.ListIncidentsOptions{}
-
-	if p == nil {
-		return opts
+func ignoredUserIDs(users []*pagerduty.User) []string {
+	var ids []string
+	for _, u := range users {
+		ids = append(ids, u.ID)
 	}
+	return ids
+}
 
-	if p.IgnoredUsers == nil {
-		p.IgnoredUsers = []*pagerduty.User{}
-	}
-
-	ignoredUserIDs := func(u []*pagerduty.User) []string {
-		var l []string
-		for _, i := range u {
-			l = append(l, i.ID)
+func filterUserIDs(memberIDs []string, ignored []string) []string {
+	var filtered []string
+	for _, id := range memberIDs {
+		if !slices.Contains(ignored, id) {
+			filtered = append(filtered, id)
 		}
-		return l
-	}(p.IgnoredUsers)
-
-	if p.TeamsMemberIDs == nil {
-		p.TeamsMemberIDs = []string{}
 	}
-
-	filteredUserIDs := func(a []string, i []string) []string {
-		var l []string
-		for _, u := range a {
-			if !slices.Contains(i, u) {
-				l = append(l, u)
-			}
-		}
-		return l
-	}(p.TeamsMemberIDs, ignoredUserIDs)
-
-	if p.Teams == nil {
-		p.Teams = []*pagerduty.Team{}
-	}
-
-	opts.TeamIDs = func(t []*pagerduty.Team) []string {
-		var l []string
-		for _, x := range t {
-			l = append(l, x.ID)
-		}
-		return l
-	}(p.Teams)
-
-	if len(filteredUserIDs) <= maxUserIDsInQuery {
-		opts.UserIDs = filteredUserIDs
-	} else {
-		log.Warn("Too many team members for per-user filtering, using team-based filtering instead",
-			"member_count", len(filteredUserIDs),
-			"max", maxUserIDsInQuery)
-	}
-
-	return opts
+	return filtered
 }
 
 // HOUSEKEEPING: The above are commands that have complete unit tests and incoming

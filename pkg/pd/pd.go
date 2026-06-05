@@ -55,6 +55,7 @@ type Config struct {
 
 	// List of the users in the Teams
 	TeamsMemberIDs     []string
+	TeamMembersByTeam  map[string][]string // team ID → member IDs
 	Teams              []*pagerduty.Team
 	EscalationPolicies map[string]*pagerduty.EscalationPolicy
 
@@ -87,7 +88,7 @@ func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_poli
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get team(s) `%v`: %v", teams, err)
 	}
 
-	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
+	c.TeamsMemberIDs, c.TeamMembersByTeam, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
 	if err != nil {
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
 	}
@@ -274,21 +275,23 @@ func GetTeams(client PagerDutyClient, teams []string) ([]*pagerduty.Team, error)
 	return t, nil
 }
 
-func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts pagerduty.ListTeamMembersOptions) ([]string, error) {
+func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts pagerduty.ListTeamMembersOptions) ([]string, map[string][]string, error) {
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
-	var u []string
+	var allIDs []string
+	byTeam := make(map[string][]string)
 
 	for _, team := range teams {
 		opts.Offset = defaultOffset
 		for {
 			response, err := client.ListMembersWithContext(ctx, team.ID, opts)
 			if err != nil {
-				return u, fmt.Errorf("pd.GetUsers(): failed to retrieve users for PagerDuty team `%v`: %v", team.ID, err)
+				return allIDs, byTeam, fmt.Errorf("pd.GetUsers(): failed to retrieve users for PagerDuty team `%v`: %v", team.ID, err)
 			}
 
 			for _, member := range response.Members {
-				u = append(u, member.User.ID)
+				allIDs = append(allIDs, member.User.ID)
+				byTeam[team.ID] = append(byTeam[team.ID], member.User.ID)
 			}
 
 			opts.Offset += opts.Limit
@@ -299,7 +302,7 @@ func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts page
 		}
 	}
 
-	return u, nil
+	return allIDs, byTeam, nil
 }
 
 func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (*pagerduty.User, error) {
