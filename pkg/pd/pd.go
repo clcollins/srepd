@@ -63,7 +63,7 @@ type Config struct {
 
 // NewConfig creates a new Config, initializing a real PagerDuty client from the token.
 func NewConfig(token string, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
-	return NewConfigWithClient(newClient(token), teams, escalation_policies, ignoredUsers)
+	return NewConfigWithClient(NewClient(token), teams, escalation_policies, ignoredUsers)
 }
 
 // NewConfigWithClient creates a Config using a pre-existing client.
@@ -121,7 +121,7 @@ func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_poli
 	return &c, nil
 }
 
-func newClient(token string) PagerDutyClient {
+func NewClient(token string) PagerDutyClient {
 	return NewRateLimitedClient(pagerduty.NewClient(token))
 }
 
@@ -310,6 +310,20 @@ func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (
 	}
 
 	return u, nil
+}
+
+func GetCurrentUserTeams(client PagerDutyClient) ([]pagerduty.Team, error) {
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	user, err := client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{
+		Includes: []string{"teams"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("pd.GetCurrentUserTeams(): failed to get current user: %w", err)
+	}
+
+	return user.Teams, nil
 }
 
 func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCallOptions) ([]pagerduty.OnCall, error) {

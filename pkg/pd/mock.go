@@ -26,6 +26,9 @@ type MockPagerDutyClient struct {
 	// without any setup.
 	CallCounts map[string]int
 
+	// GetCurrentUserErr, when non-nil, causes GetCurrentUserWithContext to return this error.
+	GetCurrentUserErr error
+
 	// ListMembersResponses is an optional response queue for
 	// ListMembersWithContext. When populated, successive calls pop from the
 	// front of the slice. When empty or nil, a default response is returned.
@@ -197,10 +200,23 @@ func (m *MockPagerDutyClient) CreateIncidentNoteWithContext(ctx context.Context,
 
 func (m *MockPagerDutyClient) GetCurrentUserWithContext(ctx context.Context, opts pagerduty.GetCurrentUserOptions) (*pagerduty.User, error) {
 	m.recordCall("GetCurrentUserWithContext")
-	return &pagerduty.User{
+	if m.GetCurrentUserErr != nil {
+		return nil, m.GetCurrentUserErr
+	}
+	user := &pagerduty.User{
 		APIObject: pagerduty.APIObject{ID: "MOCK_USER"},
 		Email:     "mock@example.com",
-	}, nil
+	}
+	for _, inc := range opts.Includes {
+		if inc == "teams" {
+			user.Teams = []pagerduty.Team{
+				{APIObject: pagerduty.APIObject{ID: "TEAM_001"}, Name: "Mock Team Alpha"},
+				{APIObject: pagerduty.APIObject{ID: "TEAM_002"}, Name: "Mock Team Beta"},
+			}
+			break
+		}
+	}
+	return user, nil
 }
 
 func (m *MockPagerDutyClient) GetEscalationPolicyWithContext(ctx context.Context, id string, opts *pagerduty.GetEscalationPolicyOptions) (*pagerduty.EscalationPolicy, error) {

@@ -414,10 +414,35 @@ func TestGetUser_Error(t *testing.T) {
 	assert.Nil(t, user)
 }
 
-// Tests for newClient (returns non-nil RateLimitedClient)
+// Tests for NewClient (returns non-nil RateLimitedClient)
 func TestNewClient(t *testing.T) {
-	client := newClient("test-token")
-	assert.NotNil(t, client, "newClient should return a non-nil client")
+	client := NewClient("test-token")
+	assert.NotNil(t, client, "NewClient should return a non-nil client")
+}
+
+func TestGetCurrentUserTeams_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+
+	teams, err := GetCurrentUserTeams(mockClient)
+
+	assert.NoError(t, err)
+	assert.Len(t, teams, 2)
+	assert.Equal(t, "TEAM_001", teams[0].ID)
+	assert.Equal(t, "Mock Team Alpha", teams[0].Name)
+	assert.Equal(t, "TEAM_002", teams[1].ID)
+	assert.Equal(t, "Mock Team Beta", teams[1].Name)
+}
+
+func TestGetCurrentUserTeams_Error(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		GetCurrentUserErr: ErrMockError,
+	}
+
+	teams, err := GetCurrentUserTeams(mockClient)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetCurrentUserTeams()")
+	assert.Nil(t, teams)
 }
 
 func TestNewConfig_Success(t *testing.T) {
