@@ -82,7 +82,7 @@ func TestStatusArea(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := statusArea(test.input, test.showSpinner, test.spinnerView)
+			result := statusArea(test.input, test.showSpinner, test.spinnerView, DefaultTheme().Text)
 			assert.Equal(t, test.expected, result)
 		})
 	}

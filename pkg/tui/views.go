@@ -10,7 +10,6 @@ import (
 	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
@@ -28,98 +27,7 @@ const (
 )
 
 var (
-	white          = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#ffffff"}
-	lightBlue      = lipgloss.AdaptiveColor{Dark: "#778da9", Light: "#778da9"}
-	blue           = lipgloss.AdaptiveColor{Dark: "#415a77", Light: "#415a77"}
-	backgroundBlue = lipgloss.AdaptiveColor{Dark: "#0d1b2a", Light: "#0d1b2a"}
-	backgroundRed  = lipgloss.AdaptiveColor{Dark: "#a4133c", Light: "#a4133c"}
-
-	// For future
-	// gray           = lipgloss.AdaptiveColor{Dark: "#e0e1dd", Light: "#e0e1dd"}
-	// darkBlue       = lipgloss.AdaptiveColor{Dark: "#1b263b", Light: "#1b263b"}
-)
-
-type pallet struct {
-	text       lipgloss.AdaptiveColor
-	background lipgloss.AdaptiveColor
-	border     lipgloss.AdaptiveColor
-}
-
-type colorModel struct {
-	normal   pallet
-	notice   pallet
-	warning  pallet
-	selected pallet
-	err      pallet
-}
-
-var srepdPallet = colorModel{
-	normal: pallet{
-		text:       lightBlue,
-		background: lipgloss.AdaptiveColor{},
-		border:     blue,
-	},
-	notice: pallet{
-		text:       white,
-		background: lipgloss.AdaptiveColor{},
-		border:     lipgloss.AdaptiveColor{},
-	},
-	warning: pallet{
-		text:       white,
-		background: backgroundRed,
-		border:     lipgloss.AdaptiveColor{},
-	},
-	selected: pallet{
-		text:       white,
-		background: blue,
-		border:     blue,
-	},
-	err: pallet{
-		text:       white,
-		background: backgroundBlue,
-		border:     blue,
-	},
-}
-
-var (
 	windowSize tea.WindowSizeMsg
-
-	mainStyle = lipgloss.NewStyle().
-			Width(windowSize.Width).
-			Height(windowSize.Height).
-			Margin(0, 0).
-			Padding(0, 0).
-			Foreground(srepdPallet.normal.text).
-			Background(srepdPallet.normal.background).
-			BorderForeground(srepdPallet.normal.border).
-			BorderBackground(srepdPallet.normal.background)
-
-	paddedStyle = mainStyle.Padding(0, 2, 0, 1)
-
-	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#5C5C5C"})
-
-	//lint:ignore U1000 - future proofing
-	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
-
-	tableContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
-	tableCellStyle      = lipgloss.NewStyle().Padding(0, 1)
-	tableHeaderStyle    = lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.RoundedBorder(), false, false, true).Foreground(srepdPallet.notice.text).Background(srepdPallet.notice.background)
-	tableSelectedStyle  = lipgloss.NewStyle().Border(lipgloss.HiddenBorder(), false).Background(srepdPallet.selected.background).Foreground(srepdPallet.selected.text).Bold(true)
-
-	tableStyle = table.Styles{
-		Cell:     tableCellStyle,
-		Selected: tableSelectedStyle,
-		Header:   tableHeaderStyle,
-	}
-
-	errorStyle = lipgloss.NewStyle().
-			Bold(true).
-			Width(64).
-			Border(lipgloss.RoundedBorder()).
-			Foreground(srepdPallet.err.text).
-			Background(srepdPallet.err.background).
-			BorderForeground(srepdPallet.err.border).
-			Padding(1, 3, 1, 3)
 )
 
 func (m model) View() string {
@@ -243,7 +151,7 @@ func (m model) renderHeader() string {
 	if m.pendingConfirmation != nil {
 		statusContent = m.styles.Warning.Render(m.pendingConfirmation.prompt)
 	} else {
-		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View())
+		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View(), m.theme.Text)
 	}
 
 	leftWidth := windowSize.Width * 4 / 6
@@ -315,10 +223,9 @@ func assigneeArea(s string) string {
 	return fstring
 }
 
-func statusArea(s string, showSpinner bool, spinnerView string) string {
+func statusArea(s string, showSpinner bool, spinnerView string, textColor lipgloss.AdaptiveColor) string {
 	if showSpinner {
-		// Apply normal text color to the status text to prevent spinner color bleed
-		statusStyle := lipgloss.NewStyle().Foreground(srepdPallet.normal.text)
+		statusStyle := lipgloss.NewStyle().Foreground(textColor)
 		return fmt.Sprintf("%s %s", spinnerView, statusStyle.Render(s))
 	}
 
@@ -847,14 +754,6 @@ func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 	return border
 }
 
-var (
-	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
-	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
-	tabHighlightColor = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
-	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(tabHighlightColor).Padding(0, 1)
-	activeTabStyle    = inactiveTabStyle.Border(activeTabBorder, true)
-	tabWindowStyle    = lipgloss.NewStyle().BorderForeground(tabHighlightColor).Border(lipgloss.NormalBorder()).UnsetBorderTop()
-)
 
 func (m model) renderTabBar() string {
 	tabLabels := make([]string, tabCount)
