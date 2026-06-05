@@ -60,7 +60,18 @@ cluster-login-command: ocm backplane login %%CLUSTER_ID%%
 
 # Toolbox mode: auto-detect Fedora Toolbox and prefix terminal commands
 # with flatpak-spawn --host. Values: "auto" (default), "true", "false"
-toolbox_mode: auto`
+toolbox_mode: auto
+
+# Custom color scheme (all optional, hex values)
+# colors:
+#   text: "#778da9"
+#   border: "#415a77"
+#   highlight: "#ffffff"
+#   selected: "#415a77"
+#   warning: "#a4133c"
+#   error: "#0d1b2a"
+#   muted: "#5C5C5C"
+#   tab: "#7D56F4"`
 )
 
 const description = `The config command is used to create or validate the SREPD config file.
@@ -87,6 +98,7 @@ var (
 		"cluster_login_command": fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
 		"toolbox_mode":          fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", defaultOptionalKeys["toolbox_mode"]),
 		"chord_prefix":          fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", defaultOptionalKeys["chord_prefix"]),
+		"colors":                "Custom color scheme (map of color name to hex value)",
 	}
 )
 

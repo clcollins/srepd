@@ -82,7 +82,7 @@ func TestStatusArea(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := statusArea(test.input, test.showSpinner, test.spinnerView)
+			result := statusArea(test.input, test.showSpinner, test.spinnerView, DefaultTheme().Text)
 			assert.Equal(t, test.expected, result)
 		})
 	}
@@ -1120,17 +1120,16 @@ func TestRenderTabContent_AlertsTab(t *testing.T) {
 	})
 }
 
-func TestRenderIncidentMarkdown_NilRenderer(t *testing.T) {
-	t.Run("returns plain content when renderer is nil", func(t *testing.T) {
-		m := &model{
-			markdownRenderer: nil,
-		}
+func TestRenderIncidentMarkdown_RendersContent(t *testing.T) {
+	t.Run("renders markdown and returns non-empty result", func(t *testing.T) {
+		m := createTestModel()
 
 		content := "# Test Heading\n\nSome **bold** text"
-		result, err := renderIncidentMarkdown(m, content)
+		result, err := renderIncidentMarkdown(&m, content)
 
-		assert.NoError(t, err, "should not error with nil renderer")
-		assert.Equal(t, content, result, "should return content unchanged when renderer is nil")
+		assert.NoError(t, err, "should not error")
+		assert.NotEmpty(t, result, "should return rendered content")
+		assert.NotEqual(t, content, result, "should transform the input")
 	})
 }
 

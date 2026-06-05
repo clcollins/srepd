@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strings"
 
+	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
@@ -27,98 +27,7 @@ const (
 )
 
 var (
-	white          = lipgloss.AdaptiveColor{Dark: "#ffffff", Light: "#ffffff"}
-	lightBlue      = lipgloss.AdaptiveColor{Dark: "#778da9", Light: "#778da9"}
-	blue           = lipgloss.AdaptiveColor{Dark: "#415a77", Light: "#415a77"}
-	backgroundBlue = lipgloss.AdaptiveColor{Dark: "#0d1b2a", Light: "#0d1b2a"}
-	backgroundRed  = lipgloss.AdaptiveColor{Dark: "#a4133c", Light: "#a4133c"}
-
-	// For future
-	// gray           = lipgloss.AdaptiveColor{Dark: "#e0e1dd", Light: "#e0e1dd"}
-	// darkBlue       = lipgloss.AdaptiveColor{Dark: "#1b263b", Light: "#1b263b"}
-)
-
-type pallet struct {
-	text       lipgloss.AdaptiveColor
-	background lipgloss.AdaptiveColor
-	border     lipgloss.AdaptiveColor
-}
-
-type colorModel struct {
-	normal   pallet
-	notice   pallet
-	warning  pallet
-	selected pallet
-	err      pallet
-}
-
-var srepdPallet = colorModel{
-	normal: pallet{
-		text:       lightBlue,
-		background: lipgloss.AdaptiveColor{},
-		border:     blue,
-	},
-	notice: pallet{
-		text:       white,
-		background: lipgloss.AdaptiveColor{},
-		border:     lipgloss.AdaptiveColor{},
-	},
-	warning: pallet{
-		text:       white,
-		background: backgroundRed,
-		border:     lipgloss.AdaptiveColor{},
-	},
-	selected: pallet{
-		text:       white,
-		background: blue,
-		border:     blue,
-	},
-	err: pallet{
-		text:       white,
-		background: backgroundBlue,
-		border:     blue,
-	},
-}
-
-var (
 	windowSize tea.WindowSizeMsg
-
-	mainStyle = lipgloss.NewStyle().
-			Width(windowSize.Width).
-			Height(windowSize.Height).
-			Margin(0, 0).
-			Padding(0, 0).
-			Foreground(srepdPallet.normal.text).
-			Background(srepdPallet.normal.background).
-			BorderForeground(srepdPallet.normal.border).
-			BorderBackground(srepdPallet.normal.background)
-
-	paddedStyle = mainStyle.Padding(0, 2, 0, 1)
-
-	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#5C5C5C"})
-
-	//lint:ignore U1000 - future proofing
-	warningStyle = lipgloss.NewStyle().Foreground(srepdPallet.warning.text).Background(srepdPallet.warning.background)
-
-	tableContainerStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true)
-	tableCellStyle      = lipgloss.NewStyle().Padding(0, 1)
-	tableHeaderStyle    = lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.RoundedBorder(), false, false, true).Foreground(srepdPallet.notice.text).Background(srepdPallet.notice.background)
-	tableSelectedStyle  = lipgloss.NewStyle().Border(lipgloss.HiddenBorder(), false).Background(srepdPallet.selected.background).Foreground(srepdPallet.selected.text).Bold(true)
-
-	tableStyle = table.Styles{
-		Cell:     tableCellStyle,
-		Selected: tableSelectedStyle,
-		Header:   tableHeaderStyle,
-	}
-
-	errorStyle = lipgloss.NewStyle().
-			Bold(true).
-			Width(64).
-			Border(lipgloss.RoundedBorder()).
-			Foreground(srepdPallet.err.text).
-			Background(srepdPallet.err.background).
-			BorderForeground(srepdPallet.err.border).
-			Padding(1, 3, 1, 3)
 )
 
 func (m model) View() string {
@@ -141,27 +50,29 @@ func (m model) View() string {
 		s.WriteString("\n")
 		s.WriteString(errHelpView)
 
-		return errorStyle.Render(s.String())
+		return m.styles.Error.Render(s.String())
 
 	case m.viewingLog:
-		s.WriteString(tableContainerStyle.Render(m.logViewer.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))
 
 	case m.clusterSelectMode:
 		s.WriteString("  " + m.clusterSelectPrompt + "\n")
-		s.WriteString(tableContainerStyle.Render(m.clusterSelectTable.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.clusterSelectTable.View()))
 
 	case m.mergeMode:
 		fmt.Fprintf(&s, "  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID)
-		s.WriteString(tableContainerStyle.Render(m.mergeTable.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.mergeTable.View()))
 
 	case m.viewingIncident:
 		tabBar := m.renderTabBar()
 		s.WriteString(tabBar)
 		s.WriteString("\n")
-		s.WriteString(tabWindowStyle.Render(m.incidentViewer.View()))
+		tabWindowBorders := m.styles.TabWindow.GetHorizontalBorderSize()
+		tabWindowWidth := windowSize.Width - m.styles.Main.GetHorizontalBorderSize() - m.styles.Main.GetHorizontalMargins() - tabWindowBorders
+		s.WriteString(m.styles.TabWindow.Width(tabWindowWidth).Render(m.incidentViewer.View()))
 
 	default:
-		s.WriteString(tableContainerStyle.Render(m.table.View()))
+		s.WriteString(m.styles.TableContainer.Render(m.table.View()))
 		s.WriteString("\n")
 		// Render refresh status line immediately below main table
 		s.WriteString(m.renderFooter())
@@ -185,7 +96,7 @@ func (m model) View() string {
 	}
 
 	// Render help separately so we can count its lines
-	helpView := paddedStyle.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
+	helpView := m.styles.Padded.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
 
 	// Calculate how many newlines needed to push help and bottom status to terminal bottom
 	// Count lines in the rendered output so far
@@ -211,7 +122,7 @@ func (m model) View() string {
 	// Add bottom status line at terminal bottom
 	s.WriteString(m.renderBottomStatus())
 
-	return mainStyle.Render(s.String())
+	return m.styles.Main.Render(s.String())
 }
 
 func (m model) renderFooter() string {
@@ -219,7 +130,7 @@ func (m model) renderFooter() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			paddedStyle.Render(refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)),
+			m.styles.Padded.Render(refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)),
 		),
 	)
 
@@ -238,9 +149,9 @@ func (m model) renderHeader() string {
 
 	var statusContent string
 	if m.pendingConfirmation != nil {
-		statusContent = warningStyle.Render(m.pendingConfirmation.prompt)
+		statusContent = m.styles.Warning.Render(m.pendingConfirmation.prompt)
 	} else {
-		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View())
+		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View(), m.theme.Text)
 	}
 
 	leftWidth := windowSize.Width * 4 / 6
@@ -249,8 +160,8 @@ func (m model) renderHeader() string {
 	s.WriteString(
 		lipgloss.JoinHorizontal(
 			0.2,
-			paddedStyle.Width(leftWidth).Render(statusContent),
-			paddedStyle.Width(rightWidth).Align(lipgloss.Right).Render(assigneeArea(assignedTo)),
+			m.styles.Padded.Width(leftWidth).Render(statusContent),
+			m.styles.Padded.Width(rightWidth).Align(lipgloss.Right).Render(assigneeArea(assignedTo)),
 		),
 	)
 
@@ -272,8 +183,8 @@ func (m model) renderBottomStatus() string {
 		updateNotice := fmt.Sprintf("An update is available: %s", m.updateVersion)
 		updateStyle := lipgloss.NewStyle().
 			Bold(true).
-			Foreground(srepdPallet.selected.text).
-			Background(srepdPallet.selected.background).
+			Foreground(m.theme.Highlight).
+			Background(m.theme.Selected).
 			Padding(0, 1).
 			Align(lipgloss.Center)
 
@@ -283,20 +194,20 @@ func (m model) renderBottomStatus() string {
 		s.WriteString(
 			lipgloss.JoinHorizontal(
 				0.2,
-				mutedStyle.Width(sideWidth).Padding(0, 0, 0, 1).Render(selectedID),
+				m.styles.Muted.Width(sideWidth).Padding(0, 0, 0, 1).Render(selectedID),
 				updateStyle.Width(centerWidth).Render(updateNotice),
-				mutedStyle.Width(sideWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
+				m.styles.Muted.Width(sideWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
 			),
 		)
 	} else {
 		versionDisplay := versionString()
-		rightCol := paddedStyle.Render(versionDisplay)
+		rightCol := m.styles.Padded.Render(versionDisplay)
 		rightWidth := lipgloss.Width(rightCol)
 
 		s.WriteString(
 			lipgloss.JoinHorizontal(
 				0.2,
-				mutedStyle.Width(windowSize.Width-rightWidth-paddedStyle.GetHorizontalPadding()-paddedStyle.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
+				m.styles.Muted.Width(windowSize.Width-rightWidth-m.styles.Padded.GetHorizontalPadding()-m.styles.Padded.GetHorizontalBorderSize()).Padding(0, 2, 0, 1).Render(selectedID),
 				rightCol,
 			),
 		)
@@ -312,10 +223,9 @@ func assigneeArea(s string) string {
 	return fstring
 }
 
-func statusArea(s string, showSpinner bool, spinnerView string) string {
+func statusArea(s string, showSpinner bool, spinnerView string, textColor lipgloss.AdaptiveColor) string {
 	if showSpinner {
-		// Apply normal text color to the status text to prevent spinner color bleed
-		statusStyle := lipgloss.NewStyle().Foreground(srepdPallet.normal.text)
+		statusStyle := lipgloss.NewStyle().Foreground(textColor)
 		return fmt.Sprintf("%s %s", spinnerView, statusStyle.Render(s))
 	}
 
@@ -806,14 +716,19 @@ var funcMap = template.FuncMap{
 }
 
 func renderIncidentMarkdown(m *model, content string) (string, error) {
-	// If no renderer available, return plain content
-	if m.markdownRenderer == nil {
+	wrapWidth := m.incidentViewer.Width
+	if wrapWidth < 40 {
+		wrapWidth = 100
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(m.styles.GlamourStyle),
+		glamour.WithWordWrap(wrapWidth),
+	)
+	if err != nil {
 		return content, nil
 	}
 
-	// Reuse the cached renderer - it was created with a reasonable default width
-	// and glamour's word wrapping will handle variations reasonably well
-	str, err := m.markdownRenderer.Render(content)
+	str, err := renderer.Render(content)
 	if err != nil {
 		return str, err
 	}
@@ -838,15 +753,6 @@ func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 	border.BottomRight = right
 	return border
 }
-
-var (
-	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
-	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
-	tabHighlightColor = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
-	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(tabHighlightColor).Padding(0, 1)
-	activeTabStyle    = inactiveTabStyle.Border(activeTabBorder, true)
-	tabWindowStyle    = lipgloss.NewStyle().BorderForeground(tabHighlightColor).Border(lipgloss.NormalBorder()).UnsetBorderTop()
-)
 
 func (m model) renderTabBar() string {
 	tabLabels := make([]string, tabCount)
@@ -893,27 +799,36 @@ func (m model) renderTabBar() string {
 	var renderedTabs []string
 	for i, label := range tabLabels {
 		var style lipgloss.Style
-		isFirst, isLast, isActive := i == 0, i == len(tabLabels)-1, i == m.activeTab
+		isFirst, isActive := i == 0, i == m.activeTab
 		if isActive {
-			style = activeTabStyle
+			style = m.styles.ActiveTab
 		} else {
-			style = inactiveTabStyle
+			style = m.styles.InactiveTab
 		}
 		border, _, _, _, _ := style.GetBorder()
 		if isFirst && isActive {
 			border.BottomLeft = "│"
 		} else if isFirst && !isActive {
 			border.BottomLeft = "├"
-		} else if isLast && isActive {
-			border.BottomRight = "│"
-		} else if isLast && !isActive {
-			border.BottomRight = "┤"
 		}
 		style = style.Border(border)
 		renderedTabs = append(renderedTabs, style.Render(label))
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	tabRow := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	tabWidth := lipgloss.Width(tabRow)
+	remainingWidth := windowSize.Width - tabWidth - 1
+	if remainingWidth > 0 {
+		gapBorder := lipgloss.Border{Bottom: "─", Right: " ", BottomRight: "┐"}
+		gap := lipgloss.NewStyle().
+			BorderForeground(m.theme.Border).
+			Border(gapBorder, false, true, true, false).
+			Width(remainingWidth).
+			Render(" ")
+		tabRow = lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow, gap)
+	}
+
+	return tabRow
 }
 
 // detailsTabTemplate renders only the incident metadata (no alerts or notes)

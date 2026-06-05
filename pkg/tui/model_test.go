@@ -21,10 +21,16 @@ import (
 
 // createTestModel creates a minimal model for testing
 func createTestModel() model {
+	theme := DefaultTheme()
+	styles := BuildStyles(theme)
+	t := table.New()
+	t.SetStyles(styles.Table)
 	return model{
-		table:         table.New(),
+		table:         t,
 		incidentCache: make(map[string]*cachedIncidentData),
 		incidentList:  []pagerduty.Incident{},
+		theme:         theme,
+		styles:        styles,
 	}
 }
 

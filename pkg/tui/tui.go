@@ -666,7 +666,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rows = append(rows, table.Row{c, clusterServices[c]})
 			}
 			m.clusterSelectTable = table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true))
-			m.clusterSelectTable.SetStyles(tableStyle)
+			m.clusterSelectTable.SetStyles(m.styles.Table)
 			return m, nil
 		}
 
