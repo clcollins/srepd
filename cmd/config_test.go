@@ -200,6 +200,7 @@ type mockFS struct {
 	writeData   []byte
 	writeErr    error
 	writePath   string
+	backupData  []byte
 }
 
 func (m *mockFS) MkdirAll(path string, perm os.FileMode) error {
@@ -220,10 +221,14 @@ func (m *mockFS) ReadFile(name string) ([]byte, error) {
 }
 
 func (m *mockFS) WriteFile(name string, data []byte, perm os.FileMode) error {
-	m.writePath = name
-	m.writeData = data
 	if m.writeErr != nil {
 		return m.writeErr
+	}
+	if strings.HasSuffix(name, "~") {
+		m.backupData = data
+	} else {
+		m.writePath = name
+		m.writeData = data
 	}
 	return nil
 }
@@ -371,7 +376,7 @@ teams:
   - <PagerDuty Team ID 2>
 editor: vim
 `)
-	result, err := updateTeamsInConfig(input, []string{"P1ABC23", "P4DEF56"})
+	result, err := updateTeamsInConfig(input, []string{"P1ABC23", "P4DEF56"}, map[string]string{"P1ABC23": "Team Alpha", "P4DEF56": "Team Beta"})
 
 	require.NoError(t, err)
 	assert.Contains(t, string(result), "- P1ABC23")
@@ -379,6 +384,17 @@ editor: vim
 	assert.NotContains(t, string(result), "<PagerDuty Team ID")
 	assert.Contains(t, string(result), "token: my-token")
 	assert.Contains(t, string(result), "editor: vim")
+}
+
+func TestUpdateTeamsInConfig_AddsTeamNameComments(t *testing.T) {
+	input := []byte(`token: my-token
+teams:
+  - <PagerDuty Team ID 1>
+`)
+	result, err := updateTeamsInConfig(input, []string{"PASPK4G"}, map[string]string{"PASPK4G": "Platform SRE"})
+
+	require.NoError(t, err)
+	assert.Contains(t, string(result), "- PASPK4G # Platform SRE")
 }
 
 func TestUpdateTeamsInConfig_PreservesComments(t *testing.T) {
@@ -389,7 +405,7 @@ teams:
   - <PagerDuty Team ID 1>
 editor: vim
 `)
-	result, err := updateTeamsInConfig(input, []string{"PREAL1"})
+	result, err := updateTeamsInConfig(input, []string{"PREAL1"}, map[string]string{"PREAL1": "Real Team"})
 
 	require.NoError(t, err)
 	assert.Contains(t, string(result), "# Main config")
@@ -402,7 +418,7 @@ func TestUpdateTeamsInConfig_EmptyTeams(t *testing.T) {
 teams:
   - <PagerDuty Team ID 1>
 `)
-	result, err := updateTeamsInConfig(input, []string{})
+	result, err := updateTeamsInConfig(input, []string{}, nil)
 
 	require.NoError(t, err)
 	assert.Contains(t, string(result), "teams: []")
@@ -412,7 +428,7 @@ func TestUpdateTeamsInConfig_NoTeamsKey(t *testing.T) {
 	input := []byte(`token: my-token
 editor: vim
 `)
-	_, err := updateTeamsInConfig(input, []string{"P1ABC23"})
+	_, err := updateTeamsInConfig(input, []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "teams")
@@ -425,17 +441,30 @@ teams:
 `)
 	m := &mockFS{readData: configData}
 
-	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"})
+	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
 
 	require.NoError(t, err)
 	assert.Contains(t, string(m.writeData), "- P1ABC23")
 	assert.NotContains(t, string(m.writeData), "<PagerDuty Team ID")
 }
 
+func TestWriteConfigTeams_CreatesBackup(t *testing.T) {
+	configData := []byte(`token: my-token
+teams:
+  - OLD_TEAM
+`)
+	m := &mockFS{readData: configData}
+
+	err := writeConfigTeams(m, "/fake/home", []string{"NEW_TEAM"}, map[string]string{"NEW_TEAM": "New"})
+
+	require.NoError(t, err)
+	assert.Equal(t, string(configData), string(m.backupData))
+}
+
 func TestWriteConfigTeams_ReadError(t *testing.T) {
 	m := &mockFS{readErr: errors.New("no such file")}
 
-	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"})
+	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read config")
@@ -448,8 +477,8 @@ teams:
 `)
 	m := &mockFS{readData: configData, writeErr: errors.New("disk full")}
 
-	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"})
+	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to write config")
+	assert.Contains(t, err.Error(), "disk full")
 }

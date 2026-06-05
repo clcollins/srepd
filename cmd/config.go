@@ -224,7 +224,7 @@ func createConfig(fs configFS, baseDir string) (retErr error) {
 	return nil
 }
 
-func updateTeamsInConfig(configData []byte, teamIDs []string) ([]byte, error) {
+func updateTeamsInConfig(configData []byte, teamIDs []string, teamNames map[string]string) ([]byte, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(configData, &doc); err != nil {
 		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
@@ -252,11 +252,15 @@ func updateTeamsInConfig(configData []byte, teamIDs []string) ([]byte, error) {
 				teamsValue.Tag = "!!seq"
 				teamsValue.Style = 0
 				for _, id := range teamIDs {
-					teamsValue.Content = append(teamsValue.Content, &yaml.Node{
+					node := &yaml.Node{
 						Kind:  yaml.ScalarNode,
 						Tag:   "!!str",
 						Value: id,
-					})
+					}
+					if name, ok := teamNames[id]; ok {
+						node.LineComment = name
+					}
+					teamsValue.Content = append(teamsValue.Content, node)
 				}
 			}
 
@@ -276,7 +280,7 @@ func updateTeamsInConfig(configData []byte, teamIDs []string) ([]byte, error) {
 	return nil, fmt.Errorf("'teams' key not found in config")
 }
 
-func writeConfigTeams(fs configFS, baseDir string, teamIDs []string) error {
+func writeConfigTeams(fs configFS, baseDir string, teamIDs []string, teamNames map[string]string) error {
 	configFile := filepath.Join(baseDir, cfgFileDir, cfgFileName)
 
 	data, err := fs.ReadFile(configFile)
@@ -284,9 +288,14 @@ func writeConfigTeams(fs configFS, baseDir string, teamIDs []string) error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	updated, err := updateTeamsInConfig(data, teamIDs)
+	updated, err := updateTeamsInConfig(data, teamIDs, teamNames)
 	if err != nil {
 		return err
+	}
+
+	backupFile := configFile + "~"
+	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to create config backup: %w", err)
 	}
 
 	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
@@ -328,7 +337,12 @@ func runListTeams() error {
 		return fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	if err := writeConfigTeams(osFS{}, home, selectedIDs); err != nil {
+	teamNames := make(map[string]string)
+	for _, team := range teams {
+		teamNames[team.ID] = team.Name
+	}
+
+	if err := writeConfigTeams(osFS{}, home, selectedIDs, teamNames); err != nil {
 		return err
 	}
 

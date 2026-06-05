@@ -212,11 +212,11 @@ func init() {
 	for _, f := range flags {
 		switch f.flagType {
 		case "bool":
-			rootCmd.Flags().BoolP(f.name, f.shorthand, f.BoolValue(), f.usage)
+			rootCmd.PersistentFlags().BoolP(f.name, f.shorthand, f.BoolValue(), f.usage)
 		case "string":
-			rootCmd.Flags().StringP(f.name, f.shorthand, f.StringValue(), f.usage)
+			rootCmd.PersistentFlags().StringP(f.name, f.shorthand, f.StringValue(), f.usage)
 		case "stringSlice":
-			rootCmd.Flags().StringSliceP(f.name, f.shorthand, []string{f.StringValue()}, f.usage)
+			rootCmd.PersistentFlags().StringSliceP(f.name, f.shorthand, []string{f.StringValue()}, f.usage)
 		}
 	}
 }

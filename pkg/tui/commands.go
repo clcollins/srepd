@@ -1006,7 +1006,10 @@ type fetchedTeamsMsg struct {
 	err   error
 }
 
-type teamsSelectedMsg []string
+type teamsSelectedMsg struct {
+	ids   []string
+	names map[string]string
+}
 
 type teamsConfigUpdatedMsg struct{ err error }
 
@@ -1017,7 +1020,7 @@ func fetchUserTeams(client pd.PagerDutyClient) tea.Cmd {
 	}
 }
 
-func writeTeamsToConfigCmd(teamIDs []string) tea.Cmd {
+func writeTeamsToConfigCmd(teamIDs []string, teamNames map[string]string) tea.Cmd {
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -1031,9 +1034,14 @@ func writeTeamsToConfigCmd(teamIDs []string) tea.Cmd {
 			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to read config: %w", err)}
 		}
 
-		updated, err := updateTeamsInYAML(data, teamIDs)
+		updated, err := updateTeamsInYAML(data, teamIDs, teamNames)
 		if err != nil {
 			return teamsConfigUpdatedMsg{err: err}
+		}
+
+		backupFile := configFile + "~"
+		if err := os.WriteFile(backupFile, data, 0644); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to create config backup: %w", err)}
 		}
 
 		if err := os.WriteFile(configFile, updated, 0644); err != nil {
@@ -1044,7 +1052,7 @@ func writeTeamsToConfigCmd(teamIDs []string) tea.Cmd {
 	}
 }
 
-func updateTeamsInYAML(configData []byte, teamIDs []string) ([]byte, error) {
+func updateTeamsInYAML(configData []byte, teamIDs []string, teamNames map[string]string) ([]byte, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(configData, &doc); err != nil {
 		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
@@ -1072,11 +1080,15 @@ func updateTeamsInYAML(configData []byte, teamIDs []string) ([]byte, error) {
 				teamsValue.Tag = "!!seq"
 				teamsValue.Style = 0
 				for _, id := range teamIDs {
-					teamsValue.Content = append(teamsValue.Content, &yaml.Node{
+					node := &yaml.Node{
 						Kind:  yaml.ScalarNode,
 						Tag:   "!!str",
 						Value: id,
-					})
+					}
+					if name, ok := teamNames[id]; ok {
+						node.LineComment = name
+					}
+					teamsValue.Content = append(teamsValue.Content, node)
 				}
 			}
 

@@ -129,9 +129,10 @@ type model struct {
 	mergeTeamMode       bool
 
 	// Team selection state — shown on first run or via --list-teams
-	teamSelectMode bool
-	teamSelectForm *huh.Form
-	teamSelectIDs  []string
+	teamSelectMode  bool
+	teamSelectForm  *huh.Form
+	teamSelectIDs   []string
+	teamSelectNames map[string]string
 
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient

@@ -247,7 +247,11 @@ func switchTeamSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.Focus()
 		selected := make([]string, len(m.teamSelectIDs))
 		copy(selected, m.teamSelectIDs)
-		return m, func() tea.Msg { return teamsSelectedMsg(selected) }
+		names := make(map[string]string)
+		for k, v := range m.teamSelectNames {
+			names[k] = v
+		}
+		return m, func() tea.Msg { return teamsSelectedMsg{ids: selected, names: names} }
 	}
 	if m.teamSelectForm.State == huh.StateAborted {
 		m.teamSelectMode = false

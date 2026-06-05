@@ -196,10 +196,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		var options []huh.Option[string]
+		m.teamSelectNames = make(map[string]string)
 		for _, team := range msg.teams {
 			options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID))
+			m.teamSelectNames[team.ID] = team.Name
 		}
 		m.teamSelectIDs = nil
+
+		theme := huh.ThemeCharm()
+		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
+		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
+		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
+		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+
 		m.teamSelectForm = huh.NewForm(
 			huh.NewGroup(
 				huh.NewMultiSelect[string]().
@@ -208,18 +218,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Options(options...).
 					Value(&m.teamSelectIDs),
 			),
-		)
+		).WithTheme(theme).WithHeight(windowSize.Height)
 		m.teamSelectMode = true
 		return m, m.teamSelectForm.Init()
 
 	case teamsSelectedMsg:
-		if len(msg) == 0 {
+		if len(msg.ids) == 0 {
 			m.setStatus("no teams selected")
 			return m, nil
 		}
-		viper.Set("teams", []string(msg))
-		m.setStatus(fmt.Sprintf("selected %d team(s) — updating config...", len(msg)))
-		return m, writeTeamsToConfigCmd(msg)
+		viper.Set("teams", msg.ids)
+		m.setStatus(fmt.Sprintf("selected %d team(s) — updating config...", len(msg.ids)))
+		return m, writeTeamsToConfigCmd(msg.ids, msg.names)
 
 	case teamsConfigUpdatedMsg:
 		if msg.err != nil {
