@@ -6,6 +6,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,6 +16,11 @@ import (
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+)
+
+const (
+	cfgFileName = "srepd.yaml"
+	cfgFileDir  = ".config/srepd"
 )
 
 const (
@@ -113,11 +119,11 @@ var configCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		switch {
 		case cmd.Flag("create").Value.String() == "true":
-			err := createConfig()
+			home, err := os.UserHomeDir()
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get user home directory: %w", err)
 			}
-			return nil
+			return createConfig(osFS{}, home)
 		case cmd.Flag("validate").Value.String() == "true":
 			err := validateConfig()
 			if err != nil {
@@ -152,37 +158,44 @@ func init() {
 	configCmd.MarkFlagsMutuallyExclusive("create", "validate")
 }
 
-// createConfig creates the config directory and writes an example config file
-func createConfig() error {
-	const (
-		cfgFile     = "srepd.yaml"
-		cfgFilePath = ".config/srepd"
-	)
+type configFS interface {
+	MkdirAll(path string, perm os.FileMode) error
+	OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error)
+}
 
-	// Find home directory
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
+type osFS struct{}
 
-	// Construct full config directory path
-	configDir := filepath.Join(home, cfgFilePath)
+func (osFS) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
 
-	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+func (osFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
+	return os.OpenFile(name, flag, perm)
+}
+
+func createConfig(fs configFS, baseDir string) (retErr error) {
+	configDir := filepath.Join(baseDir, cfgFileDir)
+
+	if err := fs.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Construct full config file path
-	configFile := filepath.Join(configDir, cfgFile)
+	configFile := filepath.Join(configDir, cfgFileName)
 
-	// Check if config file already exists
-	if _, err := os.Stat(configFile); err == nil {
-		return fmt.Errorf("config file already exists at %s", configFile)
+	f, err := fs.OpenFile(configFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("config file already exists at %s", configFile)
+		}
+		return fmt.Errorf("failed to create config file: %w", err)
 	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = fmt.Errorf("failed to close config file: %w", cerr)
+		}
+	}()
 
-	// Write example config to file
-	if err := os.WriteFile(configFile, []byte(exampleConfig), 0644); err != nil {
+	if _, err := f.Write([]byte(strings.TrimLeft(exampleConfig, "\n"))); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
