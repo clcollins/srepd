@@ -14,10 +14,12 @@ import (
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -357,18 +359,34 @@ func runTeamSelector(teams []pagerduty.Team) ([]string, error) {
 		options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID))
 	}
 
+	colors := viper.GetStringMapString("colors")
+	theme := tui.ThemeFromConfig(colors)
+
+	huhTheme := huh.ThemeCharm()
+	huhTheme.Focused.Title = huhTheme.Focused.Title.Foreground(theme.Highlight)
+	huhTheme.Focused.Description = huhTheme.Focused.Description.Foreground(theme.Muted)
+	huhTheme.Focused.SelectedOption = huhTheme.Focused.SelectedOption.Foreground(theme.Highlight)
+	huhTheme.Focused.UnselectedOption = huhTheme.Focused.UnselectedOption.Foreground(theme.Text)
+	huhTheme.Focused.Base = huhTheme.Focused.Base.BorderForeground(theme.Border)
+
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Select your PagerDuty teams").
-				Description("Use space to toggle, enter to confirm").
+				Description("Use space to toggle, enter to confirm, esc to skip").
 				Options(options...).
 				Value(&selected),
 		),
-	)
+	).WithTheme(huhTheme)
 
-	if err := form.Run(); err != nil {
-		return nil, fmt.Errorf("team selection cancelled: %w", err)
+	p := tea.NewProgram(form, tea.WithAltScreen())
+	_, err := p.Run()
+	if err != nil {
+		return nil, fmt.Errorf("team selection failed: %w", err)
+	}
+
+	if form.State == huh.StateAborted {
+		return nil, nil
 	}
 
 	return selected, nil
