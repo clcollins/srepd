@@ -25,6 +25,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -285,18 +286,13 @@ func runDevMode() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	const (
-		cfgFile     = "srepd.yaml"
-		cfgFilePath = ".config/srepd/"
-	)
-
 	// Find home directory.
 	home, err := os.UserHomeDir()
 	cobra.CheckErr(err)
 
 	// Search config in home directory with name ".srepd" (without extension).
-	viper.AddConfigPath(home + "/" + cfgFilePath)
-	viper.SetConfigName(cfgFile)
+	viper.AddConfigPath(filepath.Join(home, cfgFileDir))
+	viper.SetConfigName(cfgFileName)
 	viper.SetConfigType("yaml")
 
 	viper.SetEnvPrefix("srepd")

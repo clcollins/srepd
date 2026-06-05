@@ -1,10 +1,18 @@
 package cmd
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // setValidConfig populates viper with a complete, valid configuration
@@ -175,4 +183,134 @@ func TestValidateConfig_CaseSensitiveEscalationKeys(t *testing.T) {
 	assert.Error(t, err, "validateConfig should return an error when required escalation policy keys (default, silent_default) are missing")
 	assert.Contains(t, err.Error(), "DEFAULT", "error should mention the missing 'DEFAULT' key")
 	assert.Contains(t, err.Error(), "SILENT_DEFAULT", "error should mention the missing 'SILENT_DEFAULT' key")
+}
+
+// mockFS is a fully in-memory mock of the configFS interface.
+type mockFS struct {
+	mkdirAllErr error
+	openFileErr error
+	buf         bytes.Buffer
+	openFlags   int
+	openPerm    os.FileMode
+	mkdirPerm   os.FileMode
+	mkdirPath   string
+	openPath    string
+}
+
+func (m *mockFS) MkdirAll(path string, perm os.FileMode) error {
+	m.mkdirPath = path
+	m.mkdirPerm = perm
+	return m.mkdirAllErr
+}
+
+type nopCloser struct{ *bytes.Buffer }
+
+func (nopCloser) Close() error { return nil }
+
+func (m *mockFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
+	m.openPath = name
+	m.openFlags = flag
+	m.openPerm = perm
+	if m.openFileErr != nil {
+		return nil, m.openFileErr
+	}
+	return nopCloser{&m.buf}, nil
+}
+
+func TestCreateConfig_Success(t *testing.T) {
+	m := &mockFS{}
+
+	err := createConfig(m, "/fake/home")
+
+	require.NoError(t, err)
+
+	expected := strings.TrimLeft(exampleConfig, "\n")
+	assert.Equal(t, expected, m.buf.String())
+}
+
+func TestCreateConfig_ContentTrimmed(t *testing.T) {
+	m := &mockFS{}
+
+	err := createConfig(m, "/fake/home")
+
+	require.NoError(t, err)
+	assert.True(t, len(m.buf.Bytes()) > 0, "written content should not be empty")
+	assert.Equal(t, byte('#'), m.buf.Bytes()[0],
+		"config file should start with '#', not a blank line")
+}
+
+func TestCreateConfig_UsesCorrectPaths(t *testing.T) {
+	m := &mockFS{}
+
+	err := createConfig(m, "/fake/home")
+
+	require.NoError(t, err)
+
+	expectedDir := filepath.Join("/fake/home", cfgFileDir)
+	expectedFile := filepath.Join(expectedDir, cfgFileName)
+
+	assert.Equal(t, expectedDir, m.mkdirPath)
+	assert.Equal(t, expectedFile, m.openPath)
+}
+
+func TestCreateConfig_UsesExclFlag(t *testing.T) {
+	m := &mockFS{}
+
+	err := createConfig(m, "/fake/home")
+
+	require.NoError(t, err)
+
+	expectedFlags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	assert.Equal(t, expectedFlags, m.openFlags,
+		"OpenFile should use O_WRONLY|O_CREATE|O_EXCL for atomic creation")
+}
+
+func TestCreateConfig_UsesCorrectPerms(t *testing.T) {
+	m := &mockFS{}
+
+	err := createConfig(m, "/fake/home")
+
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), m.mkdirPerm, "directory should use 0755 permissions")
+	assert.Equal(t, os.FileMode(0644), m.openPerm, "file should use 0644 permissions")
+}
+
+func TestCreateConfig_ErrorWhenFileExists(t *testing.T) {
+	m := &mockFS{
+		openFileErr: &os.PathError{
+			Op:   "open",
+			Path: "/fake/home/.config/srepd/srepd.yaml",
+			Err:  os.ErrExist,
+		},
+	}
+
+	err := createConfig(m, "/fake/home")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+	assert.Contains(t, err.Error(), fmt.Sprintf("%s/%s/%s", "/fake/home", cfgFileDir, cfgFileName))
+}
+
+func TestCreateConfig_ErrorOnMkdirFail(t *testing.T) {
+	m := &mockFS{
+		mkdirAllErr: errors.New("permission denied"),
+	}
+
+	err := createConfig(m, "/fake/home")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create config directory")
+	assert.Contains(t, err.Error(), "permission denied")
+}
+
+func TestCreateConfig_ErrorOnOpenFail(t *testing.T) {
+	m := &mockFS{
+		openFileErr: errors.New("disk full"),
+	}
+
+	err := createConfig(m, "/fake/home")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create config file")
+	assert.Contains(t, err.Error(), "disk full")
 }
