@@ -6,6 +6,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -111,7 +113,10 @@ var configCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		switch {
 		case cmd.Flag("create").Value.String() == "true":
-			fmt.Println(exampleConfig)
+			err := createConfig()
+			if err != nil {
+				return err
+			}
 			return nil
 		case cmd.Flag("validate").Value.String() == "true":
 			err := validateConfig()
@@ -142,9 +147,48 @@ func init() {
 	// is called directly, e.g.:
 	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
-	configCmd.Flags().BoolP("create", "c", false, "print a sample config file")
+	configCmd.Flags().BoolP("create", "c", false, "create a sample config file at ~/.config/srepd/srepd.yaml")
 	configCmd.Flags().BoolP("validate", "v", false, "validate the config file")
 	configCmd.MarkFlagsMutuallyExclusive("create", "validate")
+}
+
+// createConfig creates the config directory and writes an example config file
+func createConfig() error {
+	const (
+		cfgFile     = "srepd.yaml"
+		cfgFilePath = ".config/srepd"
+	)
+
+	// Find home directory
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	// Construct full config directory path
+	configDir := filepath.Join(home, cfgFilePath)
+
+	// Create config directory if it doesn't exist
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Construct full config file path
+	configFile := filepath.Join(configDir, cfgFile)
+
+	// Check if config file already exists
+	if _, err := os.Stat(configFile); err == nil {
+		return fmt.Errorf("config file already exists at %s", configFile)
+	}
+
+	// Write example config to file
+	if err := os.WriteFile(configFile, []byte(exampleConfig), 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	fmt.Printf("Config file created at %s\n", configFile)
+	fmt.Println("Please edit the file to add your PagerDuty credentials and team information.")
+	return nil
 }
 
 // validateConfig prints the viper info passed into the program
