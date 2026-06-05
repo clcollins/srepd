@@ -43,7 +43,7 @@ go install .        # standard go install
 
 ## Configuration
 
-SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Generate a sample config with `srepd config --create` or validate with `srepd config --validate`.
+SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Create a sample config file with `srepd config --create` or validate an existing one with `srepd config --validate`.
 
 ### Required
 
