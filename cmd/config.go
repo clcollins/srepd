@@ -13,8 +13,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/deprecation"
+	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -125,7 +128,11 @@ var configCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to get user home directory: %w", err)
 			}
-			return createConfig(osFS{}, home)
+			if err := createConfig(osFS{}, home); err != nil {
+				return err
+			}
+			fmt.Println("\nTip: After adding your token, run 'srepd config --list-teams' to see available teams.")
+			return nil
 		case cmd.Flag("validate").Value.String() == "true":
 			err := validateConfig()
 			if err != nil {
@@ -133,8 +140,8 @@ var configCmd = &cobra.Command{
 			}
 			fmt.Printf("Config file is valid\n")
 			return nil
-		case cmd.Flag("create").Value.String() == "true" && cmd.Flag("validate").Value.String() == "true":
-			return errors.New("cannot use both --create and --validate flags together")
+		case cmd.Flag("list-teams").Value.String() == "true":
+			return runListTeams()
 		default:
 			err := cmd.Usage()
 			return err
@@ -157,7 +164,8 @@ func init() {
 
 	configCmd.Flags().BoolP("create", "c", false, "create a sample config file at ~/.config/srepd/srepd.yaml")
 	configCmd.Flags().BoolP("validate", "v", false, "validate the config file")
-	configCmd.MarkFlagsMutuallyExclusive("create", "validate")
+	configCmd.Flags().BoolP("list-teams", "l", false, "select your PagerDuty teams interactively")
+	configCmd.MarkFlagsMutuallyExclusive("create", "validate", "list-teams")
 }
 
 type configFS interface {
@@ -286,6 +294,70 @@ func writeConfigTeams(fs configFS, baseDir string, teamIDs []string) error {
 	}
 
 	return nil
+}
+
+func runListTeams() error {
+	token := viper.GetString("token")
+	if token == "" {
+		return fmt.Errorf("no PagerDuty API token found; set 'token' in config or SREPD_TOKEN env var")
+	}
+
+	client := pd.NewClient(token)
+	teams, err := pd.GetCurrentUserTeams(client)
+	if err != nil {
+		return err
+	}
+
+	if len(teams) == 0 {
+		fmt.Println("No teams found in your PagerDuty account.")
+		return nil
+	}
+
+	selectedIDs, err := runTeamSelector(teams)
+	if err != nil {
+		return err
+	}
+
+	if len(selectedIDs) == 0 {
+		fmt.Println("No teams selected.")
+		return nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	if err := writeConfigTeams(osFS{}, home, selectedIDs); err != nil {
+		return err
+	}
+
+	fmt.Printf("\nSaved %d team(s) to config.\n", len(selectedIDs))
+	return nil
+}
+
+func runTeamSelector(teams []pagerduty.Team) ([]string, error) {
+	var selected []string
+	var options []huh.Option[string]
+	for _, team := range teams {
+		options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID))
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewMultiSelect[string]().
+				Title("Select your PagerDuty teams").
+				Description("Use space to toggle, enter to confirm").
+				Options(options...).
+				Value(&selected),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return nil, fmt.Errorf("team selection cancelled: %w", err)
+	}
+
+	return selected, nil
 }
 
 func hasPlaceholderTeams(teams []string) bool {
