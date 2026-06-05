@@ -645,9 +645,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cluster string
 		switch len(clusters) {
 		case 0:
-			// Alerts exist but none carry a cluster_id
-			cluster = ""
-			m.setStatus("no cluster_id found in alerts - launching without cluster")
+			return m, m.flashNotification("No cluster_id found in alerts — cannot login")
 		case 1:
 			cluster = clusters[0]
 			m.setStatus(fmt.Sprintf("logging into cluster %s", cluster))
