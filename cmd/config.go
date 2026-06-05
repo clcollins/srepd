@@ -163,13 +163,13 @@ type configFS interface {
 	OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error)
 }
 
-type osFS struct{}
+type osFS struct{} // codecov:ignore
 
-func (osFS) MkdirAll(path string, perm os.FileMode) error {
+func (osFS) MkdirAll(path string, perm os.FileMode) error { // codecov:ignore
 	return os.MkdirAll(path, perm)
 }
 
-func (osFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
+func (osFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) { // codecov:ignore
 	return os.OpenFile(name, flag, perm)
 }
 
