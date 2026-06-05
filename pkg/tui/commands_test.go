@@ -317,7 +317,7 @@ func TestUpdateIncidentList(t *testing.T) {
 			},
 			expected: updatedIncidentListMsg{
 				incidents: []pagerduty.Incident(nil),
-				err:       fmt.Errorf("pd.GetIncidents(): failed to get incidents: %v", pd.ErrMockError),
+				err:       fmt.Errorf("pd.GetIncidents(): failed to get incidents: %w", pd.ErrMockError),
 			},
 		},
 		{

@@ -137,16 +137,19 @@ func updateIncidentList(p *pd.Config) tea.Cmd {
 }
 
 // newListIncidentOptsFromConfig returns a ListIncidentsOptions struct
+// maxUserIDsInQuery is the maximum number of user IDs to include in a PagerDuty
+// API query before falling back to team-based filtering. PagerDuty returns HTTP
+// 414 (URI Too Long) when the query string exceeds its limit.
+const maxUserIDsInQuery = 100
+
 // with the UserIDs and TeamIDs fields populated from the given Config
 func newListIncidentOptsFromConfig(p *pd.Config) pagerduty.ListIncidentsOptions {
 	var opts = pagerduty.ListIncidentsOptions{}
 
-	// If the Config is nil, return the default options
 	if p == nil {
 		return opts
 	}
 
-	// Convert the list of *pagerduty.User to a slice of user IDs
 	if p.IgnoredUsers == nil {
 		p.IgnoredUsers = []*pagerduty.User{}
 	}
@@ -159,12 +162,11 @@ func newListIncidentOptsFromConfig(p *pd.Config) pagerduty.ListIncidentsOptions 
 		return l
 	}(p.IgnoredUsers)
 
-	// If the UserID from p.TeamMemberIDs is not in the ignoredUserIDs slice, add it to the opts.UserIDs slice
 	if p.TeamsMemberIDs == nil {
 		p.TeamsMemberIDs = []string{}
 	}
 
-	opts.UserIDs = func(a []string, i []string) []string {
+	filteredUserIDs := func(a []string, i []string) []string {
 		var l []string
 		for _, u := range a {
 			if !slices.Contains(i, u) {
@@ -174,7 +176,6 @@ func newListIncidentOptsFromConfig(p *pd.Config) pagerduty.ListIncidentsOptions 
 		return l
 	}(p.TeamsMemberIDs, ignoredUserIDs)
 
-	// Convert the list of *pagerduty.Team to a slice of team IDs
 	if p.Teams == nil {
 		p.Teams = []*pagerduty.Team{}
 	}
@@ -186,6 +187,14 @@ func newListIncidentOptsFromConfig(p *pd.Config) pagerduty.ListIncidentsOptions 
 		}
 		return l
 	}(p.Teams)
+
+	if len(filteredUserIDs) <= maxUserIDsInQuery {
+		opts.UserIDs = filteredUserIDs
+	} else {
+		log.Warn("Too many team members for per-user filtering, using team-based filtering instead",
+			"member_count", len(filteredUserIDs),
+			"max", maxUserIDsInQuery)
+	}
 
 	return opts
 }

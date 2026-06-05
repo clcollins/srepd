@@ -227,7 +227,10 @@ func GetIncidents(client PagerDutyClient, opts pagerduty.ListIncidentsOptions) (
 	for {
 		response, err := client.ListIncidentsWithContext(ctx, opts)
 		if err != nil {
-			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents: %v", err)
+			if strings.Contains(err.Error(), "414") {
+				return i, fmt.Errorf("pd.GetIncidents(): too many team members (%d) for PagerDuty API query — try selecting fewer teams: %w", len(opts.UserIDs), err)
+			}
+			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents: %w", err)
 		}
 
 		i = append(i, response.Incidents...)
