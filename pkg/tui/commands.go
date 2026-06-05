@@ -11,12 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"bytes"
+	"path/filepath"
+
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
+	"gopkg.in/yaml.v3"
 )
 
 // This file contains the commands that are used in the Bubble Tea update function.
@@ -982,4 +986,112 @@ func getIDsFromIncidents(incidents []pagerduty.Incident) []string {
 		ids = append(ids, i.ID)
 	}
 	return ids
+}
+
+func hasPlaceholderTeamsCfg(teams []string) bool {
+	if len(teams) == 0 {
+		return true
+	}
+	for _, team := range teams {
+		trimmed := strings.TrimSpace(team)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
+			return false
+		}
+	}
+	return true
+}
+
+type fetchedTeamsMsg struct {
+	teams []pagerduty.Team
+	err   error
+}
+
+type teamsSelectedMsg []string
+
+type teamsConfigUpdatedMsg struct{ err error }
+
+func fetchUserTeams(client pd.PagerDutyClient) tea.Cmd {
+	return func() tea.Msg {
+		teams, err := pd.GetCurrentUserTeams(client)
+		return fetchedTeamsMsg{teams: teams, err: err}
+	}
+}
+
+func writeTeamsToConfigCmd(teamIDs []string) tea.Cmd {
+	return func() tea.Msg {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to get home directory: %w", err)}
+		}
+
+		configFile := filepath.Join(home, ".config", "srepd", "srepd.yaml")
+
+		data, err := os.ReadFile(configFile)
+		if err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to read config: %w", err)}
+		}
+
+		updated, err := updateTeamsInYAML(data, teamIDs)
+		if err != nil {
+			return teamsConfigUpdatedMsg{err: err}
+		}
+
+		if err := os.WriteFile(configFile, updated, 0644); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to write config: %w", err)}
+		}
+
+		return teamsConfigUpdatedMsg{}
+	}
+}
+
+func updateTeamsInYAML(configData []byte, teamIDs []string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(configData, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, fmt.Errorf("invalid YAML document structure")
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected YAML mapping at root")
+	}
+
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		if root.Content[i].Value == "teams" {
+			teamsValue := root.Content[i+1]
+			teamsValue.Content = nil
+			if len(teamIDs) == 0 {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = yaml.FlowStyle
+			} else {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = 0
+				for _, id := range teamIDs {
+					teamsValue.Content = append(teamsValue.Content, &yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Tag:   "!!str",
+						Value: id,
+					})
+				}
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			enc.SetIndent(2)
+			if err := enc.Encode(&doc); err != nil {
+				return nil, fmt.Errorf("failed to encode config YAML: %w", err)
+			}
+			if err := enc.Close(); err != nil {
+				return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
+			}
+			return buf.Bytes(), nil
+		}
+	}
+
+	return nil, fmt.Errorf("'teams' key not found in config")
 }

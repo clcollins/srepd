@@ -10,6 +10,7 @@ import (
 	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -126,6 +127,11 @@ type model struct {
 	mergeTargetID       string
 	mergeTable          table.Model
 	mergeTeamMode       bool
+
+	// Team selection state — shown on first run or via --list-teams
+	teamSelectMode bool
+	teamSelectForm *huh.Form
+	teamSelectIDs  []string
 
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient

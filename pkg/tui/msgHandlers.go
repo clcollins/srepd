@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 )
 
@@ -208,6 +209,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Default commands for the table view
 	switch {
+	case m.teamSelectMode:
+		return switchTeamSelectFocusMode(m, msg)
+
 	case m.err != nil:
 		return switchErrorFocusMode(m, msg)
 
@@ -231,6 +235,27 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func switchTeamSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.teamSelectForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.teamSelectForm = f
+	}
+	if m.teamSelectForm.State == huh.StateCompleted {
+		m.teamSelectMode = false
+		m.table.Focus()
+		selected := make([]string, len(m.teamSelectIDs))
+		copy(selected, m.teamSelectIDs)
+		return m, func() tea.Msg { return teamsSelectedMsg(selected) }
+	}
+	if m.teamSelectForm.State == huh.StateAborted {
+		m.teamSelectMode = false
+		m.table.Focus()
+		m.setStatus("team selection skipped")
+		return m, nil
+	}
+	return m, cmd
 }
 
 func switchClusterSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
