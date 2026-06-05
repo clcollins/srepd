@@ -195,6 +195,11 @@ type mockFS struct {
 	mkdirPerm   os.FileMode
 	mkdirPath   string
 	openPath    string
+	readData    []byte
+	readErr     error
+	writeData   []byte
+	writeErr    error
+	writePath   string
 }
 
 func (m *mockFS) MkdirAll(path string, perm os.FileMode) error {
@@ -206,6 +211,22 @@ func (m *mockFS) MkdirAll(path string, perm os.FileMode) error {
 type nopCloser struct{ *bytes.Buffer }
 
 func (nopCloser) Close() error { return nil }
+
+func (m *mockFS) ReadFile(name string) ([]byte, error) {
+	if m.readErr != nil {
+		return nil, m.readErr
+	}
+	return m.readData, nil
+}
+
+func (m *mockFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	m.writePath = name
+	m.writeData = data
+	if m.writeErr != nil {
+		return m.writeErr
+	}
+	return nil
+}
 
 func (m *mockFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
 	m.openPath = name
@@ -313,4 +334,122 @@ func TestCreateConfig_ErrorOnOpenFail(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create config file")
 	assert.Contains(t, err.Error(), "disk full")
+}
+
+func TestHasPlaceholderTeams_Empty(t *testing.T) {
+	assert.True(t, hasPlaceholderTeams([]string{}))
+}
+
+func TestHasPlaceholderTeams_Nil(t *testing.T) {
+	assert.True(t, hasPlaceholderTeams(nil))
+}
+
+func TestHasPlaceholderTeams_AllPlaceholders(t *testing.T) {
+	teams := []string{"<PagerDuty Team ID 1>", "<PagerDuty Team ID 2>"}
+	assert.True(t, hasPlaceholderTeams(teams))
+}
+
+func TestHasPlaceholderTeams_OneReal(t *testing.T) {
+	teams := []string{"P1ABC23"}
+	assert.False(t, hasPlaceholderTeams(teams))
+}
+
+func TestHasPlaceholderTeams_MixedRealAndPlaceholder(t *testing.T) {
+	teams := []string{"<PagerDuty Team ID 1>", "P1ABC23"}
+	assert.False(t, hasPlaceholderTeams(teams))
+}
+
+func TestHasPlaceholderTeams_WhitespaceOnly(t *testing.T) {
+	teams := []string{"  ", ""}
+	assert.True(t, hasPlaceholderTeams(teams))
+}
+
+func TestUpdateTeamsInConfig_ReplacesPlaceholders(t *testing.T) {
+	input := []byte(`token: my-token
+teams:
+  - <PagerDuty Team ID 1>
+  - <PagerDuty Team ID 2>
+editor: vim
+`)
+	result, err := updateTeamsInConfig(input, []string{"P1ABC23", "P4DEF56"})
+
+	require.NoError(t, err)
+	assert.Contains(t, string(result), "- P1ABC23")
+	assert.Contains(t, string(result), "- P4DEF56")
+	assert.NotContains(t, string(result), "<PagerDuty Team ID")
+	assert.Contains(t, string(result), "token: my-token")
+	assert.Contains(t, string(result), "editor: vim")
+}
+
+func TestUpdateTeamsInConfig_PreservesComments(t *testing.T) {
+	input := []byte(`# Main config
+token: my-token
+# Teams to filter on
+teams:
+  - <PagerDuty Team ID 1>
+editor: vim
+`)
+	result, err := updateTeamsInConfig(input, []string{"PREAL1"})
+
+	require.NoError(t, err)
+	assert.Contains(t, string(result), "# Main config")
+	assert.Contains(t, string(result), "# Teams to filter on")
+	assert.Contains(t, string(result), "- PREAL1")
+}
+
+func TestUpdateTeamsInConfig_EmptyTeams(t *testing.T) {
+	input := []byte(`token: my-token
+teams:
+  - <PagerDuty Team ID 1>
+`)
+	result, err := updateTeamsInConfig(input, []string{})
+
+	require.NoError(t, err)
+	assert.Contains(t, string(result), "teams: []")
+}
+
+func TestUpdateTeamsInConfig_NoTeamsKey(t *testing.T) {
+	input := []byte(`token: my-token
+editor: vim
+`)
+	_, err := updateTeamsInConfig(input, []string{"P1ABC23"})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "teams")
+}
+
+func TestWriteConfigTeams_Success(t *testing.T) {
+	configData := []byte(`token: my-token
+teams:
+  - <PagerDuty Team ID 1>
+`)
+	m := &mockFS{readData: configData}
+
+	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"})
+
+	require.NoError(t, err)
+	assert.Contains(t, string(m.writeData), "- P1ABC23")
+	assert.NotContains(t, string(m.writeData), "<PagerDuty Team ID")
+}
+
+func TestWriteConfigTeams_ReadError(t *testing.T) {
+	m := &mockFS{readErr: errors.New("no such file")}
+
+	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read config")
+}
+
+func TestWriteConfigTeams_WriteError(t *testing.T) {
+	configData := []byte(`token: my-token
+teams:
+  - <PagerDuty Team ID 1>
+`)
+	m := &mockFS{readData: configData, writeErr: errors.New("disk full")}
+
+	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to write config")
 }

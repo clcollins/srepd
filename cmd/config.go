@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -161,6 +163,8 @@ func init() {
 type configFS interface {
 	MkdirAll(path string, perm os.FileMode) error
 	OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error)
+	ReadFile(name string) ([]byte, error)
+	WriteFile(name string, data []byte, perm os.FileMode) error
 }
 
 type osFS struct{} // codecov:ignore
@@ -171,6 +175,14 @@ func (osFS) MkdirAll(path string, perm os.FileMode) error { // codecov:ignore
 
 func (osFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) { // codecov:ignore
 	return os.OpenFile(name, flag, perm)
+}
+
+func (osFS) ReadFile(name string) ([]byte, error) { // codecov:ignore
+	return os.ReadFile(name)
+}
+
+func (osFS) WriteFile(name string, data []byte, perm os.FileMode) error { // codecov:ignore
+	return os.WriteFile(name, data, perm)
 }
 
 func createConfig(fs configFS, baseDir string) (retErr error) {
@@ -202,6 +214,91 @@ func createConfig(fs configFS, baseDir string) (retErr error) {
 	fmt.Printf("Config file created at %s\n", configFile)
 	fmt.Println("Please edit the file to add your PagerDuty credentials and team information.")
 	return nil
+}
+
+func updateTeamsInConfig(configData []byte, teamIDs []string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(configData, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, fmt.Errorf("invalid YAML document structure")
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected YAML mapping at root")
+	}
+
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		if root.Content[i].Value == "teams" {
+			teamsValue := root.Content[i+1]
+			teamsValue.Content = nil
+			if len(teamIDs) == 0 {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = yaml.FlowStyle
+			} else {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = 0
+				for _, id := range teamIDs {
+					teamsValue.Content = append(teamsValue.Content, &yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Tag:   "!!str",
+						Value: id,
+					})
+				}
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			enc.SetIndent(2)
+			if err := enc.Encode(&doc); err != nil {
+				return nil, fmt.Errorf("failed to encode config YAML: %w", err)
+			}
+			if err := enc.Close(); err != nil {
+				return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
+			}
+			return buf.Bytes(), nil
+		}
+	}
+
+	return nil, fmt.Errorf("'teams' key not found in config")
+}
+
+func writeConfigTeams(fs configFS, baseDir string, teamIDs []string) error {
+	configFile := filepath.Join(baseDir, cfgFileDir, cfgFileName)
+
+	data, err := fs.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	updated, err := updateTeamsInConfig(data, teamIDs)
+	if err != nil {
+		return err
+	}
+
+	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+func hasPlaceholderTeams(teams []string) bool {
+	if len(teams) == 0 {
+		return true
+	}
+	for _, team := range teams {
+		trimmed := strings.TrimSpace(team)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
+			return false
+		}
+	}
+	return true
 }
 
 // validateConfig prints the viper info passed into the program
