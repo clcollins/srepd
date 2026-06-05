@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
@@ -808,14 +809,19 @@ var funcMap = template.FuncMap{
 }
 
 func renderIncidentMarkdown(m *model, content string) (string, error) {
-	// If no renderer available, return plain content
-	if m.markdownRenderer == nil {
+	wrapWidth := m.incidentViewer.Width
+	if wrapWidth < 40 {
+		wrapWidth = 100
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(m.styles.GlamourStyle),
+		glamour.WithWordWrap(wrapWidth),
+	)
+	if err != nil {
 		return content, nil
 	}
 
-	// Reuse the cached renderer - it was created with a reasonable default width
-	// and glamour's word wrapping will handle variations reasonably well
-	str, err := m.markdownRenderer.Render(content)
+	str, err := renderer.Render(content)
 	if err != nil {
 		return str, err
 	}
