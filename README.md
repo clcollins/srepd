@@ -63,6 +63,23 @@ SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment varia
 | `ignoredusers` | `[]string` | (none) | PagerDuty user IDs to exclude |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
+| `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
+
+### Colors
+
+All color keys are optional. Unspecified keys use defaults. Values must be hex colors (e.g., `#778da9`).
+
+```yaml
+colors:
+  text: "#778da9"       # Normal text, table rows
+  border: "#415a77"     # Borders, tab outlines, separators
+  highlight: "#ffffff"  # Headers, selected row text, active tab
+  selected: "#415a77"   # Selected row background
+  warning: "#a4133c"    # Warning/confirmation prompts
+  error: "#0d1b2a"      # Error modal background
+  muted: "#5C5C5C"      # Muted text (version, incident ID)
+  tab: "#7D56F4"        # Reserved for future use
+```
 
 ### Example
 
