@@ -128,6 +128,10 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.help.Width = windowSize.Width - horizontalScratchWidth
 
+	if m.viewingIncident {
+		return m, func() tea.Msg { return renderIncidentMsg("window resized") }
+	}
+
 	return m, nil
 }
 
