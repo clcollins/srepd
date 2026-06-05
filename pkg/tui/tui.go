@@ -208,6 +208,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
 		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
 		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
+		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
+		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
 		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
 
 		m.teamSelectForm = huh.NewForm(

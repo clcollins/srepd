@@ -85,50 +85,53 @@ but rather a simple tool to make on-call tasks easier.`,
 			return
 		}
 
-		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"), viper.GetString("toolbox_mode"))
-		if err != nil {
-			fmt.Println(err)
-			log.Fatal(err)
-		}
-
-		// Initialize OCM client (optional — silently disabled if not configured)
-		ocmClient, ocmErr := ocm.NewClient(tui.Version)
-		if ocmErr != nil {
-			log.Warn("OCM connection failed", "error", ocmErr)
-		} else if ocmClient != nil {
-			defer ocmClient.Close()
-			log.Info("OCM connected")
-		} else {
-			log.Warn("OCM not configured")
-		}
-
-		m, _ := tui.InitialModel(
-			viper.GetString("token"),
-			viper.GetStringSlice("teams"),
-			viper.GetStringMapString("service_escalation_policies"),
-			viper.GetStringSlice("ignoredusers"),
-			viper.GetStringSlice("editor"),
-			launcher,
-			viper.GetBool("debug"),
-			ocmClient,
-			viper.GetStringMapString("colors"),
-		)
-
-		p := tea.NewProgram(m, tea.WithAltScreen())
-
-		go func() {
-			for {
-				time.Sleep(tickInterval * time.Second)
-				p.Send(tui.TickMsg{})
-			}
-		}()
-
-		_, err = p.Run()
-		if err != nil {
-			fmt.Println(err)
-			log.Fatal(err)
-		}
+		launchTUI()
 	},
+}
+
+func launchTUI() {
+	l, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"), viper.GetString("toolbox_mode"))
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+	}
+
+	ocmClient, ocmErr := ocm.NewClient(tui.Version)
+	if ocmErr != nil {
+		log.Warn("OCM connection failed", "error", ocmErr)
+	} else if ocmClient != nil {
+		defer ocmClient.Close()
+		log.Info("OCM connected")
+	} else {
+		log.Warn("OCM not configured")
+	}
+
+	m, _ := tui.InitialModel(
+		viper.GetString("token"),
+		viper.GetStringSlice("teams"),
+		viper.GetStringMapString("service_escalation_policies"),
+		viper.GetStringSlice("ignoredusers"),
+		viper.GetStringSlice("editor"),
+		l,
+		viper.GetBool("debug"),
+		ocmClient,
+		viper.GetStringMapString("colors"),
+	)
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	go func() {
+		for {
+			time.Sleep(tickInterval * time.Second)
+			p.Send(tui.TickMsg{})
+		}
+	}()
+
+	_, err = p.Run()
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+	}
 }
 
 // logWriter holds the active asyncWriter so it can be flushed on shutdown.

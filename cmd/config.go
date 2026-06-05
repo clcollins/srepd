@@ -348,7 +348,8 @@ func runListTeams() error {
 		return err
 	}
 
-	fmt.Printf("\nSaved %d team(s) to config.\n", len(selectedIDs))
+	fmt.Printf("\nSaved %d team(s) to config. Launching srepd...\n", len(selectedIDs))
+	launchTUI()
 	return nil
 }
 
@@ -367,6 +368,9 @@ func runTeamSelector(teams []pagerduty.Team) ([]string, error) {
 	huhTheme.Focused.Description = huhTheme.Focused.Description.Foreground(theme.Muted)
 	huhTheme.Focused.SelectedOption = huhTheme.Focused.SelectedOption.Foreground(theme.Highlight)
 	huhTheme.Focused.UnselectedOption = huhTheme.Focused.UnselectedOption.Foreground(theme.Text)
+	huhTheme.Focused.MultiSelectSelector = huhTheme.Focused.MultiSelectSelector.Foreground(theme.Text)
+	huhTheme.Focused.SelectedPrefix = huhTheme.Focused.SelectedPrefix.Foreground(theme.Highlight)
+	huhTheme.Focused.UnselectedPrefix = huhTheme.Focused.UnselectedPrefix.Foreground(theme.Muted)
 	huhTheme.Focused.Base = huhTheme.Focused.Base.BorderForeground(theme.Border)
 
 	form := huh.NewForm(
@@ -377,10 +381,9 @@ func runTeamSelector(teams []pagerduty.Team) ([]string, error) {
 				Options(options...).
 				Value(&selected),
 		),
-	).WithTheme(huhTheme)
+	).WithTheme(huhTheme).WithProgramOptions(tea.WithAltScreen())
 
-	p := tea.NewProgram(form, tea.WithAltScreen())
-	_, err := p.Run()
+	err := form.Run()
 	if err != nil {
 		return nil, fmt.Errorf("team selection failed: %w", err)
 	}
