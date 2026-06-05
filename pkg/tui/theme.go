@@ -158,9 +158,7 @@ func BuildStyles(theme Theme) Styles {
 	}
 }
 
-func stringPtr(s string) *string { return &s }
-func boolPtr(b bool) *bool       { return &b }
-func uintPtr(u uint) *uint       { return &u }
+func boolPtr(b bool) *bool { return &b }
 
 func buildGlamourStyle(theme Theme) ansi.StyleConfig {
 	style := glamourstyles.DarkStyleConfig
