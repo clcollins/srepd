@@ -754,7 +754,6 @@ func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 	return border
 }
 
-
 func (m model) renderTabBar() string {
 	tabLabels := make([]string, tabCount)
 	tabLabels[tabDetails] = "Details"
