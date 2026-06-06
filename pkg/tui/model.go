@@ -164,6 +164,8 @@ func InitialModel(
 	debug bool,
 	ocmClient ocm.OCMClient,
 	colors map[string]string,
+	defaultSilentPolicy string,
+	customSilentPolicies map[string]string,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -222,7 +224,7 @@ func InitialModel(
 	// We have to set the m.err here instead of how the errMsg is handled
 	// because the Init() occurs before the Update() and the errMsg is not
 	// preserved
-	pd, err := pd.NewConfig(token, teams, escalation_policies, ignoredusers)
+	pd, err := pd.NewConfig(token, teams, escalation_policies, ignoredusers, defaultSilentPolicy, customSilentPolicies)
 	m.config = pd
 
 	if err != nil {

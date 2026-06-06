@@ -48,17 +48,15 @@ teams:
   - <PagerDuty Team ID 1>
   - <PagerDuty Team ID 2>
 
-# Service to Escalation Policy mapping
-# The map may have 1 or more optional PagerDuty services to Escalation Policy mappings, but
-# must have a DEFAULT and SILENT_DEFAULT key.  The DEFAULT key is used for the default escalation policy
-# and the SILENT_DEFAULT key is used for the default escalation policy when the user wants to suppress
-# notifications.
-service_escalation_policies:
-  DEFAULT: <PagerDuty Escalation Policy ID 1>
-  SILENT_DEFAULT: <PagerDuty Escalation Policy ID 2>
-  <PagerDuty Service ID 1>: <PagerDuty Escalation Policy ID 3>
+# Default silent escalation policy — auto-discovered via --pick-teams
+# or set manually. Used when silencing incidents.
+# default_silent_escalation_policy: <PagerDuty Escalation Policy ID>
 
 # Optional configuration options
+
+# Per-service silent policy overrides (service ID → silent policy ID)
+# custom_service_escalation_policies:
+#   <PagerDuty Service ID>: <PagerDuty Escalation Policy ID>
 
 # Editor to use for notes
 editor: vim
@@ -91,9 +89,8 @@ the configuration options for the SREPD application.`
 
 var (
 	requiredKeys = map[string]string{
-		"token":                       "PagerDuty API token",
-		"teams":                       "PagerDuty team IDs to filter on",
-		"service_escalation_policies": "Service to Escalation Policy mapping (pagerduty_service_id:pagerduty_escalation_policy_id); Requires 'DEFAULT' and 'SILENT_DEFAULT' keys",
+		"token": "PagerDuty API token",
+		"teams": "PagerDuty team IDs to filter on",
 	}
 	defaultOptionalKeys = map[string]string{
 		"editor":                "vim",
@@ -103,12 +100,14 @@ var (
 		"chord_prefix":          "ctrl+x",
 	}
 	optionalKeys = map[string]string{
-		"editor":                fmt.Sprintf("Editor to use for notes (default: %v)", defaultOptionalKeys["editor"]),
-		"terminal":              fmt.Sprintf("Terminal to use for exec commands (default: %v)", defaultOptionalKeys["terminal"]),
-		"cluster_login_command": fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
-		"toolbox_mode":          fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", defaultOptionalKeys["toolbox_mode"]),
-		"chord_prefix":          fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", defaultOptionalKeys["chord_prefix"]),
-		"colors":                "Custom color scheme (map of color name to hex value)",
+		"editor":                             fmt.Sprintf("Editor to use for notes (default: %v)", defaultOptionalKeys["editor"]),
+		"terminal":                           fmt.Sprintf("Terminal to use for exec commands (default: %v)", defaultOptionalKeys["terminal"]),
+		"cluster_login_command":              fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
+		"toolbox_mode":                       fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", defaultOptionalKeys["toolbox_mode"]),
+		"chord_prefix":                       fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", defaultOptionalKeys["chord_prefix"]),
+		"colors":                             "Custom color scheme (map of color name to hex value)",
+		"default_silent_escalation_policy":   "Default silent escalation policy ID (auto-discovered via --pick-teams)",
+		"custom_service_escalation_policies": "Per-service silent policy overrides (service ID → policy ID)",
 	}
 )
 
@@ -349,7 +348,20 @@ func runPickTeams() error {
 		return err
 	}
 
-	fmt.Printf("\nSaved %d team(s) to config. Launching srepd...\n", len(selectedIDs))
+	fmt.Printf("\nSaved %d team(s) to config.\n", len(selectedIDs))
+
+	silentPolicyID, err := discoverAndSelectSilentPolicy(client, selectedIDs)
+	if err != nil {
+		log.Warn("Silent policy discovery failed", "error", err)
+	}
+	if silentPolicyID != "" {
+		if err := writeConfigKey(osFS{}, home, "default_silent_escalation_policy", silentPolicyID); err != nil {
+			return fmt.Errorf("failed to save silent policy to config: %w", err)
+		}
+		fmt.Printf("Saved default silent policy to config.\n")
+	}
+
+	fmt.Println("Launching srepd...")
 	launchTUI()
 	return nil
 }
@@ -472,4 +484,144 @@ func validateConfig() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func discoverAndSelectSilentPolicy(client pd.PagerDutyClient, teamIDs []string) (string, error) {
+	policies, err := pd.GetTeamEscalationPolicies(client, teamIDs)
+	if err != nil {
+		return "", fmt.Errorf("failed to list escalation policies: %w", err)
+	}
+
+	var silentPolicies []pagerduty.EscalationPolicy
+	for _, p := range policies {
+		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent {
+			silentPolicies = append(silentPolicies, p)
+		}
+	}
+
+	if len(silentPolicies) == 0 {
+		fmt.Println("\nNo silent escalation policies found for your teams.")
+		fmt.Println("You can set one manually in your config as 'default_silent_escalation_policy'.")
+		return "", nil
+	}
+
+	if len(silentPolicies) == 1 {
+		p := silentPolicies[0]
+		fmt.Printf("\nDefault silent policy: %s — %s\n", p.ID, p.Name)
+		return p.ID, nil
+	}
+
+	var selected string
+	var options []huh.Option[string]
+	for _, p := range silentPolicies {
+		options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", p.Name, p.ID), p.ID))
+	}
+
+	colors := viper.GetStringMapString("colors")
+	theme := tui.ThemeFromConfig(colors)
+
+	huhTheme := huh.ThemeCharm()
+	huhTheme.Focused.Title = huhTheme.Focused.Title.Foreground(theme.Highlight)
+	huhTheme.Focused.SelectedOption = huhTheme.Focused.SelectedOption.Foreground(theme.Highlight)
+	huhTheme.Focused.UnselectedOption = huhTheme.Focused.UnselectedOption.Foreground(theme.Text)
+	huhTheme.Focused.Base = huhTheme.Focused.Base.BorderForeground(theme.Border)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Which policy should silenced alerts be assigned to?").
+				Description("Select the default silent escalation policy").
+				Options(options...).
+				Value(&selected),
+		),
+	).WithTheme(huhTheme).WithProgramOptions(tea.WithAltScreen())
+
+	err = form.Run()
+	if err != nil {
+		return "", fmt.Errorf("silent policy selection failed: %w", err)
+	}
+
+	if form.State == huh.StateAborted {
+		return "", nil
+	}
+
+	return selected, nil
+}
+
+func writeConfigKey(fs configFS, baseDir string, key string, value string) error {
+	configFile := filepath.Join(baseDir, cfgFileDir, cfgFileName)
+
+	data, err := fs.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	updated, err := upsertScalarInConfig(data, key, value)
+	if err != nil {
+		return err
+	}
+
+	backupFile := configFile + "~"
+	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to create config backup: %w", err)
+	}
+
+	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+func upsertScalarInConfig(configData []byte, key string, value string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(configData, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, fmt.Errorf("invalid YAML document structure")
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected YAML mapping at root")
+	}
+
+	// Update existing key or append new one
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		if root.Content[i].Value == key {
+			root.Content[i+1].Value = value
+			root.Content[i+1].Tag = "!!str"
+			root.Content[i+1].Kind = yaml.ScalarNode
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			enc.SetIndent(2)
+			if err := enc.Encode(&doc); err != nil {
+				return nil, fmt.Errorf("failed to encode config YAML: %w", err)
+			}
+			if err := enc.Close(); err != nil {
+				return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
+			}
+			return buf.Bytes(), nil
+		}
+	}
+
+	// Key not found — append it
+	root.Content = append(root.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value},
+	)
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, fmt.Errorf("failed to encode config YAML: %w", err)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
+	}
+	return buf.Bytes(), nil
 }

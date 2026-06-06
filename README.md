@@ -52,12 +52,13 @@ SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment varia
 |-----|------|-------------|
 | `token` | `string` | PagerDuty API OAuth token |
 | `teams` | `[]string` | PagerDuty team IDs |
-| `service_escalation_policies` | `map[string]string` | Must contain `DEFAULT` and `SILENT_DEFAULT` keys |
 
 ### Optional
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| `default_silent_escalation_policy` | `string` | (auto-discovered) | Silent escalation policy ID for silencing incidents. Auto-discovered via `--pick-teams`. |
+| `custom_service_escalation_policies` | `map[string]string` | (none) | Per-service silent policy overrides (service ID to policy ID) |
 | `editor` | `string` | `vim` | Editor for incident notes |
 | `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
@@ -87,9 +88,7 @@ colors:
 token: <PagerDuty API token>
 teams:
   - <team ID>
-service_escalation_policies:
-  DEFAULT: P123456
-  SILENT_DEFAULT: P654321
+default_silent_escalation_policy: P654321
 terminal: gnome-terminal
 cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
 toolbox_mode: auto

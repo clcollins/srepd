@@ -453,7 +453,7 @@ func TestNewConfig_Success(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil, "", nil)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, config)
@@ -473,7 +473,7 @@ func TestNewConfig_MissingDefaultPolicy(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil, "", nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must contain a `default` key")
@@ -485,7 +485,7 @@ func TestNewConfig_MissingSilentDefaultPolicy(t *testing.T) {
 		"default": "POLICY1",
 	}
 
-	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil, "", nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must contain a `silent_default` key")
@@ -499,7 +499,7 @@ func TestNewConfig_BadEscalationPolicy(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil, "", nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get escalation policy")
@@ -512,7 +512,7 @@ func TestNewConfig_WithIgnoredUsers(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"USER1", "USER2"})
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"USER1", "USER2"}, "", nil)
 
 	assert.NoError(t, err)
 	assert.Len(t, config.IgnoredUsers, 2)
@@ -528,7 +528,7 @@ func TestNewConfig_BadIgnoredUser(t *testing.T) {
 	}
 
 	// "err" ID triggers mock error in GetUserWithContext
-	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"err"})
+	_, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"err"}, "", nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get user for ignore list")
@@ -541,7 +541,7 @@ func TestNewConfig_MultipleTeams(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	config, err := NewConfigWithClient(mockClient, []string{"team1", "team2", "team3"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1", "team2", "team3"}, policies, nil, "", nil)
 
 	assert.NoError(t, err)
 	assert.Len(t, config.Teams, 3)
@@ -555,7 +555,7 @@ func TestNewConfig_PolicyKeysUppercased(t *testing.T) {
 		"custom_service": "POLICY3",
 	}
 
-	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil, "", nil)
 
 	assert.NoError(t, err)
 	// Keys should be uppercased
@@ -598,7 +598,7 @@ func TestNewConfig_AutoDiscoverIgnoredUsers(t *testing.T) {
 		"silent_default": "POLICY_SILENT",
 	}
 
-	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil, "", nil)
 
 	assert.NoError(t, err)
 	assert.Len(t, config.IgnoredUsers, 2)
@@ -634,7 +634,7 @@ func TestNewConfig_ManualIgnoredUsersTakePrecedence(t *testing.T) {
 		"silent_default": "POLICY_SILENT",
 	}
 
-	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"MANUAL_USER"})
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"MANUAL_USER"}, "", nil)
 
 	assert.NoError(t, err)
 	assert.Len(t, config.IgnoredUsers, 1)
@@ -669,9 +669,82 @@ func TestNewConfig_AutoDiscoverNoSilentPolicies(t *testing.T) {
 		"silent_default": "POLICY2",
 	}
 
-	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil, "", nil)
 
 	assert.NoError(t, err)
+	assert.Empty(t, config.IgnoredUsers)
+}
+
+func TestNewConfig_DefaultSilentPolicy(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		EscalationPolicyResponses: map[string]*pagerduty.EscalationPolicy{
+			"SILENT_POL": {
+				APIObject: pagerduty.APIObject{ID: "SILENT_POL"},
+				Name:      "Silent Test - Non-Actionable",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT1", Type: "user_reference"},
+					}},
+				},
+			},
+		},
+	}
+
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, nil, nil, "SILENT_POL", nil)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, config.EscalationPolicies["SILENT_DEFAULT"])
+	assert.Equal(t, "SILENT_POL", config.EscalationPolicies["SILENT_DEFAULT"].ID)
+	assert.Len(t, config.IgnoredUsers, 1)
+	assert.Equal(t, "BOT1", config.IgnoredUsers[0].ID)
+}
+
+func TestNewConfig_DefaultSilentWithCustomOverrides(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		EscalationPolicyResponses: map[string]*pagerduty.EscalationPolicy{
+			"SILENT_POL": {
+				APIObject: pagerduty.APIObject{ID: "SILENT_POL"},
+				Name:      "Silent Test",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT1", Type: "user_reference"},
+					}},
+				},
+			},
+			"DMS_SILENT": {
+				APIObject: pagerduty.APIObject{ID: "DMS_SILENT"},
+				Name:      "DMS Silent Test",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT2", Type: "user_reference"},
+					}},
+				},
+			},
+		},
+	}
+
+	customOverrides := map[string]string{
+		"svc_dms": "DMS_SILENT",
+	}
+
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, nil, nil, "SILENT_POL", customOverrides)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, config.EscalationPolicies["SILENT_DEFAULT"])
+	assert.Equal(t, "SILENT_POL", config.EscalationPolicies["SILENT_DEFAULT"].ID)
+	assert.NotNil(t, config.EscalationPolicies["SVC_DMS"])
+	assert.Equal(t, "DMS_SILENT", config.EscalationPolicies["SVC_DMS"].ID)
+	// Both bot users should be auto-discovered
+	assert.Len(t, config.IgnoredUsers, 2)
+}
+
+func TestNewConfig_NoSilentPolicyConfigured(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, nil, nil, "", nil)
+
+	assert.NoError(t, err)
+	assert.Empty(t, config.EscalationPolicies)
 	assert.Empty(t, config.IgnoredUsers)
 }
 
@@ -1142,4 +1215,59 @@ func TestExtractSilentPolicyUsers(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestGetTeamEscalationPolicies_SinglePage(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		ListEscalationPoliciesResponses: []pagerduty.ListEscalationPoliciesResponse{
+			{
+				APIListObject: pagerduty.APIListObject{More: false},
+				EscalationPolicies: []pagerduty.EscalationPolicy{
+					{APIObject: pagerduty.APIObject{ID: "POL1"}, Name: "Policy 1"},
+					{APIObject: pagerduty.APIObject{ID: "POL2"}, Name: "Policy 2"},
+				},
+			},
+		},
+	}
+
+	policies, err := GetTeamEscalationPolicies(mockClient, []string{"TEAM1"})
+
+	assert.NoError(t, err)
+	assert.Len(t, policies, 2)
+	assert.Equal(t, "POL1", policies[0].ID)
+	assert.Equal(t, "POL2", policies[1].ID)
+}
+
+func TestGetTeamEscalationPolicies_Paginated(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		ListEscalationPoliciesResponses: []pagerduty.ListEscalationPoliciesResponse{
+			{
+				APIListObject: pagerduty.APIListObject{More: true},
+				EscalationPolicies: []pagerduty.EscalationPolicy{
+					{APIObject: pagerduty.APIObject{ID: "POL1"}},
+				},
+			},
+			{
+				APIListObject: pagerduty.APIListObject{More: false},
+				EscalationPolicies: []pagerduty.EscalationPolicy{
+					{APIObject: pagerduty.APIObject{ID: "POL2"}},
+				},
+			},
+		},
+	}
+
+	policies, err := GetTeamEscalationPolicies(mockClient, []string{"TEAM1"})
+
+	assert.NoError(t, err)
+	assert.Len(t, policies, 2)
+	assert.Equal(t, 2, mockClient.CallCounts["ListEscalationPoliciesWithContext"])
+}
+
+func TestGetTeamEscalationPolicies_EmptyTeams(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+
+	policies, err := GetTeamEscalationPolicies(mockClient, []string{})
+
+	assert.NoError(t, err)
+	assert.Empty(t, policies)
 }

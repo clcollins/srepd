@@ -2,9 +2,10 @@ package deprecation
 
 var (
 	deprecatedKeys = map[string]bool{
-		"shell":        true,
-		"silentuser":   true,
-		"ignoredusers": true,
+		"shell":                       true,
+		"silentuser":                  true,
+		"ignoredusers":                true,
+		"service_escalation_policies": true,
 	}
 )
 

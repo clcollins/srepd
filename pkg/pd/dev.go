@@ -519,6 +519,12 @@ func (d *DevPagerDutyClient) ListIncidentNotesWithContext(_ context.Context, id 
 	return notes, nil
 }
 
+func (d *DevPagerDutyClient) ListEscalationPoliciesWithContext(_ context.Context, _ pagerduty.ListEscalationPoliciesOptions) (*pagerduty.ListEscalationPoliciesResponse, error) {
+	return &pagerduty.ListEscalationPoliciesResponse{
+		EscalationPolicies: []pagerduty.EscalationPolicy{},
+	}, nil
+}
+
 func (d *DevPagerDutyClient) ListOnCallsWithContext(_ context.Context, _ pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

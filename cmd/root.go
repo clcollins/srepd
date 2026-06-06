@@ -116,6 +116,8 @@ func launchTUI() {
 		viper.GetBool("debug"),
 		ocmClient,
 		viper.GetStringMapString("colors"),
+		viper.GetString("default_silent_escalation_policy"),
+		viper.GetStringMapString("custom_service_escalation_policies"),
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

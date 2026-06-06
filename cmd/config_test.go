@@ -68,15 +68,14 @@ func TestValidateConfig_MissingTeams(t *testing.T) {
 	assert.Contains(t, err.Error(), "teams", "error should mention the missing 'teams' key")
 }
 
-func TestValidateConfig_MissingEscalationPolicies(t *testing.T) {
+func TestValidateConfig_NoEscalationPoliciesIsValid(t *testing.T) {
 	viper.Reset()
 	viper.Set("token", "test-pagerduty-token")
 	viper.Set("teams", []string{"TEAM1", "TEAM2"})
 
 	err := validateConfig()
 
-	assert.Error(t, err, "validateConfig should return an error when service_escalation_policies is missing")
-	assert.Contains(t, err.Error(), "service_escalation_policies", "error should mention the missing 'service_escalation_policies' key")
+	assert.NoError(t, err, "validateConfig should not error when service_escalation_policies is absent (deprecated)")
 }
 
 func TestValidateConfig_MissingDefaultPolicy(t *testing.T) {
@@ -118,7 +117,6 @@ func TestValidateConfig_MultipleErrors(t *testing.T) {
 	assert.Error(t, err, "validateConfig should return errors when all required keys are missing")
 	assert.Contains(t, err.Error(), "token", "error should mention the missing 'token' key")
 	assert.Contains(t, err.Error(), "teams", "error should mention the missing 'teams' key")
-	assert.Contains(t, err.Error(), "service_escalation_policies", "error should mention the missing 'service_escalation_policies' key")
 }
 
 func TestValidateConfig_OptionalKeysGetDefaults(t *testing.T) {
