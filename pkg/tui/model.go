@@ -230,8 +230,6 @@ func InitialModel(
 		m.err = err
 	}
 
-	log.Debug("InitialModel", "config", m.config)
-
 	return m, func() tea.Msg {
 		return errMsg{err}
 	}
@@ -303,8 +301,6 @@ func InitialModelWithConfig(
 	if config == nil {
 		m.err = fmt.Errorf("InitialModelWithConfig: config is nil")
 	}
-
-	log.Debug("InitialModelWithConfig", "config", m.config)
 
 	return m, func() tea.Msg {
 		return errMsg{m.err}
