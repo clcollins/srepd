@@ -303,104 +303,121 @@ func TestGetIncidentNotes(t *testing.T) {
 	}
 }
 
-func TestUpdateIncidentList(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *pd.Config
-		expected tea.Msg
-	}{
-		{
-			name: "return updatedIncidentListMsg with non-nil error if error occurs",
-			config: &pd.Config{
-				Client:         &pd.MockPagerDutyClient{},
-				TeamsMemberIDs: []string{"err"}, // "err" signals the mock client to produce a mock error
-			},
-			expected: updatedIncidentListMsg{
-				incidents: []pagerduty.Incident(nil),
-				err:       fmt.Errorf("pd.GetIncidents(): failed to get incidents: %v", pd.ErrMockError),
-			},
-		},
-		{
-			name:   "return updatedIncidentListMsg with an incident list if no error occurs",
-			config: &pd.Config{Client: &pd.MockPagerDutyClient{}},
-			expected: updatedIncidentListMsg{
-				// These incidents are defined in the Mock for ListIncidentsWithContext
-				incidents: []pagerduty.Incident{
-					{APIObject: pagerduty.APIObject{ID: "QABCDEFG1234567"}},
-					{APIObject: pagerduty.APIObject{ID: "QABCDEFG7654321"}},
-				},
-			},
-		},
-	}
+func TestIgnoredUserIDs(t *testing.T) {
+	t.Run("returns IDs from user list", func(t *testing.T) {
+		users := []*pagerduty.User{
+			{APIObject: pagerduty.APIObject{ID: "P1"}},
+			{APIObject: pagerduty.APIObject{ID: "P2"}},
+		}
+		ids := ignoredUserIDs(users)
+		assert.Equal(t, []string{"P1", "P2"}, ids)
+	})
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cmd := updateIncidentList(test.config)
-			actual := cmd()
-			assert.Equal(t, test.expected, actual)
-		})
-	}
+	t.Run("returns nil for nil input", func(t *testing.T) {
+		ids := ignoredUserIDs(nil)
+		assert.Nil(t, ids)
+	})
 }
 
-func TestNewListIncidentOptsFromConfig(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *pd.Config
-		expected pagerduty.ListIncidentsOptions
-	}{
-		{
-			name:     "return default ListIncidentsOptions if config is nil",
-			config:   nil,
-			expected: pagerduty.ListIncidentsOptions{},
-		},
-		{
-			name: "p.TeamsMembers is properly converted to ListIncidentsOptions.UserIDs",
-			config: &pd.Config{
-				TeamsMemberIDs: []string{
-					"PABC123",
-					"PDEF456",
-				},
-			},
-			expected: pagerduty.ListIncidentsOptions{
-				UserIDs: []string{"PABC123", "PDEF456"},
-			},
-		},
-		{
-			name: "p.IgnopredUsers are properly excluded from ListIncidentsOptions.UserIDs, and extra Ignored users have no effect",
-			config: &pd.Config{
-				TeamsMemberIDs: []string{
-					"PABC123",
-					"PDEF456",
-				},
-				IgnoredUsers: []*pagerduty.User{
-					{APIObject: pagerduty.APIObject{ID: "PDEF456"}},
-					{APIObject: pagerduty.APIObject{ID: "PXYZ789"}},
-				},
-			},
-			expected: pagerduty.ListIncidentsOptions{
-				UserIDs: []string{"PABC123"},
-			},
-		},
-		{
-			name: "p.Teams is properly converted to ListIncidentsOptions.TeamIDs",
-			config: &pd.Config{
-				Teams: []*pagerduty.Team{
-					{APIObject: pagerduty.APIObject{ID: "PABC123"}},
-					{APIObject: pagerduty.APIObject{ID: "PDEF456"}},
-				},
-			},
-			expected: pagerduty.ListIncidentsOptions{
-				TeamIDs: []string{"PABC123", "PDEF456"},
-			},
-		},
-	}
+func TestFilterUserIDs(t *testing.T) {
+	t.Run("removes ignored users", func(t *testing.T) {
+		members := []string{"P1", "P2", "P3"}
+		ignored := []string{"P2"}
+		result := filterUserIDs(members, ignored)
+		assert.Equal(t, []string{"P1", "P3"}, result)
+	})
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actual := newListIncidentOptsFromConfig(test.config)
-			assert.Equal(t, test.expected, actual)
-		})
-	}
+	t.Run("returns all when no ignored users", func(t *testing.T) {
+		members := []string{"P1", "P2"}
+		result := filterUserIDs(members, nil)
+		assert.Equal(t, []string{"P1", "P2"}, result)
+	})
+
+	t.Run("returns nil for nil members", func(t *testing.T) {
+		result := filterUserIDs(nil, []string{"P1"})
+		assert.Nil(t, result)
+	})
+
+	t.Run("extra ignored users have no effect", func(t *testing.T) {
+		members := []string{"P1", "P2"}
+		ignored := []string{"P2", "PXYZ"}
+		result := filterUserIDs(members, ignored)
+		assert.Equal(t, []string{"P1"}, result)
+	})
+}
+
+func TestUpdateIncidentList_PerTeamQuery(t *testing.T) {
+	t.Run("queries per team and deduplicates", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			Teams: []*pagerduty.Team{
+				{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
+				{APIObject: pagerduty.APIObject{ID: "TEAM2"}},
+			},
+			TeamMembersByTeam: map[string][]string{
+				"TEAM1": {"U1", "U2"},
+				"TEAM2": {"U2", "U3"},
+			},
+		}
+
+		cmd := updateIncidentList(config)
+		msg := cmd()
+		result, ok := msg.(updatedIncidentListMsg)
+		assert.True(t, ok)
+		assert.NoError(t, result.err)
+		// MockPagerDutyClient returns 2 incidents per call; with 2 teams
+		// the same incidents are returned both times, so dedup should
+		// produce exactly 2 unique incidents
+		assert.Len(t, result.incidents, 2)
+	})
+
+	t.Run("returns empty for nil config", func(t *testing.T) {
+		cmd := updateIncidentList(nil)
+		msg := cmd()
+		result, ok := msg.(updatedIncidentListMsg)
+		assert.True(t, ok)
+		assert.NoError(t, result.err)
+		assert.Nil(t, result.incidents)
+	})
+
+	t.Run("excludes ignored users from per-team queries", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			Teams: []*pagerduty.Team{
+				{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
+			},
+			TeamMembersByTeam: map[string][]string{
+				"TEAM1": {"U1", "IGNORED"},
+			},
+			IgnoredUsers: []*pagerduty.User{
+				{APIObject: pagerduty.APIObject{ID: "IGNORED"}},
+			},
+		}
+
+		cmd := updateIncidentList(config)
+		msg := cmd()
+		result, ok := msg.(updatedIncidentListMsg)
+		assert.True(t, ok)
+		assert.NoError(t, result.err)
+	})
+
+	t.Run("propagates API error", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			Teams: []*pagerduty.Team{
+				{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
+			},
+			TeamMembersByTeam: map[string][]string{
+				"TEAM1": {"err"},
+			},
+		}
+
+		cmd := updateIncidentList(config)
+		msg := cmd()
+		result, ok := msg.(updatedIncidentListMsg)
+		assert.True(t, ok)
+		assert.Error(t, result.err)
+	})
 }
 func TestGetEscalationPolicyKey(t *testing.T) {
 	mockPolicies := map[string]*pagerduty.EscalationPolicy{

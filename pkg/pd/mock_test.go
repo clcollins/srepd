@@ -88,7 +88,7 @@ func TestEnhancedMock_PaginatedListMembers(t *testing.T) {
 		{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
 	}
 	opts := pagerduty.ListTeamMembersOptions{Limit: 2, Offset: 0}
-	memberIDs, err := GetTeamMemberIDs(mock, teams, opts)
+	memberIDs, _, err := GetTeamMemberIDs(mock, teams, opts)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"USER1", "USER2", "USER3"}, memberIDs)
@@ -116,7 +116,7 @@ func TestEnhancedMock_PaginatedListMembersError(t *testing.T) {
 		{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
 	}
 	opts := pagerduty.ListTeamMembersOptions{Limit: 1, Offset: 0}
-	_, err := GetTeamMemberIDs(mock, teams, opts)
+	_, _, err := GetTeamMemberIDs(mock, teams, opts)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to retrieve users")

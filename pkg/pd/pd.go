@@ -55,6 +55,7 @@ type Config struct {
 
 	// List of the users in the Teams
 	TeamsMemberIDs     []string
+	TeamMembersByTeam  map[string][]string // team ID → member IDs
 	Teams              []*pagerduty.Team
 	EscalationPolicies map[string]*pagerduty.EscalationPolicy
 
@@ -63,7 +64,7 @@ type Config struct {
 
 // NewConfig creates a new Config, initializing a real PagerDuty client from the token.
 func NewConfig(token string, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
-	return NewConfigWithClient(newClient(token), teams, escalation_policies, ignoredUsers)
+	return NewConfigWithClient(NewClient(token), teams, escalation_policies, ignoredUsers)
 }
 
 // NewConfigWithClient creates a Config using a pre-existing client.
@@ -87,7 +88,7 @@ func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_poli
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get team(s) `%v`: %v", teams, err)
 	}
 
-	c.TeamsMemberIDs, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
+	c.TeamsMemberIDs, c.TeamMembersByTeam, err = GetTeamMemberIDs(c.Client, c.Teams, pagerduty.ListTeamMembersOptions{Limit: defaultPageLimit, Offset: defaultOffset})
 	if err != nil {
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
 	}
@@ -121,7 +122,7 @@ func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_poli
 	return &c, nil
 }
 
-func newClient(token string) PagerDutyClient {
+func NewClient(token string) PagerDutyClient {
 	return NewRateLimitedClient(pagerduty.NewClient(token))
 }
 
@@ -227,7 +228,10 @@ func GetIncidents(client PagerDutyClient, opts pagerduty.ListIncidentsOptions) (
 	for {
 		response, err := client.ListIncidentsWithContext(ctx, opts)
 		if err != nil {
-			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents: %v", err)
+			if strings.Contains(err.Error(), "414") {
+				return i, fmt.Errorf("pd.GetIncidents(): too many team members (%d) for PagerDuty API query — try selecting fewer teams: %w", len(opts.UserIDs), err)
+			}
+			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents: %w", err)
 		}
 
 		i = append(i, response.Incidents...)
@@ -271,21 +275,23 @@ func GetTeams(client PagerDutyClient, teams []string) ([]*pagerduty.Team, error)
 	return t, nil
 }
 
-func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts pagerduty.ListTeamMembersOptions) ([]string, error) {
+func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts pagerduty.ListTeamMembersOptions) ([]string, map[string][]string, error) {
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
-	var u []string
+	var allIDs []string
+	byTeam := make(map[string][]string)
 
 	for _, team := range teams {
 		opts.Offset = defaultOffset
 		for {
 			response, err := client.ListMembersWithContext(ctx, team.ID, opts)
 			if err != nil {
-				return u, fmt.Errorf("pd.GetUsers(): failed to retrieve users for PagerDuty team `%v`: %v", team.ID, err)
+				return allIDs, byTeam, fmt.Errorf("pd.GetUsers(): failed to retrieve users for PagerDuty team `%v`: %v", team.ID, err)
 			}
 
 			for _, member := range response.Members {
-				u = append(u, member.User.ID)
+				allIDs = append(allIDs, member.User.ID)
+				byTeam[team.ID] = append(byTeam[team.ID], member.User.ID)
 			}
 
 			opts.Offset += opts.Limit
@@ -296,7 +302,7 @@ func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts page
 		}
 	}
 
-	return u, nil
+	return allIDs, byTeam, nil
 }
 
 func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (*pagerduty.User, error) {
@@ -310,6 +316,20 @@ func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (
 	}
 
 	return u, nil
+}
+
+func GetCurrentUserTeams(client PagerDutyClient) ([]pagerduty.Team, error) {
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	user, err := client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{
+		Includes: []string{"teams"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("pd.GetCurrentUserTeams(): failed to get current user: %w", err)
+	}
+
+	return user.Teams, nil
 }
 
 func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCallOptions) ([]pagerduty.OnCall, error) {

@@ -55,6 +55,9 @@ func (m model) View() string {
 	case m.viewingLog:
 		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))
 
+	case m.teamSelectMode:
+		s.WriteString(m.teamSelectForm.View())
+
 	case m.clusterSelectMode:
 		s.WriteString("  " + m.clusterSelectPrompt + "\n")
 		s.WriteString(m.styles.TableContainer.Render(m.clusterSelectTable.View()))
@@ -842,6 +845,9 @@ const detailsTabTemplate = `
 {{ ToLink .Title .HTMLURL }}
 
 * Service: {{ .Service }}
+{{- if .Teams }}
+* Team: {{ range $i, $team := .Teams }}{{ if $i }}, {{ end }}{{ $team }}{{ end }}
+{{- end }}
 * Urgency: {{ .Urgency }}
 * Created: {{ .Created }}
 

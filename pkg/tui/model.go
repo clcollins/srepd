@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
@@ -127,6 +128,12 @@ type model struct {
 	mergeTable          table.Model
 	mergeTeamMode       bool
 
+	// Team selection state — shown on first run or via --pick-teams
+	teamSelectMode  bool
+	teamSelectForm  *huh.Form
+	teamSelectIDs   []string
+	teamSelectNames map[string]string
+
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
@@ -223,8 +230,6 @@ func InitialModel(
 		m.err = err
 	}
 
-	log.Debug("InitialModel", "config", m.config)
-
 	return m, func() tea.Msg {
 		return errMsg{err}
 	}
@@ -296,8 +301,6 @@ func InitialModelWithConfig(
 	if config == nil {
 		m.err = fmt.Errorf("InitialModelWithConfig: config is nil")
 	}
-
-	log.Debug("InitialModelWithConfig", "config", m.config)
 
 	return m, func() tea.Msg {
 		return errMsg{m.err}

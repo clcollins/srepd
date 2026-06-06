@@ -56,7 +56,7 @@ reassigning to the next on-call, etc.  It is not intended
 to be a full-featured PagerDuty client, or kitchen sink,
 but rather a simple tool to make on-call tasks easier.`,
 
-	PreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		bindArgsToViper(cmd)
 
 		log.SetLevel(func() log.Level {
@@ -65,7 +65,8 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 			return log.WarnLevel
 		}())
-
+	},
+	PreRun: func(cmd *cobra.Command, args []string) {
 		// Skip config validation in dev mode
 		if viper.GetBool("dev") {
 			log.Info("Dev mode enabled: skipping config validation")
@@ -76,7 +77,6 @@ but rather a simple tool to make on-call tasks easier.`,
 		if err != nil {
 			log.Fatal(err)
 		}
-
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 
@@ -85,50 +85,53 @@ but rather a simple tool to make on-call tasks easier.`,
 			return
 		}
 
-		launcher, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"), viper.GetString("toolbox_mode"))
-		if err != nil {
-			fmt.Println(err)
-			log.Fatal(err)
-		}
-
-		// Initialize OCM client (optional — silently disabled if not configured)
-		ocmClient, ocmErr := ocm.NewClient(tui.Version)
-		if ocmErr != nil {
-			log.Warn("OCM connection failed", "error", ocmErr)
-		} else if ocmClient != nil {
-			defer ocmClient.Close()
-			log.Info("OCM connected")
-		} else {
-			log.Warn("OCM not configured")
-		}
-
-		m, _ := tui.InitialModel(
-			viper.GetString("token"),
-			viper.GetStringSlice("teams"),
-			viper.GetStringMapString("service_escalation_policies"),
-			viper.GetStringSlice("ignoredusers"),
-			viper.GetStringSlice("editor"),
-			launcher,
-			viper.GetBool("debug"),
-			ocmClient,
-			viper.GetStringMapString("colors"),
-		)
-
-		p := tea.NewProgram(m, tea.WithAltScreen())
-
-		go func() {
-			for {
-				time.Sleep(tickInterval * time.Second)
-				p.Send(tui.TickMsg{})
-			}
-		}()
-
-		_, err = p.Run()
-		if err != nil {
-			fmt.Println(err)
-			log.Fatal(err)
-		}
+		launchTUI()
 	},
+}
+
+func launchTUI() {
+	l, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"), viper.GetString("toolbox_mode"))
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+	}
+
+	ocmClient, ocmErr := ocm.NewClient(tui.Version)
+	if ocmErr != nil {
+		log.Warn("OCM connection failed", "error", ocmErr)
+	} else if ocmClient != nil {
+		defer ocmClient.Close()
+		log.Info("OCM connected")
+	} else {
+		log.Warn("OCM not configured")
+	}
+
+	m, _ := tui.InitialModel(
+		viper.GetString("token"),
+		viper.GetStringSlice("teams"),
+		viper.GetStringMapString("service_escalation_policies"),
+		viper.GetStringSlice("ignoredusers"),
+		viper.GetStringSlice("editor"),
+		l,
+		viper.GetBool("debug"),
+		ocmClient,
+		viper.GetStringMapString("colors"),
+	)
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	go func() {
+		for {
+			time.Sleep(tickInterval * time.Second)
+			p.Send(tui.TickMsg{})
+		}
+	}()
+
+	_, err = p.Run()
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+	}
 }
 
 // logWriter holds the active asyncWriter so it can be flushed on shutdown.
@@ -159,16 +162,17 @@ func CleanupLogging() {
 
 // bindArgsToViper binds the command line arguments to viper
 func bindArgsToViper(cmd *cobra.Command) {
-	err := viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
+	root := cmd.Root()
+	err := viper.BindPFlag("debug", root.PersistentFlags().Lookup("debug"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = viper.BindPFlag("dev", cmd.Flags().Lookup("dev"))
+	err = viper.BindPFlag("dev", root.PersistentFlags().Lookup("dev"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = viper.BindPFlag("fixtures_dir", cmd.Flags().Lookup("fixtures-dir"))
+	err = viper.BindPFlag("fixtures_dir", root.PersistentFlags().Lookup("fixtures-dir"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -212,11 +216,11 @@ func init() {
 	for _, f := range flags {
 		switch f.flagType {
 		case "bool":
-			rootCmd.Flags().BoolP(f.name, f.shorthand, f.BoolValue(), f.usage)
+			rootCmd.PersistentFlags().BoolP(f.name, f.shorthand, f.BoolValue(), f.usage)
 		case "string":
-			rootCmd.Flags().StringP(f.name, f.shorthand, f.StringValue(), f.usage)
+			rootCmd.PersistentFlags().StringP(f.name, f.shorthand, f.StringValue(), f.usage)
 		case "stringSlice":
-			rootCmd.Flags().StringSliceP(f.name, f.shorthand, []string{f.StringValue()}, f.usage)
+			rootCmd.PersistentFlags().StringSliceP(f.name, f.shorthand, []string{f.StringValue()}, f.usage)
 		}
 	}
 }

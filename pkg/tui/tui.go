@@ -11,9 +11,11 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/ocm"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -38,13 +40,19 @@ func (m model) Init() tea.Cmd {
 	if m.err != nil {
 		return func() tea.Msg { return errMsg{m.err} }
 	}
-	return tea.Batch(
+
+	initCmds := []tea.Cmd{
 		tea.SetWindowTitle(title),
 		m.spinner.Tick,
 		func() tea.Msg { return updateIncidentListMsg("sender: Init") },
 		checkForUpdate(m.devMode, ""),
-	)
+	}
 
+	if m.config != nil && m.config.Client != nil && hasPlaceholderTeamsCfg(viper.GetStringSlice("teams")) {
+		initCmds = append(initCmds, fetchUserTeams(m.config.Client))
+	}
+
+	return tea.Batch(initCmds...)
 }
 
 type filteredMsg struct {
@@ -176,6 +184,64 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		return m.errMsgHandler(msg)
+
+	case fetchedTeamsMsg:
+		if msg.err != nil {
+			log.Warn("Failed to fetch teams for selection", "error", msg.err)
+			m.setStatus("could not fetch teams: " + msg.err.Error())
+			return m, nil
+		}
+		if len(msg.teams) == 0 {
+			m.setStatus("no teams found in your PagerDuty account")
+			return m, nil
+		}
+		var options []huh.Option[string]
+		m.teamSelectNames = make(map[string]string)
+		for _, team := range msg.teams {
+			options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID))
+			m.teamSelectNames[team.ID] = team.Name
+		}
+		m.teamSelectIDs = nil
+
+		theme := huh.ThemeCharm()
+		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
+		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
+		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
+		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
+		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
+		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+
+		m.teamSelectForm = huh.NewForm(
+			huh.NewGroup(
+				huh.NewMultiSelect[string]().
+					Title("Select your PagerDuty teams").
+					Description("Use space to toggle, enter to confirm, esc to skip").
+					Options(options...).
+					Value(&m.teamSelectIDs),
+			),
+		).WithTheme(theme).WithHeight(windowSize.Height)
+		m.teamSelectMode = true
+		return m, m.teamSelectForm.Init()
+
+	case teamsSelectedMsg:
+		if len(msg.ids) == 0 {
+			m.setStatus("no teams selected")
+			return m, nil
+		}
+		viper.Set("teams", msg.ids)
+		m.setStatus(fmt.Sprintf("selected %d team(s) — updating config...", len(msg.ids)))
+		return m, writeTeamsToConfigCmd(msg.ids, msg.names)
+
+	case teamsConfigUpdatedMsg:
+		if msg.err != nil {
+			log.Warn("Failed to write team config", "error", msg.err)
+			m.setStatus("teams selected but config write failed: " + msg.err.Error())
+		} else {
+			m.setStatus("teams saved to config")
+		}
+		return m, func() tea.Msg { return updateIncidentListMsg("teams updated") }
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd

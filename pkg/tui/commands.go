@@ -11,12 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"bytes"
+	"path/filepath"
+
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
+	"gopkg.in/yaml.v3"
 )
 
 // This file contains the commands that are used in the Bubble Tea update function.
@@ -123,67 +127,59 @@ type updatedIncidentListMsg struct {
 	err       error
 }
 
-// updateIncidentList returns a command that fetches the incident list from the PagerDuty API
+// updateIncidentList returns a command that fetches the incident list from the PagerDuty API.
+// It queries per-team to avoid HTTP 414 (URI Too Long) when teams have many members.
 func updateIncidentList(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
-		opts := newListIncidentOptsFromConfig(p)
-		i, err := pd.GetIncidents(p.Client, opts)
-		return updatedIncidentListMsg{i, err}
+		if p == nil {
+			return updatedIncidentListMsg{}
+		}
+
+		ignoredIDs := ignoredUserIDs(p.IgnoredUsers)
+		seen := make(map[string]bool)
+		var allIncidents []pagerduty.Incident
+
+		for _, team := range p.Teams {
+			memberIDs := filterUserIDs(p.TeamMembersByTeam[team.ID], ignoredIDs)
+
+			opts := pagerduty.ListIncidentsOptions{
+				TeamIDs: []string{team.ID},
+				UserIDs: memberIDs,
+			}
+
+			incidents, err := pd.GetIncidents(p.Client, opts)
+			if err != nil {
+				return updatedIncidentListMsg{err: err}
+			}
+
+			for _, inc := range incidents {
+				if !seen[inc.ID] {
+					seen[inc.ID] = true
+					allIncidents = append(allIncidents, inc)
+				}
+			}
+		}
+
+		return updatedIncidentListMsg{incidents: allIncidents}
 	}
 }
 
-// newListIncidentOptsFromConfig returns a ListIncidentsOptions struct
-// with the UserIDs and TeamIDs fields populated from the given Config
-func newListIncidentOptsFromConfig(p *pd.Config) pagerduty.ListIncidentsOptions {
-	var opts = pagerduty.ListIncidentsOptions{}
-
-	// If the Config is nil, return the default options
-	if p == nil {
-		return opts
+func ignoredUserIDs(users []*pagerduty.User) []string {
+	var ids []string
+	for _, u := range users {
+		ids = append(ids, u.ID)
 	}
+	return ids
+}
 
-	// Convert the list of *pagerduty.User to a slice of user IDs
-	if p.IgnoredUsers == nil {
-		p.IgnoredUsers = []*pagerduty.User{}
-	}
-
-	ignoredUserIDs := func(u []*pagerduty.User) []string {
-		var l []string
-		for _, i := range u {
-			l = append(l, i.ID)
+func filterUserIDs(memberIDs []string, ignored []string) []string {
+	var filtered []string
+	for _, id := range memberIDs {
+		if !slices.Contains(ignored, id) {
+			filtered = append(filtered, id)
 		}
-		return l
-	}(p.IgnoredUsers)
-
-	// If the UserID from p.TeamMemberIDs is not in the ignoredUserIDs slice, add it to the opts.UserIDs slice
-	if p.TeamsMemberIDs == nil {
-		p.TeamsMemberIDs = []string{}
 	}
-
-	opts.UserIDs = func(a []string, i []string) []string {
-		var l []string
-		for _, u := range a {
-			if !slices.Contains(i, u) {
-				l = append(l, u)
-			}
-		}
-		return l
-	}(p.TeamsMemberIDs, ignoredUserIDs)
-
-	// Convert the list of *pagerduty.Team to a slice of team IDs
-	if p.Teams == nil {
-		p.Teams = []*pagerduty.Team{}
-	}
-
-	opts.TeamIDs = func(t []*pagerduty.Team) []string {
-		var l []string
-		for _, x := range t {
-			l = append(l, x.ID)
-		}
-		return l
-	}(p.Teams)
-
-	return opts
+	return filtered
 }
 
 // HOUSEKEEPING: The above are commands that have complete unit tests and incoming
@@ -982,4 +978,124 @@ func getIDsFromIncidents(incidents []pagerduty.Incident) []string {
 		ids = append(ids, i.ID)
 	}
 	return ids
+}
+
+func hasPlaceholderTeamsCfg(teams []string) bool {
+	if len(teams) == 0 {
+		return true
+	}
+	for _, team := range teams {
+		trimmed := strings.TrimSpace(team)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
+			return false
+		}
+	}
+	return true
+}
+
+type fetchedTeamsMsg struct {
+	teams []pagerduty.Team
+	err   error
+}
+
+type teamsSelectedMsg struct {
+	ids   []string
+	names map[string]string
+}
+
+type teamsConfigUpdatedMsg struct{ err error }
+
+func fetchUserTeams(client pd.PagerDutyClient) tea.Cmd {
+	return func() tea.Msg {
+		teams, err := pd.GetCurrentUserTeams(client)
+		return fetchedTeamsMsg{teams: teams, err: err}
+	}
+}
+
+func writeTeamsToConfigCmd(teamIDs []string, teamNames map[string]string) tea.Cmd {
+	return func() tea.Msg {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to get home directory: %w", err)}
+		}
+
+		configFile := filepath.Join(home, ".config", "srepd", "srepd.yaml")
+
+		data, err := os.ReadFile(configFile)
+		if err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to read config: %w", err)}
+		}
+
+		updated, err := updateTeamsInYAML(data, teamIDs, teamNames)
+		if err != nil {
+			return teamsConfigUpdatedMsg{err: err}
+		}
+
+		backupFile := configFile + "~"
+		if err := os.WriteFile(backupFile, data, 0644); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to create config backup: %w", err)}
+		}
+
+		if err := os.WriteFile(configFile, updated, 0644); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to write config: %w", err)}
+		}
+
+		return teamsConfigUpdatedMsg{}
+	}
+}
+
+func updateTeamsInYAML(configData []byte, teamIDs []string, teamNames map[string]string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(configData, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, fmt.Errorf("invalid YAML document structure")
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected YAML mapping at root")
+	}
+
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		if root.Content[i].Value == "teams" {
+			teamsValue := root.Content[i+1]
+			teamsValue.Content = nil
+			if len(teamIDs) == 0 {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = yaml.FlowStyle
+			} else {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = 0
+				for _, id := range teamIDs {
+					node := &yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Tag:   "!!str",
+						Value: id,
+					}
+					if name, ok := teamNames[id]; ok {
+						node.LineComment = name
+					}
+					teamsValue.Content = append(teamsValue.Content, node)
+				}
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			enc.SetIndent(2)
+			if err := enc.Encode(&doc); err != nil {
+				return nil, fmt.Errorf("failed to encode config YAML: %w", err)
+			}
+			if err := enc.Close(); err != nil {
+				return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
+			}
+			return buf.Bytes(), nil
+		}
+	}
+
+	return nil, fmt.Errorf("'teams' key not found in config")
 }

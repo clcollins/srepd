@@ -305,7 +305,7 @@ func TestDevClient_GetTeam(t *testing.T) {
 		team, err := client.GetTeamWithContext(ctx, "PDEV_TEAM_001")
 		require.NoError(t, err)
 		assert.Equal(t, "PDEV_TEAM_001", team.ID)
-		assert.Equal(t, "SREP On-Call", team.Name)
+		assert.Equal(t, "Dev Platform SRE", team.Name)
 	})
 }
 

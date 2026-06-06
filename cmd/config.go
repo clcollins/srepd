@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -12,10 +13,16 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/PagerDuty/go-pagerduty"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/deprecation"
+	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/clcollins/srepd/pkg/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -123,7 +130,11 @@ var configCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to get user home directory: %w", err)
 			}
-			return createConfig(osFS{}, home)
+			if err := createConfig(osFS{}, home); err != nil {
+				return err
+			}
+			fmt.Println("\nTip: After adding your token, run 'srepd config --pick-teams' to see available teams.")
+			return nil
 		case cmd.Flag("validate").Value.String() == "true":
 			err := validateConfig()
 			if err != nil {
@@ -131,8 +142,8 @@ var configCmd = &cobra.Command{
 			}
 			fmt.Printf("Config file is valid\n")
 			return nil
-		case cmd.Flag("create").Value.String() == "true" && cmd.Flag("validate").Value.String() == "true":
-			return errors.New("cannot use both --create and --validate flags together")
+		case cmd.Flag("pick-teams").Value.String() == "true":
+			return runPickTeams()
 		default:
 			err := cmd.Usage()
 			return err
@@ -155,12 +166,15 @@ func init() {
 
 	configCmd.Flags().BoolP("create", "c", false, "create a sample config file at ~/.config/srepd/srepd.yaml")
 	configCmd.Flags().BoolP("validate", "v", false, "validate the config file")
-	configCmd.MarkFlagsMutuallyExclusive("create", "validate")
+	configCmd.Flags().BoolP("pick-teams", "p", false, "select your PagerDuty teams interactively")
+	configCmd.MarkFlagsMutuallyExclusive("create", "validate", "pick-teams")
 }
 
 type configFS interface {
 	MkdirAll(path string, perm os.FileMode) error
 	OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error)
+	ReadFile(name string) ([]byte, error)
+	WriteFile(name string, data []byte, perm os.FileMode) error
 }
 
 type osFS struct{} // codecov:ignore
@@ -171,6 +185,14 @@ func (osFS) MkdirAll(path string, perm os.FileMode) error { // codecov:ignore
 
 func (osFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) { // codecov:ignore
 	return os.OpenFile(name, flag, perm)
+}
+
+func (osFS) ReadFile(name string) ([]byte, error) { // codecov:ignore
+	return os.ReadFile(name)
+}
+
+func (osFS) WriteFile(name string, data []byte, perm os.FileMode) error { // codecov:ignore
+	return os.WriteFile(name, data, perm)
 }
 
 func createConfig(fs configFS, baseDir string) (retErr error) {
@@ -202,6 +224,194 @@ func createConfig(fs configFS, baseDir string) (retErr error) {
 	fmt.Printf("Config file created at %s\n", configFile)
 	fmt.Println("Please edit the file to add your PagerDuty credentials and team information.")
 	return nil
+}
+
+func updateTeamsInConfig(configData []byte, teamIDs []string, teamNames map[string]string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(configData, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, fmt.Errorf("invalid YAML document structure")
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected YAML mapping at root")
+	}
+
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		if root.Content[i].Value == "teams" {
+			teamsValue := root.Content[i+1]
+			teamsValue.Content = nil
+			if len(teamIDs) == 0 {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = yaml.FlowStyle
+			} else {
+				teamsValue.Kind = yaml.SequenceNode
+				teamsValue.Tag = "!!seq"
+				teamsValue.Style = 0
+				for _, id := range teamIDs {
+					node := &yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Tag:   "!!str",
+						Value: id,
+					}
+					if name, ok := teamNames[id]; ok {
+						node.LineComment = name
+					}
+					teamsValue.Content = append(teamsValue.Content, node)
+				}
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			enc.SetIndent(2)
+			if err := enc.Encode(&doc); err != nil {
+				return nil, fmt.Errorf("failed to encode config YAML: %w", err)
+			}
+			if err := enc.Close(); err != nil {
+				return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
+			}
+			return buf.Bytes(), nil
+		}
+	}
+
+	return nil, fmt.Errorf("'teams' key not found in config")
+}
+
+func writeConfigTeams(fs configFS, baseDir string, teamIDs []string, teamNames map[string]string) error {
+	configFile := filepath.Join(baseDir, cfgFileDir, cfgFileName)
+
+	data, err := fs.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	updated, err := updateTeamsInConfig(data, teamIDs, teamNames)
+	if err != nil {
+		return err
+	}
+
+	backupFile := configFile + "~"
+	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to create config backup: %w", err)
+	}
+
+	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+func runPickTeams() error {
+	if viper.GetBool("dev") {
+		fmt.Println("Dev mode: skipping team selection, launching with fixture data...")
+		runDevMode()
+		return nil
+	}
+
+	token := viper.GetString("token")
+	if token == "" {
+		return fmt.Errorf("no PagerDuty API token found; set 'token' in config or SREPD_TOKEN env var")
+	}
+
+	client := pd.NewClient(token)
+	teams, err := pd.GetCurrentUserTeams(client)
+	if err != nil {
+		return err
+	}
+
+	if len(teams) == 0 {
+		fmt.Println("No teams found in your PagerDuty account.")
+		return nil
+	}
+
+	selectedIDs, err := runTeamSelector(teams)
+	if err != nil {
+		return err
+	}
+
+	if len(selectedIDs) == 0 {
+		fmt.Println("No teams selected.")
+		return nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	teamNames := make(map[string]string)
+	for _, team := range teams {
+		teamNames[team.ID] = team.Name
+	}
+
+	if err := writeConfigTeams(osFS{}, home, selectedIDs, teamNames); err != nil {
+		return err
+	}
+
+	fmt.Printf("\nSaved %d team(s) to config. Launching srepd...\n", len(selectedIDs))
+	launchTUI()
+	return nil
+}
+
+func runTeamSelector(teams []pagerduty.Team) ([]string, error) {
+	var selected []string
+	var options []huh.Option[string]
+	for _, team := range teams {
+		options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID))
+	}
+
+	colors := viper.GetStringMapString("colors")
+	theme := tui.ThemeFromConfig(colors)
+
+	huhTheme := huh.ThemeCharm()
+	huhTheme.Focused.Title = huhTheme.Focused.Title.Foreground(theme.Highlight)
+	huhTheme.Focused.Description = huhTheme.Focused.Description.Foreground(theme.Muted)
+	huhTheme.Focused.SelectedOption = huhTheme.Focused.SelectedOption.Foreground(theme.Highlight)
+	huhTheme.Focused.UnselectedOption = huhTheme.Focused.UnselectedOption.Foreground(theme.Text)
+	huhTheme.Focused.MultiSelectSelector = huhTheme.Focused.MultiSelectSelector.Foreground(theme.Text)
+	huhTheme.Focused.SelectedPrefix = huhTheme.Focused.SelectedPrefix.Foreground(theme.Highlight)
+	huhTheme.Focused.UnselectedPrefix = huhTheme.Focused.UnselectedPrefix.Foreground(theme.Muted)
+	huhTheme.Focused.Base = huhTheme.Focused.Base.BorderForeground(theme.Border)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewMultiSelect[string]().
+				Title("Select your PagerDuty teams").
+				Description("Use space to toggle, enter to confirm, esc to skip").
+				Options(options...).
+				Value(&selected),
+		),
+	).WithTheme(huhTheme).WithProgramOptions(tea.WithAltScreen())
+
+	err := form.Run()
+	if err != nil {
+		return nil, fmt.Errorf("team selection failed: %w", err)
+	}
+
+	if form.State == huh.StateAborted {
+		return nil, nil
+	}
+
+	return selected, nil
+}
+
+func hasPlaceholderTeams(teams []string) bool {
+	if len(teams) == 0 {
+		return true
+	}
+	for _, team := range teams {
+		trimmed := strings.TrimSpace(team)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
+			return false
+		}
+	}
+	return true
 }
 
 // validateConfig prints the viper info passed into the program
