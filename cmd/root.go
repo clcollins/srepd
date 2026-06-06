@@ -56,7 +56,7 @@ reassigning to the next on-call, etc.  It is not intended
 to be a full-featured PagerDuty client, or kitchen sink,
 but rather a simple tool to make on-call tasks easier.`,
 
-	PreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		bindArgsToViper(cmd)
 
 		log.SetLevel(func() log.Level {
@@ -65,7 +65,8 @@ but rather a simple tool to make on-call tasks easier.`,
 			}
 			return log.WarnLevel
 		}())
-
+	},
+	PreRun: func(cmd *cobra.Command, args []string) {
 		// Skip config validation in dev mode
 		if viper.GetBool("dev") {
 			log.Info("Dev mode enabled: skipping config validation")
@@ -76,7 +77,6 @@ but rather a simple tool to make on-call tasks easier.`,
 		if err != nil {
 			log.Fatal(err)
 		}
-
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 
@@ -162,16 +162,17 @@ func CleanupLogging() {
 
 // bindArgsToViper binds the command line arguments to viper
 func bindArgsToViper(cmd *cobra.Command) {
-	err := viper.BindPFlag("debug", cmd.Flags().Lookup("debug"))
+	root := cmd.Root()
+	err := viper.BindPFlag("debug", root.PersistentFlags().Lookup("debug"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = viper.BindPFlag("dev", cmd.Flags().Lookup("dev"))
+	err = viper.BindPFlag("dev", root.PersistentFlags().Lookup("dev"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = viper.BindPFlag("fixtures_dir", cmd.Flags().Lookup("fixtures-dir"))
+	err = viper.BindPFlag("fixtures_dir", root.PersistentFlags().Lookup("fixtures-dir"))
 	if err != nil {
 		log.Fatal(err)
 	}

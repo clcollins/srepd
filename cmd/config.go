@@ -133,7 +133,7 @@ var configCmd = &cobra.Command{
 			if err := createConfig(osFS{}, home); err != nil {
 				return err
 			}
-			fmt.Println("\nTip: After adding your token, run 'srepd config --list-teams' to see available teams.")
+			fmt.Println("\nTip: After adding your token, run 'srepd config --pick-teams' to see available teams.")
 			return nil
 		case cmd.Flag("validate").Value.String() == "true":
 			err := validateConfig()
@@ -142,8 +142,8 @@ var configCmd = &cobra.Command{
 			}
 			fmt.Printf("Config file is valid\n")
 			return nil
-		case cmd.Flag("list-teams").Value.String() == "true":
-			return runListTeams()
+		case cmd.Flag("pick-teams").Value.String() == "true":
+			return runPickTeams()
 		default:
 			err := cmd.Usage()
 			return err
@@ -166,8 +166,8 @@ func init() {
 
 	configCmd.Flags().BoolP("create", "c", false, "create a sample config file at ~/.config/srepd/srepd.yaml")
 	configCmd.Flags().BoolP("validate", "v", false, "validate the config file")
-	configCmd.Flags().BoolP("list-teams", "l", false, "select your PagerDuty teams interactively")
-	configCmd.MarkFlagsMutuallyExclusive("create", "validate", "list-teams")
+	configCmd.Flags().BoolP("pick-teams", "p", false, "select your PagerDuty teams interactively")
+	configCmd.MarkFlagsMutuallyExclusive("create", "validate", "pick-teams")
 }
 
 type configFS interface {
@@ -307,7 +307,13 @@ func writeConfigTeams(fs configFS, baseDir string, teamIDs []string, teamNames m
 	return nil
 }
 
-func runListTeams() error {
+func runPickTeams() error {
+	if viper.GetBool("dev") {
+		fmt.Println("Dev mode: skipping team selection, launching with fixture data...")
+		runDevMode()
+		return nil
+	}
+
 	token := viper.GetString("token")
 	if token == "" {
 		return fmt.Errorf("no PagerDuty API token found; set 'token' in config or SREPD_TOKEN env var")

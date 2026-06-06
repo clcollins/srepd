@@ -40,11 +40,11 @@ go install .        # standard go install
 | `srepd update` | Update to the latest release in place |
 | `srepd --version` | Print version and git SHA |
 | `srepd --dev` | Run with fixture data (no PD connection) |
-| `srepd config --list-teams` | Interactively select your PagerDuty teams |
+| `srepd config --pick-teams` | Interactively select your PagerDuty teams |
 
 ## Configuration
 
-SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Create a sample config file with `srepd config --create` or validate an existing one with `srepd config --validate`. On first run with placeholder teams, srepd will automatically prompt you to select your PagerDuty teams, or you can run `srepd config --list-teams` at any time to re-select.
+SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Create a sample config file with `srepd config --create` or validate an existing one with `srepd config --validate`. On first run with placeholder teams, srepd will automatically prompt you to select your PagerDuty teams, or you can run `srepd config --pick-teams` at any time to re-select.
 
 ### Required
 

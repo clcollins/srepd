@@ -353,14 +353,14 @@ func TestBindArgsToViper(t *testing.T) {
 			t.Cleanup(func() { viper.Reset() })
 
 			cmd := &cobra.Command{Use: "test"}
-			cmd.Flags().BoolP("debug", "d", false, "enable debug logging")
-			cmd.Flags().BoolP("dev", "D", false, "enable dev mode")
-			cmd.Flags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
-			err := cmd.Flags().Set("debug", tt.debugFlag)
+			cmd.PersistentFlags().BoolP("debug", "d", false, "enable debug logging")
+			cmd.PersistentFlags().BoolP("dev", "D", false, "enable dev mode")
+			cmd.PersistentFlags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
+			err := cmd.PersistentFlags().Set("debug", tt.debugFlag)
 			require.NoError(t, err)
-			err = cmd.Flags().Set("dev", tt.devFlag)
+			err = cmd.PersistentFlags().Set("dev", tt.devFlag)
 			require.NoError(t, err)
-			err = cmd.Flags().Set("fixtures-dir", tt.fixturesFlag)
+			err = cmd.PersistentFlags().Set("fixtures-dir", tt.fixturesFlag)
 			require.NoError(t, err)
 
 			bindArgsToViper(cmd)
@@ -377,9 +377,9 @@ func TestBindArgsToViper_FlagNotSet_UsesDefault(t *testing.T) {
 	t.Cleanup(func() { viper.Reset() })
 
 	cmd := &cobra.Command{Use: "test"}
-	cmd.Flags().BoolP("debug", "d", false, "enable debug logging")
-	cmd.Flags().BoolP("dev", "D", false, "enable dev mode")
-	cmd.Flags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
+	cmd.PersistentFlags().BoolP("debug", "d", false, "enable debug logging")
+	cmd.PersistentFlags().BoolP("dev", "D", false, "enable dev mode")
+	cmd.PersistentFlags().StringP("fixtures-dir", "F", "testdata/fixtures", "path to fixture data")
 	// Do not set any flags -- they should retain their defaults
 	bindArgsToViper(cmd)
 

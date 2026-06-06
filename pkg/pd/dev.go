@@ -63,6 +63,7 @@ type fixtureIncident struct {
 	EscalationPolicy   fixtureAPIRef       `json:"escalation_policy"`
 	Assignments        []fixtureAssignment `json:"assignments"`
 	Acknowledgements   []fixtureAck        `json:"acknowledgements"`
+	Teams              []fixtureAPIRef     `json:"teams"`
 }
 
 type fixtureServiceRef struct {
@@ -320,6 +321,14 @@ func convertFixtureIncident(fi fixtureIncident) *pagerduty.Incident {
 				Type:    fack.Acknowledger.Type,
 				Summary: fack.Acknowledger.Summary,
 			},
+		})
+	}
+
+	for _, ft := range fi.Teams {
+		incident.Teams = append(incident.Teams, pagerduty.APIObject{
+			ID:      ft.ID,
+			Type:    ft.Type,
+			Summary: ft.Summary,
 		})
 	}
 

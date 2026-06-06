@@ -128,7 +128,7 @@ type model struct {
 	mergeTable          table.Model
 	mergeTeamMode       bool
 
-	// Team selection state — shown on first run or via --list-teams
+	// Team selection state — shown on first run or via --pick-teams
 	teamSelectMode  bool
 	teamSelectForm  *huh.Form
 	teamSelectIDs   []string

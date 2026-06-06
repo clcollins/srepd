@@ -10,7 +10,7 @@
   "teams": [
     {
       "id": "PDEV_TEAM_001",
-      "name": "SREP On-Call",
+      "name": "Dev Platform SRE",
       "type": "team",
       "self": "https://api.example.pagerduty.com/teams/PDEV_TEAM_001",
       "html_url": "https://example.pagerduty.com/teams/PDEV_TEAM_001"

@@ -845,6 +845,9 @@ const detailsTabTemplate = `
 {{ ToLink .Title .HTMLURL }}
 
 * Service: {{ .Service }}
+{{- if .Teams }}
+* Team: {{ range $i, $team := .Teams }}{{ if $i }}, {{ end }}{{ $team }}{{ end }}
+{{- end }}
 * Urgency: {{ .Urgency }}
 * Created: {{ .Created }}
 

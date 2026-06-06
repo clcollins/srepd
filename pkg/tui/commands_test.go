@@ -303,8 +303,6 @@ func TestGetIncidentNotes(t *testing.T) {
 	}
 }
 
-
-
 func TestIgnoredUserIDs(t *testing.T) {
 	t.Run("returns IDs from user list", func(t *testing.T) {
 		users := []*pagerduty.User{
