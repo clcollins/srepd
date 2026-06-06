@@ -3,10 +3,8 @@ package cmd
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -241,102 +239,22 @@ func (m *mockFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteClos
 	return nopCloser{&m.buf}, nil
 }
 
-func TestCreateConfig_Success(t *testing.T) {
-	m := &mockFS{}
-
-	err := createConfig(m, "/fake/home")
-
-	require.NoError(t, err)
-
-	expected := strings.TrimLeft(exampleConfig, "\n")
-	assert.Equal(t, expected, m.buf.String())
+func TestMaskToken(t *testing.T) {
+	assert.Equal(t, "PCGX****", maskToken("PCGXUDY1"))
+	assert.Equal(t, "****", maskToken("ab"))
+	assert.Equal(t, "****", maskToken(""))
 }
 
-func TestCreateConfig_ContentTrimmed(t *testing.T) {
-	m := &mockFS{}
-
-	err := createConfig(m, "/fake/home")
-
-	require.NoError(t, err)
-	assert.True(t, len(m.buf.Bytes()) > 0, "written content should not be empty")
-	assert.Equal(t, byte('#'), m.buf.Bytes()[0],
-		"config file should start with '#', not a blank line")
+func TestStringSlicesEqual(t *testing.T) {
+	assert.True(t, stringSlicesEqual([]string{"a", "b"}, []string{"b", "a"}))
+	assert.False(t, stringSlicesEqual([]string{"a"}, []string{"a", "b"}))
+	assert.True(t, stringSlicesEqual([]string{}, []string{}))
 }
 
-func TestCreateConfig_UsesCorrectPaths(t *testing.T) {
-	m := &mockFS{}
-
-	err := createConfig(m, "/fake/home")
-
-	require.NoError(t, err)
-
-	expectedDir := filepath.Join("/fake/home", cfgFileDir)
-	expectedFile := filepath.Join(expectedDir, cfgFileName)
-
-	assert.Equal(t, expectedDir, m.mkdirPath)
-	assert.Equal(t, expectedFile, m.openPath)
-}
-
-func TestCreateConfig_UsesExclFlag(t *testing.T) {
-	m := &mockFS{}
-
-	err := createConfig(m, "/fake/home")
-
-	require.NoError(t, err)
-
-	expectedFlags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	assert.Equal(t, expectedFlags, m.openFlags,
-		"OpenFile should use O_WRONLY|O_CREATE|O_EXCL for atomic creation")
-}
-
-func TestCreateConfig_UsesCorrectPerms(t *testing.T) {
-	m := &mockFS{}
-
-	err := createConfig(m, "/fake/home")
-
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0755), m.mkdirPerm, "directory should use 0755 permissions")
-	assert.Equal(t, os.FileMode(0644), m.openPerm, "file should use 0644 permissions")
-}
-
-func TestCreateConfig_ErrorWhenFileExists(t *testing.T) {
-	m := &mockFS{
-		openFileErr: &os.PathError{
-			Op:   "open",
-			Path: "/fake/home/.config/srepd/srepd.yaml",
-			Err:  os.ErrExist,
-		},
-	}
-
-	err := createConfig(m, "/fake/home")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "already exists")
-	assert.Contains(t, err.Error(), fmt.Sprintf("%s/%s/%s", "/fake/home", cfgFileDir, cfgFileName))
-}
-
-func TestCreateConfig_ErrorOnMkdirFail(t *testing.T) {
-	m := &mockFS{
-		mkdirAllErr: errors.New("permission denied"),
-	}
-
-	err := createConfig(m, "/fake/home")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create config directory")
-	assert.Contains(t, err.Error(), "permission denied")
-}
-
-func TestCreateConfig_ErrorOnOpenFail(t *testing.T) {
-	m := &mockFS{
-		openFileErr: errors.New("disk full"),
-	}
-
-	err := createConfig(m, "/fake/home")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create config file")
-	assert.Contains(t, err.Error(), "disk full")
+func TestFormatCustomMappings(t *testing.T) {
+	assert.Equal(t, "", formatCustomMappings(nil))
+	result := formatCustomMappings(map[string]string{"SVC1": "POL1"})
+	assert.Contains(t, result, "SVC1:POL1")
 }
 
 func TestHasPlaceholderTeams_Empty(t *testing.T) {

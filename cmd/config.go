@@ -30,59 +30,6 @@ const (
 	cfgFileDir  = ".config/srepd"
 )
 
-const (
-	exampleConfig = `
-# Example srepd configuration file
----
-# This is an example configuration file for srepd.  It is intended to be used
-# as a reference for the configuration options available to the user.  The
-# configuration file is located at ~/.config/srepd/srepd.yaml
-
-# Required configuration options
-
-# PagerDuty API token
-token: <PagerDuty API token>
-
-# Teams to filter on
-teams:
-  - <PagerDuty Team ID 1>
-  - <PagerDuty Team ID 2>
-
-# Default silent escalation policy — auto-discovered via --pick-teams
-# or set manually. Used when silencing incidents.
-# default_silent_escalation_policy: <PagerDuty Escalation Policy ID>
-
-# Optional configuration options
-
-# Per-service silent policy overrides (service ID → silent policy ID)
-# custom_service_escalation_policies:
-#   <PagerDuty Service ID>: <PagerDuty Escalation Policy ID>
-
-# Editor to use for notes
-editor: vim
-
-# Terminal to use for exec commands
-terminal: gnome-terminal --
-
-# Cluster login command
-cluster-login-command: ocm backplane login %%CLUSTER_ID%%
-
-# Toolbox mode: auto-detect Fedora Toolbox and prefix terminal commands
-# with flatpak-spawn --host. Values: "auto" (default), "true", "false"
-toolbox_mode: auto
-
-# Custom color scheme (all optional, hex values)
-# colors:
-#   text: "#778da9"
-#   border: "#415a77"
-#   highlight: "#ffffff"
-#   selected: "#415a77"
-#   warning: "#a4133c"
-#   error: "#0d1b2a"
-#   muted: "#5C5C5C"
-#   tab: "#7D56F4"`
-)
-
 const description = `The config command is used to create or validate the SREPD config file.
 The config file is located at ~/.config/srepd/srepd.yaml and is used to store
 the configuration options for the SREPD application.`
@@ -102,11 +49,11 @@ var (
 	optionalKeys = map[string]string{
 		"editor":                             fmt.Sprintf("Editor to use for notes (default: %v)", defaultOptionalKeys["editor"]),
 		"terminal":                           fmt.Sprintf("Terminal to use for exec commands (default: %v)", defaultOptionalKeys["terminal"]),
-		"cluster_login_command":              fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
+		"cluster_login_command":              fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster_login_command"]),
 		"toolbox_mode":                       fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", defaultOptionalKeys["toolbox_mode"]),
 		"chord_prefix":                       fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", defaultOptionalKeys["chord_prefix"]),
 		"colors":                             "Custom color scheme (map of color name to hex value)",
-		"default_silent_escalation_policy":   "Default silent escalation policy ID (auto-discovered via --pick-teams)",
+		"default_silent_escalation_policy":   "Default silent escalation policy ID (auto-discovered via srepd config)",
 		"custom_service_escalation_policies": "Per-service silent policy overrides (service ID → policy ID)",
 	}
 )
@@ -114,54 +61,16 @@ var (
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:          "config",
-	Short:        "Create or validate the SREPD config file",
-	Long:         description + "\n\n" + exampleConfig,
+	Short:        "Configure SREPD interactively",
+	Long:         description,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		switch {
-		case cmd.Flag("create").Value.String() == "true":
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get user home directory: %w", err)
-			}
-			if err := createConfig(osFS{}, home); err != nil {
-				return err
-			}
-			fmt.Println("\nTip: After adding your token, run 'srepd config --pick-teams' to see available teams.")
-			return nil
-		case cmd.Flag("validate").Value.String() == "true":
-			err := validateConfig()
-			if err != nil {
-				return err
-			}
-			fmt.Printf("Config file is valid\n")
-			return nil
-		case cmd.Flag("pick-teams").Value.String() == "true":
-			return runPickTeams()
-		default:
-			err := cmd.Usage()
-			return err
-		}
+		return runConfigWizard()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// configCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
-	configCmd.Flags().BoolP("create", "c", false, "create a sample config file at ~/.config/srepd/srepd.yaml")
-	configCmd.Flags().BoolP("validate", "v", false, "validate the config file")
-	configCmd.Flags().BoolP("pick-teams", "p", false, "select your PagerDuty teams interactively")
-	configCmd.MarkFlagsMutuallyExclusive("create", "validate", "pick-teams")
 }
 
 type configFS interface {
@@ -189,35 +98,318 @@ func (osFS) WriteFile(name string, data []byte, perm os.FileMode) error { // cod
 	return os.WriteFile(name, data, perm)
 }
 
-func createConfig(fs configFS, baseDir string) (retErr error) {
-	configDir := filepath.Join(baseDir, cfgFileDir)
+func maskToken(token string) string {
+	if len(token) <= 4 {
+		return "****"
+	}
+	return token[:4] + strings.Repeat("*", len(token)-4)
+}
 
-	if err := fs.MkdirAll(configDir, 0755); err != nil {
+func runConfigWizard() error {
+	if viper.GetBool("dev") {
+		runDevMode()
+		return nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	configDir := filepath.Join(home, cfgFileDir)
+	configFile := filepath.Join(configDir, cfgFileName)
+
+	existingToken := viper.GetString("token")
+	existingTeams := viper.GetStringSlice("teams")
+	existingSilent := viper.GetString("default_silent_escalation_policy")
+	existingCustom := viper.GetStringMapString("custom_service_escalation_policies")
+
+	var tokenInput string
+	tokenDesc := "Your PagerDuty API OAuth token."
+	if existingToken != "" {
+		tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.", maskToken(existingToken))
+	}
+
+	var selectedTeams []string
+	silentPolicyID := existingSilent
+	var customMappingsInput string
+	if len(existingCustom) > 0 {
+		var pairs []string
+		for svcID, polID := range existingCustom {
+			pairs = append(pairs, svcID+":"+polID)
+		}
+		customMappingsInput = strings.Join(pairs, ", ")
+	}
+
+	colors := viper.GetStringMapString("colors")
+	theme := tui.ThemeFromConfig(colors)
+	huhTheme := buildHuhTheme(theme)
+
+	// Phase 1: Get token
+	tokenForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("PagerDuty API token").
+				Description(tokenDesc).
+				EchoMode(huh.EchoModePassword).
+				Value(&tokenInput),
+		),
+	).WithTheme(huhTheme).WithShowHelp(false).WithProgramOptions(tea.WithAltScreen())
+
+	if err := tokenForm.Run(); err != nil {
+		return fmt.Errorf("config wizard failed: %w", err)
+	}
+	if tokenForm.State == huh.StateAborted {
+		return nil
+	}
+
+	tokenInput = strings.TrimSpace(tokenInput)
+	finalToken := existingToken
+	if tokenInput != "" {
+		finalToken = tokenInput
+	}
+	if finalToken == "" {
+		return fmt.Errorf("a PagerDuty API token is required")
+	}
+
+	// Phase 2: Fetch teams and build the rest of the form
+	client := pd.NewClient(finalToken)
+	teams, err := pd.GetCurrentUserTeams(client)
+	if err != nil {
+		return fmt.Errorf("failed to fetch teams (is your token valid?): %w", err)
+	}
+
+	if len(teams) == 0 {
+		fmt.Println("No teams found in your PagerDuty account.")
+		return nil
+	}
+
+	existingTeamSet := make(map[string]bool)
+	for _, id := range existingTeams {
+		existingTeamSet[id] = true
+	}
+
+	var teamOptions []huh.Option[string]
+	for _, team := range teams {
+		opt := huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID)
+		if existingTeamSet[team.ID] {
+			opt = opt.Selected(true)
+		}
+		teamOptions = append(teamOptions, opt)
+	}
+
+	submitted := false
+	mainForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewMultiSelect[string]().
+				Title("Select your PagerDuty teams").
+				Description("<space> toggle • ↑ up • ↓ down • / filter • enter submit • ctrl+a select all • ctrl+c quit").
+				Options(teamOptions...).
+				Value(&selectedTeams).
+				Validate(func(s []string) error {
+					if !submitted {
+						submitted = true
+						return nil
+					}
+					if len(s) == 0 {
+						return fmt.Errorf("at least one team is required")
+					}
+					return nil
+				}),
+		),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Default silent escalation policy").
+				Description(
+					"When you silence an incident, it gets reassigned to a silent\n"+
+						"escalation policy — one that routes only to bot users, not\n"+
+						"on-call humans. Find this ID in PagerDuty → Escalation Policies\n"+
+						"(e.g., \"Silent Test\"). Leave blank to configure later.",
+				).
+				Value(&silentPolicyID),
+		),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Custom service-to-policy mappings").
+				Description(
+					"Some services use a different silent policy than the default.\n"+
+						"For example, Deadmanssnitch alerts might route to a separate\n"+
+						"silent policy instead of the general one.\n"+
+						"Enter as SERVICE_ID:POLICY_ID separated by commas.\n"+
+						"Leave blank to skip.",
+				).
+				Value(&customMappingsInput),
+		),
+	).WithTheme(huhTheme).WithShowHelp(false).WithProgramOptions(tea.WithAltScreen())
+
+	if err := mainForm.Run(); err != nil {
+		return fmt.Errorf("config wizard failed: %w", err)
+	}
+	if mainForm.State == huh.StateAborted {
+		return nil
+	}
+
+	// Build summary
+	silentPolicyID = strings.TrimSpace(silentPolicyID)
+	customMappingsInput = strings.TrimSpace(customMappingsInput)
+
+	tokenChanged := tokenInput != "" && tokenInput != existingToken
+	teamsChanged := !stringSlicesEqual(selectedTeams, existingTeams)
+	silentChanged := silentPolicyID != existingSilent
+	customChanged := customMappingsInput != formatCustomMappings(existingCustom)
+
+	teamNames := make(map[string]string)
+	for _, team := range teams {
+		teamNames[team.ID] = team.Name
+	}
+
+	fmt.Println("\nConfiguration summary:")
+	if tokenChanged {
+		fmt.Printf("  Token:          %s (changed)\n", maskToken(finalToken))
+	} else {
+		fmt.Printf("  Token:          %s (unchanged)\n", maskToken(finalToken))
+	}
+
+	teamDisplay := []string{}
+	for _, id := range selectedTeams {
+		if name, ok := teamNames[id]; ok {
+			teamDisplay = append(teamDisplay, fmt.Sprintf("%s (%s)", name, id))
+		} else {
+			teamDisplay = append(teamDisplay, id)
+		}
+	}
+	changeLabel := ""
+	if teamsChanged {
+		changeLabel = " (changed)"
+	}
+	fmt.Printf("  Teams:          %s%s\n", strings.Join(teamDisplay, ", "), changeLabel)
+
+	if silentPolicyID != "" {
+		changeLabel = ""
+		if silentChanged {
+			changeLabel = " (changed)"
+		}
+		fmt.Printf("  Silent policy:  %s%s\n", silentPolicyID, changeLabel)
+	}
+
+	if customMappingsInput != "" {
+		changeLabel = ""
+		if customChanged {
+			changeLabel = " (changed)"
+		}
+		fmt.Printf("  Custom:         %s%s\n", customMappingsInput, changeLabel)
+	}
+
+	if !tokenChanged && !teamsChanged && !silentChanged && !customChanged {
+		fmt.Println("\nConfig is valid. No changes needed.")
+		return nil
+	}
+
+	// Confirm save
+	var confirm bool
+	confirmForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Save changes?").
+				Value(&confirm),
+		),
+	).WithTheme(huhTheme).WithShowHelp(false)
+
+	if err := confirmForm.Run(); err != nil {
+		return fmt.Errorf("confirmation failed: %w", err)
+	}
+	if !confirm || confirmForm.State == huh.StateAborted {
+		fmt.Println("Changes discarded.")
+		return nil
+	}
+
+	// Ensure config dir exists
+	if err := (osFS{}).MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	configFile := filepath.Join(configDir, cfgFileName)
-
-	f, err := fs.OpenFile(configFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("config file already exists at %s", configFile)
+	// If no config file, create one with defaults first
+	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
+		if writeErr := (osFS{}).WriteFile(configFile, []byte("---\n"), 0644); writeErr != nil {
+			return fmt.Errorf("failed to create config file: %w", writeErr)
 		}
-		return fmt.Errorf("failed to create config file: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && retErr == nil {
-			retErr = fmt.Errorf("failed to close config file: %w", cerr)
-		}
-	}()
-
-	if _, err := f.Write([]byte(strings.TrimLeft(exampleConfig, "\n"))); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	fmt.Printf("Config file created at %s\n", configFile)
-	fmt.Println("Please edit the file to add your PagerDuty credentials and team information.")
+	// Write token
+	if tokenChanged {
+		if err := writeConfigKey(osFS{}, home, "token", finalToken); err != nil {
+			return fmt.Errorf("failed to save token: %w", err)
+		}
+	}
+
+	// Write teams
+	if teamsChanged {
+		if err := writeConfigTeams(osFS{}, home, selectedTeams, teamNames); err != nil {
+			return fmt.Errorf("failed to save teams: %w", err)
+		}
+	}
+
+	// Validate and write silent policy
+	if silentChanged && silentPolicyID != "" {
+		if _, err := pd.GetEscalationPolicy(client, silentPolicyID, pagerduty.GetEscalationPolicyOptions{}); err != nil {
+			return fmt.Errorf("invalid silent policy ID %q: %w", silentPolicyID, err)
+		}
+		if err := writeConfigKey(osFS{}, home, "default_silent_escalation_policy", silentPolicyID); err != nil {
+			return fmt.Errorf("failed to save silent policy: %w", err)
+		}
+	}
+
+	// Validate and write custom mappings
+	if customChanged && customMappingsInput != "" {
+		customPolicies := make(map[string]string)
+		for _, pair := range strings.Split(customMappingsInput, ",") {
+			pair = strings.TrimSpace(pair)
+			parts := strings.SplitN(pair, ":", 2)
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid mapping %q — expected SERVICE_ID:POLICY_ID", pair)
+			}
+			svcID := strings.TrimSpace(parts[0])
+			polID := strings.TrimSpace(parts[1])
+			if _, err := pd.GetEscalationPolicy(client, polID, pagerduty.GetEscalationPolicyOptions{}); err != nil {
+				return fmt.Errorf("invalid policy %q for service %q: %w", polID, svcID, err)
+			}
+			customPolicies[svcID] = polID
+		}
+		if err := writeConfigMap(osFS{}, home, "custom_service_escalation_policies", customPolicies); err != nil {
+			return fmt.Errorf("failed to save custom policies: %w", err)
+		}
+	}
+
+	fmt.Println("\nConfig saved. Launching srepd...")
+	launchTUI()
 	return nil
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[string]bool)
+	for _, v := range a {
+		set[v] = true
+	}
+	for _, v := range b {
+		if !set[v] {
+			return false
+		}
+	}
+	return true
+}
+
+func formatCustomMappings(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	var pairs []string
+	for svcID, polID := range m {
+		pairs = append(pairs, svcID+":"+polID)
+	}
+	return strings.Join(pairs, ", ")
 }
 
 func updateTeamsInConfig(configData []byte, teamIDs []string, teamNames map[string]string) ([]byte, error) {
@@ -301,121 +493,17 @@ func writeConfigTeams(fs configFS, baseDir string, teamIDs []string, teamNames m
 	return nil
 }
 
-func runPickTeams() error {
-	if viper.GetBool("dev") {
-		fmt.Println("Dev mode: skipping team selection, launching with fixture data...")
-		runDevMode()
-		return nil
-	}
-
-	token := viper.GetString("token")
-	if token == "" {
-		return fmt.Errorf("no PagerDuty API token found; set 'token' in config or SREPD_TOKEN env var")
-	}
-
-	client := pd.NewClient(token)
-	teams, err := pd.GetCurrentUserTeams(client)
-	if err != nil {
-		return err
-	}
-
-	if len(teams) == 0 {
-		fmt.Println("No teams found in your PagerDuty account.")
-		return nil
-	}
-
-	selectedIDs, err := runTeamSelector(teams)
-	if err != nil {
-		return err
-	}
-
-	if len(selectedIDs) == 0 {
-		fmt.Println("No teams selected.")
-		return nil
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	teamNames := make(map[string]string)
-	for _, team := range teams {
-		teamNames[team.ID] = team.Name
-	}
-
-	if err := writeConfigTeams(osFS{}, home, selectedIDs, teamNames); err != nil {
-		return err
-	}
-
-	fmt.Printf("\nSaved %d team(s) to config.\n", len(selectedIDs))
-
-	silentPolicyID, err := promptForSilentPolicy(client)
-	if err != nil {
-		return err
-	}
-	if silentPolicyID != "" {
-		if err := writeConfigKey(osFS{}, home, "default_silent_escalation_policy", silentPolicyID); err != nil {
-			return fmt.Errorf("failed to save silent policy to config: %w", err)
-		}
-		fmt.Println("Saved default silent policy to config.")
-	}
-
-	customPolicies, err := promptForCustomPolicies(client)
-	if err != nil {
-		return err
-	}
-	if len(customPolicies) > 0 {
-		if err := writeConfigMap(osFS{}, home, "custom_service_escalation_policies", customPolicies); err != nil {
-			return fmt.Errorf("failed to save custom policies to config: %w", err)
-		}
-		fmt.Printf("Saved %d custom service policy mapping(s) to config.\n", len(customPolicies))
-	}
-
-	fmt.Println("\nSetup complete. Run 'srepd' to start.")
-	return nil
-}
-
-func runTeamSelector(teams []pagerduty.Team) ([]string, error) {
-	var selected []string
-	var options []huh.Option[string]
-	for _, team := range teams {
-		options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID))
-	}
-
-	colors := viper.GetStringMapString("colors")
-	theme := tui.ThemeFromConfig(colors)
-
-	huhTheme := huh.ThemeCharm()
-	huhTheme.Focused.Title = huhTheme.Focused.Title.Foreground(theme.Highlight)
-	huhTheme.Focused.Description = huhTheme.Focused.Description.Foreground(theme.Muted)
-	huhTheme.Focused.SelectedOption = huhTheme.Focused.SelectedOption.Foreground(theme.Highlight)
-	huhTheme.Focused.UnselectedOption = huhTheme.Focused.UnselectedOption.Foreground(theme.Text)
-	huhTheme.Focused.MultiSelectSelector = huhTheme.Focused.MultiSelectSelector.Foreground(theme.Text)
-	huhTheme.Focused.SelectedPrefix = huhTheme.Focused.SelectedPrefix.Foreground(theme.Highlight)
-	huhTheme.Focused.UnselectedPrefix = huhTheme.Focused.UnselectedPrefix.Foreground(theme.Muted)
-	huhTheme.Focused.Base = huhTheme.Focused.Base.BorderForeground(theme.Border)
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Select your PagerDuty teams").
-				Description("Use space to toggle, enter to confirm, esc to skip").
-				Options(options...).
-				Value(&selected),
-		),
-	).WithTheme(huhTheme).WithProgramOptions(tea.WithAltScreen())
-
-	err := form.Run()
-	if err != nil {
-		return nil, fmt.Errorf("team selection failed: %w", err)
-	}
-
-	if form.State == huh.StateAborted {
-		return nil, nil
-	}
-
-	return selected, nil
+func buildHuhTheme(theme tui.Theme) *huh.Theme {
+	t := huh.ThemeCharm()
+	t.Focused.Title = t.Focused.Title.Foreground(theme.Highlight)
+	t.Focused.Description = t.Focused.Description.Foreground(theme.Muted)
+	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(theme.Highlight)
+	t.Focused.UnselectedOption = t.Focused.UnselectedOption.Foreground(theme.Text)
+	t.Focused.MultiSelectSelector = t.Focused.MultiSelectSelector.Foreground(theme.Text)
+	t.Focused.SelectedPrefix = t.Focused.SelectedPrefix.Foreground(theme.Highlight)
+	t.Focused.UnselectedPrefix = t.Focused.UnselectedPrefix.Foreground(theme.Muted)
+	t.Focused.Base = t.Focused.Base.BorderForeground(theme.Border)
+	return t
 }
 
 func hasPlaceholderTeams(teams []string) bool {
@@ -494,92 +582,6 @@ func validateConfig() error {
 	}
 
 	return errors.Join(errs...)
-}
-
-func promptForSilentPolicy(client pd.PagerDutyClient) (string, error) {
-	var policyID string
-
-	fmt.Println("\n--- Default Silent Escalation Policy ---")
-	fmt.Println("When you silence an incident, it gets reassigned to a silent escalation")
-	fmt.Println("policy (one that routes only to bot users, not on-call humans).")
-	fmt.Println("Find this ID in PagerDuty → Escalation Policies (e.g., \"Silent Test\").")
-	fmt.Println("Leave blank to configure later in your config file.")
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter the ID of your default silent escalation policy").
-				Description("Leave blank to skip").
-				Value(&policyID),
-		),
-	)
-
-	if err := form.Run(); err != nil {
-		return "", fmt.Errorf("silent policy prompt failed: %w", err)
-	}
-
-	policyID = strings.TrimSpace(policyID)
-	if policyID == "" {
-		fmt.Println("Skipped — you can set 'default_silent_escalation_policy' in your config later.")
-		return "", nil
-	}
-
-	policy, err := pd.GetEscalationPolicy(client, policyID, pagerduty.GetEscalationPolicyOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed to validate policy ID %q: %w", policyID, err)
-	}
-
-	fmt.Printf("Confirmed: %s — %s\n", policy.ID, policy.Name)
-	return policyID, nil
-}
-
-func promptForCustomPolicies(client pd.PagerDutyClient) (map[string]string, error) {
-	var input string
-
-	fmt.Println("\n--- Custom Service-to-Policy Mappings ---")
-	fmt.Println("Some services may use a different silent policy than the default.")
-	fmt.Println("For example, DMS alerts might route to a DMS-specific silent policy")
-	fmt.Println("instead of the general one.")
-	fmt.Println("Enter mappings as SERVICE_ID:POLICY_ID separated by commas.")
-	fmt.Println("Leave blank to skip.")
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Custom mappings (SERVICE_ID:POLICY_ID, ...)").
-				Description("Leave blank to skip").
-				Value(&input),
-		),
-	)
-
-	if err := form.Run(); err != nil {
-		return nil, fmt.Errorf("custom policy prompt failed: %w", err)
-	}
-
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return nil, nil
-	}
-
-	result := make(map[string]string)
-	for _, pair := range strings.Split(input, ",") {
-		pair = strings.TrimSpace(pair)
-		parts := strings.SplitN(pair, ":", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid mapping %q — expected SERVICE_ID:POLICY_ID", pair)
-		}
-		svcID := strings.TrimSpace(parts[0])
-		polID := strings.TrimSpace(parts[1])
-
-		policy, err := pd.GetEscalationPolicy(client, polID, pagerduty.GetEscalationPolicyOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate policy %q for service %q: %w", polID, svcID, err)
-		}
-		fmt.Printf("  %s → %s — %s\n", svcID, policy.ID, policy.Name)
-		result[svcID] = polID
-	}
-
-	return result, nil
 }
 
 func writeConfigKey(fs configFS, baseDir string, key string, value string) error {
