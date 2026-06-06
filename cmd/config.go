@@ -350,19 +350,29 @@ func runPickTeams() error {
 
 	fmt.Printf("\nSaved %d team(s) to config.\n", len(selectedIDs))
 
-	silentPolicyID, err := discoverAndSelectSilentPolicy(client, selectedIDs)
+	silentPolicyID, err := promptForSilentPolicy(client)
 	if err != nil {
-		log.Warn("Silent policy discovery failed", "error", err)
+		return err
 	}
 	if silentPolicyID != "" {
 		if err := writeConfigKey(osFS{}, home, "default_silent_escalation_policy", silentPolicyID); err != nil {
 			return fmt.Errorf("failed to save silent policy to config: %w", err)
 		}
-		fmt.Printf("Saved default silent policy to config.\n")
+		fmt.Println("Saved default silent policy to config.")
 	}
 
-	fmt.Println("Launching srepd...")
-	launchTUI()
+	customPolicies, err := promptForCustomPolicies(client)
+	if err != nil {
+		return err
+	}
+	if len(customPolicies) > 0 {
+		if err := writeConfigMap(osFS{}, home, "custom_service_escalation_policies", customPolicies); err != nil {
+			return fmt.Errorf("failed to save custom policies to config: %w", err)
+		}
+		fmt.Printf("Saved %d custom service policy mapping(s) to config.\n", len(customPolicies))
+	}
+
+	fmt.Println("\nSetup complete. Run 'srepd' to start.")
 	return nil
 }
 
@@ -486,66 +496,90 @@ func validateConfig() error {
 	return errors.Join(errs...)
 }
 
-func discoverAndSelectSilentPolicy(client pd.PagerDutyClient, teamIDs []string) (string, error) {
-	policies, err := pd.GetTeamEscalationPolicies(client, teamIDs)
-	if err != nil {
-		return "", fmt.Errorf("failed to list escalation policies: %w", err)
-	}
+func promptForSilentPolicy(client pd.PagerDutyClient) (string, error) {
+	var policyID string
 
-	var silentPolicies []pagerduty.EscalationPolicy
-	for _, p := range policies {
-		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent {
-			silentPolicies = append(silentPolicies, p)
-		}
-	}
-
-	if len(silentPolicies) == 0 {
-		fmt.Println("\nNo silent escalation policies found for your teams.")
-		fmt.Println("You can set one manually in your config as 'default_silent_escalation_policy'.")
-		return "", nil
-	}
-
-	if len(silentPolicies) == 1 {
-		p := silentPolicies[0]
-		fmt.Printf("\nDefault silent policy: %s — %s\n", p.ID, p.Name)
-		return p.ID, nil
-	}
-
-	var selected string
-	var options []huh.Option[string]
-	for _, p := range silentPolicies {
-		options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", p.Name, p.ID), p.ID))
-	}
-
-	colors := viper.GetStringMapString("colors")
-	theme := tui.ThemeFromConfig(colors)
-
-	huhTheme := huh.ThemeCharm()
-	huhTheme.Focused.Title = huhTheme.Focused.Title.Foreground(theme.Highlight)
-	huhTheme.Focused.SelectedOption = huhTheme.Focused.SelectedOption.Foreground(theme.Highlight)
-	huhTheme.Focused.UnselectedOption = huhTheme.Focused.UnselectedOption.Foreground(theme.Text)
-	huhTheme.Focused.Base = huhTheme.Focused.Base.BorderForeground(theme.Border)
+	fmt.Println("\n--- Default Silent Escalation Policy ---")
+	fmt.Println("When you silence an incident, it gets reassigned to a silent escalation")
+	fmt.Println("policy (one that routes only to bot users, not on-call humans).")
+	fmt.Println("Find this ID in PagerDuty → Escalation Policies (e.g., \"Silent Test\").")
+	fmt.Println("Leave blank to configure later in your config file.")
 
 	form := huh.NewForm(
 		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Which policy should silenced alerts be assigned to?").
-				Description("Select the default silent escalation policy").
-				Options(options...).
-				Value(&selected),
+			huh.NewInput().
+				Title("Enter the ID of your default silent escalation policy").
+				Description("Leave blank to skip").
+				Value(&policyID),
 		),
-	).WithTheme(huhTheme).WithProgramOptions(tea.WithAltScreen())
+	)
 
-	err = form.Run()
-	if err != nil {
-		return "", fmt.Errorf("silent policy selection failed: %w", err)
+	if err := form.Run(); err != nil {
+		return "", fmt.Errorf("silent policy prompt failed: %w", err)
 	}
 
-	if form.State == huh.StateAborted {
+	policyID = strings.TrimSpace(policyID)
+	if policyID == "" {
+		fmt.Println("Skipped — you can set 'default_silent_escalation_policy' in your config later.")
 		return "", nil
 	}
 
-	return selected, nil
+	policy, err := pd.GetEscalationPolicy(client, policyID, pagerduty.GetEscalationPolicyOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to validate policy ID %q: %w", policyID, err)
+	}
+
+	fmt.Printf("Confirmed: %s — %s\n", policy.ID, policy.Name)
+	return policyID, nil
+}
+
+func promptForCustomPolicies(client pd.PagerDutyClient) (map[string]string, error) {
+	var input string
+
+	fmt.Println("\n--- Custom Service-to-Policy Mappings ---")
+	fmt.Println("Some services may use a different silent policy than the default.")
+	fmt.Println("For example, DMS alerts might route to a DMS-specific silent policy")
+	fmt.Println("instead of the general one.")
+	fmt.Println("Enter mappings as SERVICE_ID:POLICY_ID separated by commas.")
+	fmt.Println("Leave blank to skip.")
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Custom mappings (SERVICE_ID:POLICY_ID, ...)").
+				Description("Leave blank to skip").
+				Value(&input),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return nil, fmt.Errorf("custom policy prompt failed: %w", err)
+	}
+
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil, nil
+	}
+
+	result := make(map[string]string)
+	for _, pair := range strings.Split(input, ",") {
+		pair = strings.TrimSpace(pair)
+		parts := strings.SplitN(pair, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid mapping %q — expected SERVICE_ID:POLICY_ID", pair)
+		}
+		svcID := strings.TrimSpace(parts[0])
+		polID := strings.TrimSpace(parts[1])
+
+		policy, err := pd.GetEscalationPolicy(client, polID, pagerduty.GetEscalationPolicyOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate policy %q for service %q: %w", polID, svcID, err)
+		}
+		fmt.Printf("  %s → %s — %s\n", svcID, policy.ID, policy.Name)
+		result[svcID] = polID
+	}
+
+	return result, nil
 }
 
 func writeConfigKey(fs configFS, baseDir string, key string, value string) error {
@@ -571,6 +605,81 @@ func writeConfigKey(fs configFS, baseDir string, key string, value string) error
 	}
 
 	return nil
+}
+
+func writeConfigMap(fs configFS, baseDir string, key string, values map[string]string) error {
+	configFile := filepath.Join(baseDir, cfgFileDir, cfgFileName)
+
+	data, err := fs.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	updated, err := upsertMapInConfig(data, key, values)
+	if err != nil {
+		return err
+	}
+
+	backupFile := configFile + "~"
+	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to create config backup: %w", err)
+	}
+
+	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+func upsertMapInConfig(configData []byte, key string, values map[string]string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(configData, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, fmt.Errorf("invalid YAML document structure")
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("expected YAML mapping at root")
+	}
+
+	mapNode := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	for k, v := range values {
+		mapNode.Content = append(mapNode.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k},
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v},
+		)
+	}
+
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		if root.Content[i].Value == key {
+			root.Content[i+1] = mapNode
+			return encodeYAMLDoc(&doc)
+		}
+	}
+
+	root.Content = append(root.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+		mapNode,
+	)
+	return encodeYAMLDoc(&doc)
+}
+
+func encodeYAMLDoc(doc *yaml.Node) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(doc); err != nil {
+		return nil, fmt.Errorf("failed to encode config YAML: %w", err)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 func upsertScalarInConfig(configData []byte, key string, value string) ([]byte, error) {
