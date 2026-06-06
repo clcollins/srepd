@@ -564,6 +564,117 @@ func TestNewConfig_PolicyKeysUppercased(t *testing.T) {
 	assert.NotNil(t, config.EscalationPolicies["CUSTOM_SERVICE"])
 }
 
+func TestNewConfig_AutoDiscoverIgnoredUsers(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		EscalationPolicyResponses: map[string]*pagerduty.EscalationPolicy{
+			"POLICY_REAL": {
+				APIObject: pagerduty.APIObject{ID: "POLICY_REAL"},
+				Name:      "OpenShift Escalation Policy",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "NOBODY_SREP", Type: "user_reference"},
+					}},
+					{Targets: []pagerduty.APIObject{
+						{ID: "ONCALL_SCHED", Type: "schedule_reference"},
+					}},
+				},
+			},
+			"POLICY_SILENT": {
+				APIObject: pagerduty.APIObject{ID: "POLICY_SILENT"},
+				Name:      "Silent Test - Non-Actionable",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT_USER_1", Type: "user_reference"},
+					}},
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT_USER_2", Type: "user_reference"},
+					}},
+				},
+			},
+		},
+	}
+	policies := map[string]string{
+		"default":        "POLICY_REAL",
+		"silent_default": "POLICY_SILENT",
+	}
+
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+
+	assert.NoError(t, err)
+	assert.Len(t, config.IgnoredUsers, 2)
+	assert.Equal(t, "BOT_USER_1", config.IgnoredUsers[0].ID)
+	assert.Equal(t, "BOT_USER_2", config.IgnoredUsers[1].ID)
+}
+
+func TestNewConfig_ManualIgnoredUsersTakePrecedence(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		EscalationPolicyResponses: map[string]*pagerduty.EscalationPolicy{
+			"POLICY_REAL": {
+				APIObject: pagerduty.APIObject{ID: "POLICY_REAL"},
+				Name:      "OpenShift Escalation Policy",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "ONCALL_SCHED", Type: "schedule_reference"},
+					}},
+				},
+			},
+			"POLICY_SILENT": {
+				APIObject: pagerduty.APIObject{ID: "POLICY_SILENT"},
+				Name:      "Silent Test",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT_USER_1", Type: "user_reference"},
+					}},
+				},
+			},
+		},
+	}
+	policies := map[string]string{
+		"default":        "POLICY_REAL",
+		"silent_default": "POLICY_SILENT",
+	}
+
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, []string{"MANUAL_USER"})
+
+	assert.NoError(t, err)
+	assert.Len(t, config.IgnoredUsers, 1)
+	assert.Equal(t, "MANUAL_USER", config.IgnoredUsers[0].ID)
+}
+
+func TestNewConfig_AutoDiscoverNoSilentPolicies(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		EscalationPolicyResponses: map[string]*pagerduty.EscalationPolicy{
+			"POLICY1": {
+				APIObject: pagerduty.APIObject{ID: "POLICY1"},
+				Name:      "Real Policy 1",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "SCHED1", Type: "schedule_reference"},
+					}},
+				},
+			},
+			"POLICY2": {
+				APIObject: pagerduty.APIObject{ID: "POLICY2"},
+				Name:      "Real Policy 2",
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "SCHED2", Type: "schedule_reference"},
+					}},
+				},
+			},
+		},
+	}
+	policies := map[string]string{
+		"default":        "POLICY1",
+		"silent_default": "POLICY2",
+	}
+
+	config, err := NewConfigWithClient(mockClient, []string{"team1"}, policies, nil)
+
+	assert.NoError(t, err)
+	assert.Empty(t, config.IgnoredUsers)
+}
+
 func TestAcknowledgeIncident_Success(t *testing.T) {
 	mockClient := &MockPagerDutyClient{}
 	user := &pagerduty.User{
@@ -852,4 +963,183 @@ func TestGetUserOnCalls_MultiplePages(t *testing.T) {
 	assert.Equal(t, "USER3", onCalls[2].User.ID)
 	// Verify the mock was called 2 times
 	assert.Equal(t, 2, mockClient.CallCounts["ListOnCallsWithContext"])
+}
+
+func TestClassifyEscalationPolicy(t *testing.T) {
+	tests := []struct {
+		name     string
+		policy   *pagerduty.EscalationPolicy
+		expected string
+	}{
+		{
+			name: "policy with schedule_reference is REAL",
+			policy: &pagerduty.EscalationPolicy{
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "SCHED1", Type: "schedule_reference"},
+					}},
+				},
+			},
+			expected: PolicyClassReal,
+		},
+		{
+			name: "policy with schedule_reference in later rule is REAL",
+			policy: &pagerduty.EscalationPolicy{
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT_USER", Type: "user_reference"},
+					}},
+					{Targets: []pagerduty.APIObject{
+						{ID: "ONCALL_SCHED", Type: "schedule_reference"},
+					}},
+				},
+			},
+			expected: PolicyClassReal,
+		},
+		{
+			name: "policy with mixed targets in one rule is REAL",
+			policy: &pagerduty.EscalationPolicy{
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT_USER", Type: "user_reference"},
+						{ID: "SCHED1", Type: "schedule_reference"},
+					}},
+				},
+			},
+			expected: PolicyClassReal,
+		},
+		{
+			name: "policy with only user_reference targets is SILENT",
+			policy: &pagerduty.EscalationPolicy{
+				EscalationRules: []pagerduty.EscalationRule{
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT_USER_1", Type: "user_reference"},
+					}},
+					{Targets: []pagerduty.APIObject{
+						{ID: "BOT_USER_2", Type: "user_reference"},
+					}},
+				},
+			},
+			expected: PolicyClassSilent,
+		},
+		{
+			name: "policy with empty escalation rules is SILENT",
+			policy: &pagerduty.EscalationPolicy{
+				EscalationRules: []pagerduty.EscalationRule{},
+			},
+			expected: PolicyClassSilent,
+		},
+		{
+			name:     "nil policy is SILENT",
+			policy:   nil,
+			expected: PolicyClassSilent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ClassifyEscalationPolicy(tt.policy)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestExtractSilentPolicyUsers(t *testing.T) {
+	silentPolicy := &pagerduty.EscalationPolicy{
+		EscalationRules: []pagerduty.EscalationRule{
+			{Targets: []pagerduty.APIObject{
+				{ID: "BOT_USER_1", Type: "user_reference"},
+			}},
+			{Targets: []pagerduty.APIObject{
+				{ID: "BOT_USER_2", Type: "user_reference"},
+			}},
+		},
+	}
+	realPolicy := &pagerduty.EscalationPolicy{
+		EscalationRules: []pagerduty.EscalationRule{
+			{Targets: []pagerduty.APIObject{
+				{ID: "NOBODY_SREP", Type: "user_reference"},
+			}},
+			{Targets: []pagerduty.APIObject{
+				{ID: "ONCALL_SCHED", Type: "schedule_reference"},
+			}},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		policies map[string]*pagerduty.EscalationPolicy
+		expected []string
+	}{
+		{
+			name: "extracts users from SILENT policy",
+			policies: map[string]*pagerduty.EscalationPolicy{
+				"SILENT_DEFAULT": silentPolicy,
+			},
+			expected: []string{"BOT_USER_1", "BOT_USER_2"},
+		},
+		{
+			name: "skips REAL policy users",
+			policies: map[string]*pagerduty.EscalationPolicy{
+				"DEFAULT":        realPolicy,
+				"SILENT_DEFAULT": silentPolicy,
+			},
+			expected: []string{"BOT_USER_1", "BOT_USER_2"},
+		},
+		{
+			name: "all REAL policies returns empty",
+			policies: map[string]*pagerduty.EscalationPolicy{
+				"DEFAULT": realPolicy,
+			},
+			expected: nil,
+		},
+		{
+			name: "deduplicates across rules",
+			policies: map[string]*pagerduty.EscalationPolicy{
+				"SILENT_DEFAULT": {
+					EscalationRules: []pagerduty.EscalationRule{
+						{Targets: []pagerduty.APIObject{
+							{ID: "BOT_USER_1", Type: "user_reference"},
+						}},
+						{Targets: []pagerduty.APIObject{
+							{ID: "BOT_USER_1", Type: "user_reference"},
+						}},
+					},
+				},
+			},
+			expected: []string{"BOT_USER_1"},
+		},
+		{
+			name: "union across multiple SILENT policies",
+			policies: map[string]*pagerduty.EscalationPolicy{
+				"SILENT_DEFAULT": silentPolicy,
+				"DMS_SILENT": {
+					EscalationRules: []pagerduty.EscalationRule{
+						{Targets: []pagerduty.APIObject{
+							{ID: "BOT_USER_2", Type: "user_reference"},
+							{ID: "BOT_USER_3", Type: "user_reference"},
+						}},
+					},
+				},
+			},
+			expected: []string{"BOT_USER_1", "BOT_USER_2", "BOT_USER_3"},
+		},
+		{
+			name:     "empty map returns nil",
+			policies: map[string]*pagerduty.EscalationPolicy{},
+			expected: nil,
+		},
+		{
+			name:     "nil map returns nil",
+			policies: nil,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ExtractSilentPolicyUsers(tt.policies)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

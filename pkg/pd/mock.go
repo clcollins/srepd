@@ -44,6 +44,11 @@ type MockPagerDutyClient struct {
 	// ListMembersOffsets records the offset value from each call to ListMembersWithContext,
 	// in order. Useful for verifying pagination offset reset behavior.
 	ListMembersOffsets []uint
+
+	// EscalationPolicyResponses maps policy IDs to specific responses for
+	// GetEscalationPolicyWithContext. When non-nil and a matching key exists,
+	// that policy is returned. Otherwise falls back to the default response.
+	EscalationPolicyResponses map[string]*pagerduty.EscalationPolicy
 }
 
 // recordCall increments the call count for the named method, lazily
@@ -223,6 +228,11 @@ func (m *MockPagerDutyClient) GetEscalationPolicyWithContext(ctx context.Context
 	m.recordCall("GetEscalationPolicyWithContext")
 	if id == "err" {
 		return nil, ErrMockError
+	}
+	if m.EscalationPolicyResponses != nil {
+		if policy, ok := m.EscalationPolicyResponses[id]; ok {
+			return policy, nil
+		}
 	}
 	return &pagerduty.EscalationPolicy{
 		APIObject: pagerduty.APIObject{ID: id},

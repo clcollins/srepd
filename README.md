@@ -61,7 +61,7 @@ SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment varia
 | `editor` | `string` | `vim` | Editor for incident notes |
 | `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
-| `ignoredusers` | `[]string` | (none) | PagerDuty user IDs to exclude |
+| `ignoredusers` | `[]string` | (auto-discovered) | **Deprecated.** PagerDuty user IDs to exclude. Now auto-discovered from silent escalation policies. Remove from config to use auto-discovery. |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 | `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
