@@ -59,10 +59,6 @@ service_escalation_policies:
   <PagerDuty Service ID 1>: <PagerDuty Escalation Policy ID 3>
 
 # Optional configuration options
-# User to ignore - Alerts assigned to these users are ignored
-ignoredusers:
-  - <PagerDuty User ID 1>
-  - <PagerDuty User ID 2>
 
 # Editor to use for notes
 editor: vim
@@ -107,7 +103,6 @@ var (
 		"chord_prefix":          "ctrl+x",
 	}
 	optionalKeys = map[string]string{
-		"ignoredusers":          fmt.Sprintf("PagerDuty user IDs to ignore (default: %v)", "None"),
 		"editor":                fmt.Sprintf("Editor to use for notes (default: %v)", defaultOptionalKeys["editor"]),
 		"terminal":              fmt.Sprintf("Terminal to use for exec commands (default: %v)", defaultOptionalKeys["terminal"]),
 		"cluster_login_command": fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
