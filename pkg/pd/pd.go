@@ -3,6 +3,7 @@ package pd
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,9 @@ const (
 	defaultPageLimit  = 100
 	defaultOffset     = 0
 	defaultAPITimeout = 30 * time.Second
+
+	PolicyClassReal   = "REAL"
+	PolicyClassSilent = "SILENT"
 )
 
 var defaultIncidentStatuses = []string{"triggered", "acknowledged"}
@@ -111,12 +115,32 @@ func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_poli
 		}
 	}
 
-	for _, i := range ignoredUsers {
-		user, err := GetUser(c.Client, i, pagerduty.GetUserOptions{})
-		if err != nil {
-			return &c, fmt.Errorf("pd.NewConfig(): failed to get user for ignore list `%v`: %v", i, err)
+	if len(ignoredUsers) > 0 {
+		log.Info("pd.NewConfig(): using manual ignoredusers (deprecated — remove ignoredusers from config to use auto-discovery)")
+		for _, i := range ignoredUsers {
+			user, err := GetUser(c.Client, i, pagerduty.GetUserOptions{})
+			if err != nil {
+				return &c, fmt.Errorf("pd.NewConfig(): failed to get user for ignore list `%v`: %v", i, err)
+			}
+			c.IgnoredUsers = append(c.IgnoredUsers, user)
 		}
-		c.IgnoredUsers = append(c.IgnoredUsers, user)
+	} else {
+		silentUserIDs := ExtractSilentPolicyUsers(c.EscalationPolicies)
+		for _, id := range silentUserIDs {
+			user, err := GetUser(c.Client, id, pagerduty.GetUserOptions{})
+			if err != nil {
+				log.Warn("pd.NewConfig(): failed to get user from silent policy, skipping", "user_id", id, "error", err)
+				continue
+			}
+			c.IgnoredUsers = append(c.IgnoredUsers, user)
+		}
+		if len(c.IgnoredUsers) > 0 {
+			var ids []string
+			for _, u := range c.IgnoredUsers {
+				ids = append(ids, u.ID)
+			}
+			log.Info("pd.NewConfig(): auto-discovered ignored users from silent policies", "count", len(c.IgnoredUsers), "user_ids", ids)
+		}
 	}
 
 	return &c, nil
@@ -434,4 +458,50 @@ func PostNote(client PagerDutyClient, id string, user *pagerduty.User, content s
 	}
 
 	return n, nil
+}
+
+// ClassifyEscalationPolicy returns PolicyClassReal if any target in any
+// escalation rule is a schedule_reference (meaning incidents can reach
+// on-call humans). Returns PolicyClassSilent if all targets are
+// user_reference only, or if the policy has no rules.
+func ClassifyEscalationPolicy(policy *pagerduty.EscalationPolicy) string {
+	if policy == nil {
+		return PolicyClassSilent
+	}
+	for _, rule := range policy.EscalationRules {
+		for _, target := range rule.Targets {
+			if target.Type == "schedule_reference" {
+				return PolicyClassReal
+			}
+		}
+	}
+	return PolicyClassSilent
+}
+
+// ExtractSilentPolicyUsers collects the deduplicated, sorted user IDs
+// from all SILENT escalation policies. These are the bot/placeholder
+// users whose assigned incidents should be filtered from the view.
+func ExtractSilentPolicyUsers(policies map[string]*pagerduty.EscalationPolicy) []string {
+	seen := make(map[string]bool)
+	var userIDs []string
+
+	for _, policy := range policies {
+		if ClassifyEscalationPolicy(policy) != PolicyClassSilent {
+			continue
+		}
+		for _, rule := range policy.EscalationRules {
+			for _, target := range rule.Targets {
+				if target.Type == "user_reference" && !seen[target.ID] {
+					seen[target.ID] = true
+					userIDs = append(userIDs, target.ID)
+				}
+			}
+		}
+	}
+
+	if len(userIDs) == 0 {
+		return nil
+	}
+	sort.Strings(userIDs)
+	return userIDs
 }
