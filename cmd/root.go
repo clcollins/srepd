@@ -95,7 +95,6 @@ but rather a simple tool to make on-call tasks easier.`,
 		home, _ := os.UserHomeDir()
 		configFile := filepath.Join(home, pkgconfig.CfgFileDir, pkgconfig.CfgFileName)
 		if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
-			fmt.Println("No config file found. Starting configuration wizard...")
 			ensureViperDefaults()
 			launchTUIWithConfig()
 			return

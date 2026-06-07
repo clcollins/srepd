@@ -561,6 +561,19 @@ func TestResolveExistingConfig(t *testing.T) {
 			},
 		},
 		{
+			name:           "new format with lowercase keys from Viper uppercased",
+			token:          "my-token",
+			teams:          []string{"TEAM1"},
+			silentPolicy:   "PCGXUDY",
+			customPolicies: map[string]string{"p5lab5y": "PVBANNN"},
+			expected: ExistingConfig{
+				Token:          "my-token",
+				Teams:          []string{"TEAM1"},
+				SilentPolicy:   "PCGXUDY",
+				CustomPolicies: map[string]string{"P5LAB5Y": "PVBANNN"},
+			},
+		},
+		{
 			name:        "old format with only reserved keys yields no custom",
 			token:       "my-token",
 			teams:       []string{"TEAM1"},
@@ -986,8 +999,28 @@ func TestBuildSummary_NothingChanged(t *testing.T) {
 
 	result := BuildSummary(existing, final, changes, teamNames)
 
-	assert.Contains(t, result, "(unchanged)")
 	assert.NotContains(t, result, "(changed)")
+	assert.Contains(t, result, "Token:")
+	assert.Contains(t, result, "Teams:")
+	assert.Contains(t, result, "Silent policy:")
+	assert.Contains(t, result, "Custom:")
+	lines := strings.Split(strings.TrimSpace(result), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ":") {
+			assert.Contains(t, line, "(unchanged)", "every field should show (unchanged): %s", line)
+		}
+	}
+}
+
+func TestBuildSummary_CustomKeyUppercased(t *testing.T) {
+	existing := ExistingConfig{Token: "tok", CustomPolicies: map[string]string{"svc1": "POL1"}}
+	final := ResolvedValues{Token: "tok", Teams: []string{}, CustomMappingsInput: "SVC1:POL1"}
+	changes := ConfigChanges{}
+
+	result := BuildSummary(existing, final, changes, nil)
+
+	assert.Contains(t, result, "SVC1:POL1")
+	assert.NotContains(t, result, "svc1")
 }
 
 func TestBuildSummary_TokenMasked(t *testing.T) {

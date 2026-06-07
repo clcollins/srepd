@@ -58,11 +58,15 @@ func ResolveExistingConfig(
 	customPoliciesRaw string,
 	oldPolicies map[string]string,
 ) ExistingConfig {
+	uppercased := make(map[string]string, len(customPolicies))
+	for k, v := range customPolicies {
+		uppercased[strings.ToUpper(k)] = v
+	}
 	cfg := ExistingConfig{
 		Token:          token,
 		Teams:          teams,
 		SilentPolicy:   silentPolicy,
-		CustomPolicies: customPolicies,
+		CustomPolicies: uppercased,
 	}
 
 	if len(cfg.CustomPolicies) == 0 && customPoliciesRaw != "" {
@@ -395,14 +399,14 @@ func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigC
 			teamDisplay = append(teamDisplay, id)
 		}
 	}
-	changeLabel := ""
+	changeLabel := " (unchanged)"
 	if changes.TeamsChanged {
 		changeLabel = " (changed)"
 	}
 	fmt.Fprintf(&sb, "  Teams:          %s%s\n", strings.Join(teamDisplay, ", "), changeLabel)
 
 	if final.SilentPolicy != "" {
-		changeLabel = ""
+		changeLabel = " (unchanged)"
 		if changes.SilentChanged {
 			changeLabel = " (changed)"
 		}
@@ -410,7 +414,7 @@ func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigC
 	}
 
 	if final.CustomMappingsInput != "" {
-		changeLabel = ""
+		changeLabel = " (unchanged)"
 		if changes.CustomChanged {
 			changeLabel = " (changed)"
 		}
