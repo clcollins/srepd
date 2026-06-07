@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -316,6 +317,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
 		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
 
+		km := huh.NewDefaultKeyMap()
+		km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "ctrl+q"), key.WithHelp("ctrl+q/ctrl+c", "quit"))
+		km.Input.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+		km.Input.Next = key.NewBinding(key.WithKeys("enter", "tab"), key.WithHelp("enter", "next"))
+		km.Select.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+		km.MultiSelect.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+		km.Note.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+		km.Confirm.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+
 		m.configForm = huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
@@ -458,7 +468,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Title("Save changes?").
 					Value(&m.configState.Confirm),
 			),
-		).WithTheme(theme).WithHeight(windowSize.Height - 4)
+		).WithTheme(theme).WithKeyMap(km).WithHeight(windowSize.Height - 4)
 		m.configMode = true
 		return m, m.configForm.Init()
 
