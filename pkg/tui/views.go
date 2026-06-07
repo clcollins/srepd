@@ -58,6 +58,9 @@ func (m model) View() string {
 	case m.configMode:
 		s.WriteString(m.configForm.View())
 
+	case m.configModeRequested:
+		s.WriteString("  Loading configuration...")
+
 	case m.teamSelectMode:
 		s.WriteString(m.teamSelectForm.View())
 
