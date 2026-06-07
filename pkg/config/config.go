@@ -385,7 +385,7 @@ func BuildFullConfig(final ResolvedValues, teamNames map[string]string, silentPo
 	return []byte(sb.String())
 }
 
-func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigChanges, teamNames map[string]string) string {
+func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, policyNames map[string]string) string {
 	var sb strings.Builder
 
 	if changes.TokenChanged {
@@ -413,7 +413,11 @@ func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigC
 		if changes.SilentChanged {
 			changeLabel = " (changed)"
 		}
-		fmt.Fprintf(&sb, "  Silent policy:  %s%s\n", final.SilentPolicy, changeLabel)
+		silentDisplay := final.SilentPolicy
+		if name, ok := policyNames[final.SilentPolicy]; ok {
+			silentDisplay = fmt.Sprintf("%s (%s)", name, final.SilentPolicy)
+		}
+		fmt.Fprintf(&sb, "  Silent policy:  %s%s\n", silentDisplay, changeLabel)
 	}
 
 	if final.CustomMappingsInput != "" {

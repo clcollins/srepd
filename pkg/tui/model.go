@@ -142,6 +142,7 @@ type model struct {
 	configIsNewFile     bool
 	configState         *configFormState
 	configTeamNames     map[string]string
+	configPolicyNames   map[string]string
 	configModeRequested bool
 	configWizardPending *configWizardReadyMsg
 

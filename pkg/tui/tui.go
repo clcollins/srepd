@@ -257,6 +257,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configExisting = msg.existing
 		m.configIsNewFile = msg.isNewFile
 		m.configTeamNames = msg.teamNames
+		m.configPolicyNames = msg.policyNames
 		m.configState = &configFormState{
 			SilentPolicy: msg.existing.SilentPolicy,
 			CustomInput:  pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies),
@@ -276,9 +277,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.", pkgconfig.MaskToken(msg.existing.Token))
 		}
 
-		keepTeamsDesc := fmt.Sprintf("Current teams: %s", strings.Join(msg.existing.Teams, ", "))
-		keepSilentDesc := fmt.Sprintf("Current: %s", msg.existing.SilentPolicy)
-		keepCustomDesc := fmt.Sprintf("Current: %s", pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies))
+		var teamDisplayList []string
+		for _, id := range msg.existing.Teams {
+			if name, ok := msg.teamNames[id]; ok {
+				teamDisplayList = append(teamDisplayList, fmt.Sprintf("%s (%s)", name, id))
+			} else {
+				teamDisplayList = append(teamDisplayList, id)
+			}
+		}
+		keepTeamsDesc := fmt.Sprintf("Current teams: %s", strings.Join(teamDisplayList, ", "))
+
+		silentDisplay := msg.existing.SilentPolicy
+		if name, ok := msg.policyNames[msg.existing.SilentPolicy]; ok {
+			silentDisplay = fmt.Sprintf("%s (%s)", name, msg.existing.SilentPolicy)
+		}
+		keepSilentDesc := fmt.Sprintf("Current: %s", silentDisplay)
+
+		var customDisplayParts []string
+		for svcID, polID := range msg.existing.CustomPolicies {
+			polDisplay := polID
+			if name, ok := msg.policyNames[polID]; ok {
+				polDisplay = fmt.Sprintf("%s (%s)", name, polID)
+			}
+			customDisplayParts = append(customDisplayParts, fmt.Sprintf("%s → %s", svcID, polDisplay))
+		}
+		keepCustomDesc := fmt.Sprintf("Current: %s", strings.Join(customDisplayParts, ", "))
 
 		var fetchedTeams []pagerduty.Team
 		submitted := false
@@ -429,7 +452,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						} else {
 							tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configState.TokenInput))
 						}
-						return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames)
+						return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames, m.configPolicyNames)
 					}, &m.configState.CustomInput),
 				huh.NewConfirm().
 					Title("Save changes?").

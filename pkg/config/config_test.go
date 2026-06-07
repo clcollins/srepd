@@ -1006,7 +1006,7 @@ func TestBuildSummary_AllChanged(t *testing.T) {
 	changes := ConfigChanges{TokenChanged: true, TeamsChanged: true, SilentChanged: true, CustomChanged: true}
 	teamNames := map[string]string{"TEAM2": "Beta Team"}
 
-	result := BuildSummary(existing, final, changes, teamNames)
+	result := BuildSummary(existing, final, changes, teamNames, nil)
 
 	assert.Contains(t, result, "new-")
 	assert.Contains(t, result, "(changed)")
@@ -1019,7 +1019,7 @@ func TestBuildSummary_NothingChanged(t *testing.T) {
 	changes := ConfigChanges{}
 	teamNames := map[string]string{"TEAM1": "Alpha"}
 
-	result := BuildSummary(existing, final, changes, teamNames)
+	result := BuildSummary(existing, final, changes, teamNames, nil)
 
 	assert.NotContains(t, result, "(changed)")
 	assert.Contains(t, result, "Token:")
@@ -1039,7 +1039,7 @@ func TestBuildSummary_CustomKeyUppercased(t *testing.T) {
 	final := ResolvedValues{Token: "tok", Teams: []string{}, CustomMappingsInput: "SVC1:POL1"}
 	changes := ConfigChanges{}
 
-	result := BuildSummary(existing, final, changes, nil)
+	result := BuildSummary(existing, final, changes, nil, nil)
 
 	assert.Contains(t, result, "SVC1:POL1")
 	assert.NotContains(t, result, "svc1")
@@ -1050,7 +1050,7 @@ func TestBuildSummary_TokenMasked(t *testing.T) {
 	final := ResolvedValues{Token: "longtoken123", Teams: []string{}}
 	changes := ConfigChanges{}
 
-	result := BuildSummary(existing, final, changes, nil)
+	result := BuildSummary(existing, final, changes, nil, nil)
 
 	assert.Contains(t, result, "long********")
 	assert.NotContains(t, result, "longtoken123")

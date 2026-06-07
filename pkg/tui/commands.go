@@ -1121,10 +1121,11 @@ type configFormState struct {
 // configWizardReadyMsg is sent when the existing config has been resolved
 // and is ready to build the config wizard form.
 type configWizardReadyMsg struct {
-	existing  pkgconfig.ExistingConfig
-	kd        pkgconfig.KeepDefaults
-	isNewFile bool
-	teamNames map[string]string
+	existing    pkgconfig.ExistingConfig
+	kd          pkgconfig.KeepDefaults
+	isNewFile   bool
+	teamNames   map[string]string
+	policyNames map[string]string
 }
 
 // configSavedMsg is sent after the config has been written to disk.
@@ -1162,6 +1163,7 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 		}
 
 		teamNames := make(map[string]string)
+		policyNames := make(map[string]string)
 		if existing.Token != "" {
 			client := pd.NewClient(existing.Token)
 			teams, err := pd.GetCurrentUserTeams(client)
@@ -1170,9 +1172,23 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 					teamNames[team.ID] = team.Name
 				}
 			}
+
+			policyIDs := make(map[string]bool)
+			if existing.SilentPolicy != "" {
+				policyIDs[existing.SilentPolicy] = true
+			}
+			for _, polID := range existing.CustomPolicies {
+				policyIDs[polID] = true
+			}
+			for id := range policyIDs {
+				pol, polErr := pd.GetEscalationPolicy(client, id, pagerduty.GetEscalationPolicyOptions{})
+				if polErr == nil && pol != nil {
+					policyNames[id] = pol.Name
+				}
+			}
 		}
 
-		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames}
+		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames, policyNames: policyNames}
 	}
 }
 
