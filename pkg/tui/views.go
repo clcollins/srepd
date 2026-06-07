@@ -94,18 +94,22 @@ func (m model) View() string {
 		}
 	}
 
-	// Choose the appropriate keymap based on focus mode
-	var helpKeyMap help.KeyMap
-	if m.chordHelpActive {
-		helpKeyMap = chordKeymap{prefix: m.chordPrefix}
-	} else if m.input.Focused() {
-		helpKeyMap = inputModeKeyMap
+	// Choose the appropriate keymap based on focus mode — skip srepd help in config mode
+	// (the huh form renders its own help internally)
+	var helpView string
+	if m.configMode || m.configModeRequested {
+		helpView = ""
 	} else {
-		helpKeyMap = defaultKeyMap
+		var helpKeyMap help.KeyMap
+		if m.chordHelpActive {
+			helpKeyMap = chordKeymap{prefix: m.chordPrefix}
+		} else if m.input.Focused() {
+			helpKeyMap = inputModeKeyMap
+		} else {
+			helpKeyMap = defaultKeyMap
+		}
+		helpView = m.styles.Padded.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
 	}
-
-	// Render help separately so we can count its lines
-	helpView := m.styles.Padded.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
 
 	// Calculate how many newlines needed to push help and bottom status to terminal bottom
 	// Count lines in the rendered output so far
