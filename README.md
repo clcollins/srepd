@@ -46,6 +46,10 @@ go install .        # standard go install
 
 SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Run `srepd config` to create or update your config interactively. Values from environment variables (e.g., `SREPD_TOKEN`) are pre-filled automatically.
 
+If no config file exists, running `srepd` automatically enters the configuration wizard on first launch.
+
+**Migrating from old config format:** If your config uses the deprecated `service_escalation_policies` key, running `srepd config` will automatically migrate to the new `default_silent_escalation_policy` and `custom_service_escalation_policies` keys. The old block is commented out with a deprecation note.
+
 ### Required
 
 | Key | Type | Description |
