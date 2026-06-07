@@ -140,14 +140,7 @@ type model struct {
 	configForm          *huh.Form
 	configExisting      pkgconfig.ExistingConfig
 	configIsNewFile     bool
-	configTokenInput    string
-	configSelectedTeams []string
-	configSilentPolicy  string
-	configCustomInput   string
-	configKeepTeams     bool
-	configKeepSilent    bool
-	configKeepCustom    bool
-	configConfirm       bool
+	configState         *configFormState
 	configModeRequested bool
 	configWizardPending *configWizardReadyMsg
 
@@ -237,7 +230,6 @@ func InitialModel(
 		theme:                 theme,
 		styles:                styles,
 		configModeRequested:   configMode,
-		configConfirm:         true,
 	}
 
 	if configMode {

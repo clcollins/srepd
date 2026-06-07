@@ -282,19 +282,19 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configMode = false
 		m.table.Focus()
 
-		if !m.configConfirm {
+		if !m.configState.Confirm {
 			m.setStatus("config changes discarded")
 			return m, func() tea.Msg { return updateIncidentListMsg("config discarded") }
 		}
 
 		final, err := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
-			TokenInput:          m.configTokenInput,
-			SelectedTeams:       m.configSelectedTeams,
-			SilentPolicyID:      m.configSilentPolicy,
-			CustomMappingsInput: m.configCustomInput,
-			KeepTeams:           m.configKeepTeams,
-			KeepSilent:          m.configKeepSilent,
-			KeepCustom:          m.configKeepCustom,
+			TokenInput:          m.configState.TokenInput,
+			SelectedTeams:       m.configState.SelectedTeams,
+			SilentPolicyID:      m.configState.SilentPolicy,
+			CustomMappingsInput: m.configState.CustomInput,
+			KeepTeams:           m.configState.KeepTeams,
+			KeepSilent:          m.configState.KeepSilent,
+			KeepCustom:          m.configState.KeepCustom,
 		})
 		if err != nil {
 			m.setStatus("config error: " + err.Error())
@@ -305,7 +305,7 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.configIsNewFile {
 			changes = pkgconfig.DetectChangesForNewFile(final)
 		} else {
-			changes = pkgconfig.DetectChanges(m.configExisting, final, strings.TrimSpace(m.configTokenInput))
+			changes = pkgconfig.DetectChanges(m.configExisting, final, strings.TrimSpace(m.configState.TokenInput))
 		}
 
 		if !changes.AnyChanged() {

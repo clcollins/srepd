@@ -256,14 +256,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.configExisting = msg.existing
 		m.configIsNewFile = msg.isNewFile
-		m.configTokenInput = ""
-		m.configSelectedTeams = nil
-		m.configSilentPolicy = msg.existing.SilentPolicy
-		m.configCustomInput = pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies)
-		m.configKeepTeams = msg.kd.KeepTeams
-		m.configKeepSilent = msg.kd.KeepSilent
-		m.configKeepCustom = msg.kd.KeepCustom
-		m.configConfirm = true
+		m.configState = &configFormState{
+			SilentPolicy: msg.existing.SilentPolicy,
+			CustomInput:  pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies),
+			KeepTeams:    msg.kd.KeepTeams,
+			KeepSilent:   msg.kd.KeepSilent,
+			KeepCustom:   msg.kd.KeepCustom,
+			Confirm:      true,
+		}
 
 		existingTeamSet := make(map[string]bool)
 		for _, id := range msg.existing.Teams {
@@ -298,20 +298,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Title("PagerDuty API token").
 					Description(tokenDesc).
 					EchoMode(huh.EchoModePassword).
-					Value(&m.configTokenInput),
+					Value(&m.configState.TokenInput),
 			),
 			huh.NewGroup(
 				huh.NewConfirm().
 					Title("Keep current teams?").
 					Description(keepTeamsDesc).
-					Value(&m.configKeepTeams),
+					Value(&m.configState.KeepTeams),
 			).WithHideFunc(func() bool { return !msg.kd.HasValidTeams }),
 			huh.NewGroup(
 				huh.NewMultiSelect[string]().
 					Title("Select your PagerDuty teams").
 					Description("<space> toggle  up  down  / filter  enter submit  ctrl+a select all  ctrl+c quit").
 					OptionsFunc(func() []huh.Option[string] {
-						token := strings.TrimSpace(m.configTokenInput)
+						token := strings.TrimSpace(m.configState.TokenInput)
 						if token == "" {
 							token = msg.existing.Token
 						}
@@ -339,8 +339,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							opts = append(opts, opt)
 						}
 						return opts
-					}, &m.configTokenInput).
-					Value(&m.configSelectedTeams).
+					}, &m.configState.TokenInput).
+					Value(&m.configState.SelectedTeams).
 					Validate(func(s []string) error {
 						if !submitted {
 							submitted = true
@@ -351,12 +351,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						return nil
 					}),
-			).WithHideFunc(func() bool { return m.configKeepTeams }),
+			).WithHideFunc(func() bool { return m.configState.KeepTeams }),
 			huh.NewGroup(
 				huh.NewConfirm().
 					Title("Keep current silent escalation policy?").
 					Description(keepSilentDesc).
-					Value(&m.configKeepSilent),
+					Value(&m.configState.KeepSilent),
 			).WithHideFunc(func() bool { return !msg.kd.HasSilent }),
 			huh.NewGroup(
 				huh.NewInput().
@@ -367,13 +367,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							"on-call humans. Find this ID in PagerDuty Escalation Policies\n"+
 							"(e.g., \"Silent Test\"). Leave blank to configure later.",
 					).
-					Value(&m.configSilentPolicy),
-			).WithHideFunc(func() bool { return m.configKeepSilent }),
+					Value(&m.configState.SilentPolicy),
+			).WithHideFunc(func() bool { return m.configState.KeepSilent }),
 			huh.NewGroup(
 				huh.NewConfirm().
 					Title("Keep current custom service-to-policy mappings?").
 					Description(keepCustomDesc).
-					Value(&m.configKeepCustom),
+					Value(&m.configState.KeepCustom),
 			).WithHideFunc(func() bool { return !msg.kd.HasCustom }),
 			huh.NewGroup(
 				huh.NewInput().
@@ -385,20 +385,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							"Enter as SERVICE_ID:POLICY_ID separated by commas.\n"+
 							"Leave blank to skip.",
 					).
-					Value(&m.configCustomInput),
-			).WithHideFunc(func() bool { return m.configKeepCustom }),
+					Value(&m.configState.CustomInput),
+			).WithHideFunc(func() bool { return m.configState.KeepCustom }),
 			huh.NewGroup(
 				huh.NewNote().
 					Title("Configuration summary").
 					DescriptionFunc(func() string {
 						tmpFinal, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
-							TokenInput:          m.configTokenInput,
-							SelectedTeams:       m.configSelectedTeams,
-							SilentPolicyID:      m.configSilentPolicy,
-							CustomMappingsInput: m.configCustomInput,
-							KeepTeams:           m.configKeepTeams,
-							KeepSilent:          m.configKeepSilent,
-							KeepCustom:          m.configKeepCustom,
+							TokenInput:          m.configState.TokenInput,
+							SelectedTeams:       m.configState.SelectedTeams,
+							SilentPolicyID:      m.configState.SilentPolicy,
+							CustomMappingsInput: m.configState.CustomInput,
+							KeepTeams:           m.configState.KeepTeams,
+							KeepSilent:          m.configState.KeepSilent,
+							KeepCustom:          m.configState.KeepCustom,
 						})
 						tmpNames := make(map[string]string)
 						for _, team := range fetchedTeams {
@@ -408,13 +408,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if m.configIsNewFile {
 							tmpChanges = pkgconfig.DetectChangesForNewFile(tmpFinal)
 						} else {
-							tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configTokenInput))
+							tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configState.TokenInput))
 						}
 						return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames)
-					}, &m.configCustomInput),
+					}, &m.configState.CustomInput),
 				huh.NewConfirm().
 					Title("Save changes?").
-					Value(&m.configConfirm),
+					Value(&m.configState.Confirm),
 			),
 		).WithTheme(theme).WithHeight(windowSize.Height - 4)
 		m.configMode = true

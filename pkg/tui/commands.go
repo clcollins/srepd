@@ -1105,6 +1105,19 @@ func updateTeamsInYAML(configData []byte, teamIDs []string, teamNames map[string
 
 // --- Config wizard message types and commands ---
 
+// configFormState holds form field values as a pointer struct so that
+// huh form Value() bindings survive bubbletea's model copying.
+type configFormState struct {
+	TokenInput    string
+	SelectedTeams []string
+	SilentPolicy  string
+	CustomInput   string
+	KeepTeams     bool
+	KeepSilent    bool
+	KeepCustom    bool
+	Confirm       bool
+}
+
 // configWizardReadyMsg is sent when the existing config has been resolved
 // and is ready to build the config wizard form.
 type configWizardReadyMsg struct {
