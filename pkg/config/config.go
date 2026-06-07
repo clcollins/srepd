@@ -44,10 +44,11 @@ var (
 )
 
 type ExistingConfig struct {
-	Token          string
-	Teams          []string
-	SilentPolicy   string
-	CustomPolicies map[string]string
+	Token             string
+	Teams             []string
+	SilentPolicy      string
+	CustomPolicies    map[string]string
+	OldFormatDetected bool
 }
 
 func ResolveExistingConfig(
@@ -77,6 +78,7 @@ func ResolveExistingConfig(
 		if cfg.SilentPolicy == "" {
 			if sd, ok := oldPolicies["silent_default"]; ok {
 				cfg.SilentPolicy = sd
+				cfg.OldFormatDetected = true
 			}
 		}
 		if len(cfg.CustomPolicies) == 0 {
@@ -88,6 +90,7 @@ func ResolveExistingConfig(
 			}
 			if len(migrated) > 0 {
 				cfg.CustomPolicies = migrated
+				cfg.OldFormatDetected = true
 			}
 		}
 	}

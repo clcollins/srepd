@@ -603,6 +603,28 @@ func TestResolveExistingConfig(t *testing.T) {
 	}
 }
 
+func TestResolveExistingConfig_OldFormatSetsFlag(t *testing.T) {
+	result := ResolveExistingConfig(
+		"my-token", []string{"TEAM1"}, "",
+		map[string]string{}, "",
+		map[string]string{"silent_default": "PCGXUDY", "default": "PA4586M", "p5lab5y": "PVBANNN"},
+	)
+
+	assert.True(t, result.OldFormatDetected)
+	assert.Equal(t, "PCGXUDY", result.SilentPolicy)
+	assert.Equal(t, map[string]string{"P5LAB5Y": "PVBANNN"}, result.CustomPolicies)
+}
+
+func TestResolveExistingConfig_NewFormatNoFlag(t *testing.T) {
+	result := ResolveExistingConfig(
+		"my-token", []string{"TEAM1"}, "PCGXUDY",
+		map[string]string{"P5LAB5Y": "PVBANNN"}, "",
+		map[string]string{},
+	)
+
+	assert.False(t, result.OldFormatDetected)
+}
+
 // --- ResolveKeepDefaults tests ---
 
 func TestResolveKeepDefaults(t *testing.T) {

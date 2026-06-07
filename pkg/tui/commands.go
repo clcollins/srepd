@@ -1124,6 +1124,7 @@ type configWizardReadyMsg struct {
 	existing  pkgconfig.ExistingConfig
 	kd        pkgconfig.KeepDefaults
 	isNewFile bool
+	teamNames map[string]string
 }
 
 // configSavedMsg is sent after the config has been written to disk.
@@ -1160,7 +1161,18 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			isNewFile = true
 		}
 
-		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile}
+		teamNames := make(map[string]string)
+		if existing.Token != "" {
+			client := pd.NewClient(existing.Token)
+			teams, err := pd.GetCurrentUserTeams(client)
+			if err == nil {
+				for _, team := range teams {
+					teamNames[team.ID] = team.Name
+				}
+			}
+		}
+
+		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames}
 	}
 }
 

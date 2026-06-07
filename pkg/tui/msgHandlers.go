@@ -308,13 +308,24 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			changes = pkgconfig.DetectChanges(m.configExisting, final, strings.TrimSpace(m.configState.TokenInput))
 		}
 
+		if m.configExisting.OldFormatDetected {
+			if final.SilentPolicy != "" {
+				changes.SilentChanged = true
+			}
+			if final.CustomMappingsInput != "" {
+				changes.CustomChanged = true
+			}
+		}
+
 		if !changes.AnyChanged() {
 			m.setStatus("config is valid, no changes needed")
 			return m, func() tea.Msg { return updateIncidentListMsg("config unchanged") }
 		}
 
-		// Build team names map (from existing config if kept, or empty if new teams selected)
 		teamNames := make(map[string]string)
+		for k, v := range m.configTeamNames {
+			teamNames[k] = v
+		}
 
 		// Parse custom policies
 		var customPolicies map[string]string

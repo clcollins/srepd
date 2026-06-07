@@ -141,6 +141,7 @@ type model struct {
 	configExisting      pkgconfig.ExistingConfig
 	configIsNewFile     bool
 	configState         *configFormState
+	configTeamNames     map[string]string
 	configModeRequested bool
 	configWizardPending *configWizardReadyMsg
 

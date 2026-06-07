@@ -256,6 +256,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.configExisting = msg.existing
 		m.configIsNewFile = msg.isNewFile
+		m.configTeamNames = msg.teamNames
 		m.configState = &configFormState{
 			SilentPolicy: msg.existing.SilentPolicy,
 			CustomInput:  pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies),
@@ -298,7 +299,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Title("PagerDuty API token").
 					Description(tokenDesc).
 					EchoMode(huh.EchoModePassword).
-					Value(&m.configState.TokenInput),
+					Value(&m.configState.TokenInput).
+					Validate(func(s string) error {
+						token := strings.TrimSpace(s)
+						if token == "" {
+							if msg.existing.Token != "" {
+								return nil
+							}
+							return fmt.Errorf("a PagerDuty API token is required")
+						}
+						client := pd.NewClient(token)
+						_, err := pd.GetCurrentUserTeams(client)
+						if err != nil {
+							return fmt.Errorf("invalid token: %v", err)
+						}
+						return nil
+					}),
 			),
 			huh.NewGroup(
 				huh.NewConfirm().
@@ -401,6 +417,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							KeepCustom:          m.configState.KeepCustom,
 						})
 						tmpNames := make(map[string]string)
+						for k, v := range m.configTeamNames {
+							tmpNames[k] = v
+						}
 						for _, team := range fetchedTeams {
 							tmpNames[team.ID] = team.Name
 						}
