@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
@@ -134,6 +135,22 @@ type model struct {
 	teamSelectIDs   []string
 	teamSelectNames map[string]string
 
+	// Config wizard state — shown via "srepd config" or on first run
+	configMode          bool
+	configForm          *huh.Form
+	configExisting      pkgconfig.ExistingConfig
+	configIsNewFile     bool
+	configTokenInput    string
+	configSelectedTeams []string
+	configSilentPolicy  string
+	configCustomInput   string
+	configKeepTeams     bool
+	configKeepSilent    bool
+	configKeepCustom    bool
+	configConfirm       bool
+	configModeRequested bool
+	configWizardPending *configWizardReadyMsg
+
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
@@ -166,6 +183,7 @@ func InitialModel(
 	colors map[string]string,
 	defaultSilentPolicy string,
 	customSilentPolicies map[string]string,
+	configMode bool,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -218,6 +236,12 @@ func InitialModel(
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
+		configModeRequested:   configMode,
+		configConfirm:         true,
+	}
+
+	if configMode {
+		return m, nil
 	}
 
 	// This is an ugly way to handle this error

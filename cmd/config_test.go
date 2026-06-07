@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"bytes"
-	"errors"
-	"io"
 	"os"
 	"strings"
 	"testing"
@@ -181,220 +178,61 @@ func TestValidateConfig_CaseSensitiveEscalationKeys(t *testing.T) {
 	assert.Contains(t, err.Error(), "SILENT_DEFAULT", "error should mention the missing 'SILENT_DEFAULT' key")
 }
 
-// mockFS is a fully in-memory mock of the configFS interface.
-type mockFS struct {
-	mkdirAllErr error
-	openFileErr error
-	buf         bytes.Buffer
-	openFlags   int
-	openPerm    os.FileMode
-	mkdirPerm   os.FileMode
-	mkdirPath   string
-	openPath    string
-	readData    []byte
-	readErr     error
-	writeData   []byte
-	writeErr    error
-	writePath   string
-	backupData  []byte
+// --- ensureViperDefaults tests ---
+
+func TestEnsureViperDefaults_SetsAllOptionalKeys(t *testing.T) {
+	viper.Reset()
+
+	ensureViperDefaults()
+
+	assert.Equal(t, "vim", viper.GetString("editor"))
+	assert.Equal(t, "gnome-terminal --", viper.GetString("terminal"))
+	assert.Equal(t, "ocm backplane login %%CLUSTER_ID%%", viper.GetString("cluster_login_command"))
+	assert.Equal(t, "auto", viper.GetString("toolbox_mode"))
+	assert.Equal(t, "ctrl+x", viper.GetString("chord_prefix"))
 }
 
-func (m *mockFS) MkdirAll(path string, perm os.FileMode) error {
-	m.mkdirPath = path
-	m.mkdirPerm = perm
-	return m.mkdirAllErr
+func TestEnsureViperDefaults_DoesNotOverrideExisting(t *testing.T) {
+	viper.Reset()
+	viper.Set("terminal", "ptyxis")
+	viper.Set("editor", "nano")
+
+	ensureViperDefaults()
+
+	assert.Equal(t, "ptyxis", viper.GetString("terminal"))
+	assert.Equal(t, "nano", viper.GetString("editor"))
+	assert.Equal(t, "ocm backplane login %%CLUSTER_ID%%", viper.GetString("cluster_login_command"))
 }
 
-type nopCloser struct{ *bytes.Buffer }
+func TestEnsureViperDefaults_NewUserReadyForLaunch(t *testing.T) {
+	viper.Reset()
+	viper.Set("token", "new-user-token")
+	viper.Set("teams", []string{"TEAM1"})
 
-func (nopCloser) Close() error { return nil }
+	ensureViperDefaults()
 
-func (m *mockFS) ReadFile(name string) ([]byte, error) {
-	if m.readErr != nil {
-		return nil, m.readErr
-	}
-	return m.readData, nil
+	assert.NotEmpty(t, viper.GetString("terminal"), "terminal must be set for launchTUI")
+	assert.NotEmpty(t, viper.GetString("editor"), "editor must be set for launchTUI")
+	clc := viper.GetString("cluster_login_command")
+	assert.NotEmpty(t, clc, "cluster_login_command must be set for launchTUI")
+	assert.Contains(t, clc, "%%CLUSTER_ID%%", "cluster_login_command must contain %%CLUSTER_ID%% placeholder")
 }
 
-func (m *mockFS) WriteFile(name string, data []byte, perm os.FileMode) error {
-	if m.writeErr != nil {
-		return m.writeErr
-	}
-	if strings.HasSuffix(name, "~") {
-		m.backupData = data
-	} else {
-		m.writePath = name
-		m.writeData = data
-	}
-	return nil
-}
-
-func (m *mockFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
-	m.openPath = name
-	m.openFlags = flag
-	m.openPerm = perm
-	if m.openFileErr != nil {
-		return nil, m.openFileErr
-	}
-	return nopCloser{&m.buf}, nil
-}
-
-func TestMaskToken(t *testing.T) {
-	assert.Equal(t, "PCGX****", maskToken("PCGXUDY1"))
-	assert.Equal(t, "****", maskToken("ab"))
-	assert.Equal(t, "****", maskToken(""))
-}
-
-func TestStringSlicesEqual(t *testing.T) {
-	assert.True(t, stringSlicesEqual([]string{"a", "b"}, []string{"b", "a"}))
-	assert.False(t, stringSlicesEqual([]string{"a"}, []string{"a", "b"}))
-	assert.True(t, stringSlicesEqual([]string{}, []string{}))
-}
-
-func TestFormatCustomMappings(t *testing.T) {
-	assert.Equal(t, "", formatCustomMappings(nil))
-	result := formatCustomMappings(map[string]string{"SVC1": "POL1"})
-	assert.Contains(t, result, "SVC1:POL1")
-}
-
-func TestHasPlaceholderTeams_Empty(t *testing.T) {
-	assert.True(t, hasPlaceholderTeams([]string{}))
-}
-
-func TestHasPlaceholderTeams_Nil(t *testing.T) {
-	assert.True(t, hasPlaceholderTeams(nil))
-}
-
-func TestHasPlaceholderTeams_AllPlaceholders(t *testing.T) {
-	teams := []string{"<PagerDuty Team ID 1>", "<PagerDuty Team ID 2>"}
-	assert.True(t, hasPlaceholderTeams(teams))
-}
-
-func TestHasPlaceholderTeams_OneReal(t *testing.T) {
-	teams := []string{"P1ABC23"}
-	assert.False(t, hasPlaceholderTeams(teams))
-}
-
-func TestHasPlaceholderTeams_MixedRealAndPlaceholder(t *testing.T) {
-	teams := []string{"<PagerDuty Team ID 1>", "P1ABC23"}
-	assert.False(t, hasPlaceholderTeams(teams))
-}
-
-func TestHasPlaceholderTeams_WhitespaceOnly(t *testing.T) {
-	teams := []string{"  ", ""}
-	assert.True(t, hasPlaceholderTeams(teams))
-}
-
-func TestUpdateTeamsInConfig_ReplacesPlaceholders(t *testing.T) {
-	input := []byte(`token: my-token
-teams:
-  - <PagerDuty Team ID 1>
-  - <PagerDuty Team ID 2>
-editor: vim
-`)
-	result, err := updateTeamsInConfig(input, []string{"P1ABC23", "P4DEF56"}, map[string]string{"P1ABC23": "Team Alpha", "P4DEF56": "Team Beta"})
-
+func TestWizardHasZeroHuhFormsInCmd(t *testing.T) {
+	source, err := os.ReadFile("config.go")
 	require.NoError(t, err)
-	assert.Contains(t, string(result), "- P1ABC23")
-	assert.Contains(t, string(result), "- P4DEF56")
-	assert.NotContains(t, string(result), "<PagerDuty Team ID")
-	assert.Contains(t, string(result), "token: my-token")
-	assert.Contains(t, string(result), "editor: vim")
+
+	content := string(source)
+	formCount := strings.Count(content, "huh.NewForm(")
+
+	assert.Equal(t, 0, formCount, "cmd/config.go should have zero huh.NewForm calls; the form is now in pkg/tui/")
 }
 
-func TestUpdateTeamsInConfig_AddsTeamNameComments(t *testing.T) {
-	input := []byte(`token: my-token
-teams:
-  - <PagerDuty Team ID 1>
-`)
-	result, err := updateTeamsInConfig(input, []string{"PASPK4G"}, map[string]string{"PASPK4G": "Platform SRE"})
-
+func TestRunConfigWizardCallsLaunchTUIWithConfig(t *testing.T) {
+	source, err := os.ReadFile("config.go")
 	require.NoError(t, err)
-	assert.Contains(t, string(result), "- PASPK4G # Platform SRE")
-}
 
-func TestUpdateTeamsInConfig_PreservesComments(t *testing.T) {
-	input := []byte(`# Main config
-token: my-token
-# Teams to filter on
-teams:
-  - <PagerDuty Team ID 1>
-editor: vim
-`)
-	result, err := updateTeamsInConfig(input, []string{"PREAL1"}, map[string]string{"PREAL1": "Real Team"})
-
-	require.NoError(t, err)
-	assert.Contains(t, string(result), "# Main config")
-	assert.Contains(t, string(result), "# Teams to filter on")
-	assert.Contains(t, string(result), "- PREAL1")
-}
-
-func TestUpdateTeamsInConfig_EmptyTeams(t *testing.T) {
-	input := []byte(`token: my-token
-teams:
-  - <PagerDuty Team ID 1>
-`)
-	result, err := updateTeamsInConfig(input, []string{}, nil)
-
-	require.NoError(t, err)
-	assert.Contains(t, string(result), "teams: []")
-}
-
-func TestUpdateTeamsInConfig_NoTeamsKey(t *testing.T) {
-	input := []byte(`token: my-token
-editor: vim
-`)
-	_, err := updateTeamsInConfig(input, []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "teams")
-}
-
-func TestWriteConfigTeams_Success(t *testing.T) {
-	configData := []byte(`token: my-token
-teams:
-  - <PagerDuty Team ID 1>
-`)
-	m := &mockFS{readData: configData}
-
-	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
-
-	require.NoError(t, err)
-	assert.Contains(t, string(m.writeData), "- P1ABC23")
-	assert.NotContains(t, string(m.writeData), "<PagerDuty Team ID")
-}
-
-func TestWriteConfigTeams_CreatesBackup(t *testing.T) {
-	configData := []byte(`token: my-token
-teams:
-  - OLD_TEAM
-`)
-	m := &mockFS{readData: configData}
-
-	err := writeConfigTeams(m, "/fake/home", []string{"NEW_TEAM"}, map[string]string{"NEW_TEAM": "New"})
-
-	require.NoError(t, err)
-	assert.Equal(t, string(configData), string(m.backupData))
-}
-
-func TestWriteConfigTeams_ReadError(t *testing.T) {
-	m := &mockFS{readErr: errors.New("no such file")}
-
-	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read config")
-}
-
-func TestWriteConfigTeams_WriteError(t *testing.T) {
-	configData := []byte(`token: my-token
-teams:
-  - <PagerDuty Team ID 1>
-`)
-	m := &mockFS{readData: configData, writeErr: errors.New("disk full")}
-
-	err := writeConfigTeams(m, "/fake/home", []string{"P1ABC23"}, map[string]string{"P1ABC23": "Team Alpha"})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "disk full")
+	content := string(source)
+	assert.Contains(t, content, "launchTUIWithConfig()",
+		"runConfigWizard should call launchTUIWithConfig to launch the TUI in config mode")
 }

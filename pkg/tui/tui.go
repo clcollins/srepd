@@ -14,7 +14,9 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/ocm"
+	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/spf13/viper"
 )
 
@@ -50,6 +52,10 @@ func (m model) Init() tea.Cmd {
 
 	if m.config != nil && m.config.Client != nil && hasPlaceholderTeamsCfg(viper.GetStringSlice("teams")) {
 		initCmds = append(initCmds, fetchUserTeams(m.config.Client))
+	}
+
+	if m.configModeRequested {
+		initCmds = append(initCmds, prepareConfigWizardCmd(m))
 	}
 
 	return tea.Batch(initCmds...)
@@ -242,6 +248,206 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("teams saved to config")
 		}
 		return m, func() tea.Msg { return updateIncidentListMsg("teams updated") }
+
+	case configWizardReadyMsg:
+		if windowSize.Height == 0 {
+			m.configWizardPending = &msg
+			return m, nil
+		}
+		m.configExisting = msg.existing
+		m.configIsNewFile = msg.isNewFile
+		m.configTokenInput = ""
+		m.configSelectedTeams = nil
+		m.configSilentPolicy = msg.existing.SilentPolicy
+		m.configCustomInput = pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies)
+		m.configKeepTeams = msg.kd.KeepTeams
+		m.configKeepSilent = msg.kd.KeepSilent
+		m.configKeepCustom = msg.kd.KeepCustom
+		m.configConfirm = true
+
+		existingTeamSet := make(map[string]bool)
+		for _, id := range msg.existing.Teams {
+			existingTeamSet[id] = true
+		}
+
+		tokenDesc := "Your PagerDuty API OAuth token."
+		if msg.existing.Token != "" {
+			tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.", pkgconfig.MaskToken(msg.existing.Token))
+		}
+
+		keepTeamsDesc := fmt.Sprintf("Current teams: %s", strings.Join(msg.existing.Teams, ", "))
+		keepSilentDesc := fmt.Sprintf("Current: %s", msg.existing.SilentPolicy)
+		keepCustomDesc := fmt.Sprintf("Current: %s", pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies))
+
+		var fetchedTeams []pagerduty.Team
+		submitted := false
+
+		theme := huh.ThemeCharm()
+		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
+		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
+		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
+		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
+		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
+		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+
+		m.configForm = huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title("PagerDuty API token").
+					Description(tokenDesc).
+					EchoMode(huh.EchoModePassword).
+					Value(&m.configTokenInput),
+			),
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title("Keep current teams?").
+					Description(keepTeamsDesc).
+					Value(&m.configKeepTeams),
+			).WithHideFunc(func() bool { return !msg.kd.HasValidTeams }),
+			huh.NewGroup(
+				huh.NewMultiSelect[string]().
+					Title("Select your PagerDuty teams").
+					Description("<space> toggle  up  down  / filter  enter submit  ctrl+a select all  ctrl+c quit").
+					OptionsFunc(func() []huh.Option[string] {
+						token := strings.TrimSpace(m.configTokenInput)
+						if token == "" {
+							token = msg.existing.Token
+						}
+						if token == "" {
+							return []huh.Option[string]{
+								huh.NewOption("(enter a token first)", ""),
+							}
+						}
+						client := pd.NewClient(token)
+						teams, err := pd.GetCurrentUserTeams(client)
+						if err != nil {
+							return []huh.Option[string]{
+								huh.NewOption(fmt.Sprintf("Error: %v", err), ""),
+							}
+						}
+						fetchedTeams = teams
+						var opts []huh.Option[string]
+						for _, team := range teams {
+							opt := huh.NewOption(
+								fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID,
+							)
+							if existingTeamSet[team.ID] {
+								opt = opt.Selected(true)
+							}
+							opts = append(opts, opt)
+						}
+						return opts
+					}, &m.configTokenInput).
+					Value(&m.configSelectedTeams).
+					Validate(func(s []string) error {
+						if !submitted {
+							submitted = true
+							return nil
+						}
+						if len(s) == 0 {
+							return fmt.Errorf("at least one team is required")
+						}
+						return nil
+					}),
+			).WithHideFunc(func() bool { return m.configKeepTeams }),
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title("Keep current silent escalation policy?").
+					Description(keepSilentDesc).
+					Value(&m.configKeepSilent),
+			).WithHideFunc(func() bool { return !msg.kd.HasSilent }),
+			huh.NewGroup(
+				huh.NewInput().
+					Title("Default silent escalation policy").
+					Description(
+						"When you silence an incident, it gets reassigned to a silent\n"+
+							"escalation policy — one that routes only to bot users, not\n"+
+							"on-call humans. Find this ID in PagerDuty Escalation Policies\n"+
+							"(e.g., \"Silent Test\"). Leave blank to configure later.",
+					).
+					Value(&m.configSilentPolicy),
+			).WithHideFunc(func() bool { return m.configKeepSilent }),
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title("Keep current custom service-to-policy mappings?").
+					Description(keepCustomDesc).
+					Value(&m.configKeepCustom),
+			).WithHideFunc(func() bool { return !msg.kd.HasCustom }),
+			huh.NewGroup(
+				huh.NewInput().
+					Title("Custom service-to-policy mappings").
+					Description(
+						"Some services use a different silent policy than the default.\n"+
+							"For example, Deadmanssnitch alerts might route to a separate\n"+
+							"silent policy instead of the general one.\n"+
+							"Enter as SERVICE_ID:POLICY_ID separated by commas.\n"+
+							"Leave blank to skip.",
+					).
+					Value(&m.configCustomInput),
+			).WithHideFunc(func() bool { return m.configKeepCustom }),
+			huh.NewGroup(
+				huh.NewNote().
+					Title("Configuration summary").
+					DescriptionFunc(func() string {
+						tmpFinal, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
+							TokenInput:          m.configTokenInput,
+							SelectedTeams:       m.configSelectedTeams,
+							SilentPolicyID:      m.configSilentPolicy,
+							CustomMappingsInput: m.configCustomInput,
+							KeepTeams:           m.configKeepTeams,
+							KeepSilent:          m.configKeepSilent,
+							KeepCustom:          m.configKeepCustom,
+						})
+						tmpNames := make(map[string]string)
+						for _, team := range fetchedTeams {
+							tmpNames[team.ID] = team.Name
+						}
+						var tmpChanges pkgconfig.ConfigChanges
+						if m.configIsNewFile {
+							tmpChanges = pkgconfig.DetectChangesForNewFile(tmpFinal)
+						} else {
+							tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configTokenInput))
+						}
+						return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames)
+					}, &m.configCustomInput),
+				huh.NewConfirm().
+					Title("Save changes?").
+					Value(&m.configConfirm),
+			),
+		).WithTheme(theme).WithHeight(windowSize.Height - 4)
+		m.configMode = true
+		return m, m.configForm.Init()
+
+	case configCompletedMsg:
+		return m, writeConfigCmd(msg.final, msg.changes, msg.teamNames, msg.customPolicies, msg.isNewFile)
+
+	case configSavedMsg:
+		m.configMode = false
+		m.configModeRequested = false
+		if msg.err != nil {
+			log.Warn("Failed to save config", "error", msg.err)
+			m.setStatus("config save failed: " + msg.err.Error())
+			m.table.Focus()
+			return m, nil
+		}
+		m.setStatus("config saved — initializing...")
+		m.table.Focus()
+		return m, initPDClientCmd()
+
+	case pdClientInitializedMsg:
+		if msg.err != nil {
+			log.Warn("Failed to initialize PD client", "error", msg.err)
+			m.setStatus("config saved but PD init failed: " + msg.err.Error())
+			return m, nil
+		}
+		m.config = msg.config
+		m.setStatus("config saved")
+		return m, tea.Batch(
+			func() tea.Msg { return updateIncidentListMsg("config saved") },
+			func() tea.Msg { return tea.WindowSizeMsg{Width: windowSize.Width, Height: windowSize.Height} },
+		)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -1181,6 +1387,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateVersion = msg.latest
 		m.updateReleaseURL = msg.releaseURL
 		return m, nil
+	}
+
+	if m.configMode && m.configForm != nil {
+		form, cmd := m.configForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			m.configForm = f
+		}
+		if m.configForm.State == huh.StateCompleted || m.configForm.State == huh.StateAborted {
+			result, resultCmd := switchConfigFocusMode(m, msg)
+			return result, resultCmd
+		}
+		cmds = append(cmds, cmd)
+	}
+
+	if m.teamSelectMode && m.teamSelectForm != nil {
+		form, cmd := m.teamSelectForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			m.teamSelectForm = f
+		}
+		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)

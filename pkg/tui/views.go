@@ -55,6 +55,9 @@ func (m model) View() string {
 	case m.viewingLog:
 		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))
 
+	case m.configMode:
+		s.WriteString(m.configForm.View())
+
 	case m.teamSelectMode:
 		s.WriteString(m.teamSelectForm.View())
 
