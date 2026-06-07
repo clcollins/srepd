@@ -273,9 +273,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			existingTeamSet[id] = true
 		}
 
-		tokenDesc := "Your PagerDuty API OAuth token."
+		tokenHelp := "Create one at PagerDuty → My Profile → User Settings → API Access → Create New API Key."
+		tokenDesc := "Your PagerDuty API OAuth token.\n" + tokenHelp
 		if msg.existing.Token != "" {
-			tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.", pkgconfig.MaskToken(msg.existing.Token))
+			tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.\n%s", pkgconfig.MaskToken(msg.existing.Token), tokenHelp)
 		}
 
 		var teamDisplayList []string
@@ -358,7 +359,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			huh.NewGroup(
 				huh.NewMultiSelect[string]().
 					Title("Select your PagerDuty teams").
-					Description("<space> toggle  up  down  / filter  enter submit  ctrl+a select all  ctrl+c quit").
+					Description("Select the team(s) whose incidents you want to monitor. Most users only need one.").
 					OptionsFunc(func() []huh.Option[string] {
 						token := strings.TrimSpace(m.configState.TokenInput)
 						if token == "" {
@@ -411,10 +412,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				huh.NewInput().
 					Title("Default silent escalation policy").
 					Description(
-						"When you silence an incident, it gets reassigned to a silent\n"+
-							"escalation policy — one that routes only to bot users, not\n"+
-							"on-call humans. Find this ID in PagerDuty Escalation Policies\n"+
-							"(e.g., \"Silent Test\"). Leave blank to configure later.",
+						"When you silence an incident, it gets reassigned to this policy —\n"+
+							"one that routes only to bot users, not on-call humans.\n"+
+							"Find the ID at People → Escalation Policies (ID is in the URL,\n"+
+							"e.g., PXXXXXX). Look for a policy like \"Silent Test\".\n"+
+							"Leave blank to configure later.",
 					).
 					Value(&m.configState.SilentPolicy),
 			).WithHideFunc(func() bool { return m.configState.KeepSilent }),
@@ -428,10 +430,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				huh.NewInput().
 					Title("Custom service-to-policy mappings").
 					Description(
-						"Some services use a different silent policy than the default.\n"+
+						"Some services need a different silent policy than the default.\n"+
 							"For example, Deadmanssnitch alerts might route to a separate\n"+
-							"silent policy instead of the general one.\n"+
-							"Enter as SERVICE_ID:POLICY_ID separated by commas.\n"+
+							"silent policy. Find service IDs in Services → Service Directory\n"+
+							"(ID in URL). Enter as SERVICE_ID:POLICY_ID separated by commas.\n"+
 							"Leave blank to skip.",
 					).
 					Value(&m.configState.CustomInput),
@@ -468,7 +470,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Title("Save changes?").
 					Value(&m.configState.Confirm),
 			),
-		).WithTheme(theme).WithKeyMap(km).WithHeight(windowSize.Height - 4)
+		).WithTheme(theme).WithKeyMap(km).WithWidth(windowSize.Width).WithHeight(windowSize.Height - 4)
 		m.configMode = true
 		return m, m.configForm.Init()
 
