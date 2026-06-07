@@ -1500,3 +1500,36 @@ func TestEndToEnd_NewFileWritesRealDefaults(t *testing.T) {
 	assert.Equal(t, "auto", parsed["toolbox_mode"])
 	assert.Equal(t, "ctrl+x", parsed["chord_prefix"])
 }
+
+// --- CommentOutOldPolicies tests ---
+
+func TestCommentOutOldPolicies_CommentsBlock(t *testing.T) {
+	input := "token: my-token\nservice_escalation_policies:\n  SILENT_DEFAULT: PCGXUDY\n  DEFAULT: PA4586M\n  P5LAB5Y: PVBANNN\neditor: vim\n"
+
+	result := CommentOutOldPolicies([]byte(input))
+	output := string(result)
+
+	assert.NotContains(t, output, "\nservice_escalation_policies:")
+	assert.Contains(t, output, "# service_escalation_policies:")
+	assert.Contains(t, output, "#   SILENT_DEFAULT: PCGXUDY")
+	assert.Contains(t, output, "#   P5LAB5Y: PVBANNN")
+	assert.Contains(t, output, "editor: vim")
+	assert.Contains(t, output, "token: my-token")
+}
+
+func TestCommentOutOldPolicies_NoOldBlock(t *testing.T) {
+	input := "token: my-token\neditor: vim\n"
+
+	result := CommentOutOldPolicies([]byte(input))
+
+	assert.Equal(t, input, string(result))
+}
+
+func TestCommentOutOldPolicies_AddsDeprecatedNote(t *testing.T) {
+	input := "service_escalation_policies:\n  SILENT_DEFAULT: PCGXUDY\n"
+
+	result := CommentOutOldPolicies([]byte(input))
+	output := string(result)
+
+	assert.Contains(t, output, "# Deprecated")
+}

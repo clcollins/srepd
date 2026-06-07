@@ -338,6 +338,10 @@ func MergeIntoExistingConfig(existingData []byte, final ResolvedValues, changes 
 		}
 	}
 
+	if changes.SilentChanged || changes.CustomChanged {
+		data = CommentOutOldPolicies(data)
+	}
+
 	return data, nil
 }
 
@@ -425,7 +429,20 @@ func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigC
 		if changes.CustomChanged {
 			changeLabel = " (changed)"
 		}
-		fmt.Fprintf(&sb, "  Custom:         %s%s\n", final.CustomMappingsInput, changeLabel)
+		customDisplay := final.CustomMappingsInput
+		parsed := ParseCustomMappings(final.CustomMappingsInput)
+		if len(parsed) > 0 && len(policyNames) > 0 {
+			var parts []string
+			for svcID, polID := range parsed {
+				polDisplay := polID
+				if name, ok := policyNames[polID]; ok {
+					polDisplay = fmt.Sprintf("%s (%s)", name, polID)
+				}
+				parts = append(parts, fmt.Sprintf("%s → %s", svcID, polDisplay))
+			}
+			customDisplay = strings.Join(parts, ", ")
+		}
+		fmt.Fprintf(&sb, "  Custom:         %s%s\n", customDisplay, changeLabel)
 	}
 
 	return sb.String()
@@ -696,6 +713,36 @@ func UpsertScalarInConfig(configData []byte, key string, value string) ([]byte, 
 		return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func CommentOutOldPolicies(data []byte) []byte {
+	lines := strings.Split(string(data), "\n")
+	var result []string
+	inBlock := false
+	found := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "service_escalation_policies:") {
+			inBlock = true
+			found = true
+			result = append(result, "# Deprecated: migrated to default_silent_escalation_policy + custom_service_escalation_policies")
+			result = append(result, "# "+line)
+			continue
+		}
+		if inBlock {
+			if strings.HasPrefix(line, "  ") || line == "" {
+				result = append(result, "# "+line)
+				continue
+			}
+			inBlock = false
+		}
+		result = append(result, line)
+	}
+
+	if !found {
+		return data
+	}
+	return []byte(strings.Join(result, "\n"))
 }
 
 func HasPlaceholderTeams(teams []string) bool {
