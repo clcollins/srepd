@@ -280,6 +280,7 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.configForm.State == huh.StateCompleted {
 		m.configMode = false
+		m.configModeRequested = false
 		m.table.Focus()
 
 		if !m.configState.Confirm {
