@@ -230,6 +230,17 @@ func (c *RateLimitedClient) ListIncidentNotesWithContext(ctx context.Context, id
 	return result, err
 }
 
+// ListEscalationPoliciesWithContext wraps the inner client with rate limiting and retry.
+func (c *RateLimitedClient) ListEscalationPoliciesWithContext(ctx context.Context, opts pagerduty.ListEscalationPoliciesOptions) (*pagerduty.ListEscalationPoliciesResponse, error) {
+	var result *pagerduty.ListEscalationPoliciesResponse
+	err := c.withRetry(ctx, func() error {
+		var innerErr error
+		result, innerErr = c.inner.ListEscalationPoliciesWithContext(ctx, opts)
+		return innerErr
+	})
+	return result, err
+}
+
 // ListOnCallsWithContext wraps the inner client with rate limiting and retry.
 func (c *RateLimitedClient) ListOnCallsWithContext(ctx context.Context, opts pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error) {
 	var result *pagerduty.ListOnCallsResponse

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/key"
@@ -11,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 )
 
 // setStatusMsgHandler is the message handler for the setStatusMsg message
@@ -133,6 +135,12 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return renderIncidentMsg("window resized") }
 	}
 
+	if m.configWizardPending != nil {
+		pending := *m.configWizardPending
+		m.configWizardPending = nil
+		return m.Update(pending)
+	}
+
 	return m, nil
 }
 
@@ -209,6 +217,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Default commands for the table view
 	switch {
+	case m.configMode:
+		return switchConfigFocusMode(m, msg)
+
 	case m.teamSelectMode:
 		return switchTeamSelectFocusMode(m, msg)
 
@@ -257,6 +268,92 @@ func switchTeamSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.teamSelectMode = false
 		m.table.Focus()
 		m.setStatus("team selection skipped")
+		return m, nil
+	}
+	return m, cmd
+}
+
+func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.configForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.configForm = f
+	}
+	if m.configForm.State == huh.StateCompleted {
+		m.configMode = false
+		m.configModeRequested = false
+		m.table.Focus()
+
+		if !m.configState.Confirm {
+			m.setStatus("config changes discarded")
+			return m, func() tea.Msg { return updateIncidentListMsg("config discarded") }
+		}
+
+		final, err := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
+			TokenInput:          m.configState.TokenInput,
+			SelectedTeams:       m.configState.SelectedTeams,
+			SilentPolicyID:      m.configState.SilentPolicy,
+			CustomMappingsInput: m.configState.CustomInput,
+			KeepTeams:           m.configState.KeepTeams,
+			KeepSilent:          m.configState.KeepSilent,
+			KeepCustom:          m.configState.KeepCustom,
+		})
+		if err != nil {
+			m.setStatus("config error: " + err.Error())
+			return m, nil
+		}
+
+		var changes pkgconfig.ConfigChanges
+		if m.configIsNewFile {
+			changes = pkgconfig.DetectChangesForNewFile(final)
+		} else {
+			changes = pkgconfig.DetectChanges(m.configExisting, final, strings.TrimSpace(m.configState.TokenInput))
+		}
+
+		if m.configExisting.OldFormatDetected {
+			if final.SilentPolicy != "" {
+				changes.SilentChanged = true
+			}
+			if final.CustomMappingsInput != "" {
+				changes.CustomChanged = true
+			}
+		}
+
+		if !changes.AnyChanged() {
+			m.setStatus("config is valid, no changes needed")
+			return m, func() tea.Msg { return updateIncidentListMsg("config unchanged") }
+		}
+
+		teamNames := make(map[string]string)
+		for k, v := range m.configTeamNames {
+			teamNames[k] = v
+		}
+
+		// Parse custom policies
+		var customPolicies map[string]string
+		if changes.CustomChanged && final.CustomMappingsInput != "" {
+			parsed, parseErr := pkgconfig.ParseCustomMappingsStrict(final.CustomMappingsInput)
+			if parseErr != nil {
+				m.setStatus("config error: " + parseErr.Error())
+				return m, nil
+			}
+			customPolicies = parsed
+		}
+
+		return m, func() tea.Msg {
+			return configCompletedMsg{
+				final:          final,
+				changes:        changes,
+				teamNames:      teamNames,
+				customPolicies: customPolicies,
+				isNewFile:      m.configIsNewFile,
+			}
+		}
+	}
+	if m.configForm.State == huh.StateAborted {
+		m.configMode = false
+		m.configModeRequested = false
+		m.table.Focus()
+		m.setStatus("config cancelled")
 		return m, nil
 	}
 	return m, cmd

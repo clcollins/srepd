@@ -40,6 +40,7 @@ type PagerDutyClientInterface interface {
 	ListIncidentAlertsWithContext(ctx context.Context, id string, opts pagerduty.ListIncidentAlertsOptions) (*pagerduty.ListAlertsResponse, error)
 	ListIncidentsWithContext(ctx context.Context, opts pagerduty.ListIncidentsOptions) (*pagerduty.ListIncidentsResponse, error)
 	ListIncidentNotesWithContext(ctx context.Context, id string) ([]pagerduty.IncidentNote, error)
+	ListEscalationPoliciesWithContext(ctx context.Context, opts pagerduty.ListEscalationPoliciesOptions) (*pagerduty.ListEscalationPoliciesResponse, error)
 	ListOnCallsWithContext(ctx context.Context, opts pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error)
 	ManageIncidentsWithContext(ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (*pagerduty.ListIncidentsResponse, error)
 	MergeIncidentsWithContext(ctx context.Context, from string, id string, o []pagerduty.MergeIncidentsOptions) (*pagerduty.Incident, error)
@@ -67,13 +68,13 @@ type Config struct {
 }
 
 // NewConfig creates a new Config, initializing a real PagerDuty client from the token.
-func NewConfig(token string, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
-	return NewConfigWithClient(NewClient(token), teams, escalation_policies, ignoredUsers)
+func NewConfig(token string, teams []string, escalation_policies map[string]string, ignoredUsers []string, defaultSilentPolicy string, customSilentPolicies map[string]string) (*Config, error) {
+	return NewConfigWithClient(NewClient(token), teams, escalation_policies, ignoredUsers, defaultSilentPolicy, customSilentPolicies)
 }
 
 // NewConfigWithClient creates a Config using a pre-existing client.
 // This enables testing with MockPagerDutyClient.
-func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_policies map[string]string, ignoredUsers []string) (*Config, error) {
+func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_policies map[string]string, ignoredUsers []string, defaultSilentPolicy string, customSilentPolicies map[string]string) (*Config, error) {
 	var c Config
 	var err error
 
@@ -97,22 +98,45 @@ func NewConfigWithClient(client PagerDutyClient, teams []string, escalation_poli
 		return &c, fmt.Errorf("pd.NewConfig(): failed to get users(s) from teams: %v", err)
 	}
 
-	_, ok := escalation_policies["default"]
-	if !ok {
-		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `default` key")
-	}
-	_, ok = escalation_policies["silent_default"]
-	if !ok {
-		return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `silent_default` key")
-	}
-
 	c.EscalationPolicies = make(map[string]*pagerduty.EscalationPolicy)
 
-	for key, value := range escalation_policies {
-		c.EscalationPolicies[strings.ToUpper(key)], err = GetEscalationPolicy(c.Client, value, pagerduty.GetEscalationPolicyOptions{})
-		if err != nil {
-			return &c, fmt.Errorf("pd.NewConfig(): failed to get escalation policy: (%s: %s) %v", key, value, err)
+	if len(escalation_policies) > 0 {
+		// Backward-compatible path: old service_escalation_policies config
+		log.Info("pd.NewConfig(): using deprecated service_escalation_policies — migrate to default_silent_escalation_policy")
+		_, ok := escalation_policies["default"]
+		if !ok {
+			return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `default` key")
 		}
+		_, ok = escalation_policies["silent_default"]
+		if !ok {
+			return &c, fmt.Errorf("pd.NewConfig(): escalation_policies map must contain a `silent_default` key")
+		}
+
+		for key, value := range escalation_policies {
+			c.EscalationPolicies[strings.ToUpper(key)], err = GetEscalationPolicy(c.Client, value, pagerduty.GetEscalationPolicyOptions{})
+			if err != nil {
+				return &c, fmt.Errorf("pd.NewConfig(): failed to get escalation policy: (%s: %s) %v", key, value, err)
+			}
+		}
+	} else if defaultSilentPolicy != "" {
+		// New path: default_silent_escalation_policy
+		policy, err := GetEscalationPolicy(c.Client, defaultSilentPolicy, pagerduty.GetEscalationPolicyOptions{})
+		if err != nil {
+			return &c, fmt.Errorf("pd.NewConfig(): failed to get default silent escalation policy `%v`: %w", defaultSilentPolicy, err)
+		}
+		c.EscalationPolicies["SILENT_DEFAULT"] = policy
+		log.Info("pd.NewConfig(): loaded default silent policy", "id", defaultSilentPolicy, "name", policy.Name)
+
+		for svcID, policyID := range customSilentPolicies {
+			p, err := GetEscalationPolicy(c.Client, policyID, pagerduty.GetEscalationPolicyOptions{})
+			if err != nil {
+				return &c, fmt.Errorf("pd.NewConfig(): failed to get custom silent policy for service %s: %w", svcID, err)
+			}
+			c.EscalationPolicies[strings.ToUpper(svcID)] = p
+			log.Info("pd.NewConfig(): loaded custom silent policy override", "service", svcID, "policy", policyID)
+		}
+	} else {
+		log.Warn("pd.NewConfig(): no silent escalation policy configured — silencing will be disabled")
 	}
 
 	if len(ignoredUsers) > 0 {
@@ -504,4 +528,38 @@ func ExtractSilentPolicyUsers(policies map[string]*pagerduty.EscalationPolicy) [
 	}
 	sort.Strings(userIDs)
 	return userIDs
+}
+
+// GetTeamEscalationPolicies fetches all escalation policies associated with the given team IDs.
+func GetTeamEscalationPolicies(client PagerDutyClient, teamIDs []string) ([]pagerduty.EscalationPolicy, error) {
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+	var policies []pagerduty.EscalationPolicy
+
+	if len(teamIDs) == 0 {
+		return policies, nil
+	}
+
+	opts := pagerduty.ListEscalationPoliciesOptions{
+		TeamIDs: teamIDs,
+		Limit:   defaultPageLimit,
+		Offset:  defaultOffset,
+	}
+
+	for {
+		response, err := client.ListEscalationPoliciesWithContext(ctx, opts)
+		if err != nil {
+			return policies, fmt.Errorf("pd.GetTeamEscalationPolicies(): failed to list escalation policies: %w", err)
+		}
+
+		policies = append(policies, response.EscalationPolicies...)
+
+		opts.Offset += opts.Limit
+
+		if !response.More {
+			break
+		}
+	}
+
+	return policies, nil
 }

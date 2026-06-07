@@ -40,11 +40,11 @@ go install .        # standard go install
 | `srepd update` | Update to the latest release in place |
 | `srepd --version` | Print version and git SHA |
 | `srepd --dev` | Run with fixture data (no PD connection) |
-| `srepd config --pick-teams` | Interactively select your PagerDuty teams |
+| `srepd config` | Interactive configuration wizard |
 
 ## Configuration
 
-SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Create a sample config file with `srepd config --create` or validate an existing one with `srepd config --validate`. On first run with placeholder teams, srepd will automatically prompt you to select your PagerDuty teams, or you can run `srepd config --pick-teams` at any time to re-select.
+SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Run `srepd config` to create or update your config interactively. Values from environment variables (e.g., `SREPD_TOKEN`) are pre-filled automatically.
 
 ### Required
 
@@ -52,12 +52,13 @@ SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment varia
 |-----|------|-------------|
 | `token` | `string` | PagerDuty API OAuth token |
 | `teams` | `[]string` | PagerDuty team IDs |
-| `service_escalation_policies` | `map[string]string` | Must contain `DEFAULT` and `SILENT_DEFAULT` keys |
 
 ### Optional
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. Set via `srepd config`. |
+| `custom_service_escalation_policies` | `map[string]string` | (none) | Per-service silent policy overrides (service ID to policy ID) |
 | `editor` | `string` | `vim` | Editor for incident notes |
 | `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
@@ -87,9 +88,7 @@ colors:
 token: <PagerDuty API token>
 teams:
   - <team ID>
-service_escalation_policies:
-  DEFAULT: P123456
-  SILENT_DEFAULT: P654321
+default_silent_escalation_policy: P654321
 terminal: gnome-terminal
 cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
 toolbox_mode: auto

@@ -49,6 +49,9 @@ type MockPagerDutyClient struct {
 	// GetEscalationPolicyWithContext. When non-nil and a matching key exists,
 	// that policy is returned. Otherwise falls back to the default response.
 	EscalationPolicyResponses map[string]*pagerduty.EscalationPolicy
+
+	// ListEscalationPoliciesResponses is a queue of responses for ListEscalationPoliciesWithContext.
+	ListEscalationPoliciesResponses []pagerduty.ListEscalationPoliciesResponse
 }
 
 // recordCall increments the call count for the named method, lazily
@@ -247,6 +250,20 @@ func (m *MockPagerDutyClient) GetUserWithContext(ctx context.Context, id string,
 	}
 	return &pagerduty.User{
 		APIObject: pagerduty.APIObject{ID: id},
+	}, nil
+}
+
+func (m *MockPagerDutyClient) ListEscalationPoliciesWithContext(ctx context.Context, opts pagerduty.ListEscalationPoliciesOptions) (*pagerduty.ListEscalationPoliciesResponse, error) {
+	m.recordCall("ListEscalationPoliciesWithContext")
+
+	if len(m.ListEscalationPoliciesResponses) > 0 {
+		resp := m.ListEscalationPoliciesResponses[0]
+		m.ListEscalationPoliciesResponses = m.ListEscalationPoliciesResponses[1:]
+		return &resp, nil
+	}
+
+	return &pagerduty.ListEscalationPoliciesResponse{
+		EscalationPolicies: []pagerduty.EscalationPolicy{},
 	}, nil
 }
 

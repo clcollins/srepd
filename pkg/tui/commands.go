@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -18,8 +19,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1098,4 +1101,162 @@ func updateTeamsInYAML(configData []byte, teamIDs []string, teamNames map[string
 	}
 
 	return nil, fmt.Errorf("'teams' key not found in config")
+}
+
+// --- Config wizard message types and commands ---
+
+// configFormState holds form field values as a pointer struct so that
+// huh form Value() bindings survive bubbletea's model copying.
+type configFormState struct {
+	TokenInput    string
+	SelectedTeams []string
+	SilentPolicy  string
+	CustomInput   string
+	KeepTeams     bool
+	KeepSilent    bool
+	KeepCustom    bool
+	Confirm       bool
+}
+
+// configWizardReadyMsg is sent when the existing config has been resolved
+// and is ready to build the config wizard form.
+type configWizardReadyMsg struct {
+	existing    pkgconfig.ExistingConfig
+	kd          pkgconfig.KeepDefaults
+	isNewFile   bool
+	teamNames   map[string]string
+	policyNames map[string]string
+}
+
+// configSavedMsg is sent after the config has been written to disk.
+type configSavedMsg struct{ err error }
+
+// configCompletedMsg is sent when the config form completes and values
+// have been resolved for writing.
+type configCompletedMsg struct {
+	final          pkgconfig.ResolvedValues
+	changes        pkgconfig.ConfigChanges
+	teamNames      map[string]string
+	customPolicies map[string]string
+	isNewFile      bool
+}
+
+// prepareConfigWizardCmd resolves existing config from Viper and checks
+// if the config file exists, returning a configWizardReadyMsg.
+func prepareConfigWizardCmd(m model) tea.Cmd {
+	return func() tea.Msg {
+		existing := pkgconfig.ResolveExistingConfig(
+			viper.GetString("token"),
+			viper.GetStringSlice("teams"),
+			viper.GetString("default_silent_escalation_policy"),
+			viper.GetStringMapString("custom_service_escalation_policies"),
+			viper.GetString("custom_service_escalation_policies"),
+			viper.GetStringMapString("service_escalation_policies"),
+		)
+		kd := pkgconfig.ResolveKeepDefaults(existing.Teams, existing.SilentPolicy, existing.CustomPolicies)
+
+		home, _ := os.UserHomeDir()
+		configFile := filepath.Join(home, pkgconfig.CfgFileDir, pkgconfig.CfgFileName)
+		isNewFile := false
+		if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
+			isNewFile = true
+		}
+
+		teamNames := make(map[string]string)
+		policyNames := make(map[string]string)
+		if existing.Token != "" {
+			client := pd.NewClient(existing.Token)
+			teams, err := pd.GetCurrentUserTeams(client)
+			if err == nil {
+				for _, team := range teams {
+					teamNames[team.ID] = team.Name
+				}
+			}
+
+			policyIDs := make(map[string]bool)
+			if existing.SilentPolicy != "" {
+				policyIDs[existing.SilentPolicy] = true
+			}
+			for _, polID := range existing.CustomPolicies {
+				policyIDs[polID] = true
+			}
+			for id := range policyIDs {
+				pol, polErr := pd.GetEscalationPolicy(client, id, pagerduty.GetEscalationPolicyOptions{})
+				if polErr == nil && pol != nil {
+					policyNames[id] = pol.Name
+				}
+			}
+		}
+
+		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames, policyNames: policyNames}
+	}
+}
+
+// realFS implements pkgconfig.ConfigFS using the real filesystem.
+type realFS struct{}
+
+func (realFS) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
+func (realFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
+	return os.OpenFile(name, flag, perm)
+}
+
+func (realFS) ReadFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
+
+func (realFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(name, data, perm)
+}
+
+// writeConfigCmd writes the config to disk using the resolved values.
+func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool) tea.Cmd {
+	return func() tea.Msg {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return configSavedMsg{err: err}
+		}
+		configDir := filepath.Join(home, pkgconfig.CfgFileDir)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return configSavedMsg{err: err}
+		}
+		fs := realFS{}
+		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile); err != nil {
+			return configSavedMsg{err: err}
+		}
+		// Update Viper with new values
+		viper.Set("token", final.Token)
+		viper.Set("teams", final.Teams)
+		if final.SilentPolicy != "" {
+			viper.Set("default_silent_escalation_policy", final.SilentPolicy)
+		}
+		// Set defaults for optional keys
+		for k, v := range pkgconfig.DefaultOptionalKeys {
+			if viper.GetString(k) == "" {
+				viper.Set(k, v)
+			}
+		}
+		return configSavedMsg{err: nil}
+	}
+}
+
+type pdClientInitializedMsg struct {
+	config *pd.Config
+	err    error
+}
+
+func initPDClientCmd() tea.Cmd {
+	return func() tea.Msg {
+		pdConfig, err := pd.NewConfig(
+			viper.GetString("token"),
+			viper.GetStringSlice("teams"),
+			viper.GetStringMapString("service_escalation_policies"),
+			viper.GetStringSlice("ignoredusers"),
+			viper.GetString("default_silent_escalation_policy"),
+			viper.GetStringMapString("custom_service_escalation_policies"),
+		)
+		return pdClientInitializedMsg{config: pdConfig, err: err}
+	}
 }

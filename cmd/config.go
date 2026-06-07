@@ -4,409 +4,110 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
-	"github.com/PagerDuty/go-pagerduty"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/deprecation"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/tui"
+
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
-)
-
-const (
-	cfgFileName = "srepd.yaml"
-	cfgFileDir  = ".config/srepd"
-)
-
-const (
-	exampleConfig = `
-# Example srepd configuration file
----
-# This is an example configuration file for srepd.  It is intended to be used
-# as a reference for the configuration options available to the user.  The
-# configuration file is located at ~/.config/srepd/srepd.yaml
-
-# Required configuration options
-
-# PagerDuty API token
-token: <PagerDuty API token>
-
-# Teams to filter on
-teams:
-  - <PagerDuty Team ID 1>
-  - <PagerDuty Team ID 2>
-
-# Service to Escalation Policy mapping
-# The map may have 1 or more optional PagerDuty services to Escalation Policy mappings, but
-# must have a DEFAULT and SILENT_DEFAULT key.  The DEFAULT key is used for the default escalation policy
-# and the SILENT_DEFAULT key is used for the default escalation policy when the user wants to suppress
-# notifications.
-service_escalation_policies:
-  DEFAULT: <PagerDuty Escalation Policy ID 1>
-  SILENT_DEFAULT: <PagerDuty Escalation Policy ID 2>
-  <PagerDuty Service ID 1>: <PagerDuty Escalation Policy ID 3>
-
-# Optional configuration options
-
-# Editor to use for notes
-editor: vim
-
-# Terminal to use for exec commands
-terminal: gnome-terminal --
-
-# Cluster login command
-cluster-login-command: ocm backplane login %%CLUSTER_ID%%
-
-# Toolbox mode: auto-detect Fedora Toolbox and prefix terminal commands
-# with flatpak-spawn --host. Values: "auto" (default), "true", "false"
-toolbox_mode: auto
-
-# Custom color scheme (all optional, hex values)
-# colors:
-#   text: "#778da9"
-#   border: "#415a77"
-#   highlight: "#ffffff"
-#   selected: "#415a77"
-#   warning: "#a4133c"
-#   error: "#0d1b2a"
-#   muted: "#5C5C5C"
-#   tab: "#7D56F4"`
 )
 
 const description = `The config command is used to create or validate the SREPD config file.
 The config file is located at ~/.config/srepd/srepd.yaml and is used to store
 the configuration options for the SREPD application.`
 
-var (
-	requiredKeys = map[string]string{
-		"token":                       "PagerDuty API token",
-		"teams":                       "PagerDuty team IDs to filter on",
-		"service_escalation_policies": "Service to Escalation Policy mapping (pagerduty_service_id:pagerduty_escalation_policy_id); Requires 'DEFAULT' and 'SILENT_DEFAULT' keys",
-	}
-	defaultOptionalKeys = map[string]string{
-		"editor":                "vim",
-		"terminal":              "gnome-terminal --",
-		"cluster_login_command": "ocm backplane login %%CLUSTER_ID%%",
-		"toolbox_mode":          "auto",
-		"chord_prefix":          "ctrl+x",
-	}
-	optionalKeys = map[string]string{
-		"editor":                fmt.Sprintf("Editor to use for notes (default: %v)", defaultOptionalKeys["editor"]),
-		"terminal":              fmt.Sprintf("Terminal to use for exec commands (default: %v)", defaultOptionalKeys["terminal"]),
-		"cluster_login_command": fmt.Sprintf("Cluster login command (default: %v)", defaultOptionalKeys["cluster-login-command"]),
-		"toolbox_mode":          fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", defaultOptionalKeys["toolbox_mode"]),
-		"chord_prefix":          fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", defaultOptionalKeys["chord_prefix"]),
-		"colors":                "Custom color scheme (map of color name to hex value)",
-	}
-)
-
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:          "config",
-	Short:        "Create or validate the SREPD config file",
-	Long:         description + "\n\n" + exampleConfig,
+	Short:        "Configure SREPD interactively",
+	Long:         description,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		switch {
-		case cmd.Flag("create").Value.String() == "true":
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get user home directory: %w", err)
-			}
-			if err := createConfig(osFS{}, home); err != nil {
-				return err
-			}
-			fmt.Println("\nTip: After adding your token, run 'srepd config --pick-teams' to see available teams.")
-			return nil
-		case cmd.Flag("validate").Value.String() == "true":
-			err := validateConfig()
-			if err != nil {
-				return err
-			}
-			fmt.Printf("Config file is valid\n")
-			return nil
-		case cmd.Flag("pick-teams").Value.String() == "true":
-			return runPickTeams()
-		default:
-			err := cmd.Usage()
-			return err
-		}
+		return runConfigWizard()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// configCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
-	configCmd.Flags().BoolP("create", "c", false, "create a sample config file at ~/.config/srepd/srepd.yaml")
-	configCmd.Flags().BoolP("validate", "v", false, "validate the config file")
-	configCmd.Flags().BoolP("pick-teams", "p", false, "select your PagerDuty teams interactively")
-	configCmd.MarkFlagsMutuallyExclusive("create", "validate", "pick-teams")
 }
 
-type configFS interface {
-	MkdirAll(path string, perm os.FileMode) error
-	OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error)
-	ReadFile(name string) ([]byte, error)
-	WriteFile(name string, data []byte, perm os.FileMode) error
-}
-
-type osFS struct{} // codecov:ignore
-
-func (osFS) MkdirAll(path string, perm os.FileMode) error { // codecov:ignore
-	return os.MkdirAll(path, perm)
-}
-
-func (osFS) OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error) { // codecov:ignore
-	return os.OpenFile(name, flag, perm)
-}
-
-func (osFS) ReadFile(name string) ([]byte, error) { // codecov:ignore
-	return os.ReadFile(name)
-}
-
-func (osFS) WriteFile(name string, data []byte, perm os.FileMode) error { // codecov:ignore
-	return os.WriteFile(name, data, perm)
-}
-
-func createConfig(fs configFS, baseDir string) (retErr error) {
-	configDir := filepath.Join(baseDir, cfgFileDir)
-
-	if err := fs.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	configFile := filepath.Join(configDir, cfgFileName)
-
-	f, err := fs.OpenFile(configFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("config file already exists at %s", configFile)
-		}
-		return fmt.Errorf("failed to create config file: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && retErr == nil {
-			retErr = fmt.Errorf("failed to close config file: %w", cerr)
-		}
-	}()
-
-	if _, err := f.Write([]byte(strings.TrimLeft(exampleConfig, "\n"))); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	fmt.Printf("Config file created at %s\n", configFile)
-	fmt.Println("Please edit the file to add your PagerDuty credentials and team information.")
-	return nil
-}
-
-func updateTeamsInConfig(configData []byte, teamIDs []string, teamNames map[string]string) ([]byte, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(configData, &doc); err != nil {
-		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
-	}
-
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
-		return nil, fmt.Errorf("invalid YAML document structure")
-	}
-
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("expected YAML mapping at root")
-	}
-
-	for i := 0; i < len(root.Content)-1; i += 2 {
-		if root.Content[i].Value == "teams" {
-			teamsValue := root.Content[i+1]
-			teamsValue.Content = nil
-			if len(teamIDs) == 0 {
-				teamsValue.Kind = yaml.SequenceNode
-				teamsValue.Tag = "!!seq"
-				teamsValue.Style = yaml.FlowStyle
-			} else {
-				teamsValue.Kind = yaml.SequenceNode
-				teamsValue.Tag = "!!seq"
-				teamsValue.Style = 0
-				for _, id := range teamIDs {
-					node := &yaml.Node{
-						Kind:  yaml.ScalarNode,
-						Tag:   "!!str",
-						Value: id,
-					}
-					if name, ok := teamNames[id]; ok {
-						node.LineComment = name
-					}
-					teamsValue.Content = append(teamsValue.Content, node)
-				}
-			}
-
-			var buf bytes.Buffer
-			enc := yaml.NewEncoder(&buf)
-			enc.SetIndent(2)
-			if err := enc.Encode(&doc); err != nil {
-				return nil, fmt.Errorf("failed to encode config YAML: %w", err)
-			}
-			if err := enc.Close(); err != nil {
-				return nil, fmt.Errorf("failed to close YAML encoder: %w", err)
-			}
-			return buf.Bytes(), nil
+func ensureViperDefaults() {
+	for k, v := range pkgconfig.DefaultOptionalKeys {
+		if viper.GetString(k) == "" {
+			viper.Set(k, v)
 		}
 	}
-
-	return nil, fmt.Errorf("'teams' key not found in config")
 }
 
-func writeConfigTeams(fs configFS, baseDir string, teamIDs []string, teamNames map[string]string) error {
-	configFile := filepath.Join(baseDir, cfgFileDir, cfgFileName)
-
-	data, err := fs.ReadFile(configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	updated, err := updateTeamsInConfig(data, teamIDs, teamNames)
-	if err != nil {
-		return err
-	}
-
-	backupFile := configFile + "~"
-	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to create config backup: %w", err)
-	}
-
-	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	return nil
-}
-
-func runPickTeams() error {
+func runConfigWizard() error {
 	if viper.GetBool("dev") {
-		fmt.Println("Dev mode: skipping team selection, launching with fixture data...")
 		runDevMode()
 		return nil
 	}
 
-	token := viper.GetString("token")
-	if token == "" {
-		return fmt.Errorf("no PagerDuty API token found; set 'token' in config or SREPD_TOKEN env var")
-	}
-
-	client := pd.NewClient(token)
-	teams, err := pd.GetCurrentUserTeams(client)
-	if err != nil {
-		return err
-	}
-
-	if len(teams) == 0 {
-		fmt.Println("No teams found in your PagerDuty account.")
-		return nil
-	}
-
-	selectedIDs, err := runTeamSelector(teams)
-	if err != nil {
-		return err
-	}
-
-	if len(selectedIDs) == 0 {
-		fmt.Println("No teams selected.")
-		return nil
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	teamNames := make(map[string]string)
-	for _, team := range teams {
-		teamNames[team.ID] = team.Name
-	}
-
-	if err := writeConfigTeams(osFS{}, home, selectedIDs, teamNames); err != nil {
-		return err
-	}
-
-	fmt.Printf("\nSaved %d team(s) to config. Launching srepd...\n", len(selectedIDs))
-	launchTUI()
+	ensureViperDefaults()
+	launchTUIWithConfig()
 	return nil
 }
 
-func runTeamSelector(teams []pagerduty.Team) ([]string, error) {
-	var selected []string
-	var options []huh.Option[string]
-	for _, team := range teams {
-		options = append(options, huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID))
-	}
-
-	colors := viper.GetStringMapString("colors")
-	theme := tui.ThemeFromConfig(colors)
-
-	huhTheme := huh.ThemeCharm()
-	huhTheme.Focused.Title = huhTheme.Focused.Title.Foreground(theme.Highlight)
-	huhTheme.Focused.Description = huhTheme.Focused.Description.Foreground(theme.Muted)
-	huhTheme.Focused.SelectedOption = huhTheme.Focused.SelectedOption.Foreground(theme.Highlight)
-	huhTheme.Focused.UnselectedOption = huhTheme.Focused.UnselectedOption.Foreground(theme.Text)
-	huhTheme.Focused.MultiSelectSelector = huhTheme.Focused.MultiSelectSelector.Foreground(theme.Text)
-	huhTheme.Focused.SelectedPrefix = huhTheme.Focused.SelectedPrefix.Foreground(theme.Highlight)
-	huhTheme.Focused.UnselectedPrefix = huhTheme.Focused.UnselectedPrefix.Foreground(theme.Muted)
-	huhTheme.Focused.Base = huhTheme.Focused.Base.BorderForeground(theme.Border)
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Select your PagerDuty teams").
-				Description("Use space to toggle, enter to confirm, esc to skip").
-				Options(options...).
-				Value(&selected),
-		),
-	).WithTheme(huhTheme).WithProgramOptions(tea.WithAltScreen())
-
-	err := form.Run()
+// launchTUIWithConfig launches the TUI with configMode enabled, so it
+// enters the inline config wizard instead of normal incident view.
+func launchTUIWithConfig() {
+	l, err := launcher.NewClusterLauncher(viper.GetString("terminal"), viper.GetString("cluster_login_command"), viper.GetString("toolbox_mode"))
 	if err != nil {
-		return nil, fmt.Errorf("team selection failed: %w", err)
+		fmt.Println(err)
+		log.Fatal(err)
 	}
 
-	if form.State == huh.StateAborted {
-		return nil, nil
+	ocmClient, ocmErr := ocm.NewClient(tui.Version)
+	if ocmErr != nil {
+		log.Warn("OCM connection failed", "error", ocmErr)
+	} else if ocmClient != nil {
+		defer ocmClient.Close()
+		log.Info("OCM connected")
+	} else {
+		log.Warn("OCM not configured")
 	}
 
-	return selected, nil
-}
+	m, _ := tui.InitialModel(
+		viper.GetString("token"),
+		viper.GetStringSlice("teams"),
+		viper.GetStringMapString("service_escalation_policies"),
+		viper.GetStringSlice("ignoredusers"),
+		viper.GetStringSlice("editor"),
+		l,
+		viper.GetBool("debug"),
+		ocmClient,
+		viper.GetStringMapString("colors"),
+		viper.GetString("default_silent_escalation_policy"),
+		viper.GetStringMapString("custom_service_escalation_policies"),
+		true, // configMode
+	)
 
-func hasPlaceholderTeams(teams []string) bool {
-	if len(teams) == 0 {
-		return true
-	}
-	for _, team := range teams {
-		trimmed := strings.TrimSpace(team)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
-			return false
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	go func() {
+		for {
+			time.Sleep(tickInterval * time.Second)
+			p.Send(tui.TickMsg{})
 		}
+	}()
+
+	_, err = p.Run()
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
 	}
-	return true
 }
 
 // validateConfig prints the viper info passed into the program
@@ -436,7 +137,7 @@ func validateConfig() error {
 
 	}
 
-	for k, v := range requiredKeys {
+	for k, v := range pkgconfig.RequiredKeys {
 		if _, ok := settings[k]; !ok {
 			errs = append(errs, fmt.Errorf("missing required key: %s ", k))
 			log.Error("Missing required key", "key_name", k, "key_description", v)
@@ -463,11 +164,11 @@ func validateConfig() error {
 		}
 	}
 
-	for k := range optionalKeys {
+	for k := range pkgconfig.OptionalKeys {
 		_, ok := settings[k]
 		if !ok {
-			log.Debug("cmd.validateConfig()", "msg", "missing optional key", "key", k, "default_value", defaultOptionalKeys[k])
-			viper.Set(k, defaultOptionalKeys[k])
+			log.Debug("cmd.validateConfig()", "msg", "missing optional key", "key", k, "default_value", pkgconfig.DefaultOptionalKeys[k])
+			viper.Set(k, pkgconfig.DefaultOptionalKeys[k])
 		}
 	}
 

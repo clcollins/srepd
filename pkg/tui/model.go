@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
@@ -134,6 +135,17 @@ type model struct {
 	teamSelectIDs   []string
 	teamSelectNames map[string]string
 
+	// Config wizard state — shown via "srepd config" or on first run
+	configMode          bool
+	configForm          *huh.Form
+	configExisting      pkgconfig.ExistingConfig
+	configIsNewFile     bool
+	configState         *configFormState
+	configTeamNames     map[string]string
+	configPolicyNames   map[string]string
+	configModeRequested bool
+	configWizardPending *configWizardReadyMsg
+
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
@@ -164,6 +176,9 @@ func InitialModel(
 	debug bool,
 	ocmClient ocm.OCMClient,
 	colors map[string]string,
+	defaultSilentPolicy string,
+	customSilentPolicies map[string]string,
+	configMode bool,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -216,13 +231,18 @@ func InitialModel(
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
+		configModeRequested:   configMode,
+	}
+
+	if configMode {
+		return m, nil
 	}
 
 	// This is an ugly way to handle this error
 	// We have to set the m.err here instead of how the errMsg is handled
 	// because the Init() occurs before the Update() and the errMsg is not
 	// preserved
-	pd, err := pd.NewConfig(token, teams, escalation_policies, ignoredusers)
+	pd, err := pd.NewConfig(token, teams, escalation_policies, ignoredusers, defaultSilentPolicy, customSilentPolicies)
 	m.config = pd
 
 	if err != nil {

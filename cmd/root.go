@@ -23,6 +23,7 @@ THE SOFTWARE.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
@@ -67,9 +69,14 @@ but rather a simple tool to make on-call tasks easier.`,
 		}())
 	},
 	PreRun: func(cmd *cobra.Command, args []string) {
-		// Skip config validation in dev mode
 		if viper.GetBool("dev") {
 			log.Info("Dev mode enabled: skipping config validation")
+			return
+		}
+
+		home, _ := os.UserHomeDir()
+		configFile := filepath.Join(home, pkgconfig.CfgFileDir, pkgconfig.CfgFileName)
+		if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
 			return
 		}
 
@@ -82,6 +89,14 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		if viper.GetBool("dev") {
 			runDevMode()
+			return
+		}
+
+		home, _ := os.UserHomeDir()
+		configFile := filepath.Join(home, pkgconfig.CfgFileDir, pkgconfig.CfgFileName)
+		if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
+			ensureViperDefaults()
+			launchTUIWithConfig()
 			return
 		}
 
@@ -116,6 +131,9 @@ func launchTUI() {
 		viper.GetBool("debug"),
 		ocmClient,
 		viper.GetStringMapString("colors"),
+		viper.GetString("default_silent_escalation_policy"),
+		viper.GetStringMapString("custom_service_escalation_policies"),
+		false,
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -295,8 +313,8 @@ func initConfig() {
 	cobra.CheckErr(err)
 
 	// Search config in home directory with name ".srepd" (without extension).
-	viper.AddConfigPath(filepath.Join(home, cfgFileDir))
-	viper.SetConfigName(cfgFileName)
+	viper.AddConfigPath(filepath.Join(home, pkgconfig.CfgFileDir))
+	viper.SetConfigName(pkgconfig.CfgFileName)
 	viper.SetConfigType("yaml")
 
 	viper.SetEnvPrefix("srepd")
