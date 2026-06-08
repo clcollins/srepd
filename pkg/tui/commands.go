@@ -1212,17 +1212,16 @@ func (realFS) WriteFile(name string, data []byte, perm os.FileMode) error {
 }
 
 // writeConfigCmd writes the config to disk using the resolved values.
-func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool) tea.Cmd {
+func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool, fs pkgconfig.ConfigFS) tea.Cmd {
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return configSavedMsg{err: err}
 		}
 		configDir := filepath.Join(home, pkgconfig.CfgFileDir)
-		if err := os.MkdirAll(configDir, 0755); err != nil {
+		if err := fs.MkdirAll(configDir, 0755); err != nil {
 			return configSavedMsg{err: err}
 		}
-		fs := realFS{}
 		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile); err != nil {
 			return configSavedMsg{err: err}
 		}

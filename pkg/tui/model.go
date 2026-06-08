@@ -156,6 +156,10 @@ type model struct {
 	serviceLogCache       map[string][]ocm.ServiceLog
 	limitedSupportCache   map[string][]ocm.LimitedSupportReason
 
+	// Dependency injection for testability
+	pdClientFactory func(string) pd.PagerDutyClient
+	configFS        pkgconfig.ConfigFS
+
 	// Color theme and derived styles
 	theme  Theme
 	styles Styles

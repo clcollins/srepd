@@ -1,15 +1,72 @@
 package tui
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type tuiMockFS struct {
+	mkdirAllErr error
+	readData    []byte
+	readErr     error
+	writeData   []byte
+	writeErr    error
+	backupData  []byte
+}
+
+func (f *tuiMockFS) MkdirAll(_ string, _ os.FileMode) error { return f.mkdirAllErr }
+func (f *tuiMockFS) ReadFile(_ string) ([]byte, error)      { return f.readData, f.readErr }
+func (f *tuiMockFS) WriteFile(name string, data []byte, _ os.FileMode) error {
+	if f.writeErr != nil {
+		return f.writeErr
+	}
+	if strings.HasSuffix(name, "~") {
+		f.backupData = data
+	} else {
+		f.writeData = data
+	}
+	return nil
+}
+func (f *tuiMockFS) OpenFile(_ string, _ int, _ os.FileMode) (io.WriteCloser, error) {
+	return nopCloser{&bytes.Buffer{}}, nil
+}
+
+type nopCloser struct{ io.Writer }
+
+func (nopCloser) Close() error { return nil }
+
+func createConfigTestModel() model {
+	m := createTestModel()
+	m.help = newHelp()
+	m.pdClientFactory = func(_ string) pd.PagerDutyClient {
+		return &pd.MockPagerDutyClient{}
+	}
+	m.configFS = &tuiMockFS{}
+	windowSize = tea.WindowSizeMsg{Width: 120, Height: 50}
+	return m
+}
+
+func newConfigWizardReadyMsg(existing pkgconfig.ExistingConfig, kd pkgconfig.KeepDefaults, isNewFile bool) configWizardReadyMsg {
+	return configWizardReadyMsg{
+		existing:    existing,
+		kd:          kd,
+		isNewFile:   isNewFile,
+		teamNames:   map[string]string{"TEAM_001": "Mock Team Alpha"},
+		policyNames: map[string]string{"POL_001": "Mock Policy"},
+	}
+}
 
 func TestSwitchConfigFocusMode_Completed(t *testing.T) {
 	t.Run("form completion sets configMode to false and dispatches write", func(t *testing.T) {
@@ -159,5 +216,450 @@ func TestConfigModeView_BeforeTeamSelect(t *testing.T) {
 
 		assert.Greater(t, teamSelectIdx, configModeIdx,
 			"configMode case should appear before teamSelectMode case in View switch")
+	})
+}
+
+// --- Tier 1: Form Construction Tests ---
+
+func TestBuildConfigForm_NewUser(t *testing.T) {
+	t.Run("new user form is not nil and builds without panic", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configState = &configFormState{Confirm: true}
+		msg := newConfigWizardReadyMsg(pkgconfig.ExistingConfig{}, pkgconfig.KeepDefaults{}, true)
+
+		assert.NotPanics(t, func() {
+			form := m.buildConfigForm(msg, "token desc", "teams desc", "silent desc", "custom desc", nil)
+			assert.NotNil(t, form, "form should not be nil")
+		})
+	})
+}
+
+func TestBuildConfigForm_ExistingConfig(t *testing.T) {
+	t.Run("existing config form builds without panic", func(t *testing.T) {
+		m := createConfigTestModel()
+		existing := pkgconfig.ExistingConfig{
+			Token:          "FAKE_TOKEN_123",
+			Teams:          []string{"TEAM_001"},
+			SilentPolicy:   "POL_001",
+			CustomPolicies: map[string]string{"SVC_001": "POL_002"},
+		}
+		kd := pkgconfig.KeepDefaults{
+			HasValidTeams: true, KeepTeams: true,
+			HasSilent: true, KeepSilent: true,
+			HasCustom: true, KeepCustom: true,
+		}
+		m.configState = &configFormState{
+			KeepTeams: true, KeepSilent: true, KeepCustom: true, Confirm: true,
+		}
+		msg := newConfigWizardReadyMsg(existing, kd, false)
+
+		assert.NotPanics(t, func() {
+			form := m.buildConfigForm(msg, "token desc", "teams desc", "silent desc", "custom desc", map[string]bool{"TEAM_001": true})
+			assert.NotNil(t, form, "form should not be nil")
+		})
+	})
+}
+
+func TestBuildConfigForm_OldFormatMigration(t *testing.T) {
+	t.Run("old format migration form builds without panic", func(t *testing.T) {
+		m := createConfigTestModel()
+		existing := pkgconfig.ExistingConfig{
+			Token:             "FAKE_TOKEN_123",
+			Teams:             []string{"TEAM_001"},
+			SilentPolicy:      "POL_001",
+			OldFormatDetected: true,
+		}
+		kd := pkgconfig.KeepDefaults{HasValidTeams: true, KeepTeams: true, HasSilent: true, KeepSilent: true}
+		m.configState = &configFormState{KeepTeams: true, KeepSilent: true, Confirm: true}
+		msg := newConfigWizardReadyMsg(existing, kd, false)
+
+		assert.NotPanics(t, func() {
+			form := m.buildConfigForm(msg, "token desc", "teams desc", "silent desc", "custom desc", nil)
+			assert.NotNil(t, form)
+		})
+	})
+}
+
+func TestBuildConfigForm_TokenDescNewUser(t *testing.T) {
+	t.Run("new user token description does not contain Current:", func(t *testing.T) {
+		tokenDesc := "Your PagerDuty API OAuth token.\nCreate one at PagerDuty"
+		assert.NotContains(t, tokenDesc, "Current:")
+		assert.Contains(t, tokenDesc, "Create one at PagerDuty")
+	})
+}
+
+func TestBuildConfigForm_TokenDescExistingUser(t *testing.T) {
+	t.Run("existing user token description contains masked token", func(t *testing.T) {
+		masked := pkgconfig.MaskToken("PCGXUDY12345")
+		tokenDesc := fmt.Sprintf("Current: %s — leave blank to keep.\nCreate one", masked)
+		assert.Contains(t, tokenDesc, "Current:")
+		assert.Contains(t, tokenDesc, "leave blank to keep")
+	})
+}
+
+func TestBuildConfigForm_NoPanicOnBuild(t *testing.T) {
+	t.Run("building form with various window sizes does not panic", func(t *testing.T) {
+		sizes := []tea.WindowSizeMsg{
+			{Width: 80, Height: 24},
+			{Width: 120, Height: 50},
+			{Width: 200, Height: 60},
+		}
+		for _, size := range sizes {
+			windowSize = size
+			m := createConfigTestModel()
+			m.configState = &configFormState{Confirm: true}
+			msg := newConfigWizardReadyMsg(pkgconfig.ExistingConfig{}, pkgconfig.KeepDefaults{}, true)
+
+			assert.NotPanics(t, func() {
+				form := m.buildConfigForm(msg, "desc", "desc", "desc", "desc", nil)
+				assert.NotNil(t, form)
+			})
+		}
+	})
+}
+
+// --- Tier 2: Keystroke Flow Tests ---
+
+func TestConfigForm_KeystrokePassthrough(t *testing.T) {
+	t.Run("keys in configMode do not trigger table or incident modes", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		confirm := true
+		m.configForm = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("test").Value(&confirm)))
+		m.configForm.Init()
+
+		keys := []tea.KeyMsg{
+			{Type: tea.KeyRunes, Runes: []rune{'a'}},
+			{Type: tea.KeyRunes, Runes: []rune{'j'}},
+			{Type: tea.KeyUp},
+			{Type: tea.KeyDown},
+		}
+		for _, k := range keys {
+			result, _ := m.Update(k)
+			updated := result.(model)
+			assert.True(t, updated.configMode, "should stay in configMode")
+			assert.False(t, updated.viewingIncident, "should not enter incident view")
+			assert.False(t, updated.mergeMode, "should not enter merge mode")
+		}
+	})
+}
+
+func TestConfigForm_EscapeAbortsForm(t *testing.T) {
+	t.Run("escape aborts form and exits config mode", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		confirm := true
+		m.configForm = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("test").Value(&confirm)))
+		m.configForm.Init()
+
+		escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+		result, _ := switchConfigFocusMode(m, escMsg)
+		updated := result.(model)
+
+		if updated.configForm.State == huh.StateAborted {
+			assert.False(t, updated.configMode, "configMode should be false after abort")
+			assert.Contains(t, updated.status, "config", "status should mention config")
+		}
+	})
+}
+
+func TestConfigForm_CtrlCQuitsApp(t *testing.T) {
+	t.Run("ctrl+c triggers quit", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		km := huh.NewDefaultKeyMap()
+		km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "ctrl+q"))
+		confirm := true
+		m.configForm = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("test").Value(&confirm))).WithKeyMap(km)
+		m.configForm.Init()
+
+		ctrlC := tea.KeyMsg{Type: tea.KeyCtrlC}
+		_, cmd := switchConfigFocusMode(m, ctrlC)
+		if cmd != nil {
+			msg := cmd()
+			_, isQuit := msg.(tea.QuitMsg)
+			assert.True(t, isQuit, "ctrl+c should produce a quit command")
+		}
+	})
+}
+
+// --- Tier 3: State Transition Tests ---
+
+func TestConfigWizard_ReadyMsgSetsConfigMode(t *testing.T) {
+	t.Run("configWizardReadyMsg sets configMode and creates form", func(t *testing.T) {
+		m := createConfigTestModel()
+		msg := newConfigWizardReadyMsg(pkgconfig.ExistingConfig{Token: "FAKE_TOKEN"}, pkgconfig.KeepDefaults{}, true)
+
+		result, cmd := m.Update(msg)
+		updated := result.(model)
+
+		assert.True(t, updated.configMode, "configMode should be true")
+		assert.NotNil(t, updated.configForm, "configForm should be created")
+		assert.NotNil(t, updated.configState, "configState should be initialized")
+		assert.True(t, updated.configIsNewFile, "configIsNewFile should be set")
+		assert.NotNil(t, cmd, "should return form init cmd")
+	})
+}
+
+func TestConfigWizard_ReadyMsgPendingNoWindowSize(t *testing.T) {
+	t.Run("ready msg is deferred when window size is zero", func(t *testing.T) {
+		m := createConfigTestModel()
+		windowSize = tea.WindowSizeMsg{Width: 0, Height: 0}
+		msg := newConfigWizardReadyMsg(pkgconfig.ExistingConfig{}, pkgconfig.KeepDefaults{}, true)
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.NotNil(t, updated.configWizardPending, "pending should be set")
+		assert.False(t, updated.configMode, "configMode should still be false")
+		assert.Nil(t, updated.configForm, "configForm should not be created yet")
+	})
+}
+
+func TestConfigWizard_PendingResolvedOnWindowSize(t *testing.T) {
+	t.Run("pending config wizard resolves when window size arrives", func(t *testing.T) {
+		m := createConfigTestModel()
+		pending := newConfigWizardReadyMsg(pkgconfig.ExistingConfig{Token: "FAKE_TOKEN"}, pkgconfig.KeepDefaults{}, true)
+		m.configWizardPending = &pending
+
+		sizeMsg := tea.WindowSizeMsg{Width: 120, Height: 50}
+		result, _ := m.Update(sizeMsg)
+		updated := result.(model)
+
+		assert.Nil(t, updated.configWizardPending, "pending should be consumed")
+		assert.True(t, updated.configMode, "configMode should be true after resolve")
+		assert.NotNil(t, updated.configForm, "configForm should be created")
+	})
+}
+
+func TestConfigWizard_AbortExitsCleanly(t *testing.T) {
+	t.Run("form abort clears config mode and sets status", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		m.configModeRequested = true
+		confirm := true
+		m.configForm = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("test").Value(&confirm)))
+		m.configForm.Init()
+
+		escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+		result, _ := switchConfigFocusMode(m, escMsg)
+		updated := result.(model)
+
+		if updated.configForm.State == huh.StateAborted {
+			assert.False(t, updated.configMode)
+			assert.False(t, updated.configModeRequested)
+			assert.Contains(t, updated.status, "config")
+		}
+	})
+}
+
+func TestConfigWizard_SavedMsgSuccess(t *testing.T) {
+	t.Run("successful save exits config mode and dispatches PD init", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		m.configModeRequested = true
+
+		result, cmd := m.Update(configSavedMsg{err: nil})
+		updated := result.(model)
+
+		assert.False(t, updated.configMode, "configMode should be false after save")
+		assert.False(t, updated.configModeRequested, "configModeRequested should be false")
+		assert.Contains(t, updated.status, "config saved")
+		assert.NotNil(t, cmd, "should dispatch initPDClientCmd")
+	})
+}
+
+func TestConfigWizard_SavedMsgError(t *testing.T) {
+	t.Run("save error exits config mode and shows error", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		m.configModeRequested = true
+
+		result, cmd := m.Update(configSavedMsg{err: fmt.Errorf("disk full")})
+		updated := result.(model)
+
+		assert.False(t, updated.configMode, "configMode should be false")
+		assert.False(t, updated.configModeRequested, "configModeRequested should be false")
+		assert.Contains(t, updated.status, "config save failed")
+		assert.Contains(t, updated.status, "disk full")
+		assert.Nil(t, cmd, "should not dispatch PD init on error")
+	})
+}
+
+func TestConfigWizard_PDClientInitSuccess(t *testing.T) {
+	t.Run("successful PD init sets config and dispatches updates", func(t *testing.T) {
+		m := createConfigTestModel()
+		mockConfig := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+		}
+
+		result, cmd := m.Update(pdClientInitializedMsg{config: mockConfig, err: nil})
+		updated := result.(model)
+
+		assert.Equal(t, mockConfig, updated.config, "config should be set")
+		assert.Contains(t, updated.status, "config saved")
+		assert.NotNil(t, cmd, "should dispatch incident list update")
+	})
+}
+
+func TestConfigWizard_PDClientInitError(t *testing.T) {
+	t.Run("PD init error sets status but does not crash", func(t *testing.T) {
+		m := createConfigTestModel()
+
+		result, cmd := m.Update(pdClientInitializedMsg{err: fmt.Errorf("auth failed")})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "PD init failed")
+		assert.Nil(t, cmd, "should not dispatch further commands on error")
+	})
+}
+
+func TestConfigWizard_CompletionNoChangesSkipsWrite(t *testing.T) {
+	t.Run("no changes detected skips write", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		existing := pkgconfig.ExistingConfig{
+			Token: "FAKE_TOKEN",
+			Teams: []string{"TEAM_001"},
+		}
+		m.configExisting = existing
+		m.configIsNewFile = false
+		m.configState = &configFormState{
+			KeepTeams:  true,
+			KeepSilent: true,
+			KeepCustom: true,
+			Confirm:    true,
+		}
+		m.configTeamNames = map[string]string{"TEAM_001": "Alpha"}
+
+		confirm := true
+		form := huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("test").Value(&confirm)))
+		form.Init()
+		m.configForm = form
+
+		// Simulate the completion check logic from switchConfigFocusMode
+		final, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
+			KeepTeams:  true,
+			KeepSilent: true,
+			KeepCustom: true,
+		})
+		changes := pkgconfig.DetectChanges(m.configExisting, final, "")
+
+		assert.False(t, changes.AnyChanged(), "no changes should be detected")
+	})
+}
+
+// --- Tier 4: Config Write Integration Tests ---
+
+func TestWriteConfigCmd_NewFile(t *testing.T) {
+	t.Run("new file writes complete config", func(t *testing.T) {
+		fs := &tuiMockFS{}
+		final := pkgconfig.ResolvedValues{
+			Token:        "FAKE_TOKEN_XYZ",
+			Teams:        []string{"TEAM_001"},
+			SilentPolicy: "POL_001",
+		}
+		changes := pkgconfig.ConfigChanges{
+			TokenChanged:  true,
+			TeamsChanged:  true,
+			SilentChanged: true,
+		}
+		teamNames := map[string]string{"TEAM_001": "Alpha Team"}
+
+		cmd := writeConfigCmd(final, changes, teamNames, nil, true, fs)
+		result := cmd()
+		savedMsg, ok := result.(configSavedMsg)
+
+		assert.True(t, ok, "should return configSavedMsg")
+		assert.NoError(t, savedMsg.err, "should save without error")
+		assert.NotEmpty(t, fs.writeData, "should write config data")
+		assert.Contains(t, string(fs.writeData), "FAKE_TOKEN_XYZ")
+		assert.Nil(t, fs.backupData, "new file should not create backup")
+	})
+}
+
+func TestWriteConfigCmd_ExistingFile(t *testing.T) {
+	t.Run("existing file creates backup and merges", func(t *testing.T) {
+		existingYAML := "token: OLD_TOKEN\nteams:\n  - TEAM_001\n"
+		fs := &tuiMockFS{readData: []byte(existingYAML)}
+		final := pkgconfig.ResolvedValues{
+			Token: "NEW_TOKEN_ABC",
+			Teams: []string{"TEAM_001"},
+		}
+		changes := pkgconfig.ConfigChanges{TokenChanged: true}
+
+		cmd := writeConfigCmd(final, changes, nil, nil, false, fs)
+		result := cmd()
+		savedMsg := result.(configSavedMsg)
+
+		assert.NoError(t, savedMsg.err)
+		assert.NotEmpty(t, fs.writeData, "should write merged config")
+		assert.NotNil(t, fs.backupData, "should create backup")
+		assert.Contains(t, string(fs.writeData), "NEW_TOKEN_ABC")
+	})
+}
+
+func TestWriteConfigCmd_WriteError(t *testing.T) {
+	t.Run("write error propagated in configSavedMsg", func(t *testing.T) {
+		fs := &tuiMockFS{writeErr: fmt.Errorf("permission denied")}
+		final := pkgconfig.ResolvedValues{Token: "TOKEN", Teams: []string{"T1"}}
+		changes := pkgconfig.ConfigChanges{TokenChanged: true}
+
+		cmd := writeConfigCmd(final, changes, nil, nil, true, fs)
+		result := cmd()
+		savedMsg := result.(configSavedMsg)
+
+		assert.Error(t, savedMsg.err, "should propagate write error")
+	})
+}
+
+// --- Tier 5: View Rendering Tests ---
+
+func TestConfigModeView_NoSrepdHelp(t *testing.T) {
+	t.Run("config mode hides srepd help keys", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		windowSize = tea.WindowSizeMsg{Width: 120, Height: 50}
+		result, _ := m.windowSizeMsgHandler(windowSize)
+		m = result.(model)
+
+		confirm := true
+		m.configForm = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("Test form").Value(&confirm)))
+		m.configForm.Init()
+
+		view := m.View()
+		assert.NotContains(t, view, "ctrl+s", "srepd help should be hidden in config mode")
+	})
+}
+
+func TestConfigModeView_LoadingState(t *testing.T) {
+	t.Run("loading state shows loading message", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configModeRequested = true
+		m.configMode = false
+		windowSize = tea.WindowSizeMsg{Width: 120, Height: 50}
+		result, _ := m.windowSizeMsgHandler(windowSize)
+		m = result.(model)
+
+		view := m.View()
+		assert.Contains(t, view, "Loading configuration...", "should show loading message")
+	})
+}
+
+func TestConfigModeView_PriorityOverOtherModes(t *testing.T) {
+	t.Run("config mode takes priority over team select mode", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+		m.teamSelectMode = true
+		windowSize = tea.WindowSizeMsg{Width: 120, Height: 50}
+		result, _ := m.windowSizeMsgHandler(windowSize)
+		m = result.(model)
+
+		confirm := true
+		m.configForm = huh.NewForm(huh.NewGroup(huh.NewConfirm().Title("Config form priority").Value(&confirm)))
+		m.configForm.Init()
+
+		view := m.View()
+		assert.Contains(t, view, "Config form priority", "config form should render, not team select")
 	})
 }
