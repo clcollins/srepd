@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"math"
 	"reflect"
 	"strings"
 
@@ -33,65 +32,43 @@ func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 // and resizes the tui according to the new terminal window size
 func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	windowSize = msg.(tea.WindowSizeMsg)
-
-	horizontalMargins := m.styles.Main.GetHorizontalMargins()
-	horizontalPadding := m.styles.Main.GetHorizontalPadding()
-	horizontalBorders := m.styles.Main.GetHorizontalBorderSize()
-
-	tableHorizontalMargins := m.styles.TableContainer.GetHorizontalMargins()
-	tableHorizontalPadding := m.styles.TableContainer.GetHorizontalPadding()
-	tableHorizontalBorders := m.styles.TableContainer.GetHorizontalBorderSize()
-
-	cellStyle := m.styles.Table.Cell
-	cellHorizontalPadding := cellStyle.GetHorizontalPadding() * 4
-	cellHorizontalMargins := cellStyle.GetHorizontalMargins() * 4
-	cellHorizontalBorders := cellStyle.GetHorizontalBorderSize() * 4
-
-	horizontalScratchWidth := horizontalMargins + horizontalPadding + horizontalBorders
-	tableHorizontalScratchWidth := tableHorizontalMargins + tableHorizontalPadding + tableHorizontalBorders + cellHorizontalPadding + cellHorizontalMargins + cellHorizontalBorders
-
-	tableWidth := windowSize.Width - horizontalScratchWidth - tableHorizontalScratchWidth
-
-	m.help.Width = windowSize.Width - horizontalScratchWidth
-	m.recalculateTableHeight()
-
-	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
+	m.recomputeLayout()
 
 	log.Debug("tui.windowSizeMsgHandler",
-		"window_width", windowSize.Width,
-		"window_height", windowSize.Height,
-		"horizontal_scratch_width", horizontalScratchWidth,
-		"table_horizontal_scratch_width", tableHorizontalScratchWidth,
-		"table_width", tableWidth,
-		"table_height", m.table.Height(),
-		"column_width", columnWidth,
+		"window_width", m.layout.WindowWidth,
+		"window_height", m.layout.WindowHeight,
+		"table_width", m.layout.TableWidth,
+		"table_height", m.layout.TableHeight,
+		"column_width", m.layout.ColumnWidth,
 	)
 
 	m.table.SetColumns([]table.Column{
 		{Title: dot, Width: dotWidth},
 		{Title: "ID", Width: idWidth - dotWidth},
-		{Title: "Summary", Width: columnWidth},
-		{Title: "Service", Width: columnWidth},
+		{Title: "Summary", Width: m.layout.ColumnWidth},
+		{Title: "Service", Width: m.layout.ColumnWidth},
 	})
 
-	tabWindowBorders := m.styles.TabWindow.GetHorizontalBorderSize()
-	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - tabWindowBorders
-	reservedLines := 7
-	m.incidentViewer.Height = windowSize.Height - reservedLines
-	if m.incidentViewer.Height < 10 {
-		m.incidentViewer.Height = 10
-	}
-
-	m.logViewer.Width = m.incidentViewer.Width
-	m.logViewer.Height = m.incidentViewer.Height
+	m.incidentViewer.Width = m.layout.IncidentViewerWidth
+	m.incidentViewer.Height = m.layout.IncidentViewerHeight
+	m.logViewer.Width = m.layout.IncidentViewerWidth
+	m.logViewer.Height = m.layout.IncidentViewerHeight
 
 	if m.configMode && m.configForm != nil {
-		m.configForm.WithWidth(windowSize.Width).WithHeight(windowSize.Height - 4)
+		m.configForm.WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
 		form, cmd := m.configForm.Update(msg)
 		if f, ok := form.(*huh.Form); ok {
 			m.configForm = f
 		}
 		return m, cmd
+	}
+
+	if m.teamSelectMode && m.teamSelectForm != nil {
+		m.teamSelectForm.Update(msg)
+	}
+
+	if m.mergeMode {
+		m.mergeTable.SetHeight(m.layout.TableHeight)
 	}
 
 	if m.viewingIncident {
