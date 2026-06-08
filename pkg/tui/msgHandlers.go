@@ -85,6 +85,15 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.logViewer.Width = m.incidentViewer.Width
 	m.logViewer.Height = m.incidentViewer.Height
 
+	if m.configMode && m.configForm != nil {
+		m.configForm.WithWidth(windowSize.Width).WithHeight(windowSize.Height - 4)
+		form, cmd := m.configForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			m.configForm = f
+		}
+		return m, cmd
+	}
+
 	if m.viewingIncident {
 		return m, func() tea.Msg { return renderIncidentMsg("window resized") }
 	}

@@ -305,177 +305,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		keepCustomDesc := fmt.Sprintf("Current: %s", strings.Join(customDisplayParts, ", "))
 
-		var fetchedTeams []pagerduty.Team
-		submitted := false
-
-		theme := huh.ThemeCharm()
-		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
-		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
-		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
-		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
-		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
-		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
-
-		km := huh.NewDefaultKeyMap()
-		km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "ctrl+q"), key.WithHelp("ctrl+q/ctrl+c", "quit"))
-		km.Input.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
-		km.Input.Next = key.NewBinding(key.WithKeys("enter", "tab"), key.WithHelp("enter", "next"))
-		km.Select.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
-		km.MultiSelect.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
-		km.Note.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
-		km.Confirm.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
-
-		m.configForm = huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("PagerDuty API token").
-					Description(tokenDesc).
-					EchoMode(huh.EchoModePassword).
-					Value(&m.configState.TokenInput).
-					Validate(func(s string) error {
-						token := strings.TrimSpace(s)
-						if token == "" {
-							if msg.existing.Token != "" {
-								return nil
-							}
-							return fmt.Errorf("a PagerDuty API token is required")
-						}
-						client := pd.NewClient(token)
-						_, err := pd.GetCurrentUserTeams(client)
-						if err != nil {
-							return fmt.Errorf("invalid token: %v", err)
-						}
-						return nil
-					}),
-			),
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title("Keep current teams?").
-					Description(keepTeamsDesc).
-					Value(&m.configState.KeepTeams),
-			).WithHideFunc(func() bool { return !msg.kd.HasValidTeams }),
-			huh.NewGroup(
-				huh.NewMultiSelect[string]().
-					Title("Select your PagerDuty teams").
-					Description("Select the team(s) whose incidents you want to monitor. Most users only need one.").
-					OptionsFunc(func() []huh.Option[string] {
-						token := strings.TrimSpace(m.configState.TokenInput)
-						if token == "" {
-							token = msg.existing.Token
-						}
-						if token == "" {
-							return []huh.Option[string]{
-								huh.NewOption("(enter a token first)", ""),
-							}
-						}
-						client := pd.NewClient(token)
-						teams, err := pd.GetCurrentUserTeams(client)
-						if err != nil {
-							return []huh.Option[string]{
-								huh.NewOption(fmt.Sprintf("Error: %v", err), ""),
-							}
-						}
-						fetchedTeams = teams
-						var opts []huh.Option[string]
-						for _, team := range teams {
-							opt := huh.NewOption(
-								fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID,
-							)
-							if existingTeamSet[team.ID] {
-								opt = opt.Selected(true)
-							}
-							opts = append(opts, opt)
-						}
-						return opts
-					}, &m.configState.TokenInput).
-					Value(&m.configState.SelectedTeams).
-					Validate(func(s []string) error {
-						if !submitted {
-							submitted = true
-							return nil
-						}
-						if len(s) == 0 {
-							return fmt.Errorf("at least one team is required")
-						}
-						return nil
-					}),
-			).WithHideFunc(func() bool { return m.configState.KeepTeams }),
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title("Keep current silent escalation policy?").
-					Description(keepSilentDesc).
-					Value(&m.configState.KeepSilent),
-			).WithHideFunc(func() bool { return !msg.kd.HasSilent }),
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Default silent escalation policy").
-					Description(
-						"When you silence an incident, it gets reassigned to this policy —\n"+
-							"one that routes only to bot users, not on-call humans.\n"+
-							"Find the ID at People → Escalation Policies (ID is in the URL,\n"+
-							"e.g., PXXXXXX). Look for a policy like \"Silent Test\".\n"+
-							"Leave blank to configure later.",
-					).
-					Value(&m.configState.SilentPolicy),
-			).WithHideFunc(func() bool { return m.configState.KeepSilent }),
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title("Keep current custom service-to-policy mappings?").
-					Description(keepCustomDesc).
-					Value(&m.configState.KeepCustom),
-			).WithHideFunc(func() bool { return !msg.kd.HasCustom }),
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Custom service-to-policy mappings").
-					Description(
-						"Some services need a different silent policy than the default.\n"+
-							"For example, Deadmanssnitch alerts might route to a separate\n"+
-							"silent policy. Find service IDs in Services → Service Directory\n"+
-							"(ID in URL). Enter as SERVICE_ID:POLICY_ID separated by commas.\n"+
-							"Leave blank to skip.",
-					).
-					Value(&m.configState.CustomInput),
-			).WithHideFunc(func() bool { return m.configState.KeepCustom }),
-			huh.NewGroup(
-				huh.NewNote().
-					Title("Configuration summary").
-					DescriptionFunc(func() string {
-						tmpFinal, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
-							TokenInput:          m.configState.TokenInput,
-							SelectedTeams:       m.configState.SelectedTeams,
-							SilentPolicyID:      m.configState.SilentPolicy,
-							CustomMappingsInput: m.configState.CustomInput,
-							KeepTeams:           m.configState.KeepTeams,
-							KeepSilent:          m.configState.KeepSilent,
-							KeepCustom:          m.configState.KeepCustom,
-						})
-						tmpNames := make(map[string]string)
-						for k, v := range m.configTeamNames {
-							tmpNames[k] = v
-						}
-						for _, team := range fetchedTeams {
-							tmpNames[team.ID] = team.Name
-						}
-						var tmpChanges pkgconfig.ConfigChanges
-						if m.configIsNewFile {
-							tmpChanges = pkgconfig.DetectChangesForNewFile(tmpFinal)
-						} else {
-							tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configState.TokenInput))
-						}
-						return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames, m.configPolicyNames)
-					}, &m.configState.CustomInput),
-				huh.NewConfirm().
-					Title("Save changes?").
-					Value(&m.configState.Confirm),
-			),
-		).WithTheme(theme).WithKeyMap(km).WithWidth(windowSize.Width).WithHeight(windowSize.Height - 4)
+		m.configForm = m.buildConfigForm(msg, tokenDesc, keepTeamsDesc, keepSilentDesc, keepCustomDesc, existingTeamSet)
 		m.configMode = true
 		return m, m.configForm.Init()
 
 	case configCompletedMsg:
-		return m, writeConfigCmd(msg.final, msg.changes, msg.teamNames, msg.customPolicies, msg.isNewFile)
+		fs := m.configFS
+		if fs == nil {
+			fs = realFS{}
+		}
+		return m, writeConfigCmd(msg.final, msg.changes, msg.teamNames, msg.customPolicies, msg.isNewFile, fs)
 
 	case configSavedMsg:
 		m.configMode = false
@@ -1465,4 +1304,178 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, tea.Batch(cmds...)
 
+}
+
+func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDesc, keepSilentDesc, keepCustomDesc string, existingTeamSet map[string]bool) *huh.Form {
+	var fetchedTeams []pagerduty.Team
+	submitted := false
+
+	theme := huh.ThemeCharm()
+	theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
+	theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
+	theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
+	theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
+	theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
+	theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
+	theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
+	theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+
+	km := huh.NewDefaultKeyMap()
+	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "ctrl+q"), key.WithHelp("ctrl+q/ctrl+c", "quit"))
+	km.Input.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+	km.Input.Next = key.NewBinding(key.WithKeys("enter", "tab"), key.WithHelp("enter", "next"))
+	km.Select.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+	km.MultiSelect.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+	km.Note.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+	km.Confirm.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
+
+	clientFactory := m.pdClientFactory
+	if clientFactory == nil {
+		clientFactory = pd.NewClient
+	}
+
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("PagerDuty API token").
+				Description(tokenDesc).
+				EchoMode(huh.EchoModePassword).
+				Value(&m.configState.TokenInput).
+				Validate(func(s string) error {
+					token := strings.TrimSpace(s)
+					if token == "" {
+						if msg.existing.Token != "" {
+							return nil
+						}
+						return fmt.Errorf("a PagerDuty API token is required")
+					}
+					client := clientFactory(token)
+					_, err := pd.GetCurrentUserTeams(client)
+					if err != nil {
+						return fmt.Errorf("invalid token: %v", err)
+					}
+					return nil
+				}),
+		),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Keep current teams?").
+				Description(keepTeamsDesc).
+				Value(&m.configState.KeepTeams),
+		).WithHideFunc(func() bool { return !msg.kd.HasValidTeams }),
+		huh.NewGroup(
+			huh.NewMultiSelect[string]().
+				Title("Select your PagerDuty teams").
+				Description("Select the team(s) whose incidents you want to monitor. Most users only need one.").
+				OptionsFunc(func() []huh.Option[string] {
+					token := strings.TrimSpace(m.configState.TokenInput)
+					if token == "" {
+						token = msg.existing.Token
+					}
+					if token == "" {
+						return []huh.Option[string]{
+							huh.NewOption("(enter a token first)", ""),
+						}
+					}
+					client := clientFactory(token)
+					teams, err := pd.GetCurrentUserTeams(client)
+					if err != nil {
+						return []huh.Option[string]{
+							huh.NewOption(fmt.Sprintf("Error: %v", err), ""),
+						}
+					}
+					fetchedTeams = teams
+					var opts []huh.Option[string]
+					for _, team := range teams {
+						opt := huh.NewOption(
+							fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID,
+						)
+						if existingTeamSet[team.ID] {
+							opt = opt.Selected(true)
+						}
+						opts = append(opts, opt)
+					}
+					return opts
+				}, &m.configState.TokenInput).
+				Value(&m.configState.SelectedTeams).
+				Validate(func(s []string) error {
+					if !submitted {
+						submitted = true
+						return nil
+					}
+					if len(s) == 0 {
+						return fmt.Errorf("at least one team is required")
+					}
+					return nil
+				}),
+		).WithHideFunc(func() bool { return m.configState.KeepTeams }),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Keep current silent escalation policy?").
+				Description(keepSilentDesc).
+				Value(&m.configState.KeepSilent),
+		).WithHideFunc(func() bool { return !msg.kd.HasSilent }),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Default silent escalation policy").
+				Description(
+					"When you silence an incident, it gets reassigned to this policy —\n"+
+						"one that routes only to bot users, not on-call humans.\n"+
+						"Find the ID at People → Escalation Policies (ID is in the URL,\n"+
+						"e.g., PXXXXXX). Look for a policy like \"Silent Test\".\n"+
+						"Leave blank to configure later.",
+				).
+				Value(&m.configState.SilentPolicy),
+		).WithHideFunc(func() bool { return m.configState.KeepSilent }),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Keep current custom service-to-policy mappings?").
+				Description(keepCustomDesc).
+				Value(&m.configState.KeepCustom),
+		).WithHideFunc(func() bool { return !msg.kd.HasCustom }),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Custom service-to-policy mappings").
+				Description(
+					"Some services need a different silent policy than the default.\n"+
+						"For example, Deadmanssnitch alerts might route to a separate\n"+
+						"silent policy. Find service IDs in Services → Service Directory\n"+
+						"(ID in URL). Enter as SERVICE_ID:POLICY_ID separated by commas.\n"+
+						"Leave blank to skip.",
+				).
+				Value(&m.configState.CustomInput),
+		).WithHideFunc(func() bool { return m.configState.KeepCustom }),
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Configuration summary").
+				DescriptionFunc(func() string {
+					tmpFinal, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
+						TokenInput:          m.configState.TokenInput,
+						SelectedTeams:       m.configState.SelectedTeams,
+						SilentPolicyID:      m.configState.SilentPolicy,
+						CustomMappingsInput: m.configState.CustomInput,
+						KeepTeams:           m.configState.KeepTeams,
+						KeepSilent:          m.configState.KeepSilent,
+						KeepCustom:          m.configState.KeepCustom,
+					})
+					tmpNames := make(map[string]string)
+					for k, v := range m.configTeamNames {
+						tmpNames[k] = v
+					}
+					for _, team := range fetchedTeams {
+						tmpNames[team.ID] = team.Name
+					}
+					var tmpChanges pkgconfig.ConfigChanges
+					if m.configIsNewFile {
+						tmpChanges = pkgconfig.DetectChangesForNewFile(tmpFinal)
+					} else {
+						tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configState.TokenInput))
+					}
+					return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames, m.configPolicyNames)
+				}, &m.configState.CustomInput),
+			huh.NewConfirm().
+				Title("Save changes?").
+				Value(&m.configState.Confirm),
+		),
+	).WithTheme(theme).WithKeyMap(km).WithWidth(windowSize.Width).WithHeight(windowSize.Height - 4)
 }
