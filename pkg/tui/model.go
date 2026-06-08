@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"charm.land/glamour/v2"
@@ -508,6 +509,38 @@ func (m *model) setStatus(msg string) {
 
 func (m *model) toggleHelp() {
 	m.help.ShowAll = !m.help.ShowAll
+	m.recalculateTableHeight()
+}
+
+func (m *model) recalculateTableHeight() {
+	var helpKeyMap help.KeyMap
+	if m.chordHelpActive {
+		helpKeyMap = chordKeymap{prefix: m.chordPrefix}
+	} else if m.input.Focused() {
+		helpKeyMap = inputModeKeyMap
+	} else {
+		helpKeyMap = defaultKeyMap
+	}
+
+	helpView := m.help.View(helpKeyMap)
+	helpLines := strings.Count(helpView, "\n") + 1
+
+	// header (2) + footer (1) + footer newline (1) + input (1) + bottom status (1)
+	fixedLines := 6
+
+	mainOverhead := m.styles.Main.GetVerticalMargins() +
+		m.styles.Main.GetVerticalPadding() +
+		m.styles.Main.GetVerticalBorderSize()
+	containerOverhead := m.styles.TableContainer.GetVerticalMargins() +
+		m.styles.TableContainer.GetVerticalPadding() +
+		m.styles.TableContainer.GetVerticalBorderSize()
+
+	tableHeight := windowSize.Height - mainOverhead - containerOverhead - fixedLines - helpLines
+	if tableHeight < 4 {
+		tableHeight = 4
+	}
+
+	m.table.SetHeight(tableHeight)
 }
 
 // flashNotification sets a status message that auto-dismisses after 4 seconds.
