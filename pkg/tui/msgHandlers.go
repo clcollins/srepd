@@ -33,79 +33,37 @@ func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 // and resizes the tui according to the new terminal window size
 func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	windowSize = msg.(tea.WindowSizeMsg)
-	rowCount := func(m model) int {
-		// This func sets the table height to a reasonable size
-		// in the case there are no incidents
-		if len(m.table.Rows()) > 0 {
-			return len(m.table.Rows())
-		}
-		return 10
-	}(m)
 
-	verticalMargins := m.styles.Main.GetVerticalMargins()
 	horizontalMargins := m.styles.Main.GetHorizontalMargins()
-	verticalPadding := m.styles.Main.GetVerticalPadding()
 	horizontalPadding := m.styles.Main.GetHorizontalPadding()
-	verticalBorders := m.styles.Main.GetVerticalBorderSize()
 	horizontalBorders := m.styles.Main.GetHorizontalBorderSize()
 
-	tableVerticalMargins := m.styles.TableContainer.GetVerticalMargins()
 	tableHorizontalMargins := m.styles.TableContainer.GetHorizontalMargins()
-	tableVerticalPadding := m.styles.TableContainer.GetVerticalPadding()
 	tableHorizontalPadding := m.styles.TableContainer.GetHorizontalPadding()
-	tableVerticalBorders := m.styles.TableContainer.GetVerticalBorderSize()
 	tableHorizontalBorders := m.styles.TableContainer.GetHorizontalBorderSize()
 
 	cellStyle := m.styles.Table.Cell
-	cellVerticalPadding := cellStyle.GetVerticalPadding() * rowCount
 	cellHorizontalPadding := cellStyle.GetHorizontalPadding() * 4
-	cellVerticalMargins := cellStyle.GetVerticalMargins() * rowCount
 	cellHorizontalMargins := cellStyle.GetHorizontalMargins() * 4
-	cellVerticalBorders := cellStyle.GetVerticalBorderSize() * rowCount
 	cellHorizontalBorders := cellStyle.GetHorizontalBorderSize() * 4
 
-	estimatedExtraLinesFromComponents := 7 // TODO: figure out how to calculate this
-
 	horizontalScratchWidth := horizontalMargins + horizontalPadding + horizontalBorders
-	verticalScratchWidth := verticalMargins + verticalPadding + verticalBorders
-
-	// The incident viewer viewport has no border/padding/margin of its own;
-	// all visual framing comes from tableContainerStyle wrapping the viewport.
-	incidentHorizontalScratchWidth := 0
-	incidentVerticalScratchWidth := 0
-
 	tableHorizontalScratchWidth := tableHorizontalMargins + tableHorizontalPadding + tableHorizontalBorders + cellHorizontalPadding + cellHorizontalMargins + cellHorizontalBorders
-	tableVerticalScratchWidth := tableVerticalMargins + tableVerticalPadding + tableVerticalBorders + cellVerticalPadding + cellVerticalMargins + cellVerticalBorders
 
 	tableWidth := windowSize.Width - horizontalScratchWidth - tableHorizontalScratchWidth
-	// Reserve lines for input field (1 line)
-	// Additional spacing for help (needs ~12 lines when expanded with 10-item columns)
-	inputReservedLines := 1
-	additionalSpacing := 15
-	tableHeight := windowSize.Height - verticalScratchWidth - tableVerticalScratchWidth - rowCount - estimatedExtraLinesFromComponents - inputReservedLines - additionalSpacing
-	// table.SetHeight subtracts the rendered header height (2 lines: text + bottom border)
-	// from the value we pass, so the minimum must exceed the header height to keep the
-	// internal viewport height positive and avoid a panic in viewport.visibleLines
-	if tableHeight < 4 {
-		tableHeight = 4
-	}
 
-	m.table.SetHeight(tableHeight)
+	m.help.Width = windowSize.Width - horizontalScratchWidth
+	m.recalculateTableHeight()
 
-	// converting to floats, rounding up and converting back to int handles layout issues arising from odd numbers
 	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
 
 	log.Debug("tui.windowSizeMsgHandler",
 		"window_width", windowSize.Width,
 		"window_height", windowSize.Height,
-		"table_horizontal_scratch_width", tableHorizontalScratchWidth,
-		"table_vertical_scratch_width", tableVerticalScratchWidth,
-		"incident_horizontal_scratch_width", incidentHorizontalScratchWidth,
-		"incident_vertical_scratch_width", incidentVerticalScratchWidth,
 		"horizontal_scratch_width", horizontalScratchWidth,
-		"vertical_scratch_width", verticalScratchWidth,
+		"table_horizontal_scratch_width", tableHorizontalScratchWidth,
 		"table_width", tableWidth,
-		"table_height", tableHeight,
+		"table_height", m.table.Height(),
 		"column_width", columnWidth,
 	)
 
@@ -117,19 +75,15 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	})
 
 	tabWindowBorders := m.styles.TabWindow.GetHorizontalBorderSize()
-	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - incidentHorizontalScratchWidth - tabWindowBorders
-	// Account for header (2 lines), footer (1 line), help (~2 lines), bottom status (1 line), and spacing
-	reservedLines := 7 // header + footer + help + bottom status + borders/padding
-	m.incidentViewer.Height = windowSize.Height - verticalScratchWidth - incidentVerticalScratchWidth - reservedLines
+	m.incidentViewer.Width = windowSize.Width - horizontalScratchWidth - tabWindowBorders
+	reservedLines := 7
+	m.incidentViewer.Height = windowSize.Height - reservedLines
 	if m.incidentViewer.Height < 10 {
-		m.incidentViewer.Height = 10 // Minimum height
+		m.incidentViewer.Height = 10
 	}
 
-	// Log viewer uses the same dimensions as the incident viewer
 	m.logViewer.Width = m.incidentViewer.Width
 	m.logViewer.Height = m.incidentViewer.Height
-
-	m.help.Width = windowSize.Width - horizontalScratchWidth
 
 	if m.viewingIncident {
 		return m, func() tea.Msg { return renderIncidentMsg("window resized") }

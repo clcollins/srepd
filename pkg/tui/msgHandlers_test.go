@@ -807,6 +807,89 @@ func TestErrorMode_EscapeClearsError(t *testing.T) {
 	})
 }
 
+func TestRecalculateTableHeight_CompactHelp(t *testing.T) {
+	t.Run("24-line terminal with compact help shows usable table height", func(t *testing.T) {
+		m := createTestModel()
+		m.help = newHelp()
+		m.help.ShowAll = false
+		m.help.Width = 80
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
+
+		m.recalculateTableHeight()
+
+		assert.GreaterOrEqual(t, m.table.Height(), 10,
+			"compact help on 24-line terminal should leave room for data rows")
+	})
+}
+
+func TestRecalculateTableHeight_ExpandedHelp(t *testing.T) {
+	t.Run("24-line terminal with expanded help shows smaller table", func(t *testing.T) {
+		m := createTestModel()
+		m.help = newHelp()
+		m.help.ShowAll = true
+		m.help.Width = 80
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
+
+		m.recalculateTableHeight()
+
+		assert.GreaterOrEqual(t, m.table.Height(), 4,
+			"expanded help on 24-line terminal should still show some rows")
+	})
+}
+
+func TestRecalculateTableHeight_CompactTallerThanExpanded(t *testing.T) {
+	t.Run("compact help produces taller table than expanded help", func(t *testing.T) {
+		m := createTestModel()
+		m.help = newHelp()
+		m.help.Width = 80
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
+
+		m.help.ShowAll = false
+		m.recalculateTableHeight()
+		compactHeight := m.table.Height()
+
+		m.help.ShowAll = true
+		m.recalculateTableHeight()
+		expandedHeight := m.table.Height()
+
+		assert.Greater(t, compactHeight, expandedHeight,
+			"compact help should yield taller table than expanded help")
+	})
+}
+
+func TestToggleHelp_RecalculatesTableHeight(t *testing.T) {
+	t.Run("toggling help changes table height", func(t *testing.T) {
+		m := createTestModel()
+		m.help = newHelp()
+		m.help.ShowAll = false
+		m.help.Width = 80
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
+
+		m.recalculateTableHeight()
+		compactHeight := m.table.Height()
+
+		m.toggleHelp()
+		expandedHeight := m.table.Height()
+
+		assert.Greater(t, compactHeight, expandedHeight,
+			"toggling to expanded help should shrink the table")
+	})
+}
+
+func TestRecalculateTableHeight_VerySmallTerminal(t *testing.T) {
+	t.Run("very small terminal keeps viewport height positive", func(t *testing.T) {
+		m := createTestModel()
+		m.help = newHelp()
+		m.help.Width = 80
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 10}
+
+		m.recalculateTableHeight()
+
+		assert.GreaterOrEqual(t, m.table.Height(), 1,
+			"viewport height must remain positive even on very small terminals")
+	})
+}
+
 func TestErrorMode_NonEscapeKeysDoNotClearError(t *testing.T) {
 	t.Run("non-Escape keys do not clear the error", func(t *testing.T) {
 		m := createTestModel()
