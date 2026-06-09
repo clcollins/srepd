@@ -33,8 +33,7 @@ func TestClaudePrompt_DispatchesCommand(t *testing.T) {
 	result, cmd := switchInputFocusMode(m, enterMsg)
 	updatedModel := result.(model)
 
-	// Input stays focused for follow-up queries, value is cleared
-	assert.True(t, updatedModel.input.Focused(), "Input should stay focused after :agent dispatch")
+	assert.False(t, updatedModel.input.Focused(), "Input should blur after :agent dispatch")
 	assert.Equal(t, "", updatedModel.input.Value(), "Input value should be cleared after dispatch")
 
 	// A command should be returned
@@ -584,7 +583,7 @@ func TestInputMode_AgentCommand_DispatchesClaude(t *testing.T) {
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.True(t, updated.input.Focused(), "input stays focused after :agent dispatch")
+	assert.False(t, updated.input.Focused(), "input should blur after :agent dispatch")
 	assert.NotNil(t, cmd, ":agent command must dispatch a command")
 
 	msg := cmd()

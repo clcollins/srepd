@@ -718,13 +718,16 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			m.input.Reset()
+			m.input.Blur()
+			m.table.Focus()
+
 			if isAgentCommand(prompt) {
 				query := parseAgentQuery(prompt)
 				if query == "" {
 					m.setStatus("usage: :agent <query>")
 					return m, nil
 				}
-				m.input.Reset()
 				return m, func() tea.Msg {
 					return claudePromptMsg{prompt: query}
 				}
@@ -736,15 +739,10 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.setStatus("usage: :watcher <query>")
 					return m, nil
 				}
-				m.input.Reset()
 				return m, func() tea.Msg {
 					return watcherPromptMsg{prompt: query}
 				}
 			}
-
-			m.input.Reset()
-			m.input.Blur()
-			m.table.Focus()
 
 			if isFlagCommand(prompt) {
 				log.Debug("switchInputFocusMode", "msg", "dispatching flag command", "prompt", prompt)
