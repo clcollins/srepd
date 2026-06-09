@@ -36,6 +36,7 @@ func createTestModel() model {
 		watcherMarker:   emojiWatcherMarker,
 		agentMarker:     emojiAgentMarker,
 		flagMarker:      emojiFlagMarker,
+		watcherDedup:    newWatcherDedup(5 * time.Minute),
 	}
 }
 

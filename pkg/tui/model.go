@@ -133,6 +133,7 @@ type model struct {
 	watcherBuffer   *watcherBuffer
 	watcherMarker   string
 	agentMarker     string
+	watcherDedup    *watcherDedup
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
@@ -280,6 +281,7 @@ func InitialModel(
 	m.flagMarker = mk.flag
 	m.watcherMarker = mk.watcher
 	m.agentMarker = mk.agent
+	m.watcherDedup = newWatcherDedup(5 * time.Minute)
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
@@ -380,6 +382,7 @@ func InitialModelWithConfig(
 	m.flagMarker = mk2.flag
 	m.watcherMarker = mk2.watcher
 	m.agentMarker = mk2.agent
+	m.watcherDedup = newWatcherDedup(5 * time.Minute)
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{

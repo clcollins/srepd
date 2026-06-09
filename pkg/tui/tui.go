@@ -379,6 +379,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.condition.ID = m.flagNextID
 		m.flagConditions = append(m.flagConditions, msg.condition)
 		m.rebuildFlagMatchCache()
+		m.runDetectors()
 		return m, m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
 
 	case removeFlagConditionMsg:
@@ -389,6 +390,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.rebuildFlagMatchCache()
+		m.runDetectors()
 		return m, m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
 
 	case clearFlagConditionsMsg:
@@ -852,6 +854,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+
+		m.runDetectors()
 
 	case parseTemplateForNoteMsg:
 		if m.selectedIncident == nil {

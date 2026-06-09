@@ -2,7 +2,9 @@ package tui
 
 import (
 	"testing"
+	"time"
 
+	"github.com/PagerDuty/go-pagerduty"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -119,4 +121,134 @@ func TestResolveMarkers_NoEmoji(t *testing.T) {
 	assert.Equal(t, noEmojiFlagMarker, mk.flag)
 	assert.Equal(t, noEmojiWatcherMarker, mk.watcher)
 	assert.Equal(t, noEmojiAgentMarker, mk.agent)
+}
+
+func makeIncident(id, service, urgency string) pagerduty.Incident {
+	return pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: id},
+		Service:   pagerduty.APIObject{Summary: service},
+		Urgency:   urgency,
+		Status:    "triggered",
+	}
+}
+
+func TestDetectServiceStorm(t *testing.T) {
+	t.Run("detects 3+ incidents on same service", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "osd-cluster-a", "high"),
+			makeIncident("P2", "osd-cluster-a", "high"),
+			makeIncident("P3", "osd-cluster-a", "low"),
+		}
+		obs := detectServiceStorm(incidents)
+		assert.Len(t, obs, 1)
+		assert.Contains(t, obs[0].Summary, "osd-cluster-a")
+		assert.Contains(t, obs[0].Summary, "3")
+	})
+
+	t.Run("no storm with 2 incidents", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "svc-a", "high"),
+			makeIncident("P2", "svc-a", "high"),
+		}
+		obs := detectServiceStorm(incidents)
+		assert.Empty(t, obs)
+	})
+
+	t.Run("multiple services each below threshold", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "svc-a", "high"),
+			makeIncident("P2", "svc-b", "high"),
+			makeIncident("P3", "svc-c", "high"),
+		}
+		obs := detectServiceStorm(incidents)
+		assert.Empty(t, obs)
+	})
+}
+
+func TestDetectClusterStorm(t *testing.T) {
+	t.Run("detects 2+ incidents on same cluster", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "svc-a", "high"),
+			makeIncident("P2", "svc-b", "high"),
+		}
+		clusterMap := map[string][]string{
+			"P1": {"cluster-abc"},
+			"P2": {"cluster-abc"},
+		}
+		obs := detectClusterStorm(incidents, clusterMap)
+		assert.Len(t, obs, 1)
+		assert.Contains(t, obs[0].Summary, "cluster-abc")
+	})
+
+	t.Run("no storm with different clusters", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "svc-a", "high"),
+			makeIncident("P2", "svc-b", "high"),
+		}
+		clusterMap := map[string][]string{
+			"P1": {"cluster-abc"},
+			"P2": {"cluster-def"},
+		}
+		obs := detectClusterStorm(incidents, clusterMap)
+		assert.Empty(t, obs)
+	})
+
+	t.Run("nil cluster map returns nil", func(t *testing.T) {
+		incidents := []pagerduty.Incident{makeIncident("P1", "svc", "high")}
+		obs := detectClusterStorm(incidents, nil)
+		assert.Nil(t, obs)
+	})
+}
+
+func TestDetectUrgencyShift(t *testing.T) {
+	t.Run("detects 3+ high urgency incidents", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "svc-a", "high"),
+			makeIncident("P2", "svc-b", "high"),
+			makeIncident("P3", "svc-c", "high"),
+		}
+		obs := detectUrgencyShift(incidents)
+		assert.Len(t, obs, 1)
+		assert.Contains(t, obs[0].Summary, "3/3")
+	})
+
+	t.Run("no alert with fewer than 3 high", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "svc-a", "high"),
+			makeIncident("P2", "svc-b", "low"),
+		}
+		obs := detectUrgencyShift(incidents)
+		assert.Nil(t, obs)
+	})
+}
+
+func TestWatcherDedup(t *testing.T) {
+	t.Run("first observation is new", func(t *testing.T) {
+		d := newWatcherDedup(5 * time.Minute)
+		assert.True(t, d.IsNew("something happened"))
+	})
+
+	t.Run("duplicate within cooldown is not new", func(t *testing.T) {
+		d := newWatcherDedup(5 * time.Minute)
+		d.IsNew("something happened")
+		assert.False(t, d.IsNew("something happened"))
+	})
+
+	t.Run("different observation is new", func(t *testing.T) {
+		d := newWatcherDedup(5 * time.Minute)
+		d.IsNew("first thing")
+		assert.True(t, d.IsNew("second thing"))
+	})
+}
+
+func TestDetectAll(t *testing.T) {
+	t.Run("returns combined observations from all detectors", func(t *testing.T) {
+		incidents := []pagerduty.Incident{
+			makeIncident("P1", "svc-a", "high"),
+			makeIncident("P2", "svc-a", "high"),
+			makeIncident("P3", "svc-a", "high"),
+		}
+		obs := detectAll(incidents, nil)
+		assert.GreaterOrEqual(t, len(obs), 2)
+	})
 }
