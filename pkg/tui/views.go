@@ -957,10 +957,14 @@ func (m model) renderWatcherStatus() string {
 		}
 	}
 
+	analyzingLabel := "analyzing..."
+	spinnerWidth := lipgloss.Width(m.spinner.View()) + 1
 	if m.claudeQuerying || m.watcherAnalyzing {
-		parts = append(parts, m.spinner.View()+" analyzing...")
+		bold := lipgloss.NewStyle().Bold(true)
+		parts = append(parts, m.spinner.View()+" "+bold.Render(analyzingLabel))
 	} else {
-		parts = append(parts, "idle")
+		padded := fmt.Sprintf("%-*s", len(analyzingLabel)+spinnerWidth, "idle")
+		parts = append(parts, padded)
 	}
 
 	return strings.Join(parts, " | ")
