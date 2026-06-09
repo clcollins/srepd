@@ -228,7 +228,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Options(options...).
 					Value(&m.teamSelectIDs),
 			),
-		).WithTheme(theme).WithHeight(windowSize.Height)
+		).WithTheme(theme).WithHeight(m.layout.TeamSelectFormHeight)
 		m.teamSelectMode = true
 		return m, m.teamSelectForm.Init()
 
@@ -821,8 +821,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clusterSelectPrompt = "Select cluster to log into (Enter=select, Esc=cancel):"
 			clusterServices := mapClusterServices(m.selectedIncidentAlerts)
 			cols := []table.Column{
-				{Title: "Cluster ID", Width: 40},
-				{Title: "Service", Width: 50},
+				{Title: "Cluster ID", Width: m.layout.ClusterSelectClusterIDWidth},
+				{Title: "Service", Width: m.layout.ClusterSelectServiceWidth},
 			}
 			var rows []table.Row
 			for _, c := range clusters {
@@ -1477,5 +1477,5 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				Title("Save changes?").
 				Value(&m.configState.Confirm),
 		),
-	).WithTheme(theme).WithKeyMap(km).WithWidth(windowSize.Width).WithHeight(windowSize.Height - 4)
+	).WithTheme(theme).WithKeyMap(km).WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
 }

@@ -62,7 +62,7 @@ func resolveChord(key string) *chordAction {
 func chordShowHelp(m model) (tea.Model, tea.Cmd) {
 	m.chordHelpActive = true
 	m.help.ShowAll = true
-	m.recalculateTableHeight()
+	m.recomputeLayout()
 	return m, nil
 }
 

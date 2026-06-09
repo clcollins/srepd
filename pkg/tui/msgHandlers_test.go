@@ -815,7 +815,7 @@ func TestRecalculateTableHeight_CompactHelp(t *testing.T) {
 		m.help.Width = 80
 		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
 
-		m.recalculateTableHeight()
+		m.recomputeLayout()
 
 		assert.GreaterOrEqual(t, m.table.Height(), 10,
 			"compact help on 24-line terminal should leave room for data rows")
@@ -830,7 +830,7 @@ func TestRecalculateTableHeight_ExpandedHelp(t *testing.T) {
 		m.help.Width = 80
 		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
 
-		m.recalculateTableHeight()
+		m.recomputeLayout()
 
 		assert.GreaterOrEqual(t, m.table.Height(), 4,
 			"expanded help on 24-line terminal should still show some rows")
@@ -845,11 +845,11 @@ func TestRecalculateTableHeight_CompactTallerThanExpanded(t *testing.T) {
 		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
 
 		m.help.ShowAll = false
-		m.recalculateTableHeight()
+		m.recomputeLayout()
 		compactHeight := m.table.Height()
 
 		m.help.ShowAll = true
-		m.recalculateTableHeight()
+		m.recomputeLayout()
 		expandedHeight := m.table.Height()
 
 		assert.Greater(t, compactHeight, expandedHeight,
@@ -865,7 +865,7 @@ func TestToggleHelp_RecalculatesTableHeight(t *testing.T) {
 		m.help.Width = 80
 		windowSize = tea.WindowSizeMsg{Width: 80, Height: 24}
 
-		m.recalculateTableHeight()
+		m.recomputeLayout()
 		compactHeight := m.table.Height()
 
 		m.toggleHelp()
@@ -883,7 +883,7 @@ func TestRecalculateTableHeight_VerySmallTerminal(t *testing.T) {
 		m.help.Width = 80
 		windowSize = tea.WindowSizeMsg{Width: 80, Height: 10}
 
-		m.recalculateTableHeight()
+		m.recomputeLayout()
 
 		assert.GreaterOrEqual(t, m.table.Height(), 1,
 			"viewport height must remain positive even on very small terminals")
