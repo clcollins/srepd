@@ -90,14 +90,27 @@ func agentQuery(agentCLICommand string, prompt string, incident *pagerduty.Incid
 		cmd.Stdin = strings.NewReader(claudeSystemPrompt + "\n\n" + prompt)
 		cmd.Env = append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
 
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+
 		log.Debug("tui.agentQuery()", "command", agentCLICommand, "prompt", prompt)
 
 		output, err := cmd.Output()
 		if err != nil {
+			stderrStr := strings.TrimSpace(stderr.String())
+			if stderrStr != "" {
+				log.Warn("tui.agentQuery()", "stderr", stderrStr)
+			}
 			if ctx.Err() == context.DeadlineExceeded {
 				return claudeResponseMsg{
 					response: "",
 					err:      fmt.Errorf("query timed out after %s", claudeTimeout),
+				}
+			}
+			if stderrStr != "" {
+				return claudeResponseMsg{
+					response: "",
+					err:      fmt.Errorf("agent error: %w: %s", err, stderrStr),
 				}
 			}
 			return claudeResponseMsg{
