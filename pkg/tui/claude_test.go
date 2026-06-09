@@ -319,7 +319,7 @@ func TestDefaultLookPath_NoPanic(t *testing.T) {
 }
 
 func TestAgentQuery_EmptyCommand(t *testing.T) {
-	cmd := agentQuery("", "test prompt", nil, nil)
+	cmd := agentQuery("", "test prompt", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -328,7 +328,7 @@ func TestAgentQuery_EmptyCommand(t *testing.T) {
 }
 
 func TestAgentQuery_CommandParsing(t *testing.T) {
-	cmd := agentQuery("echo hello world", "ignored", nil, nil)
+	cmd := agentQuery("echo hello world", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -337,7 +337,7 @@ func TestAgentQuery_CommandParsing(t *testing.T) {
 }
 
 func TestAgentQuery_MultiWordCommand(t *testing.T) {
-	cmd := agentQuery("echo -n test", "ignored", nil, nil)
+	cmd := agentQuery("echo -n test", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -346,7 +346,7 @@ func TestAgentQuery_MultiWordCommand(t *testing.T) {
 }
 
 func TestAgentQuery_CommandNotFound(t *testing.T) {
-	cmd := agentQuery("nonexistent-binary-99999 --flag", "test", nil, nil)
+	cmd := agentQuery("nonexistent-binary-99999 --flag", "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -359,7 +359,7 @@ func TestAgentQuery_StderrCaptured(t *testing.T) {
 	err := os.WriteFile(script, []byte("#!/bin/sh\necho oops >&2\nexit 1\n"), 0755)
 	assert.NoError(t, err)
 
-	cmd := agentQuery(script, "test", nil, nil)
+	cmd := agentQuery(script, "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -380,7 +380,7 @@ func TestAgentQuery_PassesEnvVars(t *testing.T) {
 		Service:   pagerduty.APIObject{Summary: "svc"},
 	}
 
-	cmd := agentQuery(script, "test", incident, nil)
+	cmd := agentQuery(script, "test", "", incident, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -389,7 +389,7 @@ func TestAgentQuery_PassesEnvVars(t *testing.T) {
 }
 
 func TestAgentQuery_PipesStdin(t *testing.T) {
-	cmd := agentQuery("cat", "user question here", nil, nil)
+	cmd := agentQuery("cat", "user question here", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)

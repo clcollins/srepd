@@ -76,7 +76,7 @@ func buildClaudeEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inciden
 // agentQuery dispatches a prompt to the configured CLI agent and returns the
 // response. The command is parsed from the agentCLICommand config string.
 // The prompt is piped via stdin for safety.
-func agentQuery(agentCLICommand string, prompt string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
+func agentQuery(agentCLICommand string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
 		defer cancel()
@@ -86,8 +86,13 @@ func agentQuery(agentCLICommand string, prompt string, incident *pagerduty.Incid
 			return claudeResponseMsg{err: fmt.Errorf("agent_cli_command is empty")}
 		}
 
+		fullPrompt := claudeSystemPrompt + "\n\n" + prompt
+		if incidentContext != "" {
+			fullPrompt += "\n\nContext:\n" + incidentContext
+		}
+
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.Stdin = strings.NewReader(claudeSystemPrompt + "\n\n" + prompt)
+		cmd.Stdin = strings.NewReader(fullPrompt)
 		cmd.Env = append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
 
 		var stderr strings.Builder
@@ -157,9 +162,10 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 		m.recomputeLayout()
 	}
 
+	incidentContext := buildWatcherContext(&m)
 	return m, tea.Batch(
 		m.spinner.Tick,
-		agentQuery(agentCmd, msg.prompt, m.selectedIncident, m.selectedIncidentAlerts),
+		agentQuery(agentCmd, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
 	)
 }
 
