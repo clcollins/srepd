@@ -21,6 +21,7 @@ import (
 	"github.com/clcollins/srepd/pkg/alert"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -1243,6 +1244,13 @@ func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChan
 		}
 		return configSavedMsg{err: nil}
 	}
+}
+
+// OCMClientReadyMsg is sent when async OCM authentication completes.
+// Exported because cmd/root.go sends it via p.Send().
+type OCMClientReadyMsg struct {
+	Client ocm.OCMClient
+	Err    error
 }
 
 type pdClientInitializedMsg struct {

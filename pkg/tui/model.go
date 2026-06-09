@@ -153,6 +153,7 @@ type model struct {
 
 	// OCM enrichment state
 	ocmClient             ocm.OCMClient
+	ocmAuthPending        bool
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
 	clusterEnrichInFlight map[string]bool     // cluster IDs currently being enriched
 	clusterEnrichFailed   map[string]int      // failure count per cluster ID
@@ -191,6 +192,7 @@ func InitialModel(
 	defaultSilentPolicy string,
 	customSilentPolicies map[string]string,
 	configMode bool,
+	ocmAuthPending bool,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -234,6 +236,7 @@ func InitialModel(
 		autoRefresh:           true,
 		showLowUrgency:        true,
 		ocmClient:             ocmClient,
+		ocmAuthPending:        ocmAuthPending,
 		incidentClusterMap:    make(map[string][]string),
 		clusterEnrichInFlight: make(map[string]bool),
 		clusterEnrichFailed:   make(map[string]int),

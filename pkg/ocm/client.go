@@ -34,61 +34,72 @@ func sanitizeSearchValue(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
-// NewClient creates a real OCM client using the standard config file.
-// Always connects to production OCM. If no valid tokens exist, initiates
-// browser-based auth code login (same flow as ocm-container).
-func NewClient(agentVersion string) (*Client, error) {
+// CheckTokens loads the OCM config and checks if valid tokens exist.
+// Returns the config (with defaults applied), whether tokens are valid, and any error.
+// This is a fast, non-blocking operation.
+func CheckTokens() (*ocmconfig.Config, bool, error) {
 	cfg, err := ocmconfig.Load()
 	if err != nil {
-		log.Debug("ocm.NewClient", "msg", "OCM config not found, creating new", "error", err)
+		log.Debug("ocm.CheckTokens", "msg", "OCM config not found, creating new", "error", err)
 	}
 	if cfg == nil {
 		cfg = new(ocmconfig.Config)
 	}
 
-	cfg.URL = productionURL
-	if cfg.ClientID == "" {
-		cfg.ClientID = clientID
-	}
-	if cfg.TokenURL == "" {
-		cfg.TokenURL = sdk.DefaultTokenURL
-	}
-	if len(cfg.Scopes) == 0 {
-		cfg.Scopes = []string{"openid"}
-	}
+	applyConfigDefaults(cfg)
 
 	armed, reason, err := cfg.Armed()
 	if err != nil {
-		return nil, fmt.Errorf("ocm config check failed: %w", err)
+		return cfg, false, fmt.Errorf("ocm config check failed: %w", err)
 	}
 
 	if !armed {
-		log.Debug("ocm.NewClient", "msg", "not logged into OCM, initiating browser auth", "reason", reason)
-		fmt.Fprintln(os.Stderr, "OCM tokens expired — opening browser for authentication...")
-		token, authErr := auth.InitiateAuthCode(clientID)
-		if authErr != nil {
-			log.Debug("ocm.NewClient", "msg", "browser auth failed or cancelled", "error", authErr)
-			return nil, nil
-		}
-		fmt.Fprintln(os.Stderr, "OCM authentication successful.")
+		log.Debug("ocm.CheckTokens", "msg", "tokens not valid", "reason", reason)
+	}
 
-		if ocmconfig.IsEncryptedToken(token) {
-			cfg.AccessToken = ""
+	return cfg, armed, nil
+}
+
+// AuthenticateAsync performs browser-based auth code login.
+// This call blocks until the user completes authentication in the browser.
+// Returns the raw auth token string on success.
+func AuthenticateAsync(cfg *ocmconfig.Config) (string, error) {
+	cid := cfg.ClientID
+	if cid == "" {
+		cid = clientID
+	}
+	token, err := auth.InitiateAuthCode(cid)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// ApplyAuthToken classifies a raw auth token and sets the appropriate
+// field on the OCM config (RefreshToken or AccessToken).
+func ApplyAuthToken(cfg *ocmconfig.Config, token string) {
+	if ocmconfig.IsEncryptedToken(token) {
+		cfg.AccessToken = ""
+		cfg.RefreshToken = token
+		return
+	}
+	parsedToken, parseErr := ocmconfig.ParseToken(token)
+	if parseErr == nil {
+		typ, typErr := ocmconfig.TokenType(parsedToken)
+		if typErr == nil && (typ == "Refresh" || typ == "Offline") {
 			cfg.RefreshToken = token
-		} else {
-			parsedToken, parseErr := ocmconfig.ParseToken(token)
-			if parseErr == nil {
-				typ, typErr := ocmconfig.TokenType(parsedToken)
-				if typErr == nil && (typ == "Refresh" || typ == "Offline") {
-					cfg.RefreshToken = token
-					cfg.AccessToken = ""
-				} else {
-					cfg.AccessToken = token
-				}
-			} else {
-				cfg.AccessToken = token
-			}
+			cfg.AccessToken = ""
+			return
 		}
+	}
+	cfg.AccessToken = token
+}
+
+// NewClientFromConfig builds an OCM client from a pre-loaded config.
+// The config must already have valid tokens set.
+func NewClientFromConfig(cfg *ocmconfig.Config, agentVersion string) (*Client, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("ocm config is nil")
 	}
 
 	conn, err := ocmconn.NewConnection().
@@ -105,12 +116,49 @@ func NewClient(agentVersion string) (*Client, error) {
 		cfg.AccessToken = accessToken
 		cfg.RefreshToken = refreshToken
 		if saveErr := ocmconfig.Save(cfg); saveErr != nil {
-			log.Debug("ocm.NewClient", "msg", "failed to save OCM tokens", "error", saveErr)
+			log.Debug("ocm.NewClientFromConfig", "msg", "failed to save OCM tokens", "error", saveErr)
 		}
 	}
 
-	log.Debug("ocm.NewClient", "msg", "connected to OCM", "url", productionURL)
+	log.Debug("ocm.NewClientFromConfig", "msg", "connected to OCM", "url", productionURL)
 	return &Client{conn: conn}, nil
+}
+
+func applyConfigDefaults(cfg *ocmconfig.Config) {
+	cfg.URL = productionURL
+	if cfg.ClientID == "" {
+		cfg.ClientID = clientID
+	}
+	if cfg.TokenURL == "" {
+		cfg.TokenURL = sdk.DefaultTokenURL
+	}
+	if len(cfg.Scopes) == 0 {
+		cfg.Scopes = []string{"openid"}
+	}
+}
+
+// NewClient creates a real OCM client using the standard config file.
+// Always connects to production OCM. If no valid tokens exist, initiates
+// browser-based auth code login (same flow as ocm-container).
+func NewClient(agentVersion string) (*Client, error) {
+	cfg, armed, err := CheckTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	if !armed {
+		log.Debug("ocm.NewClient", "msg", "not logged into OCM, initiating browser auth")
+		fmt.Fprintln(os.Stderr, "OCM tokens expired — opening browser for authentication...")
+		token, authErr := AuthenticateAsync(cfg)
+		if authErr != nil {
+			log.Debug("ocm.NewClient", "msg", "browser auth failed or cancelled", "error", authErr)
+			return nil, nil
+		}
+		fmt.Fprintln(os.Stderr, "OCM authentication successful.")
+		ApplyAuthToken(cfg, token)
+	}
+
+	return NewClientFromConfig(cfg, agentVersion)
 }
 
 func (c *Client) GetCluster(ctx context.Context, key string) (*ClusterInfo, error) {

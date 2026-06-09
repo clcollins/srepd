@@ -508,6 +508,182 @@ func TestCacheCleanup_SharedClusterPreserved(t *testing.T) {
 	})
 }
 
+func TestOCMClientReadyMsg_SetsClient(t *testing.T) {
+	t.Run("successful auth sets ocmClient and clears pending", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+
+		mock := createMockOCMClient()
+		result, _ := m.Update(OCMClientReadyMsg{Client: mock, Err: nil})
+		updated := result.(model)
+
+		assert.Equal(t, mock, updated.ocmClient, "ocmClient should be set")
+		assert.False(t, updated.ocmAuthPending, "ocmAuthPending should be false")
+	})
+}
+
+func TestOCMClientReadyMsg_ClearsAuthPending(t *testing.T) {
+	t.Run("clears ocmAuthPending on error", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+
+		result, _ := m.Update(OCMClientReadyMsg{Err: fmt.Errorf("auth cancelled")})
+		updated := result.(model)
+
+		assert.Nil(t, updated.ocmClient, "ocmClient should remain nil on error")
+		assert.False(t, updated.ocmAuthPending, "ocmAuthPending should be cleared on error")
+	})
+}
+
+func TestOCMClientReadyMsg_NilClientGraceful(t *testing.T) {
+	t.Run("nil client without error is graceful degradation", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+
+		result, _ := m.Update(OCMClientReadyMsg{Client: nil, Err: nil})
+		updated := result.(model)
+
+		assert.Nil(t, updated.ocmClient)
+		assert.False(t, updated.ocmAuthPending)
+	})
+}
+
+func TestOCMClientReadyMsg_TriggersRetroactiveEnrichment(t *testing.T) {
+	t.Run("enriches already-loaded clusters after auth", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+		m.incidentClusterMap = map[string][]string{
+			"INC001": {"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+			"INC002": {"2a3b4c5dfakeidtest0i1j2k3l4m5n6o"},
+		}
+		m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		m.clusterEnrichInFlight = make(map[string]bool)
+		m.clusterEnrichFailed = make(map[string]int)
+
+		mock := createMockOCMClient()
+		result, cmd := m.Update(OCMClientReadyMsg{Client: mock, Err: nil})
+		updated := result.(model)
+
+		assert.Equal(t, mock, updated.ocmClient)
+		assert.NotNil(t, cmd, "should return enrichment commands")
+		// Verify the in-flight tracking was set for uncached clusters
+		assert.True(t, updated.clusterEnrichInFlight["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"])
+		assert.True(t, updated.clusterEnrichInFlight["2a3b4c5dfakeidtest0i1j2k3l4m5n6o"])
+	})
+}
+
+func TestOCMClientReadyMsg_SkipsCachedClusters(t *testing.T) {
+	t.Run("does not re-enrich already cached clusters", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+		m.incidentClusterMap = map[string][]string{
+			"INC001": {"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+		}
+		m.clusterCache = map[string]*ocm.ClusterInfo{
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {ID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+		}
+		m.clusterEnrichInFlight = make(map[string]bool)
+		m.clusterEnrichFailed = make(map[string]int)
+
+		mock := createMockOCMClient()
+		result, _ := m.Update(OCMClientReadyMsg{Client: mock, Err: nil})
+		updated := result.(model)
+
+		assert.False(t, updated.clusterEnrichInFlight["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"],
+			"already cached cluster should not be in-flight")
+	})
+}
+
+func TestOCMClientReadyMsg_SkipsFailedClusters(t *testing.T) {
+	t.Run("does not re-enrich clusters that exceeded retry limit", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+		m.incidentClusterMap = map[string][]string{
+			"INC001": {"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"},
+		}
+		m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		m.clusterEnrichInFlight = make(map[string]bool)
+		m.clusterEnrichFailed = map[string]int{
+			"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": 3,
+		}
+
+		mock := createMockOCMClient()
+		result, _ := m.Update(OCMClientReadyMsg{Client: mock, Err: nil})
+		updated := result.(model)
+
+		assert.False(t, updated.clusterEnrichInFlight["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"],
+			"failed cluster should not be retried")
+	})
+}
+
+func TestOCMClientReadyMsg_NoIncidents(t *testing.T) {
+	t.Run("no retroactive enrichment when no incidents loaded", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+		m.incidentClusterMap = make(map[string][]string)
+		m.clusterEnrichInFlight = make(map[string]bool)
+		m.clusterEnrichFailed = make(map[string]int)
+
+		mock := createMockOCMClient()
+		result, cmd := m.Update(OCMClientReadyMsg{Client: mock, Err: nil})
+		updated := result.(model)
+
+		assert.Equal(t, mock, updated.ocmClient)
+		// cmd will still be non-nil (flash notification), but no enrichment in-flight
+		assert.Empty(t, updated.clusterEnrichInFlight)
+		_ = cmd
+	})
+}
+
+func TestRenderClusterTab_AuthPending(t *testing.T) {
+	t.Run("shows authenticating message when auth is pending", func(t *testing.T) {
+		m := createTestModel()
+		m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+
+		content, err := m.renderClusterTab()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "authenticating")
+		assert.NotContains(t, content, "OCM not connected")
+	})
+}
+
+func TestRenderServiceLogsTab_AuthPending(t *testing.T) {
+	t.Run("shows authenticating message when auth is pending", func(t *testing.T) {
+		m := createTestModel()
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+
+		content, err := m.renderServiceLogsTab()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "authenticating")
+		assert.NotContains(t, content, "OCM not connected")
+	})
+}
+
+func TestRenderLimitedSupportTab_AuthPending(t *testing.T) {
+	t.Run("shows authenticating message when auth is pending", func(t *testing.T) {
+		m := createTestModel()
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+
+		content, err := m.renderLimitedSupportTab()
+		assert.NoError(t, err)
+		assert.Contains(t, content, "authenticating")
+		assert.NotContains(t, content, "OCM not connected")
+	})
+}
+
 func TestCacheCleanup_RemovedFromList(t *testing.T) {
 	t.Run("OCM caches cleared when incident removed from list", func(t *testing.T) {
 		c1 := "1q2w3e4rfakeidtest9o0p1a2s3d4f5g"
