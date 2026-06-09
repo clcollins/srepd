@@ -121,7 +121,8 @@ func BuildStyles(theme Theme) Styles {
 	watcherContainer := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(theme.Border).
-		Foreground(theme.Text)
+		Foreground(theme.Text).
+		Padding(0, 1)
 
 	tableCell := lipgloss.NewStyle().Padding(0, 1)
 	tableHeader := lipgloss.NewStyle().
