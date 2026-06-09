@@ -1316,3 +1316,70 @@ func TestRenderBottomStatus_Layout(t *testing.T) {
 		assert.NotContains(t, result, "An update is available", "should not show update notice")
 	})
 }
+
+func TestBlockquote(t *testing.T) {
+	bq := funcMap["blockquote"].(func(string) template.HTML)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected template.HTML
+	}{
+		{
+			name:     "single line",
+			input:    "Hello world",
+			expected: "> Hello world",
+		},
+		{
+			name:     "multi-paragraph with blank line",
+			input:    "First paragraph.\n\nSecond paragraph.",
+			expected: "> First paragraph.\n> \n> Second paragraph.",
+		},
+		{
+			name:     "three lines no blank",
+			input:    "Line one\nLine two\nLine three",
+			expected: "> Line one\n> Line two\n> Line three",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "> ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := bq(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNoteTabTemplate_MultiParagraph(t *testing.T) {
+	tmpl, err := template.New("note").Funcs(funcMap).Parse(noteTabTemplate)
+	require.NoError(t, err)
+
+	data := struct {
+		Note  noteSummary
+		Index int
+		Total int
+	}{
+		Note: noteSummary{
+			Content: "First paragraph.\n\nSecond paragraph.",
+			User:    "testuser",
+			Created: "2025-01-01",
+		},
+		Index: 0,
+		Total: 1,
+	}
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, data)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "> First paragraph.")
+	assert.Contains(t, output, "> Second paragraph.")
+	assert.Contains(t, output, "-- testuser @ 2025-01-01", "attribution should be present")
+	assert.NotContains(t, output, "> -- testuser", "attribution should not be blockquoted")
+}
