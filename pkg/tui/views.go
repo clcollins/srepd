@@ -333,6 +333,8 @@ func (m model) renderDetailsTab(summary incidentSummary) (string, error) {
 		content += clusters.String()
 	}
 
+	content += m.renderFlagConditionsSection()
+
 	return content, nil
 }
 

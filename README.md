@@ -20,6 +20,7 @@ A PagerDuty terminal user interface focused on common SRE tasks.
 * Log into clusters via ocm-container or ocm backplane with multi-cluster selection
 * Add notes, auto-refresh with selection preservation, auto-acknowledge when on-call
 * PagerDuty environment variables passed automatically to terminal sessions
+* [Flag conditions](docs/flag-conditions.md): mark incidents matching cluster ID or organization name patterns
 * OCM integration: cluster enrichment with display names, service logs, limited support history
 * 6-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History
 * Auto-update notification and `srepd update` self-update command
@@ -68,6 +69,7 @@ If no config file exists, running `srepd` automatically enters the configuration
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
+| `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`) |
 | `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
 
 ### Colors
@@ -141,6 +143,7 @@ Press `h` to toggle the help overlay inside srepd.
 | `ctrl+a` | Toggle auto-acknowledge | `ctrl+l` | View debug log |
 | `ctrl+q`/`ctrl+c` | Quit | `1`-`9` | Select cluster |
 | `i`/`:` | Ask Claude | `m` | Merge incident |
+| `f` | Flag condition | | |
 | `ctrl+x` + key | Chord commands | `ctrl+x ?` | Show chord help |
 | `Tab`/`Shift+Tab`/`←`/`→` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |
 
