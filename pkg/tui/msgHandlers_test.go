@@ -969,3 +969,116 @@ func TestBulkSilenceMode_ConfirmationPrompt(t *testing.T) {
 		assert.Contains(t, updated.pendingConfirmation.prompt, "2 incident(s)")
 	})
 }
+
+// createInputFocusedModel creates a test model with a focused text input
+// containing the given initial value. Used for testing that global key
+// bindings are bypassed during input mode.
+func createInputFocusedModel(initialValue string) model {
+	m := createTestModel()
+	m.input = newTextInput()
+	m.input.Focus()
+	if initialValue != "" {
+		m.input.SetValue(initialValue)
+		m.input.SetCursor(len(initialValue))
+	}
+	return m
+}
+
+func TestInputMode_TypingU_DoesNotToggleUrgency(t *testing.T) {
+	m := createInputFocusedModel("")
+	m.showLowUrgency = false
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}}
+	result, _ := m.keyMsgHandler(keyMsg)
+	updated := result.(model)
+
+	assert.False(t, updated.showLowUrgency, "pressing 'u' in input mode must not toggle urgency")
+	assert.True(t, updated.input.Focused(), "input must remain focused")
+	assert.Contains(t, updated.input.Value(), "u", "input value must contain the typed 'u'")
+}
+
+func TestInputMode_TypingI_DoesNotReFocusInput(t *testing.T) {
+	m := createInputFocusedModel("test")
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}}
+	result, _ := m.keyMsgHandler(keyMsg)
+	updated := result.(model)
+
+	assert.True(t, updated.input.Focused(), "input must remain focused")
+	assert.Contains(t, updated.input.Value(), "i", "input value must contain the typed 'i'")
+}
+
+func TestInputMode_TypingColon_DoesNotReFocusInput(t *testing.T) {
+	m := createInputFocusedModel("test")
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}}
+	result, _ := m.keyMsgHandler(keyMsg)
+	updated := result.(model)
+
+	assert.True(t, updated.input.Focused(), "input must remain focused")
+	assert.Contains(t, updated.input.Value(), ":", "input value must contain the typed ':'")
+}
+
+func TestInputMode_CtrlR_DoesNotToggleAutoRefresh(t *testing.T) {
+	m := createInputFocusedModel("test")
+	m.autoRefresh = false
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyCtrlR}
+	result, _ := m.keyMsgHandler(keyMsg)
+	updated := result.(model)
+
+	assert.False(t, updated.autoRefresh, "ctrl+r in input mode must not toggle autoRefresh")
+	assert.True(t, updated.input.Focused(), "input must remain focused")
+}
+
+func TestInputMode_CtrlA_DoesNotToggleAutoAck(t *testing.T) {
+	m := createInputFocusedModel("test")
+	m.autoAcknowledge = false
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyCtrlA}
+	result, _ := m.keyMsgHandler(keyMsg)
+	updated := result.(model)
+
+	assert.False(t, updated.autoAcknowledge, "ctrl+a in input mode must not toggle autoAcknowledge")
+	assert.True(t, updated.input.Focused(), "input must remain focused")
+}
+
+func TestInputMode_CtrlC_StillQuits(t *testing.T) {
+	m := createInputFocusedModel("test")
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := m.keyMsgHandler(keyMsg)
+
+	assert.NotNil(t, cmd, "ctrl+c must still produce a command")
+	msg := cmd()
+	_, isQuit := msg.(tea.QuitMsg)
+	assert.True(t, isQuit, "ctrl+c in input mode must still quit")
+}
+
+func TestInputMode_Escape_StillExitsInput(t *testing.T) {
+	m := createInputFocusedModel("test")
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	result, _ := m.keyMsgHandler(keyMsg)
+	updated := result.(model)
+
+	assert.False(t, updated.input.Focused(), "Escape must blur the input")
+	assert.Empty(t, updated.input.Value(), "Escape must reset the input value")
+}
+
+func TestInputMode_Enter_StillDispatchesPrompt(t *testing.T) {
+	m := createInputFocusedModel("investigate this alert")
+
+	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, cmd := m.keyMsgHandler(keyMsg)
+	updated := result.(model)
+
+	assert.False(t, updated.input.Focused(), "Enter must blur the input")
+	assert.Empty(t, updated.input.Value(), "Enter must reset the input value")
+	assert.NotNil(t, cmd, "Enter must dispatch a command")
+
+	msg := cmd()
+	promptMsg, ok := msg.(claudePromptMsg)
+	assert.True(t, ok, "dispatched message must be claudePromptMsg")
+	assert.Equal(t, "investigate this alert", promptMsg.prompt)
+}
