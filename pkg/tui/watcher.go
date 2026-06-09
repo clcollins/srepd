@@ -102,8 +102,21 @@ type typewriterState struct {
 
 type typewriterTickMsg struct{}
 
+func splitKeepingNewlines(text string) []string {
+	var tokens []string
+	for _, line := range strings.Split(text, "\n") {
+		words := strings.Fields(line)
+		tokens = append(tokens, words...)
+		tokens = append(tokens, "\n")
+	}
+	if len(tokens) > 0 {
+		tokens = tokens[:len(tokens)-1]
+	}
+	return tokens
+}
+
 func (m *model) startTypewriter(marker string, text string) tea.Cmd {
-	words := strings.Fields(text)
+	words := splitKeepingNewlines(text)
 	if len(words) == 0 {
 		return nil
 	}
@@ -127,11 +140,15 @@ func (m *model) advanceTypewriter() tea.Cmd {
 		end = len(tw.words)
 	}
 
-	chunk := strings.Join(tw.words[tw.index:end], " ")
-	if tw.partial != "" {
-		tw.partial += " " + chunk
-	} else {
-		tw.partial = chunk
+	for i := tw.index; i < end; i++ {
+		word := tw.words[i]
+		if word == "\n" {
+			tw.partial += "\n"
+		} else if tw.partial == "" || strings.HasSuffix(tw.partial, "\n") {
+			tw.partial += word
+		} else {
+			tw.partial += " " + word
+		}
 	}
 	tw.index = end
 
