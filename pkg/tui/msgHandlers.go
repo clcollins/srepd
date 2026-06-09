@@ -715,9 +715,19 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.dispatchFlagCommand(prompt)
 			}
 
-			return m, func() tea.Msg {
-				return claudePromptMsg{prompt: prompt}
+			if isAgentCommand(prompt) {
+				query := parseAgentQuery(prompt)
+				if query == "" {
+					m.setStatus("usage: /agent <query>")
+					return m, nil
+				}
+				return m, func() tea.Msg {
+					return claudePromptMsg{prompt: query}
+				}
 			}
+
+			m.setStatus("unknown command — try /agent <query> or /flag <type> <value>")
+			return m, nil
 
 		default:
 			// Pass ALL other keypresses (including 'h') to the input component

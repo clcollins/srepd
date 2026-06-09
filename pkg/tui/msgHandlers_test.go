@@ -1067,7 +1067,7 @@ func TestInputMode_Escape_StillExitsInput(t *testing.T) {
 }
 
 func TestInputMode_Enter_StillDispatchesPrompt(t *testing.T) {
-	m := createInputFocusedModel("investigate this alert")
+	m := createInputFocusedModel("/agent investigate this alert")
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.keyMsgHandler(keyMsg)

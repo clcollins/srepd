@@ -142,7 +142,7 @@ Press `h` to toggle the help overlay inside srepd.
 | `ctrl+r` | Toggle auto-refresh | `u` | Toggle urgency filter |
 | `ctrl+a` | Toggle auto-acknowledge | `ctrl+l` | View debug log |
 | `ctrl+q`/`ctrl+c` | Quit | `1`-`9` | Select cluster |
-| `i`/`:` | Ask Claude | `m` | Merge incident |
+| `i`/`:` | Command input | `m` | Merge incident |
 | `f` | Flag condition | | |
 | `ctrl+x` + key | Chord commands | `ctrl+x ?` | Show chord help |
 | `Tab`/`Shift+Tab`/`←`/`→` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |

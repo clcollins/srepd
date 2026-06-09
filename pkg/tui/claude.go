@@ -183,3 +183,12 @@ func truncatePrompt(s string, maxLen int) string {
 func defaultHasClaudeCode() bool {
 	return launcher.HasClaudeCode()
 }
+
+func isAgentCommand(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, "/agent ") || trimmed == "/agent"
+}
+
+func parseAgentQuery(input string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), "/agent"))
+}
