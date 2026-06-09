@@ -118,7 +118,8 @@ type model struct {
 	chordHelpActive bool
 
 	// claudeQuerying is true while a Claude CLI query is in progress
-	claudeQuerying bool
+	claudeQuerying  bool
+	agentCLICommand string
 
 	// aiProvider is the configured LLM API provider, or nil when unconfigured
 	aiProvider ai.Provider
@@ -206,6 +207,7 @@ func InitialModel(
 	configMode bool,
 	ocmAuthPending bool,
 	aiProvider ai.Provider,
+	agentCLICommand string,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -262,6 +264,7 @@ func InitialModel(
 		styles:                styles,
 		configModeRequested:   configMode,
 		aiProvider:            aiProvider,
+		agentCLICommand:       agentCLICommand,
 	}
 
 	if aiProvider != nil {
@@ -302,6 +305,7 @@ func InitialModelWithConfig(
 	debug bool,
 	ocmClient ocm.OCMClient,
 	aiProvider ai.Provider,
+	agentCLICommand string,
 ) (tea.Model, tea.Cmd) {
 
 	theme := DefaultTheme()
@@ -354,6 +358,7 @@ func InitialModelWithConfig(
 		theme:                 theme,
 		styles:                styles,
 		aiProvider:            aiProvider,
+		agentCLICommand:       agentCLICommand,
 	}
 
 	if aiProvider != nil {

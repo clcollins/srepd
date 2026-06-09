@@ -106,6 +106,7 @@ func launchTUIWithConfig() {
 		true, // configMode
 		ocmAuthPending,
 		nil, // aiProvider — not needed in config mode
+		"",  // agentCLICommand — not needed in config mode
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

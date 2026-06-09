@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -64,21 +65,19 @@ func TestClaudePrompt_EmptyInput(t *testing.T) {
 }
 
 func TestClaudeNotFound_ShowsStatus(t *testing.T) {
-	// When claudePromptMsg is received but Claude is not installed,
-	// the status should show an appropriate message
-
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
+	m.agentCLICommand = "nonexistent-binary --print"
 
 	msg := claudePromptMsg{prompt: "test query"}
 
-	// Use the handler directly with a custom hasClaudeCode that returns false
-	result, cmd := m.handleClaudePrompt(msg, func() bool { return false })
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "", fmt.Errorf("not found: %s", s)
+	})
 	updatedModel := result.(model)
 
-	assert.Contains(t, updatedModel.status, "Claude Code not installed",
-		"Status should indicate Claude is not available")
-	assert.Nil(t, cmd, "No command should be returned when Claude is not installed")
+	assert.Contains(t, updatedModel.status, "not found on PATH")
+	assert.Nil(t, cmd)
 }
 
 func TestClaudePrompt_ShowsSpinner(t *testing.T) {
@@ -93,13 +92,14 @@ func TestClaudePrompt_ShowsSpinner(t *testing.T) {
 
 	msg := claudePromptMsg{prompt: "test query"}
 
-	result, cmd := m.handleClaudePrompt(msg, func() bool { return true })
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
 	updatedModel := result.(model)
 
 	assert.True(t, updatedModel.claudeQuerying, "claudeQuerying should be true")
 	assert.True(t, updatedModel.apiInProgress, "apiInProgress should be true for spinner")
-	assert.Contains(t, updatedModel.status, "querying Claude",
-		"Status should indicate Claude is being queried")
+	assert.Contains(t, updatedModel.status, "querying agent")
 	assert.NotNil(t, cmd, "A command should be returned to execute the query")
 }
 
@@ -287,7 +287,9 @@ func TestClaudePrompt_WithViewingIncident(t *testing.T) {
 
 	msg := claudePromptMsg{prompt: "what is wrong with this cluster?"}
 
-	result, cmd := m.handleClaudePrompt(msg, func() bool { return true })
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
 	updatedModel := result.(model)
 
 	assert.True(t, updatedModel.claudeQuerying, "Should start querying")
@@ -323,17 +325,11 @@ func TestClaudeResponse_RendersWithPrefix(t *testing.T) {
 	// The actual prefix is added in the Update handler
 }
 
-func TestDefaultHasClaudeCode_NoPanic(t *testing.T) {
-	t.Run("defaultHasClaudeCode does not panic", func(t *testing.T) {
-		// defaultHasClaudeCode wraps launcher.HasClaudeCode which calls exec.LookPath.
-		// In a test environment where 'claude' is not installed, it should return false
-		// without panicking.
+func TestDefaultLookPath_NoPanic(t *testing.T) {
+	t.Run("defaultLookPath does not panic", func(t *testing.T) {
 		assert.NotPanics(t, func() {
-			result := defaultHasClaudeCode()
-			// In most test environments, claude CLI is not installed
-			// We just verify the function runs without panic and returns a bool
-			_ = result
-		}, "defaultHasClaudeCode should not panic regardless of claude installation status")
+			_, _ = defaultLookPath("nonexistent-binary-12345")
+		}, "defaultLookPath should not panic for missing binaries")
 	})
 }
 
