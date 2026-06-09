@@ -153,8 +153,8 @@ func (m model) renderFooter() string {
 
 	return lipgloss.JoinHorizontal(
 		0.2,
-		m.styles.Padded.Width(leftWidth).Render(left),
-		m.styles.Muted.Width(rightWidth).Align(lipgloss.Right).Padding(0, 1, 0, 0).Render(right),
+		m.styles.Padded.Width(leftWidth).MaxWidth(leftWidth).Render(left),
+		m.styles.Muted.Width(rightWidth).MaxWidth(rightWidth).Align(lipgloss.Right).Padding(0, 1, 0, 0).Render(right),
 	)
 }
 
@@ -958,13 +958,11 @@ func (m model) renderWatcherStatus() string {
 	}
 
 	analyzingLabel := "analyzing..."
-	spinnerWidth := lipgloss.Width(m.spinner.View()) + 1
 	if m.claudeQuerying || m.watcherAnalyzing {
-		bold := lipgloss.NewStyle().Bold(true)
-		parts = append(parts, m.spinner.View()+" "+bold.Render(analyzingLabel))
+		highlight := lipgloss.NewStyle().Foreground(m.theme.Highlight)
+		parts = append(parts, m.spinner.View()+" "+highlight.Render(analyzingLabel))
 	} else {
-		padded := fmt.Sprintf("%-*s", len(analyzingLabel)+spinnerWidth, "idle")
-		parts = append(parts, padded)
+		parts = append(parts, "idle")
 	}
 
 	return strings.Join(parts, " | ")
