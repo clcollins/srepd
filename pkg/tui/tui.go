@@ -379,8 +379,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.condition.ID = m.flagNextID
 		m.flagConditions = append(m.flagConditions, msg.condition)
 		m.rebuildFlagMatchCache()
-		m.runDetectors()
-		return m, m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
+		watcherCmds := m.runDetectors()
+		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
+		return m, tea.Batch(append(watcherCmds, flashCmd)...)
 
 	case removeFlagConditionMsg:
 		for i, c := range m.flagConditions {
@@ -390,8 +391,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.rebuildFlagMatchCache()
-		m.runDetectors()
-		return m, m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
+		watcherCmds := m.runDetectors()
+		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
+		return m, tea.Batch(append(watcherCmds, flashCmd)...)
 
 	case clearFlagConditionsMsg:
 		m.flagConditions = nil
@@ -441,6 +443,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case aiHealthCheckMsg:
 		m.aiHealthy = msg.healthy
+		return m, nil
+
+	case watcherSynthesisMsg:
+		m.watcherAnalyzing = false
+		if msg.err != nil {
+			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
+		} else {
+			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.response))
+		}
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		m.updateWatcherViewport()
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -855,7 +871,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-		m.runDetectors()
+		cmds = append(cmds, m.runDetectors()...)
 
 	case parseTemplateForNoteMsg:
 		if m.selectedIncident == nil {

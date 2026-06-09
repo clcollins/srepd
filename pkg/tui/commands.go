@@ -228,6 +228,36 @@ func aiHealthCheckCmd(provider ai.Provider) tea.Cmd {
 	}
 }
 
+type watcherSynthesisMsg struct {
+	observation string
+	response    string
+	err         error
+}
+
+func watcherSynthesizeCmd(provider ai.Provider, observation string, incidentSummary string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		systemPrompt := "You are an SRE assistant observing a PagerDuty incident queue. " +
+			"A pattern detector identified the following observation. " +
+			"Provide a brief (1-3 sentence) analysis of what this pattern might indicate " +
+			"and any suggested investigation steps. Be concise."
+
+		userPrompt := fmt.Sprintf("Observation: %s\n\nCurrent incidents:\n%s", observation, incidentSummary)
+
+		log.Debug("watcher.synthesize", "provider", provider.Name(), "observation", observation)
+
+		response, err := provider.Query(ctx, systemPrompt, userPrompt)
+		if err != nil {
+			log.Warn("watcher.synthesize", "error", err)
+			return watcherSynthesisMsg{observation: observation, err: err}
+		}
+
+		return watcherSynthesisMsg{observation: observation, response: response}
+	}
+}
+
 // clearFlashMsg is sent after a flash notification's display duration has elapsed.
 // The status is only cleared if it still matches the original flash message,
 // preventing newer messages from being prematurely dismissed.

@@ -133,7 +133,8 @@ type model struct {
 	watcherBuffer   *watcherBuffer
 	watcherMarker   string
 	agentMarker     string
-	watcherDedup    *watcherDedup
+	watcherDedup      *watcherDedup
+	watcherAnalyzing  bool
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes

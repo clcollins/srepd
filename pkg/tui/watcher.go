@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 )
@@ -104,17 +105,27 @@ func (d *watcherDedup) IsNew(observation string) bool {
 	return true
 }
 
-func (m *model) runDetectors() {
+func (m *model) runDetectors() []tea.Cmd {
 	if len(m.incidentList) < 2 {
-		return
+		return nil
 	}
 
 	observations := detectAll(m.incidentList, m.incidentClusterMap)
 
+	var cmds []tea.Cmd
 	added := false
 	for _, obs := range observations {
-		if m.watcherDedup.IsNew(obs.Summary) {
-			log.Debug("watcher.runDetectors", "observation", obs.Summary)
+		if !m.watcherDedup.IsNew(obs.Summary) {
+			continue
+		}
+
+		log.Debug("watcher.runDetectors", "observation", obs.Summary)
+
+		if m.aiProvider != nil && m.aiHealthy && !m.watcherAnalyzing {
+			m.watcherAnalyzing = true
+			summary := buildIncidentSummary(m.incidentList)
+			cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, obs.Summary, summary))
+		} else {
 			m.watcherBuffer.Append(prefixLines(m.watcherMarker, obs.Summary))
 			added = true
 		}
@@ -127,6 +138,16 @@ func (m *model) runDetectors() {
 		}
 		m.updateWatcherViewport()
 	}
+
+	return cmds
+}
+
+func buildIncidentSummary(incidents []pagerduty.Incident) string {
+	var lines []string
+	for _, inc := range incidents {
+		lines = append(lines, fmt.Sprintf("- [%s] %s (%s, %s)", inc.ID, inc.Title, inc.Service.Summary, inc.Urgency))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func detectAll(incidents []pagerduty.Incident, clusterMap map[string][]string) []watcherObservation {

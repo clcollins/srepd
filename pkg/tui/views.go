@@ -956,7 +956,7 @@ func (m model) renderWatcherHeader() string {
 		}
 	}
 
-	if m.claudeQuerying {
+	if m.claudeQuerying || m.watcherAnalyzing {
 		parts = append(parts, m.spinner.View()+" analyzing...")
 	} else {
 		parts = append(parts, "idle")
