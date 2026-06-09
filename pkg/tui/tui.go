@@ -129,7 +129,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msgType {
 	case reflect.TypeOf(TickMsg{}),
 		reflect.TypeOf(spinner.TickMsg{}),
-		reflect.TypeOf(tea.MouseMsg{}):
+		reflect.TypeOf(tea.MouseMsg{}),
+		reflect.TypeOf(ocmServiceLogsMsg{}),
+		reflect.TypeOf(limitedSupportMsg{}):
 		shouldLog = false
 	}
 
