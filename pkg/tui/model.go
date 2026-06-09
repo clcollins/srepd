@@ -126,6 +126,10 @@ type model struct {
 	// aiHealthy tracks whether the last LLM provider health check succeeded
 	aiHealthy bool
 
+	// watcherExpanded is true when the AI watcher pane is visible below the table
+	watcherExpanded bool
+	watcherViewport viewport.Model
+
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
 
@@ -265,6 +269,7 @@ func InitialModel(
 		configModeRequested:   configMode,
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
+		watcherViewport:       newWatcherViewport(),
 	}
 
 	if aiProvider != nil {
@@ -359,6 +364,7 @@ func InitialModelWithConfig(
 		styles:                styles,
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
+		watcherViewport:       newWatcherViewport(),
 	}
 
 	if aiProvider != nil {
@@ -611,7 +617,11 @@ func newIncidentViewer() viewport.Model {
 
 func newLogViewer() viewport.Model {
 	vp := viewport.New(100, 100)
-	// Viewport uses container border from View(), no style needed here
+	return vp
+}
+
+func newWatcherViewport() viewport.Model {
+	vp := viewport.New(100, layoutWatcherPaneHeight)
 	return vp
 }
 

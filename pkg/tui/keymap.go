@@ -19,7 +19,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 		// Column 2: Primary incident actions
 		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence, k.Merge, k.Flag},
 		// Column 3: Settings & toggles, Quit at bottom
-		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.ViewLog, k.Quit},
+		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.Watcher, k.ViewLog, k.Quit},
 		// Column 4: Tab navigation (incident viewer)
 		{k.TabNext, k.TabPrev},
 	}
@@ -58,6 +58,7 @@ type keymap struct {
 	ViewLog     key.Binding
 	Merge       key.Binding
 	Flag        key.Binding
+	Watcher     key.Binding
 	TabNext     key.Binding
 	TabPrev     key.Binding
 }
@@ -191,6 +192,10 @@ var defaultKeyMap = keymap{
 	Flag: key.NewBinding(
 		key.WithKeys("f"),
 		key.WithHelp("f", "flag condition"),
+	),
+	Watcher: key.NewBinding(
+		key.WithKeys("w"),
+		key.WithHelp("w", "toggle watcher"),
 	),
 	TabNext: key.NewBinding(
 		key.WithKeys("tab", "right"),

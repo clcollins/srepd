@@ -54,6 +54,11 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.logViewer.Width = m.layout.IncidentViewerWidth
 	m.logViewer.Height = m.layout.IncidentViewerHeight
 
+	if m.watcherExpanded {
+		m.watcherViewport.Width = m.layout.WatcherWidth
+		m.watcherViewport.Height = m.layout.WatcherHeight
+	}
+
 	if m.configMode && m.configForm != nil {
 		m.configForm.WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
 		form, cmd := m.configForm.Update(msg)
@@ -153,6 +158,12 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Urgency) {
 		m.showLowUrgency = !m.showLowUrgency
 		return m, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
+	}
+
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Watcher) {
+		m.watcherExpanded = !m.watcherExpanded
+		m.recomputeLayout()
+		return m, nil
 	}
 
 	// Commands for any focus mode

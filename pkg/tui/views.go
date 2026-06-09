@@ -86,14 +86,13 @@ func (m model) View() string {
 	default:
 		s.WriteString(m.styles.TableContainer.Render(m.table.View()))
 		s.WriteString("\n")
-		// Render refresh status line immediately below main table
 		s.WriteString(m.renderFooter())
 		s.WriteString("\n")
-		// Input field always reserves a line (empty if not focused)
+		s.WriteString(m.renderWatcherPane())
 		if m.input.Focused() {
 			s.WriteString(m.input.View())
 		} else {
-			s.WriteString("") // Preserve empty line when input not focused
+			s.WriteString("")
 		}
 	}
 
@@ -931,3 +930,37 @@ const noteTemplate = `
 # Service: {{ .Service }}
 #
 `
+
+func (m model) renderWatcherPane() string {
+	if !m.watcherExpanded {
+		return ""
+	}
+
+	var s strings.Builder
+	s.WriteString(m.renderWatcherHeader())
+	s.WriteString("\n")
+	s.WriteString(m.styles.WatcherContainer.Render(m.watcherViewport.View()))
+	s.WriteString("\n")
+	return s.String()
+}
+
+func (m model) renderWatcherHeader() string {
+	parts := []string{"[AI Watcher]"}
+
+	if m.aiProvider != nil {
+		parts = append(parts, m.aiProvider.Name())
+		if m.aiHealthy {
+			parts = append(parts, "healthy")
+		} else {
+			parts = append(parts, "offline")
+		}
+	}
+
+	if m.claudeQuerying {
+		parts = append(parts, m.spinner.View()+" analyzing...")
+	} else {
+		parts = append(parts, "idle")
+	}
+
+	return m.styles.Muted.Render("  " + strings.Join(parts, " | "))
+}

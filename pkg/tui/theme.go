@@ -28,17 +28,18 @@ type Theme struct {
 }
 
 type Styles struct {
-	Main           lipgloss.Style
-	Padded         lipgloss.Style
-	Muted          lipgloss.Style
-	Warning        lipgloss.Style
-	Error          lipgloss.Style
-	TableContainer lipgloss.Style
-	Table          table.Styles
-	ActiveTab      lipgloss.Style
-	InactiveTab    lipgloss.Style
-	TabWindow      lipgloss.Style
-	GlamourStyle   ansi.StyleConfig
+	Main             lipgloss.Style
+	Padded           lipgloss.Style
+	Muted            lipgloss.Style
+	Warning          lipgloss.Style
+	Error            lipgloss.Style
+	TableContainer   lipgloss.Style
+	Table            table.Styles
+	ActiveTab        lipgloss.Style
+	InactiveTab      lipgloss.Style
+	TabWindow        lipgloss.Style
+	WatcherContainer lipgloss.Style
+	GlamourStyle     ansi.StyleConfig
 }
 
 func DefaultTheme() Theme {
@@ -117,6 +118,11 @@ func BuildStyles(theme Theme) Styles {
 		BorderForeground(theme.Border).
 		Foreground(theme.Text)
 
+	watcherContainer := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder(), true).
+		BorderForeground(theme.Border).
+		Foreground(theme.Text)
+
 	tableCell := lipgloss.NewStyle().Padding(0, 1)
 	tableHeader := lipgloss.NewStyle().
 		Padding(0, 1).
@@ -145,7 +151,8 @@ func BuildStyles(theme Theme) Styles {
 			Background(theme.Error).
 			BorderForeground(theme.Border).
 			Padding(1, 3, 1, 3),
-		TableContainer: tableContainer,
+		TableContainer:   tableContainer,
+		WatcherContainer: watcherContainer,
 		Table: table.Styles{
 			Cell:     tableCell,
 			Selected: tableSelected,

@@ -24,6 +24,11 @@ const (
 	configFormBottomPadding = 1
 	configFormReserved      = layoutHeaderLines + layoutBottomStatusLines + configFormBottomPadding
 
+	layoutWatcherPaneHeight     = 5
+	layoutWatcherBorderOverhead = 2
+	layoutWatcherHeaderLines    = 1
+	layoutMinWatcherHeight      = 3
+
 	layoutMinTableHeight          = 4
 	layoutMinIncidentViewerHeight = 10
 	layoutMinFormHeight           = 1
@@ -48,6 +53,9 @@ type Layout struct {
 	IncidentViewerWidth  int
 	IncidentViewerHeight int
 
+	WatcherWidth  int
+	WatcherHeight int
+
 	FormWidth            int
 	FormHeight           int
 	TeamSelectFormHeight int
@@ -56,7 +64,7 @@ type Layout struct {
 	ClusterSelectServiceWidth   int
 }
 
-func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string) Layout {
+func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcherLines int) Layout {
 	mainHOverhead := styles.Main.GetHorizontalMargins() +
 		styles.Main.GetHorizontalPadding() +
 		styles.Main.GetHorizontalBorderSize()
@@ -81,10 +89,16 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string) Layout 
 	helpLines := strings.Count(helpView, "\n") + 1
 
 	tableWidth := ws.Width - mainHOverhead - containerHOverhead - cellHOverhead
-	tableHeight := ws.Height - mainVOverhead - containerVOverhead - tableFixedOverhead - helpLines
+	tableHeight := ws.Height - mainVOverhead - containerVOverhead - tableFixedOverhead - helpLines - watcherLines
 	if tableHeight < layoutMinTableHeight {
 		tableHeight = layoutMinTableHeight
 	}
+
+	watcherHeight := layoutWatcherPaneHeight
+	if watcherHeight < layoutMinWatcherHeight {
+		watcherHeight = layoutMinWatcherHeight
+	}
+	watcherWidth := ws.Width - mainHOverhead - containerHOverhead
 
 	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
 
@@ -131,6 +145,8 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string) Layout 
 		FormWidth:                   formWidth,
 		FormHeight:                  formHeight,
 		TeamSelectFormHeight:        teamSelectFormHeight,
+		WatcherWidth:                watcherWidth,
+		WatcherHeight:               watcherHeight,
 		ClusterSelectClusterIDWidth: clusterIDWidth,
 		ClusterSelectServiceWidth:   serviceWidth,
 	}
@@ -152,6 +168,17 @@ func (m *model) recomputeLayout() {
 	}
 
 	helpView := m.help.View(helpKeyMap)
-	m.layout = computeLayout(windowSize, m.styles, helpView)
+
+	watcherLines := 0
+	if m.watcherExpanded {
+		watcherLines = layoutWatcherPaneHeight + layoutWatcherBorderOverhead + layoutWatcherHeaderLines
+	}
+
+	m.layout = computeLayout(windowSize, m.styles, helpView, watcherLines)
 	m.table.SetHeight(m.layout.TableHeight)
+
+	if m.watcherExpanded {
+		m.watcherViewport.Width = m.layout.WatcherWidth
+		m.watcherViewport.Height = m.layout.WatcherHeight
+	}
 }
