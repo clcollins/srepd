@@ -236,46 +236,46 @@ func buildWatcherContext(m *model) string {
 		parts = append(parts, fmt.Sprintf("Service: %s", inc.Service.Summary))
 		parts = append(parts, fmt.Sprintf("Status: %s, Urgency: %s", inc.Status, inc.Urgency))
 
-		for _, alert := range m.selectedIncidentAlerts {
+		// Pull alerts from cache (populated by OCM enrichment pipeline)
+		var alerts []pagerduty.IncidentAlert
+		if cached, ok := m.incidentCache[inc.ID]; ok && cached.alertsLoaded {
+			alerts = cached.alerts
+		} else if len(m.selectedIncidentAlerts) > 0 {
+			alerts = m.selectedIncidentAlerts
+		}
+
+		for _, alert := range alerts {
 			if details, ok := alert.Body["details"].(map[string]interface{}); ok {
 				if name, ok := details["alert_name"].(string); ok {
 					parts = append(parts, fmt.Sprintf("Alert: %s", name))
 				}
+				if sopURL, ok := details["firing"].(string); ok && sopURL != "" {
+					parts = append(parts, fmt.Sprintf("SOP: %s", sopURL))
+				}
 				if cluster, ok := details["cluster_id"].(string); ok {
 					parts = append(parts, fmt.Sprintf("Cluster: %s", cluster))
-
-					if info, ok := m.clusterCache[cluster]; ok {
-						parts = append(parts, fmt.Sprintf("Cluster name: %s", info.DisplayName))
-						parts = append(parts, fmt.Sprintf("State: %s, Region: %s, Version: %s", info.State, info.Region, info.Version))
-					}
-					if logs, ok := m.serviceLogCache[cluster]; ok && len(logs) > 0 {
-						parts = append(parts, fmt.Sprintf("Recent service logs: %d", len(logs)))
-						for i, sl := range logs {
-							if i >= 3 {
-								break
-							}
-							parts = append(parts, fmt.Sprintf("  - [%s] %s: %s", sl.Severity, sl.ServiceName, sl.Summary))
-						}
-					}
-					if reasons, ok := m.limitedSupportCache[cluster]; ok && len(reasons) > 0 {
-						parts = append(parts, fmt.Sprintf("Limited support reasons: %d", len(reasons)))
-						for _, r := range reasons {
-							parts = append(parts, fmt.Sprintf("  - %s", r.Summary))
-						}
-					}
+					parts = append(parts, buildClusterContext(m, cluster)...)
 				}
 			}
 		}
 
-		if len(m.selectedIncidentNotes) > 0 {
-			parts = append(parts, fmt.Sprintf("Notes: %d", len(m.selectedIncidentNotes)))
-			for i, n := range m.selectedIncidentNotes {
-				if i >= 3 {
+		// Pull notes from cache
+		var notes []pagerduty.IncidentNote
+		if cached, ok := m.incidentCache[inc.ID]; ok && cached.notesLoaded {
+			notes = cached.notes
+		} else if len(m.selectedIncidentNotes) > 0 {
+			notes = m.selectedIncidentNotes
+		}
+
+		if len(notes) > 0 {
+			parts = append(parts, fmt.Sprintf("Notes: %d", len(notes)))
+			for i, n := range notes {
+				if i >= 5 {
 					break
 				}
 				content := n.Content
-				if len(content) > 200 {
-					content = content[:200] + "..."
+				if len(content) > 300 {
+					content = content[:300] + "..."
 				}
 				parts = append(parts, fmt.Sprintf("  - %s", content))
 			}
@@ -288,6 +288,35 @@ func buildWatcherContext(m *model) string {
 	}
 
 	return strings.Join(parts, "\n")
+}
+
+func buildClusterContext(m *model, clusterID string) []string {
+	var parts []string
+
+	if info, ok := m.clusterCache[clusterID]; ok {
+		parts = append(parts, fmt.Sprintf("Cluster name: %s", info.DisplayName))
+		parts = append(parts, fmt.Sprintf("State: %s, Region: %s, Provider: %s, Version: %s",
+			info.State, info.Region, info.CloudProvider, info.Version))
+	}
+
+	if logs, ok := m.serviceLogCache[clusterID]; ok && len(logs) > 0 {
+		parts = append(parts, fmt.Sprintf("Recent service logs: %d", len(logs)))
+		for i, sl := range logs {
+			if i >= 5 {
+				break
+			}
+			parts = append(parts, fmt.Sprintf("  - [%s] %s: %s", sl.Severity, sl.ServiceName, sl.Summary))
+		}
+	}
+
+	if reasons, ok := m.limitedSupportCache[clusterID]; ok && len(reasons) > 0 {
+		parts = append(parts, fmt.Sprintf("Limited support reasons: %d", len(reasons)))
+		for _, r := range reasons {
+			parts = append(parts, fmt.Sprintf("  - %s", r.Summary))
+		}
+	}
+
+	return parts
 }
 
 func prefixLines(marker string, text string) string {
