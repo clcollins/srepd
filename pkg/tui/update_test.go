@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/PagerDuty/go-pagerduty"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
@@ -337,5 +338,116 @@ func TestDevModeFieldSet(t *testing.T) {
 		m := teaModel.(model)
 
 		assert.True(t, m.devMode, "devMode should be true for InitialModelWithConfig")
+	})
+}
+
+func TestEnterBulkSilenceMsg_BuildsForm(t *testing.T) {
+	t.Run("enterBulkSilenceMsg creates multi-select form", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+		}
+		m.incidentList = []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Title: "Alert 1", Service: pagerduty.APIObject{Summary: "SvcA"}},
+			{APIObject: pagerduty.APIObject{ID: "Q456"}, Title: "Alert 2", Service: pagerduty.APIObject{Summary: "SvcB"}},
+		}
+
+		result, cmd := m.Update(enterBulkSilenceMsg{})
+		updated := result.(model)
+
+		assert.True(t, updated.bulkSilenceMode, "should enter bulk silence mode")
+		assert.NotNil(t, updated.bulkSilenceForm, "form should be created")
+		assert.NotNil(t, cmd, "should return init command for form")
+	})
+
+	t.Run("enterBulkSilenceMsg with no incidents shows status", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+		}
+		m.incidentList = nil
+
+		result, _ := m.Update(enterBulkSilenceMsg{})
+		updated := result.(model)
+
+		assert.False(t, updated.bulkSilenceMode, "should not enter bulk silence mode")
+		assert.Contains(t, updated.status, "no incidents")
+	})
+}
+
+func TestBulkSilenceConfirmedMsg_PerServicePolicy(t *testing.T) {
+	t.Run("bulkSilenceConfirmedMsg uses per-service policy lookup", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+			EscalationPolicies: map[string]*pagerduty.EscalationPolicy{
+				"SILENT_DEFAULT": {APIObject: pagerduty.APIObject{ID: "POL_DEFAULT"}, Name: "Default Silent"},
+				"SVC_CUSTOM":     {APIObject: pagerduty.APIObject{ID: "POL_CUSTOM"}, Name: "Custom Silent"},
+			},
+		}
+
+		incidents := []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Service: pagerduty.APIObject{ID: "SVC_CUSTOM", Summary: "Custom Svc"}},
+			{APIObject: pagerduty.APIObject{ID: "Q456"}, Service: pagerduty.APIObject{ID: "SVC_OTHER", Summary: "Other Svc"}},
+		}
+
+		result, cmd := m.Update(bulkSilenceConfirmedMsg{incidents: incidents})
+		updated := result.(model)
+
+		assert.NotNil(t, cmd, "should return batch command")
+		assert.Contains(t, updated.status, "Silenced")
+	})
+
+	t.Run("bulkSilenceConfirmedMsg with empty incidents shows status", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+		}
+
+		result, _ := m.Update(bulkSilenceConfirmedMsg{incidents: nil})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "no incidents")
+	})
+}
+
+func TestSilenceIncidentsMsg_PerServicePolicy(t *testing.T) {
+	t.Run("silenceIncidentsMsg uses per-service policy lookup", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+			EscalationPolicies: map[string]*pagerduty.EscalationPolicy{
+				"SILENT_DEFAULT": {APIObject: pagerduty.APIObject{ID: "POL_DEFAULT"}, Name: "Default Silent"},
+				"SVC_CUSTOM":     {APIObject: pagerduty.APIObject{ID: "POL_CUSTOM"}, Name: "Custom Silent"},
+			},
+		}
+
+		incidents := []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Service: pagerduty.APIObject{ID: "SVC_CUSTOM"}},
+		}
+
+		result, cmd := m.Update(silenceIncidentsMsg{incidents: incidents})
+		updated := result.(model)
+
+		assert.NotNil(t, cmd, "should return batch command")
+		assert.Contains(t, updated.status, "Silenced")
+	})
+
+	t.Run("silenceIncidentsMsg with nil incidents shows error", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+		}
+
+		result, _ := m.Update(silenceIncidentsMsg{incidents: nil})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "failed silencing")
 	})
 }
