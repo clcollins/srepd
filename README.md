@@ -112,7 +112,7 @@ When running inside a Fedora Toolbox, terminal commands are automatically prefix
 
 ## OCM Integration
 
-SREPD enriches PagerDuty incident data with cluster details from the OpenShift Cluster Manager (OCM) API. On startup, it connects to the production OCM API using tokens from `~/.config/ocm/ocm.json`. If tokens are expired, a browser window opens for auth code login.
+SREPD enriches PagerDuty incident data with cluster details from the OpenShift Cluster Manager (OCM) API. On startup, it connects to the production OCM API using tokens from `~/.config/ocm/ocm.json`. If tokens are expired, a browser window opens for auth code login in the background — the TUI starts immediately with PagerDuty incidents visible, and OCM enrichment populates once authentication completes.
 
 Enriched data includes:
 * **Cluster display names** replace PD service names in the incident table (e.g., `mycluster.abc1.p1.example.org` instead of `osd-mycluster.abc1.p1.example.org-hive-cluster`)
