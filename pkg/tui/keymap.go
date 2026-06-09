@@ -188,12 +188,12 @@ var defaultKeyMap = keymap{
 		key.WithHelp("m", "merge incident"),
 	),
 	TabNext: key.NewBinding(
-		key.WithKeys("tab"),
-		key.WithHelp("tab", "next tab"),
+		key.WithKeys("tab", "right"),
+		key.WithHelp("tab/→", "next tab"),
 	),
 	TabPrev: key.NewBinding(
-		key.WithKeys("shift+tab"),
-		key.WithHelp("shift+tab", "prev tab"),
+		key.WithKeys("shift+tab", "left"),
+		key.WithHelp("shift+tab/←", "prev tab"),
 	),
 }
 

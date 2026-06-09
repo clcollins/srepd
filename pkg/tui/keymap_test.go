@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -205,4 +206,30 @@ func getBindingFieldName(binding key.Binding) string {
 	}
 
 	return ""
+}
+
+func TestTabNavigation_ArrowKeys(t *testing.T) {
+	t.Run("left arrow matches TabPrev", func(t *testing.T) {
+		msg := tea.KeyMsg{Type: tea.KeyLeft}
+		assert.True(t, key.Matches(msg, defaultKeyMap.TabPrev),
+			"left arrow should match TabPrev binding")
+	})
+
+	t.Run("right arrow matches TabNext", func(t *testing.T) {
+		msg := tea.KeyMsg{Type: tea.KeyRight}
+		assert.True(t, key.Matches(msg, defaultKeyMap.TabNext),
+			"right arrow should match TabNext binding")
+	})
+
+	t.Run("tab still matches TabNext", func(t *testing.T) {
+		msg := tea.KeyMsg{Type: tea.KeyTab}
+		assert.True(t, key.Matches(msg, defaultKeyMap.TabNext),
+			"tab should still match TabNext binding")
+	})
+
+	t.Run("shift+tab still matches TabPrev", func(t *testing.T) {
+		msg := tea.KeyMsg{Type: tea.KeyShiftTab}
+		assert.True(t, key.Matches(msg, defaultKeyMap.TabPrev),
+			"shift+tab should still match TabPrev binding")
+	})
 }
