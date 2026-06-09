@@ -168,6 +168,10 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Commands for any focus mode
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
+		if msg.(tea.KeyMsg).String() == "/" {
+			m.input.SetValue("/")
+			m.input.SetCursor(1)
+		}
 		return m, tea.Sequence(
 			m.input.Focus(),
 		)

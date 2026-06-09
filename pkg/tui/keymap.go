@@ -166,8 +166,8 @@ var defaultKeyMap = keymap{
 		key.WithHelp("u", "toggle urgency filter"),
 	),
 	Input: key.NewBinding(
-		key.WithKeys("i", ":"),
-		key.WithHelp("i/:", "command input"),
+		key.WithKeys("i", ":", "/"),
+		key.WithHelp("i/:/", "command input"),
 	),
 	Login: key.NewBinding(
 		key.WithKeys("l"),
