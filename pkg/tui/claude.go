@@ -15,11 +15,6 @@ import (
 
 const (
 	claudeTimeout = 60 * time.Second
-
-	claudeSystemPrompt = "You are in read-only investigation mode for SRE PagerDuty incident triage. " +
-		"Suggest commands for the user to run if changes are needed. Do not modify cluster state. " +
-		"All cluster commands must be read-only (oc get, oc describe, NOT oc delete/patch). " +
-		"If a fix requires changes, OUTPUT the commands for the SRE to review and run manually."
 )
 
 // claudePromptMsg is sent when the user submits a prompt from the input field
@@ -76,7 +71,7 @@ func buildClaudeEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inciden
 // agentQuery dispatches a prompt to the configured CLI agent and returns the
 // response. The command is parsed from the agentCLICommand config string.
 // The prompt is piped via stdin for safety.
-func agentQuery(agentCLICommand string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
+func agentQuery(agentCLICommand string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
 		defer cancel()
@@ -86,7 +81,7 @@ func agentQuery(agentCLICommand string, prompt string, incidentContext string, i
 			return claudeResponseMsg{err: fmt.Errorf("agent_cli_command is empty")}
 		}
 
-		fullPrompt := claudeSystemPrompt + "\n\n" + prompt
+		fullPrompt := systemPrompt + "\n\n" + prompt
 		if incidentContext != "" {
 			fullPrompt += "\n\nContext:\n" + incidentContext
 		}
@@ -165,7 +160,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	incidentContext := buildWatcherContext(&m)
 	return m, tea.Batch(
 		m.spinner.Tick,
-		agentQuery(agentCmd, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
+		agentQuery(agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
 	)
 }
 

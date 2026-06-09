@@ -8,6 +8,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -208,12 +209,16 @@ func TestClaudeQuery_PassesContext(t *testing.T) {
 		"Should include cluster ID from alerts")
 }
 
-func TestClaudeQuery_SystemPrompt(t *testing.T) {
-	// The system prompt should specify read-only investigation mode
-	assert.Contains(t, claudeSystemPrompt, "read-only",
-		"System prompt should specify read-only mode")
-	assert.Contains(t, claudeSystemPrompt, "investigation",
-		"System prompt should mention investigation")
+func TestDefaultAgentSystemPrompt(t *testing.T) {
+	defaultPrompt := pkgconfig.DefaultOptionalKeys["agent_system_prompt"]
+	assert.Contains(t, defaultPrompt, "read-only")
+	assert.Contains(t, defaultPrompt, "investigation")
+}
+
+func TestDefaultWatcherSystemPrompt(t *testing.T) {
+	defaultPrompt := pkgconfig.DefaultOptionalKeys["watcher_system_prompt"]
+	assert.Contains(t, defaultPrompt, "SRE assistant")
+	assert.Contains(t, defaultPrompt, "destructive")
 }
 
 func TestInputFocusMode_EscBlursInput(t *testing.T) {
@@ -319,7 +324,7 @@ func TestDefaultLookPath_NoPanic(t *testing.T) {
 }
 
 func TestAgentQuery_EmptyCommand(t *testing.T) {
-	cmd := agentQuery("", "test prompt", "", nil, nil)
+	cmd := agentQuery("", "test system", "test prompt", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -328,7 +333,7 @@ func TestAgentQuery_EmptyCommand(t *testing.T) {
 }
 
 func TestAgentQuery_CommandParsing(t *testing.T) {
-	cmd := agentQuery("echo hello world", "ignored", "", nil, nil)
+	cmd := agentQuery("echo hello world", "", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -337,7 +342,7 @@ func TestAgentQuery_CommandParsing(t *testing.T) {
 }
 
 func TestAgentQuery_MultiWordCommand(t *testing.T) {
-	cmd := agentQuery("echo -n test", "ignored", "", nil, nil)
+	cmd := agentQuery("echo -n test", "", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -346,7 +351,7 @@ func TestAgentQuery_MultiWordCommand(t *testing.T) {
 }
 
 func TestAgentQuery_CommandNotFound(t *testing.T) {
-	cmd := agentQuery("nonexistent-binary-99999 --flag", "test", "", nil, nil)
+	cmd := agentQuery("nonexistent-binary-99999 --flag", "", "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -359,7 +364,7 @@ func TestAgentQuery_StderrCaptured(t *testing.T) {
 	err := os.WriteFile(script, []byte("#!/bin/sh\necho oops >&2\nexit 1\n"), 0755)
 	assert.NoError(t, err)
 
-	cmd := agentQuery(script, "test", "", nil, nil)
+	cmd := agentQuery(script, "", "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -380,7 +385,7 @@ func TestAgentQuery_PassesEnvVars(t *testing.T) {
 		Service:   pagerduty.APIObject{Summary: "svc"},
 	}
 
-	cmd := agentQuery(script, "test", "", incident, nil)
+	cmd := agentQuery(script, "", "test", "", incident, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -389,13 +394,13 @@ func TestAgentQuery_PassesEnvVars(t *testing.T) {
 }
 
 func TestAgentQuery_PipesStdin(t *testing.T) {
-	cmd := agentQuery("cat", "user question here", "", nil, nil)
+	cmd := agentQuery("cat", "test system prompt", "user question here", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
 	assert.NoError(t, resp.err)
 	assert.Contains(t, resp.response, "user question here")
-	assert.Contains(t, resp.response, claudeSystemPrompt)
+	assert.Contains(t, resp.response, "test system prompt")
 }
 
 func TestHandleClaudePrompt_DefaultCommand(t *testing.T) {

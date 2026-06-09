@@ -216,13 +216,10 @@ type watcherResponseMsg struct {
 	err      error
 }
 
-func watcherQueryCmd(provider ai.Provider, userPrompt string, incidentContext string) tea.Cmd {
+func watcherQueryCmd(provider ai.Provider, systemPrompt string, userPrompt string, incidentContext string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), watcherQueryTimeout)
 		defer cancel()
-
-		systemPrompt := "You are an SRE assistant with access to PagerDuty incident data and OpenShift cluster information. " +
-			"Provide concise, actionable analysis. Do not suggest destructive commands."
 
 		fullPrompt := userPrompt
 		if incidentContext != "" {
@@ -269,17 +266,15 @@ type watcherSynthesisMsg struct {
 	err         error
 }
 
-func watcherSynthesizeCmd(provider ai.Provider, observation string, incidentSummary string) tea.Cmd {
+func watcherSynthesizeCmd(provider ai.Provider, systemPrompt string, observation string, incidentSummary string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), watcherSynthesisTimeout)
 		defer cancel()
 
-		systemPrompt := "You are an SRE assistant observing a PagerDuty incident queue. " +
-			"A pattern detector identified the following observation. " +
+		synthesisPrefix := "A pattern detector identified the following observation. " +
 			"Provide a brief (1-3 sentence) analysis of what this pattern might indicate " +
 			"and any suggested investigation steps. Be concise."
-
-		userPrompt := fmt.Sprintf("Observation: %s\n\nCurrent incidents:\n%s", observation, incidentSummary)
+		userPrompt := fmt.Sprintf("%s\n\nObservation: %s\n\nCurrent incidents:\n%s", synthesisPrefix, observation, incidentSummary)
 
 		log.Debug("watcher.synthesize", "provider", provider.Name(), "observation", observation)
 

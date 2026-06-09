@@ -33,6 +33,8 @@ var (
 		"flag_marker":           "🚩 ",
 		"agent_cli_command":     "claude --print",
 		"emoji":                 "true",
+		"agent_system_prompt":   "You are in read-only investigation mode for SRE PagerDuty incident triage. Suggest commands for the user to run if changes are needed. Do not modify cluster state. All cluster commands must be read-only (oc get, oc describe, NOT oc delete/patch). If a fix requires changes, OUTPUT the commands for the SRE to review and run manually.",
+		"watcher_system_prompt": "You are an SRE assistant with access to PagerDuty incident data and OpenShift cluster information. Provide concise, actionable analysis. Do not suggest destructive commands.",
 	}
 	OptionalKeys = map[string]string{
 		"editor":                             fmt.Sprintf("Editor to use for notes (default: %v)", DefaultOptionalKeys["editor"]),
@@ -43,6 +45,8 @@ var (
 		"flag_marker":                        fmt.Sprintf("Prefix marker for flagged incidents (default: %v, alt: |►)", DefaultOptionalKeys["flag_marker"]),
 		"agent_cli_command":                  fmt.Sprintf("CLI agent command for /agent queries (default: %v)", DefaultOptionalKeys["agent_cli_command"]),
 		"emoji":                              "Use emoji markers for flags/agent/watcher (default: true, set false for text fallbacks)",
+		"agent_system_prompt":                "System prompt for :agent CLI queries (customizable per-user)",
+		"watcher_system_prompt":              "System prompt for :watcher LLM queries and ambient analysis (customizable per-user)",
 		"colors":                             "Custom color scheme (map of color name to hex value)",
 		"default_silent_escalation_policy":   "Default silent escalation policy ID (auto-discovered via srepd config)",
 		"custom_service_escalation_policies": "Per-service silent policy overrides (service ID → policy ID)",

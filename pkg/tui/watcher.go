@@ -194,7 +194,7 @@ func (m *model) runDetectors() []tea.Cmd {
 			m.watcherQueryStart = time.Now()
 			m.watcherQueryTimeout = watcherSynthesisTimeout
 			summary := buildIncidentSummary(m.incidentList)
-			cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, obs.Summary, summary))
+			cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, m.watcherSystemPrompt, obs.Summary, summary))
 		} else {
 			m.watcherBuffer.Append(prefixLines(m.watcherMarker, obs.Summary))
 			added = true

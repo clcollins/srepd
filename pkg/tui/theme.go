@@ -9,6 +9,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	cellPaddingV = 0
+	cellPaddingH = 1
+)
+
 var hexColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$`)
 
 func isValidHexColor(s string) bool {
@@ -122,11 +127,11 @@ func BuildStyles(theme Theme) Styles {
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(theme.Border).
 		Foreground(theme.Text).
-		Padding(0, 1)
+		Padding(cellPaddingV, cellPaddingH)
 
-	tableCell := lipgloss.NewStyle().Padding(0, 1)
+	tableCell := lipgloss.NewStyle().Padding(cellPaddingV, cellPaddingH)
 	tableHeader := lipgloss.NewStyle().
-		Padding(0, 1).
+		Padding(cellPaddingV, cellPaddingH).
 		Border(lipgloss.RoundedBorder(), false, false, true).
 		BorderForeground(theme.Border).
 		Foreground(theme.Highlight).

@@ -119,8 +119,10 @@ type model struct {
 	chordHelpActive bool
 
 	// claudeQuerying is true while a Claude CLI query is in progress
-	claudeQuerying  bool
-	agentCLICommand string
+	claudeQuerying     bool
+	agentCLICommand    string
+	agentSystemPrompt  string
+	watcherSystemPrompt string
 
 	// aiProvider is the configured LLM API provider, or nil when unconfigured
 	aiProvider ai.Provider
@@ -286,6 +288,8 @@ func InitialModel(
 	m.watcherMarker = mk.watcher
 	m.agentMarker = mk.agent
 	m.watcherDedup = newWatcherDedup(5 * time.Minute)
+	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
+	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
@@ -387,6 +391,8 @@ func InitialModelWithConfig(
 	m.watcherMarker = mk2.watcher
 	m.agentMarker = mk2.agent
 	m.watcherDedup = newWatcherDedup(5 * time.Minute)
+	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
+	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{

@@ -462,6 +462,8 @@ func configureLogging() {
 	// Check if user wants to log to journal (default: true)
 	viper.SetDefault("log_to_journal", true)
 	viper.SetDefault("emoji", true)
+	viper.SetDefault("agent_system_prompt", pkgconfig.DefaultOptionalKeys["agent_system_prompt"])
+	viper.SetDefault("watcher_system_prompt", pkgconfig.DefaultOptionalKeys["watcher_system_prompt"])
 	logToJournal := viper.GetBool("log_to_journal")
 
 	dest, logPath := determineLogDestination(runtime.GOOS, logToJournal, journal.Enabled())

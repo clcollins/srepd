@@ -491,7 +491,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		incidentContext := buildWatcherContext(&m)
 		return m, tea.Batch(
 			m.spinner.Tick,
-			watcherQueryCmd(m.aiProvider, msg.prompt, incidentContext),
+			watcherQueryCmd(m.aiProvider, m.watcherSystemPrompt, msg.prompt, incidentContext),
 		)
 
 	case watcherResponseMsg:
