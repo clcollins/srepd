@@ -444,6 +444,78 @@ func TestJournalWriter_Write(t *testing.T) {
 	}
 }
 
+func TestAutoCommentOldPolicies_BothFormatsPresent(t *testing.T) {
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "srepd.yaml")
+
+	content := `token: my-token
+teams:
+  - TEAM1
+service_escalation_policies:
+  SILENT_DEFAULT: PCGXUDY
+  DEFAULT: PA4586M
+default_silent_escalation_policy: PCGXUDY
+`
+	err := os.WriteFile(configFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	changed, err := autoCommentOldPolicies(configFile)
+	require.NoError(t, err)
+	assert.True(t, changed, "should report that changes were made")
+
+	result, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	output := string(result)
+
+	assert.NotContains(t, output, "\nservice_escalation_policies:", "old block should be commented out")
+	assert.Contains(t, output, "# service_escalation_policies:", "old block should be commented")
+	assert.Contains(t, output, "default_silent_escalation_policy: PCGXUDY", "new format should be preserved")
+}
+
+func TestAutoCommentOldPolicies_NoOldFormat(t *testing.T) {
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "srepd.yaml")
+
+	content := `token: my-token
+teams:
+  - TEAM1
+default_silent_escalation_policy: PCGXUDY
+`
+	err := os.WriteFile(configFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	changed, err := autoCommentOldPolicies(configFile)
+	require.NoError(t, err)
+	assert.False(t, changed, "should report no changes when old format absent")
+
+	result, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	assert.Equal(t, content, string(result), "file should not be modified")
+}
+
+func TestAutoCommentOldPolicies_OnlyOldFormat(t *testing.T) {
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "srepd.yaml")
+
+	content := `token: my-token
+teams:
+  - TEAM1
+service_escalation_policies:
+  SILENT_DEFAULT: PCGXUDY
+  DEFAULT: PA4586M
+`
+	err := os.WriteFile(configFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	changed, err := autoCommentOldPolicies(configFile)
+	require.NoError(t, err)
+	assert.False(t, changed, "should not migrate when new format is absent")
+
+	result, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	assert.Equal(t, content, string(result), "file should not be modified when only old format exists")
+}
+
 func TestJournalWriter_WriteReturnsCorrectLength(t *testing.T) {
 	if !journal.Enabled() {
 		t.Skip("systemd journal not available")
