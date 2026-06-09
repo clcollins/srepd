@@ -252,3 +252,109 @@ func TestDetectAll(t *testing.T) {
 		assert.GreaterOrEqual(t, len(obs), 2)
 	})
 }
+
+func TestWatcherBuffer_SetLast(t *testing.T) {
+	t.Run("replaces last entry", func(t *testing.T) {
+		buf := newWatcherBuffer(5)
+		buf.Append("first")
+		buf.Append("second")
+		buf.SetLast("replaced")
+
+		assert.Equal(t, 2, buf.Len())
+		assert.Contains(t, buf.Content(), "replaced")
+		assert.NotContains(t, buf.Content(), "second")
+	})
+
+	t.Run("appends when empty", func(t *testing.T) {
+		buf := newWatcherBuffer(5)
+		buf.SetLast("only")
+
+		assert.Equal(t, 1, buf.Len())
+		assert.Equal(t, "only", buf.Content())
+	})
+}
+
+func TestBuildIncidentSummary(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+		makeIncident("P2", "svc-b", "low"),
+	}
+
+	summary := buildIncidentSummary(incidents)
+
+	assert.Contains(t, summary, "P1")
+	assert.Contains(t, summary, "svc-a")
+	assert.Contains(t, summary, "high")
+	assert.Contains(t, summary, "P2")
+	assert.Contains(t, summary, "svc-b")
+	assert.Contains(t, summary, "low")
+}
+
+func TestIsWatcherCommand(t *testing.T) {
+	assert.True(t, isWatcherCommand(":watcher what happened"))
+	assert.True(t, isWatcherCommand(":watcher"))
+	assert.True(t, isWatcherCommand("  :watcher query"))
+	assert.False(t, isWatcherCommand("watcher"))
+	assert.False(t, isWatcherCommand(":agent query"))
+	assert.False(t, isWatcherCommand(""))
+}
+
+func TestParseWatcherQuery(t *testing.T) {
+	assert.Equal(t, "what happened", parseWatcherQuery(":watcher what happened"))
+	assert.Equal(t, "", parseWatcherQuery(":watcher"))
+	assert.Equal(t, "multi word query", parseWatcherQuery(":watcher multi word query"))
+}
+
+func TestSplitKeepingNewlines(t *testing.T) {
+	t.Run("preserves newlines as tokens", func(t *testing.T) {
+		tokens := splitKeepingNewlines("hello world\nfoo bar")
+		assert.Equal(t, []string{"hello", "world", "\n", "foo", "bar"}, tokens)
+	})
+
+	t.Run("handles blank lines", func(t *testing.T) {
+		tokens := splitKeepingNewlines("hello\n\nworld")
+		assert.Equal(t, []string{"hello", "\n", "\n", "world"}, tokens)
+	})
+
+	t.Run("single line", func(t *testing.T) {
+		tokens := splitKeepingNewlines("hello world")
+		assert.Equal(t, []string{"hello", "world"}, tokens)
+	})
+
+	t.Run("empty string", func(t *testing.T) {
+		tokens := splitKeepingNewlines("")
+		assert.Empty(t, tokens)
+	})
+}
+
+func TestBuildWatcherContext_NoIncident(t *testing.T) {
+	m := createTestModel()
+	m.incidentList = []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+
+	ctx := buildWatcherContext(&m)
+
+	assert.Contains(t, ctx, "P1")
+	assert.Contains(t, ctx, "svc-a")
+}
+
+func TestBuildWatcherContext_WithIncident(t *testing.T) {
+	m := createTestModel()
+	m.selectedIncident = &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "P123"},
+		Title:     "Test Alert",
+		Status:    "triggered",
+		Urgency:   "high",
+		Service:   pagerduty.APIObject{Summary: "test-service"},
+	}
+	m.incidentList = []pagerduty.Incident{*m.selectedIncident}
+
+	ctx := buildWatcherContext(&m)
+
+	assert.Contains(t, ctx, "Test Alert")
+	assert.Contains(t, ctx, "P123")
+	assert.Contains(t, ctx, "test-service")
+	assert.Contains(t, ctx, "triggered")
+	assert.Contains(t, ctx, "high")
+}

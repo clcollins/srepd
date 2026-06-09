@@ -170,13 +170,13 @@ type watcherObservation struct {
 }
 
 type watcherDedup struct {
-	seen    map[string]time.Time
+	seen     map[string]time.Time
 	cooldown time.Duration
 }
 
 func newWatcherDedup(cooldown time.Duration) *watcherDedup {
 	return &watcherDedup{
-		seen:    make(map[string]time.Time),
+		seen:     make(map[string]time.Time),
 		cooldown: cooldown,
 	}
 }

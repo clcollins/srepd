@@ -119,9 +119,9 @@ type model struct {
 	chordHelpActive bool
 
 	// claudeQuerying is true while a Claude CLI query is in progress
-	claudeQuerying     bool
-	agentCLICommand    string
-	agentSystemPrompt  string
+	claudeQuerying      bool
+	agentCLICommand     string
+	agentSystemPrompt   string
 	watcherSystemPrompt string
 
 	// aiProvider is the configured LLM API provider, or nil when unconfigured
@@ -130,16 +130,16 @@ type model struct {
 	aiHealthy bool
 
 	// watcherExpanded is true when the AI watcher pane is visible below the table
-	watcherExpanded bool
-	watcherViewport viewport.Model
-	watcherBuffer   *watcherBuffer
-	watcherMarker   string
-	agentMarker     string
-	watcherDedup       *watcherDedup
-	watcherAnalyzing      bool
-	watcherQueryStart     time.Time
-	watcherQueryTimeout   time.Duration
-	typewriter        *typewriterState
+	watcherExpanded     bool
+	watcherViewport     viewport.Model
+	watcherBuffer       *watcherBuffer
+	watcherMarker       string
+	agentMarker         string
+	watcherDedup        *watcherDedup
+	watcherAnalyzing    bool
+	watcherQueryStart   time.Time
+	watcherQueryTimeout time.Duration
+	typewriter          *typewriterState
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes

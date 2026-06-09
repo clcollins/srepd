@@ -39,7 +39,7 @@ SREPD reads configuration from `~/.config/srepd/srepd.yaml` and supports the `SR
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command. Supports `%%CLUSTER_ID%%` and `%%INCIDENT_ID%%` placeholders. |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
-| `emoji` | `bool` | `true` | Use emoji markers (`🚩 🤖 📡`) or text fallbacks (`|► ☻ ☺`) |
+| `emoji` | `bool` | `true` | Use emoji markers (🚩 🤖 📡) or text fallbacks (\|► ☻ ☺) |
 
 #### Escalation Policies
 
@@ -52,7 +52,7 @@ SREPD reads configuration from `~/.config/srepd/srepd.yaml` and supports the `SR
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`). Overridden by `emoji` setting. |
+| `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: \|►). Overridden by `emoji` setting. |
 
 See [Flag Conditions](flag-conditions.md) for usage.
 

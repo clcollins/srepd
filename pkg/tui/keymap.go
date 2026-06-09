@@ -56,8 +56,8 @@ type keymap struct {
 	Open        key.Binding
 	SOP         key.Binding
 	ViewLog     key.Binding
-	Merge   key.Binding
-	Watcher key.Binding
+	Merge       key.Binding
+	Watcher     key.Binding
 	TabNext     key.Binding
 	TabPrev     key.Binding
 }
