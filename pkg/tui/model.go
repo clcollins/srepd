@@ -161,6 +161,12 @@ type model struct {
 	serviceLogCache       map[string][]ocm.ServiceLog
 	limitedSupportCache   map[string][]ocm.LimitedSupportReason
 
+	// Flag conditions state
+	flagConditions []FlagCondition
+	flagNextID     int
+	flagMarker     string
+	flagMatchCache map[string][]int // incident ID → matching condition IDs
+
 	// Dependency injection for testability
 	pdClientFactory func(string) pd.PagerDutyClient
 	configFS        pkgconfig.ConfigFS
@@ -243,6 +249,7 @@ func InitialModel(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
+		flagMarker:            defaultFlagMarker,
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
@@ -327,6 +334,7 @@ func InitialModelWithConfig(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
+		flagMarker:            defaultFlagMarker,
 		theme:                 theme,
 		styles:                styles,
 	}

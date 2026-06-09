@@ -374,6 +374,61 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		enrichCmds = append(enrichCmds, m.flashNotification("OCM connected — enriching cluster data"))
 		return m, tea.Batch(enrichCmds...)
 
+	case addFlagConditionMsg:
+		m.flagNextID++
+		msg.condition.ID = m.flagNextID
+		m.flagConditions = append(m.flagConditions, msg.condition)
+		m.rebuildFlagMatchCache()
+		return m, m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
+
+	case removeFlagConditionMsg:
+		for i, c := range m.flagConditions {
+			if c.ID == msg.id {
+				m.flagConditions = append(m.flagConditions[:i], m.flagConditions[i+1:]...)
+				break
+			}
+		}
+		m.rebuildFlagMatchCache()
+		return m, m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
+
+	case clearFlagConditionsMsg:
+		m.flagConditions = nil
+		m.rebuildFlagMatchCache()
+		return m, m.flashNotification("all flags cleared")
+
+	case listFlagConditionsMsg:
+		content := formatFlagsList(m.flagConditions)
+		rendered, renderErr := renderIncidentMarkdown(&m, content)
+		if renderErr != nil {
+			rendered = content
+		}
+		m.incidentViewer.SetContent(rendered)
+		m.incidentViewer.GotoTop()
+		m.viewingIncident = true
+		m.table.Blur()
+		return m, nil
+
+	case flagsSavedMsg:
+		if msg.err != nil {
+			return m, m.flashNotification("flags save failed: " + msg.err.Error())
+		}
+		return m, m.flashNotification(fmt.Sprintf("flags saved (%d conditions)", len(m.flagConditions)))
+
+	case flagsLoadedMsg:
+		if msg.err != nil {
+			return m, m.flashNotification("flags load failed: " + msg.err.Error())
+		}
+		m.flagConditions = msg.conditions
+		maxID := 0
+		for _, c := range m.flagConditions {
+			if c.ID > maxID {
+				maxID = c.ID
+			}
+		}
+		m.flagNextID = maxID
+		m.rebuildFlagMatchCache()
+		return m, m.flashNotification(fmt.Sprintf("flags loaded (%d conditions)", len(m.flagConditions)))
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -695,6 +750,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Apply urgency filter before building table rows
 		filteredIncidents := filterByUrgency(m.incidentList, m.showLowUrgency)
 
+		m.rebuildFlagMatchCache()
+
 		var rows []table.Row
 
 		for _, i := range filteredIncidents {
@@ -738,7 +795,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						serviceName = serviceName + suffix
 					}
 				}
-				rows = append(rows, table.Row{state, i.ID, i.Title, serviceName})
+				title := i.Title
+				if matchedFlags, ok := m.flagMatchCache[i.ID]; ok && len(matchedFlags) > 0 {
+					title = m.flagMarker + title
+				}
+				rows = append(rows, table.Row{state, i.ID, title, serviceName})
 			}
 		}
 

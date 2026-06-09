@@ -155,6 +155,14 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	}
 
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Flag) {
+		m.input.SetValue("/flag ")
+		m.input.SetCursor(len("/flag "))
+		return m, tea.Sequence(
+			m.input.Focus(),
+		)
+	}
+
 	// Default commands for the table view
 	switch {
 	case m.configMode:
@@ -687,15 +695,17 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Enter):
-			// Extract the input text, reset input, and dispatch to Claude
 			prompt := m.input.Value()
 			m.input.Reset()
 			m.input.Blur()
 			m.table.Focus()
 
-			// Don't dispatch on empty input
 			if prompt == "" {
 				return m, nil
+			}
+
+			if isFlagCommand(prompt) {
+				return m, m.dispatchFlagCommand(prompt)
 			}
 
 			return m, func() tea.Msg {
