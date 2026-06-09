@@ -150,6 +150,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	m.claudeQuerying = true
 	m.apiInProgress = true
 	m.watcherQueryStart = time.Now()
+	m.watcherQueryTimeout = claudeTimeout
 
 	if !m.watcherExpanded {
 		m.watcherExpanded = true

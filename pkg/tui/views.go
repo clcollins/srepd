@@ -960,9 +960,12 @@ func (m model) renderWatcherStatus() string {
 	}
 
 	if m.claudeQuerying || m.watcherAnalyzing {
-		elapsed := time.Since(m.watcherQueryStart).Truncate(time.Second)
+		remaining := m.watcherQueryTimeout - time.Since(m.watcherQueryStart).Truncate(time.Second)
+		if remaining < 0 {
+			remaining = 0
+		}
 		highlight := lipgloss.NewStyle().Foreground(m.theme.Highlight)
-		parts = append(parts, m.spinner.View()+" "+highlight.Render(fmt.Sprintf("analyzing... %s", elapsed)))
+		parts = append(parts, m.spinner.View()+" "+highlight.Render(fmt.Sprintf("analyzing... %s", remaining)))
 	} else {
 		parts = append(parts, "idle")
 	}

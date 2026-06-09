@@ -28,6 +28,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	watcherQueryTimeout     = 60 * time.Second
+	watcherSynthesisTimeout = 30 * time.Second
+)
+
 // This file contains the commands that are used in the Bubble Tea update function.
 // These commands are functions that return a tea.Cmd, which performs I/O with
 // another system, such as the PagerDuty API, the filesystem, or the user's terminal,
@@ -213,7 +218,7 @@ type watcherResponseMsg struct {
 
 func watcherQueryCmd(provider ai.Provider, userPrompt string, incidentContext string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), watcherQueryTimeout)
 		defer cancel()
 
 		systemPrompt := "You are an SRE assistant with access to PagerDuty incident data and OpenShift cluster information. " +
@@ -266,7 +271,7 @@ type watcherSynthesisMsg struct {
 
 func watcherSynthesizeCmd(provider ai.Provider, observation string, incidentSummary string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), watcherSynthesisTimeout)
 		defer cancel()
 
 		systemPrompt := "You are an SRE assistant observing a PagerDuty incident queue. " +

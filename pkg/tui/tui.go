@@ -478,6 +478,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.watcherAnalyzing = true
 		m.apiInProgress = true
 		m.watcherQueryStart = time.Now()
+		m.watcherQueryTimeout = watcherQueryTimeout
 
 		if !m.watcherExpanded {
 			m.watcherExpanded = true

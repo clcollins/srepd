@@ -134,8 +134,9 @@ type model struct {
 	watcherMarker   string
 	agentMarker     string
 	watcherDedup       *watcherDedup
-	watcherAnalyzing   bool
-	watcherQueryStart  time.Time
+	watcherAnalyzing      bool
+	watcherQueryStart     time.Time
+	watcherQueryTimeout   time.Duration
 	typewriter        *typewriterState
 
 	// Incident viewer tab state
