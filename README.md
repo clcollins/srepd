@@ -70,6 +70,7 @@ If no config file exists, running `srepd` automatically enters the configuration
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 | `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`) |
+| `agent_cli_command` | `string` | `claude --print` | CLI agent command for `/agent` queries |
 | `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
 
 ### Colors
