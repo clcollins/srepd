@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -331,6 +333,125 @@ func TestDefaultLookPath_NoPanic(t *testing.T) {
 			_, _ = defaultLookPath("nonexistent-binary-12345")
 		}, "defaultLookPath should not panic for missing binaries")
 	})
+}
+
+func TestAgentQuery_EmptyCommand(t *testing.T) {
+	cmd := agentQuery("", "test prompt", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.Error(t, resp.err)
+	assert.Contains(t, resp.err.Error(), "agent_cli_command is empty")
+}
+
+func TestAgentQuery_CommandParsing(t *testing.T) {
+	cmd := agentQuery("echo hello world", "ignored", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Equal(t, "hello world", resp.response)
+}
+
+func TestAgentQuery_MultiWordCommand(t *testing.T) {
+	cmd := agentQuery("echo -n test", "ignored", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Equal(t, "test", resp.response)
+}
+
+func TestAgentQuery_CommandNotFound(t *testing.T) {
+	cmd := agentQuery("nonexistent-binary-99999 --flag", "test", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.Error(t, resp.err)
+	assert.Contains(t, resp.err.Error(), "agent error")
+}
+
+func TestAgentQuery_StderrCaptured(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fail.sh")
+	err := os.WriteFile(script, []byte("#!/bin/sh\necho oops >&2\nexit 1\n"), 0755)
+	assert.NoError(t, err)
+
+	cmd := agentQuery(script, "test", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.Error(t, resp.err)
+	assert.Contains(t, resp.err.Error(), "oops")
+}
+
+func TestAgentQuery_PassesEnvVars(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "env.sh")
+	err := os.WriteFile(script, []byte("#!/bin/sh\necho $PAGERDUTY_INCIDENT_ID\n"), 0755)
+	assert.NoError(t, err)
+
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PD999"},
+		Title:     "Test",
+		Urgency:   "high",
+		Status:    "triggered",
+		Service:   pagerduty.APIObject{Summary: "svc"},
+	}
+
+	cmd := agentQuery(script, "test", incident, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Equal(t, "PD999", resp.response)
+}
+
+func TestAgentQuery_PipesStdin(t *testing.T) {
+	cmd := agentQuery("cat", "user question here", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Contains(t, resp.response, "user question here")
+	assert.Contains(t, resp.response, claudeSystemPrompt)
+}
+
+func TestHandleClaudePrompt_DefaultCommand(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = ""
+
+	msg := claudePromptMsg{prompt: "test"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		assert.Equal(t, "claude", s, "should look up 'claude' when agentCLICommand is empty")
+		return "/usr/bin/claude", nil
+	})
+	updated := result.(model)
+	assert.True(t, updated.claudeQuerying)
+}
+
+func TestHandleClaudePrompt_CustomCommand(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "/opt/bin/my-agent --verbose --print"
+
+	msg := claudePromptMsg{prompt: "test"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		assert.Equal(t, "/opt/bin/my-agent", s, "should look up the first word of the configured command")
+		return s, nil
+	})
+	updated := result.(model)
+	assert.True(t, updated.claudeQuerying)
+}
+
+func TestHandleClaudePrompt_ToolboxCommand(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "toolbox run -c devtools claude --print"
+
+	msg := claudePromptMsg{prompt: "test"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		assert.Equal(t, "toolbox", s, "should look up 'toolbox' as the first word")
+		return "/usr/bin/toolbox", nil
+	})
+	updated := result.(model)
+	assert.True(t, updated.claudeQuerying)
 }
 
 func TestTruncatePrompt(t *testing.T) {
