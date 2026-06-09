@@ -437,6 +437,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TickMsg:
 		return m, tea.Batch(runScheduledJobs(&m)...)
 
+	case aiHealthCheckMsg:
+		m.aiHealthy = msg.healthy
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		return m.windowSizeMsgHandler(msg)
 

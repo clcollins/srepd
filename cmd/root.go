@@ -35,6 +35,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/ai"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
@@ -164,6 +165,27 @@ func launchTUI() {
 		log.Info("OCM tokens not valid — will authenticate async")
 	}
 
+	var aiProvider ai.Provider
+	llmCfg := ai.Config{
+		Provider:  viper.GetString("llm_api.provider"),
+		APIKeyEnv: viper.GetString("llm_api.api_key_env"),
+		Model:     viper.GetString("llm_api.model"),
+		Endpoint:  viper.GetString("llm_api.endpoint"),
+	}
+	if llmCfg.Provider != "" {
+		if err := ai.ValidateConfig(llmCfg); err != nil {
+			log.Warn("LLM API config invalid, AI features disabled", "error", err)
+		} else {
+			provider, providerErr := ai.NewProvider(llmCfg)
+			if providerErr != nil {
+				log.Warn("Failed to create LLM provider, AI features disabled", "error", providerErr)
+			} else {
+				aiProvider = provider
+				log.Info("LLM provider initialized", "provider", provider.Name())
+			}
+		}
+	}
+
 	m, _ := tui.InitialModel(
 		viper.GetString("token"),
 		viper.GetStringSlice("teams"),
@@ -178,6 +200,7 @@ func launchTUI() {
 		viper.GetStringMapString("custom_service_escalation_policies"),
 		false,
 		ocmAuthPending,
+		aiProvider,
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -358,6 +381,7 @@ func runDevMode() {
 		devLauncher,
 		viper.GetBool("debug"),
 		ocmMock,
+		nil, // aiProvider — not used in dev mode
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
