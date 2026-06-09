@@ -381,7 +381,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rebuildFlagMatchCache()
 		watcherCmds := m.runDetectors()
 		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
-		return m, tea.Batch(append(watcherCmds, flashCmd)...)
+		rebuildCmd := func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
+		return m, tea.Batch(append(watcherCmds, flashCmd, rebuildCmd)...)
 
 	case removeFlagConditionMsg:
 		for i, c := range m.flagConditions {
@@ -393,12 +394,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rebuildFlagMatchCache()
 		watcherCmds := m.runDetectors()
 		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
-		return m, tea.Batch(append(watcherCmds, flashCmd)...)
+		rebuildCmd := func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
+		return m, tea.Batch(append(watcherCmds, flashCmd, rebuildCmd)...)
 
 	case clearFlagConditionsMsg:
 		m.flagConditions = nil
 		m.rebuildFlagMatchCache()
-		return m, m.flashNotification("all flags cleared")
+		return m, tea.Batch(
+			m.flashNotification("all flags cleared"),
+			func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} },
+		)
 
 	case listFlagConditionsMsg:
 		content := formatFlagsList(m.flagConditions)
@@ -431,7 +436,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.flagNextID = maxID
 		m.rebuildFlagMatchCache()
-		return m, m.flashNotification(fmt.Sprintf("flags loaded (%d conditions)", len(m.flagConditions)))
+
+		enrichCmds := []tea.Cmd{
+			m.flashNotification(fmt.Sprintf("flags loaded (%d conditions)", len(m.flagConditions))),
+			func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} },
+		}
+		for _, inc := range m.incidentList {
+			if _, ok := m.incidentClusterMap[inc.ID]; !ok {
+				if m.config != nil {
+					enrichCmds = append(enrichCmds, getIncidentAlerts(m.config, inc.ID))
+				}
+			}
+		}
+		return m, tea.Batch(enrichCmds...)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -1400,6 +1417,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clusterCache[msg.clusterID] = msg.info
 		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
+
+		m.rebuildFlagMatchCache()
 
 		// Phase 2: dispatch service logs and limited support using the
 		// OCM internal ID for the API call but the PD cluster ID as cache key.

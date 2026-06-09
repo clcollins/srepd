@@ -735,9 +735,11 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.table.Focus()
 
 			if isFlagCommand(prompt) {
+				log.Debug("switchInputFocusMode", "msg", "dispatching flag command", "prompt", prompt)
 				return m, m.dispatchFlagCommand(prompt)
 			}
 
+			log.Debug("switchInputFocusMode", "msg", "unknown command", "prompt", prompt)
 			m.setStatus("unknown command — try :agent <query> or :flag <type> <value>")
 			return m, nil
 
