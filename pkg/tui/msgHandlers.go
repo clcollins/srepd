@@ -160,6 +160,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case m.configMode:
 		return switchConfigFocusMode(m, msg)
 
+	case m.bulkSilenceMode:
+		return switchBulkSilenceFocusMode(m, msg)
+
 	case m.teamSelectMode:
 		return switchTeamSelectFocusMode(m, msg)
 
@@ -186,6 +189,49 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func switchBulkSilenceFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.bulkSilenceForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.bulkSilenceForm = f
+	}
+	if m.bulkSilenceForm.State == huh.StateCompleted {
+		m.bulkSilenceMode = false
+		m.table.Focus()
+
+		if len(m.bulkSilenceIDs) == 0 {
+			m.setStatus("no incidents selected for silence")
+			return m, nil
+		}
+
+		var selected []pagerduty.Incident
+		idSet := make(map[string]bool)
+		for _, id := range m.bulkSilenceIDs {
+			idSet[id] = true
+		}
+		for _, inc := range m.incidentList {
+			if idSet[inc.ID] {
+				selected = append(selected, inc)
+			}
+		}
+
+		incidentIDs := strings.Join(m.bulkSilenceIDs, ", ")
+		m.pendingConfirmation = &confirmActionState{
+			prompt: fmt.Sprintf("Silence %d incident(s): %s? [y/n]", len(selected), incidentIDs),
+			action: func() tea.Msg {
+				return bulkSilenceConfirmedMsg{incidents: selected}
+			},
+		}
+		return m, nil
+	}
+	if m.bulkSilenceForm.State == huh.StateAborted {
+		m.bulkSilenceMode = false
+		m.table.Focus()
+		m.setStatus("bulk silence cancelled")
+		return m, nil
+	}
+	return m, cmd
 }
 
 func switchTeamSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {

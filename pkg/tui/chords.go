@@ -23,6 +23,7 @@ var chordRegistry = []struct {
 }{
 	{Key: "?", Description: "show chord help"},
 	{Key: "d", Description: "view debug log"},
+	{Key: "s", Description: "bulk silence"},
 }
 
 // getChordActions returns the full chord action list with handlers attached.
@@ -32,6 +33,7 @@ func getChordActions() []chordAction {
 	handlers := map[string]func(m model) (tea.Model, tea.Cmd){
 		"?": chordShowHelp,
 		"d": chordViewLog,
+		"s": chordBulkSilence,
 	}
 
 	var actions []chordAction
@@ -107,6 +109,15 @@ func chordHelpText(prefix string) string {
 		fmt.Fprintf(&b, "%s=%s", entry.Key, entry.Description)
 	}
 	return b.String()
+}
+
+// chordBulkSilence enters the bulk-silence incident selection mode.
+func chordBulkSilence(m model) (tea.Model, tea.Cmd) {
+	if len(m.incidentList) == 0 {
+		m.setStatus("no incidents to silence")
+		return m, nil
+	}
+	return m, func() tea.Msg { return enterBulkSilenceMsg{} }
 }
 
 // chordHelpBindings generates key.Binding entries for the help display.

@@ -61,6 +61,9 @@ func (m model) View() string {
 	case m.configModeRequested:
 		s.WriteString("  Loading configuration...")
 
+	case m.bulkSilenceMode:
+		s.WriteString(m.bulkSilenceForm.View())
+
 	case m.teamSelectMode:
 		s.WriteString(m.teamSelectForm.View())
 

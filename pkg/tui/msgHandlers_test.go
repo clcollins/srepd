@@ -8,6 +8,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -902,5 +903,69 @@ func TestErrorMode_NonEscapeKeysDoNotClearError(t *testing.T) {
 
 		assert.NotNil(t, updatedModel.err, "error should NOT be cleared by non-Escape key")
 		assert.Nil(t, cmd, "no command should be returned")
+	})
+}
+
+func TestBulkSilenceMode_AbortExitsMode(t *testing.T) {
+	t.Run("aborted form exits bulk silence mode", func(t *testing.T) {
+		m := createTestModel()
+		m.bulkSilenceMode = true
+
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewMultiSelect[string]().
+					Title("test").
+					Options(huh.NewOption("test", "Q123")).
+					Value(&m.bulkSilenceIDs),
+			),
+		)
+		m.bulkSilenceForm = form
+		m.bulkSilenceForm.Init()
+		m.bulkSilenceForm.State = huh.StateAborted
+
+		keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+		result, _ := switchBulkSilenceFocusMode(m, keyMsg)
+		updated := result.(model)
+
+		assert.False(t, updated.bulkSilenceMode, "should exit bulk silence mode")
+		assert.Contains(t, updated.status, "cancelled")
+	})
+}
+
+func TestBulkSilenceMode_ConfirmationPrompt(t *testing.T) {
+	t.Run("completing form with selections shows confirmation prompt", func(t *testing.T) {
+		m := createTestModel()
+		m.bulkSilenceMode = true
+		m.incidentList = []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Title: "Test 1"},
+			{APIObject: pagerduty.APIObject{ID: "Q456"}, Title: "Test 2"},
+		}
+		m.bulkSilenceIDs = []string{"Q123", "Q456"}
+
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewMultiSelect[string]().
+					Title("test").
+					Options(
+						huh.NewOption("test1", "Q123"),
+						huh.NewOption("test2", "Q456"),
+					).
+					Value(&m.bulkSilenceIDs),
+			),
+		)
+		m.bulkSilenceForm = form
+		m.bulkSilenceForm.Init()
+
+		// Simulate form completion by setting state
+		m.bulkSilenceForm.State = huh.StateCompleted
+
+		// Send any key to trigger the handler
+		keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}
+		result, _ := switchBulkSilenceFocusMode(m, keyMsg)
+		updated := result.(model)
+
+		assert.False(t, updated.bulkSilenceMode, "should exit bulk silence mode")
+		assert.NotNil(t, updated.pendingConfirmation, "should show confirmation prompt")
+		assert.Contains(t, updated.pendingConfirmation.prompt, "2 incident(s)")
 	})
 }

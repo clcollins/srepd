@@ -2672,3 +2672,20 @@ func TestRenderIncident_NilRenderer(t *testing.T) {
 	assert.NotEmpty(t, msg.content, "content should not be empty (plain text fallback)")
 	assert.Contains(t, msg.content, "Q456", "plain text content should contain incident ID")
 }
+
+func TestGetEscalationPolicyKey_CustomPolicy(t *testing.T) {
+	policies := map[string]*pagerduty.EscalationPolicy{
+		"silent_default": {APIObject: pagerduty.APIObject{ID: "POL_DEFAULT"}},
+		"SVC_ABC":        {APIObject: pagerduty.APIObject{ID: "POL_CUSTOM"}},
+	}
+
+	t.Run("returns service-specific key when custom policy exists", func(t *testing.T) {
+		key := getEscalationPolicyKey("SVC_ABC", policies)
+		assert.Equal(t, "SVC_ABC", key)
+	})
+
+	t.Run("returns silent_default when no custom policy exists", func(t *testing.T) {
+		key := getEscalationPolicyKey("SVC_XYZ", policies)
+		assert.Equal(t, silentDefaultPolicyKey, key)
+	})
+}
