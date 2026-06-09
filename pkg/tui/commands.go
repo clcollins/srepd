@@ -18,6 +18,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/alert"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
@@ -198,6 +199,33 @@ type waitForSelectedIncidentThenDoMsg struct {
 }
 
 type TickMsg struct {
+}
+
+type aiHealthCheckMsg struct {
+	healthy bool
+	err     error
+}
+
+func aiHealthCheckCmd(provider ai.Provider) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		checker, ok := provider.(ai.HealthChecker)
+		if !ok {
+			log.Debug("ai.HealthCheck", "msg", "provider does not support health checks", "provider", provider.Name())
+			return aiHealthCheckMsg{healthy: true}
+		}
+
+		err := checker.Healthy(ctx)
+		if err != nil {
+			log.Warn("ai.HealthCheck", "provider", provider.Name(), "status", "unhealthy", "error", err)
+			return aiHealthCheckMsg{healthy: false, err: err}
+		}
+
+		log.Debug("ai.HealthCheck", "provider", provider.Name(), "status", "healthy")
+		return aiHealthCheckMsg{healthy: true}
+	}
 }
 
 // clearFlashMsg is sent after a flash notification's display duration has elapsed.

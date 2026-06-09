@@ -126,6 +126,38 @@ Enriched data includes:
 
 OCM features are optional — if OCM is not configured, the remaining TUI functions normally.
 
+## LLM Integration
+
+SREPD supports configurable LLM providers for AI-assisted incident analysis. Configuration is entirely optional — AI features are disabled when unconfigured. See [docs/llm-providers.md](docs/llm-providers.md) for full provider documentation.
+
+### Quick Start
+
+Add to `~/.config/srepd/srepd.yaml`:
+
+```yaml
+llm_api:
+  provider: ollama
+  model: llama3.1:8b
+```
+
+### Supported Providers
+
+| Provider | Endpoint Default | Description |
+|----------|-----------------|-------------|
+| `ollama` | `http://localhost:11434` | Local Ollama daemon (or [ollama-container](https://github.com/clcollins/ollama-container)) |
+| `anthropic` | SDK default | Anthropic Messages API |
+| `openai` | (user must specify) | Any OpenAI-compatible endpoint (vLLM, TGI, internal models) |
+| `ramalama` | `http://localhost:8080` | Red Hat RamaLama server |
+
+### Configuration Reference
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `llm_api.provider` | `string` | Provider name: `ollama`, `anthropic`, `openai`, `ramalama` |
+| `llm_api.endpoint` | `string` | API endpoint URL (provider-specific default used if omitted) |
+| `llm_api.model` | `string` | Model identifier (provider-specific default used if omitted) |
+| `llm_api.api_key_env` | `string` | Name of env var containing API key (optional for all providers) |
+
 ## Key Bindings
 
 Press `h` to toggle the help overlay inside srepd.

@@ -105,6 +105,7 @@ func launchTUIWithConfig() {
 		viper.GetStringMapString("custom_service_escalation_policies"),
 		true, // configMode
 		ocmAuthPending,
+		nil, // aiProvider — not needed in config mode
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

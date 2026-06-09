@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/ai"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
@@ -119,6 +120,11 @@ type model struct {
 	// claudeQuerying is true while a Claude CLI query is in progress
 	claudeQuerying bool
 
+	// aiProvider is the configured LLM API provider, or nil when unconfigured
+	aiProvider ai.Provider
+	// aiHealthy tracks whether the last LLM provider health check succeeded
+	aiHealthy bool
+
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
 
@@ -199,6 +205,7 @@ func InitialModel(
 	customSilentPolicies map[string]string,
 	configMode bool,
 	ocmAuthPending bool,
+	aiProvider ai.Provider,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -254,6 +261,14 @@ func InitialModel(
 		theme:                 theme,
 		styles:                styles,
 		configModeRequested:   configMode,
+		aiProvider:            aiProvider,
+	}
+
+	if aiProvider != nil {
+		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
+			jobMsg:    aiHealthCheckCmd(aiProvider),
+			frequency: 60 * time.Second,
+		})
 	}
 
 	if configMode {
@@ -286,6 +301,7 @@ func InitialModelWithConfig(
 	launcher launcher.ClusterLauncher,
 	debug bool,
 	ocmClient ocm.OCMClient,
+	aiProvider ai.Provider,
 ) (tea.Model, tea.Cmd) {
 
 	theme := DefaultTheme()
@@ -337,6 +353,14 @@ func InitialModelWithConfig(
 		flagMarker:            defaultFlagMarker,
 		theme:                 theme,
 		styles:                styles,
+		aiProvider:            aiProvider,
+	}
+
+	if aiProvider != nil {
+		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
+			jobMsg:    aiHealthCheckCmd(aiProvider),
+			frequency: 60 * time.Second,
+		})
 	}
 
 	m.config = config
