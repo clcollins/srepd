@@ -26,11 +26,16 @@ func createTestModel() model {
 	t := table.New()
 	t.SetStyles(styles.Table)
 	return model{
-		table:         t,
-		incidentCache: make(map[string]*cachedIncidentData),
-		incidentList:  []pagerduty.Incident{},
-		theme:         theme,
-		styles:        styles,
+		table:           t,
+		incidentCache:   make(map[string]*cachedIncidentData),
+		incidentList:    []pagerduty.Incident{},
+		theme:           theme,
+		styles:          styles,
+		watcherBuffer:   newWatcherBuffer(50),
+		watcherViewport: newWatcherViewport(),
+		watcherMarker:   emojiWatcherMarker,
+		agentMarker:     emojiAgentMarker,
+		flagMarker:      emojiFlagMarker,
 	}
 }
 

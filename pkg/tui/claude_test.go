@@ -33,9 +33,9 @@ func TestClaudePrompt_DispatchesCommand(t *testing.T) {
 	result, cmd := switchInputFocusMode(m, enterMsg)
 	updatedModel := result.(model)
 
-	// Input should be blurred and reset
-	assert.False(t, updatedModel.input.Focused(), "Input should be blurred after Enter")
-	assert.Equal(t, "", updatedModel.input.Value(), "Input should be reset after Enter")
+	// Input stays focused for follow-up queries, value is cleared
+	assert.True(t, updatedModel.input.Focused(), "Input should stay focused after /agent dispatch")
+	assert.Equal(t, "", updatedModel.input.Value(), "Input value should be cleared after dispatch")
 
 	// A command should be returned
 	assert.NotNil(t, cmd, "Enter in input mode should return a command")
@@ -105,16 +105,11 @@ func TestClaudePrompt_ShowsSpinner(t *testing.T) {
 	assert.NotNil(t, cmd, "A command should be returned to execute the query")
 }
 
-func TestClaudeResponse_RendersInViewport(t *testing.T) {
-	// When claudeResponseMsg is received with a successful response,
-	// the content should be set in the incidentViewer and viewingIncident
-	// should be true
-
+func TestClaudeResponse_RendersInWatcherPane(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.claudeQuerying = true
 	m.apiInProgress = true
-	m.incidentViewer = newIncidentViewer()
 
 	msg := claudeResponseMsg{
 		response: "Based on the alert, the cluster appears to have high CPU usage.",
@@ -126,7 +121,9 @@ func TestClaudeResponse_RendersInViewport(t *testing.T) {
 
 	assert.False(t, updatedModel.claudeQuerying, "claudeQuerying should be false after response")
 	assert.False(t, updatedModel.apiInProgress, "apiInProgress should be false after response")
-	assert.True(t, updatedModel.viewingIncident, "viewingIncident should be true to show response")
+	assert.False(t, updatedModel.viewingIncident, "viewingIncident should remain false — response goes to watcher pane")
+	assert.True(t, updatedModel.watcherExpanded, "watcher pane should auto-expand on response")
+	assert.Equal(t, 1, updatedModel.watcherBuffer.Len(), "response should be appended to watcher buffer")
 }
 
 func TestClaudeResponse_Error(t *testing.T) {
@@ -276,13 +273,10 @@ func TestClaudePrompt_InputModeKeyMapUpdated(t *testing.T) {
 		"Enter key help description should say 'ask Claude'")
 }
 
-func TestClaudePrompt_WithViewingIncident(t *testing.T) {
-	// When in incident view, entering input mode and submitting should work
-	// by setting viewingIncident to true for the response display
-
+func TestClaudePrompt_AutoExpandsWatcher(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
-	m.viewingIncident = true
+	m.watcherExpanded = false
 	m.selectedIncident = &pagerduty.Incident{
 		APIObject: pagerduty.APIObject{ID: "Q123"},
 	}
@@ -295,6 +289,7 @@ func TestClaudePrompt_WithViewingIncident(t *testing.T) {
 	updatedModel := result.(model)
 
 	assert.True(t, updatedModel.claudeQuerying, "Should start querying")
+	assert.True(t, updatedModel.watcherExpanded, "Watcher pane should auto-expand on query")
 	assert.NotNil(t, cmd, "Should dispatch query command")
 }
 
@@ -304,15 +299,11 @@ func TestNewTextInputWidth(t *testing.T) {
 	assert.Equal(t, 120, input.Width, "Input width should be 120")
 }
 
-func TestClaudeResponse_RendersWithPrefix(t *testing.T) {
-	// When Claude response is rendered in the viewport, it should have
-	// a clear prefix indicating it's from Claude
-
+func TestClaudeResponse_AppendsToWatcherBuffer(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.claudeQuerying = true
 	m.apiInProgress = true
-	m.incidentViewer = newIncidentViewer()
 
 	msg := claudeResponseMsg{
 		response: "The cluster is experiencing high CPU usage.",
@@ -320,11 +311,11 @@ func TestClaudeResponse_RendersWithPrefix(t *testing.T) {
 	}
 
 	result, _ := m.Update(msg)
-	_ = result.(model)
+	updatedModel := result.(model)
 
-	// The response content is set on the viewport - we can't directly read it back
-	// from viewport.Model in tests, but we verify the model state is correct
-	// The actual prefix is added in the Update handler
+	assert.Equal(t, 1, updatedModel.watcherBuffer.Len())
+	assert.Contains(t, updatedModel.watcherBuffer.Content(), "high CPU usage")
+	assert.Contains(t, updatedModel.watcherBuffer.Content(), emojiAgentMarker, "response should be prefixed with agent marker")
 }
 
 func TestDefaultLookPath_NoPanic(t *testing.T) {
@@ -600,7 +591,7 @@ func TestInputMode_AgentCommand_DispatchesClaude(t *testing.T) {
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.False(t, updated.input.Focused(), "input must be blurred after Enter")
+	assert.True(t, updated.input.Focused(), "input stays focused after /agent dispatch")
 	assert.NotNil(t, cmd, "/agent command must dispatch a command")
 
 	msg := cmd()

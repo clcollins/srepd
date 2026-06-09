@@ -1073,7 +1073,7 @@ func TestInputMode_Enter_StillDispatchesPrompt(t *testing.T) {
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.False(t, updated.input.Focused(), "Enter must blur the input")
+	assert.True(t, updated.input.Focused(), "agent dispatch keeps input focused for follow-up queries")
 	assert.Empty(t, updated.input.Value(), "Enter must reset the input value")
 	assert.NotNil(t, cmd, "Enter must dispatch a command")
 

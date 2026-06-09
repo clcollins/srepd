@@ -151,6 +151,11 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	m.claudeQuerying = true
 	m.apiInProgress = true
 
+	if !m.watcherExpanded {
+		m.watcherExpanded = true
+		m.recomputeLayout()
+	}
+
 	return m, tea.Batch(
 		m.spinner.Tick,
 		agentQuery(agentCmd, msg.prompt, m.selectedIncident, m.selectedIncidentAlerts),
@@ -173,20 +178,14 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 
-	// Format the response with a Claude header
-	content := fmt.Sprintf("# Claude Response\n\n%s", msg.response)
+	m.watcherBuffer.Append(prefixLines(m.agentMarker, msg.response))
+	m.updateWatcherViewport()
 
-	// Render as markdown if renderer is available
-	if m.markdownRenderer != nil {
-		rendered, err := m.markdownRenderer.Render(content)
-		if err == nil {
-			content = rendered
-		}
+	if !m.watcherExpanded {
+		m.watcherExpanded = true
+		m.recomputeLayout()
 	}
 
-	m.incidentViewer.SetContent(content)
-	m.incidentViewer.GotoTop()
-	m.viewingIncident = true
 	log.Info("claude response received")
 	m.setStatus("Claude response received")
 

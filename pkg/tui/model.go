@@ -23,6 +23,7 @@ import (
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/spf13/viper"
 )
 
 // cachedIncidentData stores fetched incident data for reuse
@@ -129,6 +130,9 @@ type model struct {
 	// watcherExpanded is true when the AI watcher pane is visible below the table
 	watcherExpanded bool
 	watcherViewport viewport.Model
+	watcherBuffer   *watcherBuffer
+	watcherMarker   string
+	agentMarker     string
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
@@ -262,7 +266,6 @@ func InitialModel(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
-		flagMarker:            defaultFlagMarker,
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
@@ -270,7 +273,13 @@ func InitialModel(
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
 		watcherViewport:       newWatcherViewport(),
+		watcherBuffer:         newWatcherBuffer(50),
 	}
+
+	mk := resolveMarkers(viper.GetBool("emoji"))
+	m.flagMarker = mk.flag
+	m.watcherMarker = mk.watcher
+	m.agentMarker = mk.agent
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
@@ -359,13 +368,18 @@ func InitialModelWithConfig(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
-		flagMarker:            defaultFlagMarker,
 		theme:                 theme,
 		styles:                styles,
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
 		watcherViewport:       newWatcherViewport(),
+		watcherBuffer:         newWatcherBuffer(50),
 	}
+
+	mk2 := resolveMarkers(viper.GetBool("emoji"))
+	m.flagMarker = mk2.flag
+	m.watcherMarker = mk2.watcher
+	m.agentMarker = mk2.agent
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{

@@ -204,7 +204,7 @@ func launchTUI() {
 		viper.GetString("agent_cli_command"),
 	)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	if ocmAuthPending {
 		go func() {
@@ -386,7 +386,7 @@ func runDevMode() {
 		"",  // agentCLICommand — uses default in dev mode
 	)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	go func() {
 		for {

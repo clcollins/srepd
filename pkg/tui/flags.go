@@ -16,7 +16,10 @@ const (
 	FlagOrgName
 )
 
-const defaultFlagMarker = "🚩 "
+const (
+	emojiFlagMarker   = "🚩 "
+	noEmojiFlagMarker = "|► "
+)
 
 // FlagCondition is a user-defined rule that marks matching incidents.
 type FlagCondition struct {

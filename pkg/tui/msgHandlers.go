@@ -714,16 +714,11 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Enter):
 			prompt := m.input.Value()
-			m.input.Reset()
-			m.input.Blur()
-			m.table.Focus()
 
 			if prompt == "" {
+				m.input.Blur()
+				m.table.Focus()
 				return m, nil
-			}
-
-			if isFlagCommand(prompt) {
-				return m, m.dispatchFlagCommand(prompt)
 			}
 
 			if isAgentCommand(prompt) {
@@ -732,9 +727,18 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.setStatus("usage: /agent <query>")
 					return m, nil
 				}
+				m.input.Reset()
 				return m, func() tea.Msg {
 					return claudePromptMsg{prompt: query}
 				}
+			}
+
+			m.input.Reset()
+			m.input.Blur()
+			m.table.Focus()
+
+			if isFlagCommand(prompt) {
+				return m, m.dispatchFlagCommand(prompt)
 			}
 
 			m.setStatus("unknown command — try /agent <query> or /flag <type> <value>")

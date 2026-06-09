@@ -299,7 +299,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 func TestDispatchFlagCommand_Add(t *testing.T) {
 	t.Run("dispatches addFlagConditionMsg for /flag cluster", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 
 		cmd := m.dispatchFlagCommand("/flag cluster abc123")
 		require.NotNil(t, cmd)
@@ -315,7 +315,7 @@ func TestDispatchFlagCommand_Add(t *testing.T) {
 func TestDispatchFlagCommand_List(t *testing.T) {
 	t.Run("dispatches listFlagConditionsMsg for /flags", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 
 		cmd := m.dispatchFlagCommand("/flags")
 		require.NotNil(t, cmd)
@@ -329,7 +329,7 @@ func TestDispatchFlagCommand_List(t *testing.T) {
 func TestDispatchFlagCommand_Invalid(t *testing.T) {
 	t.Run("returns flash notification for invalid command", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 
 		cmd := m.dispatchFlagCommand("/flag badtype value")
 		require.NotNil(t, cmd)

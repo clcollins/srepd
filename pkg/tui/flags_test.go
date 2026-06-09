@@ -267,7 +267,7 @@ func TestEvaluateFlags_NoClusters(t *testing.T) {
 func TestAddFlagConditionMsg(t *testing.T) {
 	t.Run("adds condition and assigns ID", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.incidentClusterMap = make(map[string][]string)
 		m.clusterCache = make(map[string]*ocm.ClusterInfo)
 
@@ -291,7 +291,7 @@ func TestAddFlagConditionMsg(t *testing.T) {
 func TestAddFlagConditionMsg_IncrementsID(t *testing.T) {
 	t.Run("auto-increments IDs", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.flagNextID = 5
 		m.flagConditions = []FlagCondition{
 			{ID: 5, Type: FlagClusterID, Pattern: "existing"},
@@ -312,7 +312,7 @@ func TestAddFlagConditionMsg_IncrementsID(t *testing.T) {
 func TestRemoveFlagConditionMsg(t *testing.T) {
 	t.Run("removes condition by ID", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.flagConditions = []FlagCondition{
 			{ID: 1, Type: FlagClusterID, Pattern: "cluster1"},
 			{ID: 2, Type: FlagOrgName, Pattern: "Acme"},
@@ -333,7 +333,7 @@ func TestRemoveFlagConditionMsg(t *testing.T) {
 func TestRemoveFlagConditionMsg_NotFound(t *testing.T) {
 	t.Run("no-op for unknown ID", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.flagConditions = []FlagCondition{
 			{ID: 1, Type: FlagClusterID, Pattern: "cluster1"},
 		}
@@ -350,7 +350,7 @@ func TestRemoveFlagConditionMsg_NotFound(t *testing.T) {
 func TestClearFlagConditionsMsg(t *testing.T) {
 	t.Run("removes all conditions", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.flagConditions = []FlagCondition{
 			{ID: 1, Type: FlagClusterID, Pattern: "a"},
 			{ID: 2, Type: FlagOrgName, Pattern: "b"},
@@ -370,7 +370,7 @@ func TestClearFlagConditionsMsg(t *testing.T) {
 func TestRebuildFlagMatchCache(t *testing.T) {
 	t.Run("rebuilds cache from current state", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.flagConditions = []FlagCondition{
 			{ID: 1, Type: FlagClusterID, Pattern: "cluster1"},
 		}
@@ -391,7 +391,7 @@ func TestRebuildFlagMatchCache(t *testing.T) {
 func TestRebuildFlagMatchCache_NoConditions(t *testing.T) {
 	t.Run("clears cache when no conditions", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.flagConditions = nil
 		m.flagMatchCache = map[string][]int{"INC001": {1}}
 
@@ -404,7 +404,7 @@ func TestRebuildFlagMatchCache_NoConditions(t *testing.T) {
 func TestRenderFlagConditionsSection(t *testing.T) {
 	t.Run("renders flag section for flagged incident", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.flagConditions = []FlagCondition{
 			{ID: 1, Type: FlagClusterID, Pattern: "cluster1", Label: "cluster ID matches \"cluster1\""},
 			{ID: 2, Type: FlagOrgName, Pattern: "Acme", Label: "org name matches \"Acme\""},
@@ -424,7 +424,7 @@ func TestRenderFlagConditionsSection(t *testing.T) {
 func TestRenderFlagConditionsSection_NoFlags(t *testing.T) {
 	t.Run("returns empty when incident not flagged", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 		m.selectedIncident = &pagerduty.Incident{
 			APIObject: pagerduty.APIObject{ID: "INC001"},
 		}
@@ -437,7 +437,7 @@ func TestRenderFlagConditionsSection_NoFlags(t *testing.T) {
 func TestRenderFlagConditionsSection_NoIncident(t *testing.T) {
 	t.Run("returns empty when no incident selected", func(t *testing.T) {
 		m := createTestModel()
-		m.flagMarker = defaultFlagMarker
+		m.flagMarker = emojiFlagMarker
 
 		content := m.renderFlagConditionsSection()
 		assert.Empty(t, content)
