@@ -119,6 +119,50 @@ func TestMergeMode_ExcludesSourceFromList(t *testing.T) {
 	})
 }
 
+func TestRebuildMergeTable_NoPanic(t *testing.T) {
+	t.Run("rebuildMergeTable does not panic when columns are unset on mergeTable", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "USER1"},
+				Email:     "test@example.com",
+			},
+		}
+		m.mergeSourceIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "Q123"},
+		}
+		m.incidentList = []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Title: "Source"},
+			{
+				APIObject: pagerduty.APIObject{ID: "Q456"},
+				Title:     "Target",
+				Service:   pagerduty.APIObject{Summary: "svc"},
+			},
+		}
+
+		cols := []table.Column{
+			{Title: "", Width: 1},
+			{Title: "ID", Width: 16},
+			{Title: "Title", Width: 40},
+			{Title: "Service", Width: 30},
+		}
+		rows := []table.Row{
+			{".", "Q123", "Source", "svc"},
+			{".", "Q456", "Target", "svc"},
+		}
+		m.table = table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true))
+		m.mergeTeamMode = true
+		m.mergeTable = newTableWithStyles()
+
+		assert.NotPanics(t, func() {
+			m.rebuildMergeTable()
+		}, "rebuildMergeTable should not panic")
+
+		assert.Equal(t, len(cols), len(m.mergeTable.Columns()), "mergeTable should have same columns as main table")
+	})
+}
+
 func TestMergedIncidentMsg_HandledInModel(t *testing.T) {
 	t.Run("mergedIncidentMsg produces flash notification", func(t *testing.T) {
 		m := createTestModel()
