@@ -322,13 +322,18 @@ func TestChordKeymap_ImplementsHelpKeyMap(t *testing.T) {
 		km := chordKeymap{prefix: "ctrl+x"}
 		full := km.FullHelp()
 		assert.NotEmpty(t, full, "FullHelp should return at least one column")
-		// Should have bindings for each chord registry entry
 		totalBindings := 0
 		for _, col := range full {
 			totalBindings += len(col)
 		}
-		assert.GreaterOrEqual(t, totalBindings, len(chordRegistry),
-			"FullHelp should have at least as many bindings as chord registry entries")
+		visibleCount := 0
+		for _, entry := range chordRegistry {
+			if !entry.Hidden {
+				visibleCount++
+			}
+		}
+		assert.GreaterOrEqual(t, totalBindings, visibleCount,
+			"FullHelp should have at least as many bindings as visible chord registry entries")
 	})
 }
 
