@@ -302,12 +302,12 @@ func TestClaudeResponse_AppendsToWatcherBuffer(t *testing.T) {
 		err:      nil,
 	}
 
-	result, _ := m.Update(msg)
+	result, cmd := m.Update(msg)
 	updatedModel := result.(model)
 
-	assert.Equal(t, 1, updatedModel.watcherBuffer.Len())
-	assert.Contains(t, updatedModel.watcherBuffer.Content(), "high CPU usage")
-	assert.Contains(t, updatedModel.watcherBuffer.Content(), emojiAgentMarker, "response should be prefixed with agent marker")
+	assert.Equal(t, 1, updatedModel.watcherBuffer.Len(), "should have placeholder entry for typewriter")
+	assert.NotNil(t, updatedModel.typewriter, "typewriter should be active")
+	assert.NotNil(t, cmd, "should return typewriter tick command")
 }
 
 func TestDefaultLookPath_NoPanic(t *testing.T) {

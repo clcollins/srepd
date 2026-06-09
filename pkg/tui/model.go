@@ -135,6 +135,7 @@ type model struct {
 	agentMarker     string
 	watcherDedup      *watcherDedup
 	watcherAnalyzing  bool
+	typewriter        *typewriterState
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes

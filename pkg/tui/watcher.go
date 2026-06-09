@@ -59,6 +59,14 @@ func (b *watcherBuffer) Append(entry string) {
 	b.entries = append(b.entries, entry)
 }
 
+func (b *watcherBuffer) SetLast(entry string) {
+	if len(b.entries) == 0 {
+		b.Append(entry)
+		return
+	}
+	b.entries[len(b.entries)-1] = entry
+}
+
 func (b *watcherBuffer) Content() string {
 	return strings.Join(b.entries, "\n---\n")
 }
@@ -78,6 +86,66 @@ func (m *model) updateWatcherViewport() {
 	}
 	m.watcherViewport.SetContent(content)
 	m.watcherViewport.GotoBottom()
+}
+
+const (
+	typewriterWordsPerTick = 3
+	typewriterTickInterval = 30 * time.Millisecond
+)
+
+type typewriterState struct {
+	words   []string
+	index   int
+	marker  string
+	partial string
+}
+
+type typewriterTickMsg struct{}
+
+func (m *model) startTypewriter(marker string, text string) tea.Cmd {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+	m.typewriter = &typewriterState{
+		words:  words,
+		marker: marker,
+	}
+	return tea.Tick(typewriterTickInterval, func(time.Time) tea.Msg {
+		return typewriterTickMsg{}
+	})
+}
+
+func (m *model) advanceTypewriter() tea.Cmd {
+	tw := m.typewriter
+	if tw == nil {
+		return nil
+	}
+
+	end := tw.index + typewriterWordsPerTick
+	if end > len(tw.words) {
+		end = len(tw.words)
+	}
+
+	chunk := strings.Join(tw.words[tw.index:end], " ")
+	if tw.partial != "" {
+		tw.partial += " " + chunk
+	} else {
+		tw.partial = chunk
+	}
+	tw.index = end
+
+	m.watcherBuffer.SetLast(prefixLines(tw.marker, tw.partial))
+	m.updateWatcherViewport()
+
+	if tw.index >= len(tw.words) {
+		m.typewriter = nil
+		return nil
+	}
+
+	return tea.Tick(typewriterTickInterval, func(time.Time) tea.Msg {
+		return typewriterTickMsg{}
+	})
 }
 
 type watcherObservation struct {

@@ -175,9 +175,6 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 		return m, m.flashNotification("agent returned empty response")
 	}
 
-	m.watcherBuffer.Append(prefixLines(m.agentMarker, msg.response))
-	m.updateWatcherViewport()
-
 	if !m.watcherExpanded {
 		m.watcherExpanded = true
 		m.recomputeLayout()
@@ -186,7 +183,8 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 	log.Info("claude response received")
 	m.setStatus("Claude response received")
 
-	return m, nil
+	m.watcherBuffer.Append("")
+	return m, m.startTypewriter(m.agentMarker, msg.response)
 }
 
 // truncatePrompt shortens a prompt string for display in the status bar

@@ -458,6 +458,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TickMsg:
 		return m, tea.Batch(runScheduledJobs(&m)...)
 
+	case typewriterTickMsg:
+		return m, m.advanceTypewriter()
+
 	case aiHealthCheckMsg:
 		m.aiHealthy = msg.healthy
 		return m, nil
@@ -494,28 +497,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.flashNotification(fmt.Sprintf("watcher query failed: %s", msg.err))
 		}
 
-		m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.response))
 		if !m.watcherExpanded {
 			m.watcherExpanded = true
 			m.recomputeLayout()
 		}
-		m.updateWatcherViewport()
 		m.setStatus("watcher response received")
-		return m, nil
+		m.watcherBuffer.Append("")
+		return m, m.startTypewriter(m.watcherMarker, msg.response)
 
 	case watcherSynthesisMsg:
 		m.watcherAnalyzing = false
-		if msg.err != nil {
-			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
-		} else {
-			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.response))
-		}
 		if !m.watcherExpanded {
 			m.watcherExpanded = true
 			m.recomputeLayout()
 		}
-		m.updateWatcherViewport()
-		return m, nil
+		if msg.err != nil {
+			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
+			m.updateWatcherViewport()
+			return m, nil
+		}
+		m.watcherBuffer.Append("")
+		return m, m.startTypewriter(m.watcherMarker, msg.response)
 
 	case tea.WindowSizeMsg:
 		return m.windowSizeMsgHandler(msg)
