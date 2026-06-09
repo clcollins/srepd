@@ -128,7 +128,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Skip logging for very frequent messages
 	switch msgType {
 	case reflect.TypeOf(TickMsg{}),
-		reflect.TypeOf(spinner.TickMsg{}):
+		reflect.TypeOf(spinner.TickMsg{}),
+		reflect.TypeOf(tea.MouseMsg{}):
 		shouldLog = false
 	}
 
