@@ -111,12 +111,21 @@ func (m *model) runDetectors() {
 
 	observations := detectAll(m.incidentList, m.incidentClusterMap)
 
+	added := false
 	for _, obs := range observations {
 		if m.watcherDedup.IsNew(obs.Summary) {
 			log.Debug("watcher.runDetectors", "observation", obs.Summary)
 			m.watcherBuffer.Append(prefixLines(m.watcherMarker, obs.Summary))
-			m.updateWatcherViewport()
+			added = true
 		}
+	}
+
+	if added {
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		m.updateWatcherViewport()
 	}
 }
 

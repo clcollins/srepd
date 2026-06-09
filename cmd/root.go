@@ -461,6 +461,7 @@ func configureLogging() {
 
 	// Check if user wants to log to journal (default: true)
 	viper.SetDefault("log_to_journal", true)
+	viper.SetDefault("emoji", true)
 	logToJournal := viper.GetBool("log_to_journal")
 
 	dest, logPath := determineLogDestination(runtime.GOOS, logToJournal, journal.Enabled())
