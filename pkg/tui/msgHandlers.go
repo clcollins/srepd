@@ -129,6 +129,13 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.input.Focused() {
+		if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Quit) {
+			return m, tea.Quit
+		}
+		return switchInputFocusMode(m, msg)
+	}
+
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Quit) {
 		return m, tea.Quit
 	}
