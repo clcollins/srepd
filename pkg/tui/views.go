@@ -148,13 +148,14 @@ func (m model) renderFooter() string {
 	}
 
 	right := m.renderWatcherStatus()
-	leftWidth := windowSize.Width * layoutTableShareNum / layoutTableShareDen
-	rightWidth := windowSize.Width - leftWidth
+	renderedRight := m.styles.Muted.Render(right)
+	rightWidth := lipgloss.Width(renderedRight)
+	leftWidth := windowSize.Width - rightWidth - m.styles.Padded.GetHorizontalPadding() - m.styles.Padded.GetHorizontalBorderSize()
 
 	return lipgloss.JoinHorizontal(
 		0.2,
-		m.styles.Padded.Width(leftWidth).MaxWidth(leftWidth).Render(left),
-		m.styles.Muted.Width(rightWidth).MaxWidth(rightWidth).Align(lipgloss.Right).Padding(0, 1, 0, 0).Render(right),
+		m.styles.Padded.Width(leftWidth).Render(left),
+		renderedRight,
 	)
 }
 
