@@ -462,6 +462,50 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.aiHealthy = msg.healthy
 		return m, nil
 
+	case watcherPromptMsg:
+		if m.aiProvider == nil {
+			m.setStatus("LLM provider not configured — add llm_api section to config")
+			return m, nil
+		}
+		if !m.aiHealthy {
+			m.setStatus("LLM provider offline")
+			return m, nil
+		}
+
+		log.Info("watcher query initiated", "prompt", truncatePrompt(msg.prompt, 80))
+		m.setStatus(fmt.Sprintf("querying watcher: %s", truncatePrompt(msg.prompt, 40)))
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+
+		incidentContext := buildWatcherContext(&m)
+		return m, tea.Batch(
+			m.spinner.Tick,
+			watcherQueryCmd(m.aiProvider, msg.prompt, incidentContext),
+		)
+
+	case watcherResponseMsg:
+		m.watcherAnalyzing = false
+		m.apiInProgress = false
+
+		if msg.err != nil {
+			m.setStatus(fmt.Sprintf("watcher query failed: %s", msg.err))
+			return m, nil
+		}
+
+		m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.response))
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		m.updateWatcherViewport()
+		m.setStatus("watcher response received")
+		return m, nil
+
 	case watcherSynthesisMsg:
 		m.watcherAnalyzing = false
 		if msg.err != nil {

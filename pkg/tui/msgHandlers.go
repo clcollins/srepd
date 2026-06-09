@@ -730,6 +730,18 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+			if isWatcherCommand(prompt) {
+				query := parseWatcherQuery(prompt)
+				if query == "" {
+					m.setStatus("usage: :watcher <query>")
+					return m, nil
+				}
+				m.input.Reset()
+				return m, func() tea.Msg {
+					return watcherPromptMsg{prompt: query}
+				}
+			}
+
 			m.input.Reset()
 			m.input.Blur()
 			m.table.Focus()
@@ -740,7 +752,7 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			log.Debug("switchInputFocusMode", "msg", "unknown command", "prompt", prompt)
-			m.setStatus("unknown command — try :agent <query> or :flag <type> <value>")
+			m.setStatus("unknown command — try :agent, :watcher, or :flag")
 			return m, nil
 
 		default:

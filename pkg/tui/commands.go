@@ -206,6 +206,36 @@ type aiHealthCheckMsg struct {
 	err     error
 }
 
+type watcherResponseMsg struct {
+	response string
+	err      error
+}
+
+func watcherQueryCmd(provider ai.Provider, userPrompt string, incidentContext string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		systemPrompt := "You are an SRE assistant with access to PagerDuty incident data and OpenShift cluster information. " +
+			"Provide concise, actionable analysis. Do not suggest destructive commands."
+
+		fullPrompt := userPrompt
+		if incidentContext != "" {
+			fullPrompt = fmt.Sprintf("%s\n\nContext:\n%s", userPrompt, incidentContext)
+		}
+
+		log.Debug("watcher.query", "provider", provider.Name(), "prompt", userPrompt)
+
+		response, err := provider.Query(ctx, systemPrompt, fullPrompt)
+		if err != nil {
+			log.Warn("watcher.query", "error", err)
+			return watcherResponseMsg{err: err}
+		}
+
+		return watcherResponseMsg{response: response}
+	}
+}
+
 func aiHealthCheckCmd(provider ai.Provider) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

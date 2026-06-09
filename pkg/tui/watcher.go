@@ -214,6 +214,82 @@ func detectUrgencyShift(incidents []pagerduty.Incident) []watcherObservation {
 	return nil
 }
 
+type watcherPromptMsg struct {
+	prompt string
+}
+
+func isWatcherCommand(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, ":watcher ") || trimmed == ":watcher"
+}
+
+func parseWatcherQuery(input string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), ":watcher"))
+}
+
+func buildWatcherContext(m *model) string {
+	var parts []string
+
+	if m.selectedIncident != nil {
+		inc := m.selectedIncident
+		parts = append(parts, fmt.Sprintf("Selected incident: %s (%s)", inc.Title, inc.ID))
+		parts = append(parts, fmt.Sprintf("Service: %s", inc.Service.Summary))
+		parts = append(parts, fmt.Sprintf("Status: %s, Urgency: %s", inc.Status, inc.Urgency))
+
+		for _, alert := range m.selectedIncidentAlerts {
+			if details, ok := alert.Body["details"].(map[string]interface{}); ok {
+				if name, ok := details["alert_name"].(string); ok {
+					parts = append(parts, fmt.Sprintf("Alert: %s", name))
+				}
+				if cluster, ok := details["cluster_id"].(string); ok {
+					parts = append(parts, fmt.Sprintf("Cluster: %s", cluster))
+
+					if info, ok := m.clusterCache[cluster]; ok {
+						parts = append(parts, fmt.Sprintf("Cluster name: %s", info.DisplayName))
+						parts = append(parts, fmt.Sprintf("State: %s, Region: %s, Version: %s", info.State, info.Region, info.Version))
+					}
+					if logs, ok := m.serviceLogCache[cluster]; ok && len(logs) > 0 {
+						parts = append(parts, fmt.Sprintf("Recent service logs: %d", len(logs)))
+						for i, sl := range logs {
+							if i >= 3 {
+								break
+							}
+							parts = append(parts, fmt.Sprintf("  - [%s] %s: %s", sl.Severity, sl.ServiceName, sl.Summary))
+						}
+					}
+					if reasons, ok := m.limitedSupportCache[cluster]; ok && len(reasons) > 0 {
+						parts = append(parts, fmt.Sprintf("Limited support reasons: %d", len(reasons)))
+						for _, r := range reasons {
+							parts = append(parts, fmt.Sprintf("  - %s", r.Summary))
+						}
+					}
+				}
+			}
+		}
+
+		if len(m.selectedIncidentNotes) > 0 {
+			parts = append(parts, fmt.Sprintf("Notes: %d", len(m.selectedIncidentNotes)))
+			for i, n := range m.selectedIncidentNotes {
+				if i >= 3 {
+					break
+				}
+				content := n.Content
+				if len(content) > 200 {
+					content = content[:200] + "..."
+				}
+				parts = append(parts, fmt.Sprintf("  - %s", content))
+			}
+		}
+	}
+
+	if len(m.incidentList) > 0 {
+		parts = append(parts, fmt.Sprintf("\nFull incident queue (%d incidents):", len(m.incidentList)))
+		parts = append(parts, buildIncidentSummary(m.incidentList))
+	}
+
+	return strings.Join(parts, "\n")
+}
+
 func prefixLines(marker string, text string) string {
 	lines := strings.Split(text, "\n")
 	var result []string
