@@ -166,7 +166,7 @@ var defaultKeyMap = keymap{
 	),
 	Input: key.NewBinding(
 		key.WithKeys("i", ":"),
-		key.WithHelp("i/:", "input"),
+		key.WithHelp("i/:", "command input"),
 	),
 	Login: key.NewBinding(
 		key.WithKeys("l"),
