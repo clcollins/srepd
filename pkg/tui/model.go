@@ -639,7 +639,7 @@ func newLogViewer() viewport.Model {
 }
 
 func newWatcherViewport() viewport.Model {
-	vp := viewport.New(100, layoutWatcherPaneHeight)
+	vp := viewport.New(100, layoutDefaultWatcherRows)
 	return vp
 }
 

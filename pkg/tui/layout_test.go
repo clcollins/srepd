@@ -24,7 +24,7 @@ func longHelp() string {
 func TestComputeLayout_StandardTerminal(t *testing.T) {
 	t.Run("80x24 produces usable dimensions", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 24}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.Equal(t, 80, l.WindowWidth)
 		assert.Equal(t, 24, l.WindowHeight)
@@ -39,7 +39,7 @@ func TestComputeLayout_StandardTerminal(t *testing.T) {
 func TestComputeLayout_SmallTerminal(t *testing.T) {
 	t.Run("80x10 floors at minimums", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 10}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.Equal(t, layoutMinTableHeight, l.TableHeight)
 		assert.Equal(t, layoutMinIncidentViewerHeight, l.IncidentViewerHeight)
@@ -49,7 +49,7 @@ func TestComputeLayout_SmallTerminal(t *testing.T) {
 func TestComputeLayout_LargeTerminal(t *testing.T) {
 	t.Run("200x60 scales proportionally", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 200, Height: 60}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.Greater(t, l.TableHeight, 30)
 		assert.Greater(t, l.ColumnWidth, 50)
@@ -62,8 +62,8 @@ func TestComputeLayout_HelpExpandedReducesHeight(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 24}
 		styles := defaultStyles()
 
-		compactLayout := computeLayout(ws, styles, shortHelp(), 0)
-		expandedLayout := computeLayout(ws, styles, longHelp(), 0)
+		compactLayout := computeLayout(ws, styles, shortHelp(), false)
+		expandedLayout := computeLayout(ws, styles, longHelp(), false)
 
 		assert.Greater(t, compactLayout.TableHeight, expandedLayout.TableHeight,
 			"compact help should yield taller table than expanded help")
@@ -73,7 +73,7 @@ func TestComputeLayout_HelpExpandedReducesHeight(t *testing.T) {
 func TestComputeLayout_TableAndIncidentViewerConsistent(t *testing.T) {
 	t.Run("both use named constants and are positive", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 24}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.Greater(t, l.TableHeight, 0)
 		assert.Greater(t, l.IncidentViewerHeight, 0)
@@ -85,7 +85,7 @@ func TestComputeLayout_TableAndIncidentViewerConsistent(t *testing.T) {
 func TestComputeLayout_FormHeight(t *testing.T) {
 	t.Run("form heights computed from constants", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 24}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.Equal(t, 24-configFormReserved, l.FormHeight)
 		assert.Equal(t, 24, l.TeamSelectFormHeight)
@@ -96,7 +96,7 @@ func TestComputeLayout_FormHeight(t *testing.T) {
 func TestComputeLayout_ZeroHeight(t *testing.T) {
 	t.Run("zero height floors at minimums", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 0}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.Equal(t, layoutMinTableHeight, l.TableHeight)
 		assert.Equal(t, layoutMinIncidentViewerHeight, l.IncidentViewerHeight)
@@ -107,7 +107,7 @@ func TestComputeLayout_ZeroHeight(t *testing.T) {
 func TestComputeLayout_ClusterSelectWidthsCapped(t *testing.T) {
 	t.Run("wide terminal caps cluster select widths", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 200, Height: 40}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.LessOrEqual(t, l.ClusterSelectClusterIDWidth, layoutMaxClusterIDWidth)
 		assert.LessOrEqual(t, l.ClusterSelectServiceWidth, layoutMaxServiceWidth)
@@ -115,7 +115,7 @@ func TestComputeLayout_ClusterSelectWidthsCapped(t *testing.T) {
 
 	t.Run("narrow terminal uses proportional widths", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 60, Height: 24}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), 0)
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
 
 		assert.Less(t, l.ClusterSelectClusterIDWidth, layoutMaxClusterIDWidth)
 		assert.Less(t, l.ClusterSelectServiceWidth, layoutMaxServiceWidth)
@@ -130,7 +130,7 @@ func TestComputeLayout_MatchesOldTableHeight(t *testing.T) {
 		styles := defaultStyles()
 		helpView := shortHelp()
 
-		l := computeLayout(ws, styles, helpView, 0)
+		l := computeLayout(ws, styles, helpView, false)
 
 		helpLines := strings.Count(helpView, "\n") + 1
 		oldFixedLines := 6
@@ -235,25 +235,46 @@ func TestWindowResize_IncidentViewMode(t *testing.T) {
 }
 
 func TestComputeLayout_WatcherReducesTableHeight(t *testing.T) {
-	t.Run("watcher lines reduce table height", func(t *testing.T) {
-		ws := tea.WindowSizeMsg{Width: 80, Height: 40}
+	t.Run("watcher expanded reduces table height", func(t *testing.T) {
+		ws := tea.WindowSizeMsg{Width: 80, Height: 60}
 		styles := defaultStyles()
 		help := shortHelp()
 
-		withoutWatcher := computeLayout(ws, styles, help, 0)
-		watcherLines := layoutWatcherPaneHeight + layoutWatcherBorderOverhead + layoutWatcherHeaderLines
-		withWatcher := computeLayout(ws, styles, help, watcherLines)
+		collapsed := computeLayout(ws, styles, help, false)
+		expanded := computeLayout(ws, styles, help, true)
 
-		assert.Equal(t, withoutWatcher.TableHeight-watcherLines, withWatcher.TableHeight)
+		assert.Greater(t, collapsed.TableHeight, expanded.TableHeight,
+			"table should be shorter when watcher is expanded")
 	})
 
-	t.Run("watcher height is populated when watcher lines > 0", func(t *testing.T) {
-		ws := tea.WindowSizeMsg{Width: 80, Height: 40}
-		watcherLines := layoutWatcherPaneHeight + layoutWatcherBorderOverhead + layoutWatcherHeaderLines
-		l := computeLayout(ws, defaultStyles(), shortHelp(), watcherLines)
+	t.Run("watcher gets height when expanded", func(t *testing.T) {
+		ws := tea.WindowSizeMsg{Width: 80, Height: 60}
+		l := computeLayout(ws, defaultStyles(), shortHelp(), true)
 
-		assert.Equal(t, layoutWatcherPaneHeight, l.WatcherHeight)
+		assert.GreaterOrEqual(t, l.WatcherHeight, layoutMinWatcherRows)
 		assert.Greater(t, l.WatcherWidth, 0)
+	})
+
+	t.Run("table always gets at least minimum rows", func(t *testing.T) {
+		ws := tea.WindowSizeMsg{Width: 80, Height: 60}
+		l := computeLayout(ws, defaultStyles(), shortHelp(), true)
+
+		assert.GreaterOrEqual(t, l.TableHeight, layoutMinTableRows)
+	})
+
+	t.Run("large terminal splits 2/3 table 1/3 watcher", func(t *testing.T) {
+		ws := tea.WindowSizeMsg{Width: 80, Height: 80}
+		l := computeLayout(ws, defaultStyles(), shortHelp(), true)
+
+		assert.Greater(t, l.TableHeight, l.WatcherHeight,
+			"table should be larger than watcher in 2/3 split")
+	})
+
+	t.Run("collapsed watcher gives zero height", func(t *testing.T) {
+		ws := tea.WindowSizeMsg{Width: 80, Height: 60}
+		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
+
+		assert.Equal(t, 0, l.WatcherHeight)
 	})
 }
 
@@ -261,7 +282,7 @@ func TestRecomputeLayout_WatcherExpanded(t *testing.T) {
 	t.Run("watcher expanded reduces table height", func(t *testing.T) {
 		m := createTestModel()
 		m.help = newHelp()
-		windowSize = tea.WindowSizeMsg{Width: 80, Height: 40}
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
 
 		m.watcherExpanded = false
 		m.recomputeLayout()
@@ -271,7 +292,7 @@ func TestRecomputeLayout_WatcherExpanded(t *testing.T) {
 		m.recomputeLayout()
 		expandedHeight := m.layout.TableHeight
 
-		watcherLines := layoutWatcherPaneHeight + layoutWatcherBorderOverhead + layoutWatcherHeaderLines
-		assert.Equal(t, collapsedHeight-watcherLines, expandedHeight)
+		assert.Greater(t, collapsedHeight, expandedHeight)
+		assert.GreaterOrEqual(t, expandedHeight, layoutMinTableRows)
 	})
 }

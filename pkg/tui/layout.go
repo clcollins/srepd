@@ -24,10 +24,15 @@ const (
 	configFormBottomPadding = 1
 	configFormReserved      = layoutHeaderLines + layoutBottomStatusLines + configFormBottomPadding
 
-	layoutWatcherPaneHeight     = 5
 	layoutWatcherBorderOverhead = 2
 	layoutWatcherHeaderLines    = 1
-	layoutMinWatcherHeight      = 3
+	layoutWatcherOverhead       = layoutWatcherBorderOverhead + layoutWatcherHeaderLines
+
+	layoutMinTableRows       = 10
+	layoutMinWatcherRows     = 5
+	layoutDefaultWatcherRows = 10
+	layoutTableShareNum      = 2
+	layoutTableShareDen      = 3
 
 	layoutMinTableHeight          = 4
 	layoutMinIncidentViewerHeight = 10
@@ -64,7 +69,7 @@ type Layout struct {
 	ClusterSelectServiceWidth   int
 }
 
-func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcherLines int) Layout {
+func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcherExpanded bool) Layout {
 	mainHOverhead := styles.Main.GetHorizontalMargins() +
 		styles.Main.GetHorizontalPadding() +
 		styles.Main.GetHorizontalBorderSize()
@@ -89,16 +94,40 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcher
 	helpLines := strings.Count(helpView, "\n") + 1
 
 	tableWidth := ws.Width - mainHOverhead - containerHOverhead - cellHOverhead
-	tableHeight := ws.Height - mainVOverhead - containerVOverhead - tableFixedOverhead - helpLines - watcherLines
+	watcherWidth := ws.Width - mainHOverhead - containerHOverhead
+
+	// Total available rows for table + watcher content
+	availableRows := ws.Height - mainVOverhead - containerVOverhead - tableFixedOverhead - helpLines
+
+	var tableHeight, watcherHeight int
+
+	if !watcherExpanded {
+		tableHeight = availableRows
+	} else {
+		// Subtract watcher chrome (header + borders) and its own container border overhead
+		watcherContainerOverhead := styles.WatcherContainer.GetVerticalMargins() +
+			styles.WatcherContainer.GetVerticalPadding() +
+			styles.WatcherContainer.GetVerticalBorderSize()
+		availableForBoth := availableRows - layoutWatcherOverhead - watcherContainerOverhead
+
+		if availableForBoth >= layoutMinTableRows+layoutDefaultWatcherRows {
+			// Enough room: split 2/3 table, 1/3 watcher
+			tableHeight = availableForBoth * layoutTableShareNum / layoutTableShareDen
+			watcherHeight = availableForBoth - tableHeight
+		} else if availableForBoth >= layoutMinTableRows+layoutMinWatcherRows {
+			// Tight: table gets minimum, watcher gets the rest
+			tableHeight = layoutMinTableRows
+			watcherHeight = availableForBoth - tableHeight
+		} else {
+			// Very tight: both get minimums
+			tableHeight = layoutMinTableRows
+			watcherHeight = layoutMinWatcherRows
+		}
+	}
+
 	if tableHeight < layoutMinTableHeight {
 		tableHeight = layoutMinTableHeight
 	}
-
-	watcherHeight := layoutWatcherPaneHeight
-	if watcherHeight < layoutMinWatcherHeight {
-		watcherHeight = layoutMinWatcherHeight
-	}
-	watcherWidth := ws.Width - mainHOverhead - containerHOverhead
 
 	columnWidth := int(math.Ceil(float64(tableWidth-idWidth-dotWidth) / float64(2)))
 
@@ -169,12 +198,7 @@ func (m *model) recomputeLayout() {
 
 	helpView := m.help.View(helpKeyMap)
 
-	watcherLines := 0
-	if m.watcherExpanded {
-		watcherLines = layoutWatcherPaneHeight + layoutWatcherBorderOverhead + layoutWatcherHeaderLines
-	}
-
-	m.layout = computeLayout(windowSize, m.styles, helpView, watcherLines)
+	m.layout = computeLayout(windowSize, m.styles, helpView, m.watcherExpanded)
 	m.table.SetHeight(m.layout.TableHeight)
 
 	if m.watcherExpanded {
