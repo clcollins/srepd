@@ -6,6 +6,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -69,14 +70,25 @@ func launchTUIWithConfig() {
 		log.Fatal(err)
 	}
 
-	ocmClient, ocmErr := ocm.NewClient(tui.Version)
-	if ocmErr != nil {
-		log.Warn("OCM connection failed", "error", ocmErr)
-	} else if ocmClient != nil {
-		defer ocmClient.Close()
-		log.Info("OCM connected")
+	var ocmClient ocm.OCMClient
+	var ocmAuthPending bool
+	var asyncOCMClient *ocm.Client
+
+	cfg, armed, checkErr := ocm.CheckTokens()
+	if checkErr != nil {
+		log.Warn("OCM config check failed", "error", checkErr)
+	} else if armed {
+		client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
+		if connErr != nil {
+			log.Warn("OCM connection failed", "error", connErr)
+		} else {
+			ocmClient = client
+			asyncOCMClient = client
+			log.Info("OCM connected")
+		}
 	} else {
-		log.Warn("OCM not configured")
+		ocmAuthPending = true
+		log.Info("OCM tokens not valid — will authenticate async")
 	}
 
 	m, _ := tui.InitialModel(
@@ -92,9 +104,31 @@ func launchTUIWithConfig() {
 		viper.GetString("default_silent_escalation_policy"),
 		viper.GetStringMapString("custom_service_escalation_policies"),
 		true, // configMode
+		ocmAuthPending,
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	if ocmAuthPending {
+		go func() {
+			fmt.Fprintln(os.Stderr, "OCM tokens expired — opening browser for authentication...")
+			token, authErr := ocm.AuthenticateAsync(cfg)
+			if authErr != nil {
+				log.Debug("OCM browser auth failed", "error", authErr)
+				p.Send(tui.OCMClientReadyMsg{Err: authErr})
+				return
+			}
+			fmt.Fprintln(os.Stderr, "OCM authentication successful.")
+			ocm.ApplyAuthToken(cfg, token)
+			client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
+			if connErr != nil {
+				p.Send(tui.OCMClientReadyMsg{Err: connErr})
+				return
+			}
+			asyncOCMClient = client
+			p.Send(tui.OCMClientReadyMsg{Client: client})
+		}()
+	}
 
 	go func() {
 		for {
@@ -104,6 +138,11 @@ func launchTUIWithConfig() {
 	}()
 
 	_, err = p.Run()
+
+	if asyncOCMClient != nil {
+		asyncOCMClient.Close()
+	}
+
 	if err != nil {
 		fmt.Println(err)
 		log.Fatal(err)

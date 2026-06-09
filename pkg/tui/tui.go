@@ -342,6 +342,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			func() tea.Msg { return tea.WindowSizeMsg{Width: windowSize.Width, Height: windowSize.Height} },
 		)
 
+	case OCMClientReadyMsg:
+		m.ocmAuthPending = false
+		if msg.Err != nil {
+			log.Warn("OCM authentication failed", "error", msg.Err)
+			return m, m.flashNotification("OCM auth failed — cluster enrichment disabled")
+		}
+		if msg.Client == nil {
+			log.Warn("OCM authentication cancelled")
+			return m, m.flashNotification("OCM auth cancelled — cluster enrichment disabled")
+		}
+		m.ocmClient = msg.Client
+		log.Info("OCM connected (async)")
+
+		var enrichCmds []tea.Cmd
+		for _, clusterIDs := range m.incidentClusterMap {
+			var uncached []string
+			for _, id := range clusterIDs {
+				if _, cached := m.clusterCache[id]; cached {
+					continue
+				}
+				if m.clusterEnrichInFlight[id] || m.clusterEnrichFailed[id] >= 3 {
+					continue
+				}
+				uncached = append(uncached, id)
+				m.clusterEnrichInFlight[id] = true
+			}
+			enrichCmds = append(enrichCmds, enrichClusters(m.ocmClient, uncached, m.devMode)...)
+		}
+
+		enrichCmds = append(enrichCmds, m.flashNotification("OCM connected — enriching cluster data"))
+		return m, tea.Batch(enrichCmds...)
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)

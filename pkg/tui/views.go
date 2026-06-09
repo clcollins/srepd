@@ -406,6 +406,9 @@ func (m model) renderNotesTab(summary incidentSummary) (string, error) {
 func (m model) renderClusterTab() (string, error) {
 	if len(m.clusterCache) == 0 {
 		if m.ocmClient == nil {
+			if m.ocmAuthPending {
+				return "\n_OCM authenticating — complete login in browser..._\n", nil
+			}
 			return "\n_OCM not connected_\n", nil
 		}
 		return "\n_Loading cluster info..._\n", nil
@@ -437,6 +440,9 @@ func (m model) renderClusterTab() (string, error) {
 func (m model) renderServiceLogsTab() (string, error) {
 	if len(m.serviceLogCache) == 0 {
 		if m.ocmClient == nil {
+			if m.ocmAuthPending {
+				return "\n_OCM authenticating — complete login in browser..._\n", nil
+			}
 			return "\n_OCM not connected_\n", nil
 		}
 		return "\n_Loading service logs..._\n", nil
@@ -471,6 +477,9 @@ func (m model) renderServiceLogsTab() (string, error) {
 func (m model) renderLimitedSupportTab() (string, error) {
 	if len(m.limitedSupportCache) == 0 {
 		if m.ocmClient == nil {
+			if m.ocmAuthPending {
+				return "\n_OCM authenticating — complete login in browser..._\n", nil
+			}
 			return "\n_OCM not connected_\n", nil
 		}
 		return "\n_No limited support history_\n", nil
