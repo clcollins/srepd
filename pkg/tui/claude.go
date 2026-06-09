@@ -11,7 +11,6 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/launcher"
 )
 
 const (
@@ -74,32 +73,49 @@ func buildClaudeEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inciden
 	return envVars
 }
 
-// claudeQuery dispatches a prompt to the Claude CLI and returns the response.
-// The prompt is piped via stdin (no -p flag) for safety.
-func claudeQuery(prompt string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
+// agentQuery dispatches a prompt to the configured CLI agent and returns the
+// response. The command is parsed from the agentCLICommand config string.
+// The prompt is piped via stdin for safety.
+func agentQuery(agentCLICommand string, prompt string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "claude", "--print")
-		cmd.Stdin = strings.NewReader(claudeSystemPrompt + "\n\n" + prompt)
+		args := strings.Fields(agentCLICommand)
+		if len(args) == 0 {
+			return claudeResponseMsg{err: fmt.Errorf("agent_cli_command is empty")}
+		}
 
-		// Set environment variables with PagerDuty context
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.Stdin = strings.NewReader(claudeSystemPrompt + "\n\n" + prompt)
 		cmd.Env = append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
 
-		log.Debug("tui.claudeQuery()", "prompt", prompt)
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+
+		log.Debug("tui.agentQuery()", "command", agentCLICommand, "prompt", prompt)
 
 		output, err := cmd.Output()
 		if err != nil {
+			stderrStr := strings.TrimSpace(stderr.String())
+			if stderrStr != "" {
+				log.Warn("tui.agentQuery()", "stderr", stderrStr)
+			}
 			if ctx.Err() == context.DeadlineExceeded {
 				return claudeResponseMsg{
 					response: "",
 					err:      fmt.Errorf("query timed out after %s", claudeTimeout),
 				}
 			}
+			if stderrStr != "" {
+				return claudeResponseMsg{
+					response: "",
+					err:      fmt.Errorf("agent error: %w: %s", err, stderrStr),
+				}
+			}
 			return claudeResponseMsg{
 				response: "",
-				err:      fmt.Errorf("claude error: %w", err),
+				err:      fmt.Errorf("agent error: %w", err),
 			}
 		}
 
@@ -111,12 +127,18 @@ func claudeQuery(prompt string, incident *pagerduty.Incident, alerts []pagerduty
 	}
 }
 
-// handleClaudePrompt processes a claudePromptMsg, checking for Claude availability
-// and dispatching the query command. The hasClaudeCode parameter allows injecting
-// a mock for testing.
-func (m model) handleClaudePrompt(msg claudePromptMsg, hasClaudeCode func() bool) (tea.Model, tea.Cmd) {
-	if !hasClaudeCode() {
-		m.setStatus("Claude Code not installed - install from https://claude.ai/download")
+// handleClaudePrompt processes a claudePromptMsg, checking for agent CLI
+// availability and dispatching the query command. The lookPath parameter
+// allows injecting a mock for testing.
+func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (string, error)) (tea.Model, tea.Cmd) {
+	agentCmd := m.agentCLICommand
+	if agentCmd == "" {
+		agentCmd = "claude --print"
+	}
+
+	binary := strings.Fields(agentCmd)[0]
+	if _, err := lookPath(binary); err != nil {
+		m.setStatus(fmt.Sprintf("agent CLI %q not found on PATH", binary))
 		return m, nil
 	}
 
@@ -124,14 +146,14 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, hasClaudeCode func() bool
 	if m.selectedIncident != nil {
 		incidentID = m.selectedIncident.ID
 	}
-	log.Info("claude query initiated", "incident_id", incidentID, "prompt", truncatePrompt(msg.prompt, 80))
-	m.setStatus(fmt.Sprintf("querying Claude: %s", truncatePrompt(msg.prompt, 40)))
+	log.Info("agent query initiated", "command", agentCmd, "incident_id", incidentID, "prompt", truncatePrompt(msg.prompt, 80))
+	m.setStatus(fmt.Sprintf("querying agent: %s", truncatePrompt(msg.prompt, 40)))
 	m.claudeQuerying = true
 	m.apiInProgress = true
 
 	return m, tea.Batch(
 		m.spinner.Tick,
-		claudeQuery(msg.prompt, m.selectedIncident, m.selectedIncidentAlerts),
+		agentQuery(agentCmd, msg.prompt, m.selectedIncident, m.selectedIncidentAlerts),
 	)
 }
 
@@ -179,9 +201,9 @@ func truncatePrompt(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-// defaultHasClaudeCode wraps launcher.HasClaudeCode for production use
-func defaultHasClaudeCode() bool {
-	return launcher.HasClaudeCode()
+// defaultLookPath wraps exec.LookPath for production use
+func defaultLookPath(file string) (string, error) {
+	return exec.LookPath(file)
 }
 
 func isAgentCommand(input string) bool {

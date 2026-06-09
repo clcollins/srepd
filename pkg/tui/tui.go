@@ -1324,7 +1324,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case claudePromptMsg:
-		return m.handleClaudePrompt(msg, defaultHasClaudeCode)
+		return m.handleClaudePrompt(msg, defaultLookPath)
 
 	case claudeResponseMsg:
 		return m.handleClaudeResponse(msg)

@@ -293,7 +293,7 @@ func TestInitialModelWithConfig_MapsInitialized(t *testing.T) {
 			Client: &pd.MockPagerDutyClient{},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil)
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "")
 		m := teaModel.(model)
 
 		assert.NotNil(t, m.incidentClusterMap, "incidentClusterMap should be initialized")

@@ -31,6 +31,7 @@ var (
 		"toolbox_mode":          "auto",
 		"chord_prefix":          "ctrl+x",
 		"flag_marker":           "🚩 ",
+		"agent_cli_command":     "claude --print",
 	}
 	OptionalKeys = map[string]string{
 		"editor":                             fmt.Sprintf("Editor to use for notes (default: %v)", DefaultOptionalKeys["editor"]),
@@ -39,6 +40,7 @@ var (
 		"toolbox_mode":                       fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", DefaultOptionalKeys["toolbox_mode"]),
 		"chord_prefix":                       fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", DefaultOptionalKeys["chord_prefix"]),
 		"flag_marker":                        fmt.Sprintf("Prefix marker for flagged incidents (default: %v, alt: |►)", DefaultOptionalKeys["flag_marker"]),
+		"agent_cli_command":                  fmt.Sprintf("CLI agent command for /agent queries (default: %v)", DefaultOptionalKeys["agent_cli_command"]),
 		"colors":                             "Custom color scheme (map of color name to hex value)",
 		"default_silent_escalation_policy":   "Default silent escalation policy ID (auto-discovered via srepd config)",
 		"custom_service_escalation_policies": "Per-service silent policy overrides (service ID → policy ID)",

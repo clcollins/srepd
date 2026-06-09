@@ -201,6 +201,7 @@ func launchTUI() {
 		false,
 		ocmAuthPending,
 		aiProvider,
+		viper.GetString("agent_cli_command"),
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -382,6 +383,7 @@ func runDevMode() {
 		viper.GetBool("debug"),
 		ocmMock,
 		nil, // aiProvider — not used in dev mode
+		"",  // agentCLICommand — uses default in dev mode
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

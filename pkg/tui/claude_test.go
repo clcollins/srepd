@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -64,21 +67,19 @@ func TestClaudePrompt_EmptyInput(t *testing.T) {
 }
 
 func TestClaudeNotFound_ShowsStatus(t *testing.T) {
-	// When claudePromptMsg is received but Claude is not installed,
-	// the status should show an appropriate message
-
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
+	m.agentCLICommand = "nonexistent-binary --print"
 
 	msg := claudePromptMsg{prompt: "test query"}
 
-	// Use the handler directly with a custom hasClaudeCode that returns false
-	result, cmd := m.handleClaudePrompt(msg, func() bool { return false })
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "", fmt.Errorf("not found: %s", s)
+	})
 	updatedModel := result.(model)
 
-	assert.Contains(t, updatedModel.status, "Claude Code not installed",
-		"Status should indicate Claude is not available")
-	assert.Nil(t, cmd, "No command should be returned when Claude is not installed")
+	assert.Contains(t, updatedModel.status, "not found on PATH")
+	assert.Nil(t, cmd)
 }
 
 func TestClaudePrompt_ShowsSpinner(t *testing.T) {
@@ -93,13 +94,14 @@ func TestClaudePrompt_ShowsSpinner(t *testing.T) {
 
 	msg := claudePromptMsg{prompt: "test query"}
 
-	result, cmd := m.handleClaudePrompt(msg, func() bool { return true })
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
 	updatedModel := result.(model)
 
 	assert.True(t, updatedModel.claudeQuerying, "claudeQuerying should be true")
 	assert.True(t, updatedModel.apiInProgress, "apiInProgress should be true for spinner")
-	assert.Contains(t, updatedModel.status, "querying Claude",
-		"Status should indicate Claude is being queried")
+	assert.Contains(t, updatedModel.status, "querying agent")
 	assert.NotNil(t, cmd, "A command should be returned to execute the query")
 }
 
@@ -287,7 +289,9 @@ func TestClaudePrompt_WithViewingIncident(t *testing.T) {
 
 	msg := claudePromptMsg{prompt: "what is wrong with this cluster?"}
 
-	result, cmd := m.handleClaudePrompt(msg, func() bool { return true })
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
 	updatedModel := result.(model)
 
 	assert.True(t, updatedModel.claudeQuerying, "Should start querying")
@@ -323,18 +327,131 @@ func TestClaudeResponse_RendersWithPrefix(t *testing.T) {
 	// The actual prefix is added in the Update handler
 }
 
-func TestDefaultHasClaudeCode_NoPanic(t *testing.T) {
-	t.Run("defaultHasClaudeCode does not panic", func(t *testing.T) {
-		// defaultHasClaudeCode wraps launcher.HasClaudeCode which calls exec.LookPath.
-		// In a test environment where 'claude' is not installed, it should return false
-		// without panicking.
+func TestDefaultLookPath_NoPanic(t *testing.T) {
+	t.Run("defaultLookPath does not panic", func(t *testing.T) {
 		assert.NotPanics(t, func() {
-			result := defaultHasClaudeCode()
-			// In most test environments, claude CLI is not installed
-			// We just verify the function runs without panic and returns a bool
-			_ = result
-		}, "defaultHasClaudeCode should not panic regardless of claude installation status")
+			_, _ = defaultLookPath("nonexistent-binary-12345")
+		}, "defaultLookPath should not panic for missing binaries")
 	})
+}
+
+func TestAgentQuery_EmptyCommand(t *testing.T) {
+	cmd := agentQuery("", "test prompt", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.Error(t, resp.err)
+	assert.Contains(t, resp.err.Error(), "agent_cli_command is empty")
+}
+
+func TestAgentQuery_CommandParsing(t *testing.T) {
+	cmd := agentQuery("echo hello world", "ignored", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Equal(t, "hello world", resp.response)
+}
+
+func TestAgentQuery_MultiWordCommand(t *testing.T) {
+	cmd := agentQuery("echo -n test", "ignored", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Equal(t, "test", resp.response)
+}
+
+func TestAgentQuery_CommandNotFound(t *testing.T) {
+	cmd := agentQuery("nonexistent-binary-99999 --flag", "test", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.Error(t, resp.err)
+	assert.Contains(t, resp.err.Error(), "agent error")
+}
+
+func TestAgentQuery_StderrCaptured(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fail.sh")
+	err := os.WriteFile(script, []byte("#!/bin/sh\necho oops >&2\nexit 1\n"), 0755)
+	assert.NoError(t, err)
+
+	cmd := agentQuery(script, "test", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.Error(t, resp.err)
+	assert.Contains(t, resp.err.Error(), "oops")
+}
+
+func TestAgentQuery_PassesEnvVars(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "env.sh")
+	err := os.WriteFile(script, []byte("#!/bin/sh\necho $PAGERDUTY_INCIDENT_ID\n"), 0755)
+	assert.NoError(t, err)
+
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PD999"},
+		Title:     "Test",
+		Urgency:   "high",
+		Status:    "triggered",
+		Service:   pagerduty.APIObject{Summary: "svc"},
+	}
+
+	cmd := agentQuery(script, "test", incident, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Equal(t, "PD999", resp.response)
+}
+
+func TestAgentQuery_PipesStdin(t *testing.T) {
+	cmd := agentQuery("cat", "user question here", nil, nil)
+	msg := cmd()
+	resp, ok := msg.(claudeResponseMsg)
+	assert.True(t, ok)
+	assert.NoError(t, resp.err)
+	assert.Contains(t, resp.response, "user question here")
+	assert.Contains(t, resp.response, claudeSystemPrompt)
+}
+
+func TestHandleClaudePrompt_DefaultCommand(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = ""
+
+	msg := claudePromptMsg{prompt: "test"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		assert.Equal(t, "claude", s, "should look up 'claude' when agentCLICommand is empty")
+		return "/usr/bin/claude", nil
+	})
+	updated := result.(model)
+	assert.True(t, updated.claudeQuerying)
+}
+
+func TestHandleClaudePrompt_CustomCommand(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "/opt/bin/my-agent --verbose --print"
+
+	msg := claudePromptMsg{prompt: "test"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		assert.Equal(t, "/opt/bin/my-agent", s, "should look up the first word of the configured command")
+		return s, nil
+	})
+	updated := result.(model)
+	assert.True(t, updated.claudeQuerying)
+}
+
+func TestHandleClaudePrompt_ToolboxCommand(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "toolbox run -c devtools claude --print"
+
+	msg := claudePromptMsg{prompt: "test"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		assert.Equal(t, "toolbox", s, "should look up 'toolbox' as the first word")
+		return "/usr/bin/toolbox", nil
+	})
+	updated := result.(model)
+	assert.True(t, updated.claudeQuerying)
 }
 
 func TestTruncatePrompt(t *testing.T) {
