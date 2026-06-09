@@ -66,20 +66,18 @@ func TestClaudePrompt_EmptyInput(t *testing.T) {
 	assert.Nil(t, cmd, "Empty input should not dispatch a command")
 }
 
-func TestClaudeNotFound_ShowsStatus(t *testing.T) {
+func TestClaudeNotFound_ShowsFlash(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.agentCLICommand = "nonexistent-binary --print"
 
 	msg := claudePromptMsg{prompt: "test query"}
 
-	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+	_, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
 		return "", fmt.Errorf("not found: %s", s)
 	})
-	updatedModel := result.(model)
 
-	assert.Contains(t, updatedModel.status, "not found on PATH")
-	assert.Nil(t, cmd)
+	assert.NotNil(t, cmd, "should return flash notification command")
 }
 
 func TestClaudePrompt_ShowsSpinner(t *testing.T) {
@@ -139,19 +137,15 @@ func TestClaudeResponse_Error(t *testing.T) {
 		err:      assert.AnError,
 	}
 
-	result, _ := m.Update(msg)
+	result, cmd := m.Update(msg)
 	updatedModel := result.(model)
 
 	assert.False(t, updatedModel.claudeQuerying, "claudeQuerying should be false after error")
 	assert.False(t, updatedModel.apiInProgress, "apiInProgress should be false after error")
-	assert.Contains(t, updatedModel.status, "Claude query failed",
-		"Status should indicate failure")
+	assert.NotNil(t, cmd, "should return flash notification for error")
 }
 
 func TestClaudeResponse_EmptyResponse(t *testing.T) {
-	// When claudeResponseMsg has no error but empty response,
-	// the status should indicate no response
-
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.claudeQuerying = true
@@ -162,12 +156,11 @@ func TestClaudeResponse_EmptyResponse(t *testing.T) {
 		err:      nil,
 	}
 
-	result, _ := m.Update(msg)
+	result, cmd := m.Update(msg)
 	updatedModel := result.(model)
 
 	assert.False(t, updatedModel.claudeQuerying, "claudeQuerying should be false after empty response")
-	assert.Contains(t, updatedModel.status, "no response",
-		"Status should indicate no response")
+	assert.NotNil(t, cmd, "should return flash notification for empty response")
 }
 
 func TestClaudeQuery_PassesContext(t *testing.T) {

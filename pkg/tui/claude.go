@@ -138,8 +138,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 
 	binary := strings.Fields(agentCmd)[0]
 	if _, err := lookPath(binary); err != nil {
-		m.setStatus(fmt.Sprintf("agent CLI %q not found on PATH", binary))
-		return m, nil
+		return m, m.flashNotification(fmt.Sprintf("agent CLI %q not found on PATH", binary))
 	}
 
 	incidentID := ""
@@ -169,13 +168,11 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 	m.apiInProgress = false
 
 	if msg.err != nil {
-		m.setStatus(fmt.Sprintf("Claude query failed: %s", msg.err))
-		return m, nil
+		return m, m.flashNotification(fmt.Sprintf("agent query failed: %s", msg.err))
 	}
 
 	if msg.response == "" {
-		m.setStatus("no response from Claude")
-		return m, nil
+		return m, m.flashNotification("agent returned empty response")
 	}
 
 	m.watcherBuffer.Append(prefixLines(m.agentMarker, msg.response))

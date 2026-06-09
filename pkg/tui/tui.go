@@ -464,12 +464,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case watcherPromptMsg:
 		if m.aiProvider == nil {
-			m.setStatus("LLM provider not configured — add llm_api section to config")
-			return m, nil
+			return m, m.flashNotification("LLM provider not configured — add llm_api section to config")
 		}
 		if !m.aiHealthy {
-			m.setStatus("LLM provider offline")
-			return m, nil
+			return m, m.flashNotification("LLM provider offline")
 		}
 
 		log.Info("watcher query initiated", "prompt", truncatePrompt(msg.prompt, 80))
@@ -493,8 +491,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiInProgress = false
 
 		if msg.err != nil {
-			m.setStatus(fmt.Sprintf("watcher query failed: %s", msg.err))
-			return m, nil
+			return m, m.flashNotification(fmt.Sprintf("watcher query failed: %s", msg.err))
 		}
 
 		m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.response))
