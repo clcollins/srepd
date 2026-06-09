@@ -730,6 +730,10 @@ type silenceSelectedIncidentMsg struct{}
 type silenceIncidentsMsg struct {
 	incidents []pagerduty.Incident
 }
+type enterBulkSilenceMsg struct{}
+type bulkSilenceConfirmedMsg struct {
+	incidents []pagerduty.Incident
+}
 
 var errSilenceIncidentInvalidArgs = errors.New("silenceIncidents: invalid arguments")
 

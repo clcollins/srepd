@@ -53,8 +53,8 @@ func (m *model) rebuildMergeTable() {
 	}
 
 	m.mergeTable.SetStyles(m.styles.Table)
-	m.mergeTable.SetRows(rows)
 	m.mergeTable.SetColumns(m.table.Columns())
+	m.mergeTable.SetRows(rows)
 	m.mergeTable.SetHeight(m.table.Height())
 	m.mergeTable.Focus()
 }

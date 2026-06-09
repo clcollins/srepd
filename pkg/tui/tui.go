@@ -1140,6 +1140,62 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			),
 		)
 
+	case enterBulkSilenceMsg:
+		var options []huh.Option[string]
+		for _, inc := range m.incidentList {
+			label := fmt.Sprintf("%s — %s — %s", inc.ID, inc.Service.Summary, inc.Title)
+			options = append(options, huh.NewOption(label, inc.ID))
+		}
+		if len(options) == 0 {
+			m.setStatus("no incidents to silence")
+			return m, nil
+		}
+		m.bulkSilenceIDs = nil
+
+		theme := huh.ThemeCharm()
+		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
+		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
+		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
+		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
+		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
+		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
+		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+
+		m.bulkSilenceForm = huh.NewForm(
+			huh.NewGroup(
+				huh.NewMultiSelect[string]().
+					Title("Select incidents to silence").
+					Description("Space to toggle, a to select all, enter to confirm, esc to cancel").
+					Options(options...).
+					Filterable(true).
+					Value(&m.bulkSilenceIDs),
+			),
+		).WithTheme(theme).WithHeight(m.layout.TeamSelectFormHeight)
+		m.bulkSilenceMode = true
+		return m, m.bulkSilenceForm.Init()
+
+	case bulkSilenceConfirmedMsg:
+		if len(msg.incidents) == 0 {
+			m.setStatus("no incidents to silence")
+			return m, nil
+		}
+
+		var cmds []tea.Cmd
+		for _, inc := range msg.incidents {
+			policyKey := getEscalationPolicyKey(inc.Service.ID, m.config.EscalationPolicies)
+			policy := m.config.EscalationPolicies[policyKey]
+			cmds = append(cmds, silenceIncidents([]pagerduty.Incident{inc}, policy, silentDefaultPolicyLevel))
+		}
+
+		incidentIDs := strings.Join(getIDsFromIncidents(msg.incidents), " ")
+		cmds = append(cmds, func() tea.Msg { return clearSelectedIncidentsMsg("sender: bulkSilenceConfirmedMsg") })
+
+		return m, tea.Batch(
+			m.flashNotification(fmt.Sprintf("Silenced %s", incidentIDs)),
+			tea.Sequence(cmds...),
+		)
+
 	case silenceIncidentsMsg:
 		if msg.incidents == nil {
 			m.setStatus("failed silencing incidents - no incidents provided")
@@ -1151,14 +1207,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			incidents = append(msg.incidents, *m.selectedIncident)
 		}
 
+		var cmds []tea.Cmd
+		for _, inc := range incidents {
+			policyKey := getEscalationPolicyKey(inc.Service.ID, m.config.EscalationPolicies)
+			policy := m.config.EscalationPolicies[policyKey]
+			cmds = append(cmds, silenceIncidents([]pagerduty.Incident{inc}, policy, silentDefaultPolicyLevel))
+		}
+
 		incidentIDs := strings.Join(getIDsFromIncidents(incidents), " ")
+		cmds = append(cmds, func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") })
 
 		return m, tea.Batch(
 			m.flashNotification(fmt.Sprintf("Silenced %s", incidentIDs)),
-			tea.Sequence(
-				silenceIncidents(incidents, m.config.EscalationPolicies["silent_default"], silentDefaultPolicyLevel),
-				func() tea.Msg { return clearSelectedIncidentsMsg("sender: silenceIncidentsMsg") },
-			),
+			tea.Sequence(cmds...),
 		)
 
 	case clearSelectedIncidentsMsg:

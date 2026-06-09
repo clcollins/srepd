@@ -23,6 +23,7 @@ THE SOFTWARE.
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -84,6 +85,10 @@ but rather a simple tool to make on-call tasks easier.`,
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		if _, err := autoCommentOldPolicies(configFile); err != nil {
+			log.Warn("Failed to auto-migrate old config format", "error", err)
+		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 
@@ -102,6 +107,33 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		launchTUI()
 	},
+}
+
+func autoCommentOldPolicies(configFile string) (bool, error) {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	content := string(data)
+	hasOld := strings.Contains(content, "\nservice_escalation_policies:") || strings.HasPrefix(content, "service_escalation_policies:")
+	hasNew := strings.Contains(content, "default_silent_escalation_policy:")
+
+	if !hasOld || !hasNew {
+		return false, nil
+	}
+
+	migrated := pkgconfig.CommentOutOldPolicies(data)
+	if bytes.Equal(data, migrated) {
+		return false, nil
+	}
+
+	if err := os.WriteFile(configFile, migrated, 0644); err != nil {
+		return false, fmt.Errorf("failed to write migrated config: %w", err)
+	}
+
+	log.Info("Auto-commented deprecated service_escalation_policies block")
+	return true, nil
 }
 
 func launchTUI() {

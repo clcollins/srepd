@@ -20,9 +20,11 @@ type chordAction struct {
 var chordRegistry = []struct {
 	Key         string
 	Description string
+	Hidden      bool
 }{
 	{Key: "?", Description: "show chord help"},
 	{Key: "d", Description: "view debug log"},
+	{Key: "s", Description: "bulk silence", Hidden: true},
 }
 
 // getChordActions returns the full chord action list with handlers attached.
@@ -32,6 +34,7 @@ func getChordActions() []chordAction {
 	handlers := map[string]func(m model) (tea.Model, tea.Cmd){
 		"?": chordShowHelp,
 		"d": chordViewLog,
+		"s": chordBulkSilence,
 	}
 
 	var actions []chordAction
@@ -83,6 +86,9 @@ func (k chordKeymap) ShortHelp() []key.Binding {
 func (k chordKeymap) FullHelp() [][]key.Binding {
 	var bindings []key.Binding
 	for _, entry := range chordRegistry {
+		if entry.Hidden {
+			continue
+		}
 		bindings = append(bindings, key.NewBinding(
 			key.WithKeys(k.prefix+" "+entry.Key),
 			key.WithHelp(k.prefix+" "+entry.Key, entry.Description),
@@ -100,13 +106,27 @@ func chordViewLog(m model) (tea.Model, tea.Cmd) {
 func chordHelpText(prefix string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Chords (%s + key): ", prefix)
-	for i, entry := range chordRegistry {
-		if i > 0 {
+	first := true
+	for _, entry := range chordRegistry {
+		if entry.Hidden {
+			continue
+		}
+		if !first {
 			b.WriteString(", ")
 		}
+		first = false
 		fmt.Fprintf(&b, "%s=%s", entry.Key, entry.Description)
 	}
 	return b.String()
+}
+
+// chordBulkSilence enters the bulk-silence incident selection mode.
+func chordBulkSilence(m model) (tea.Model, tea.Cmd) {
+	if len(m.incidentList) == 0 {
+		m.setStatus("no incidents to silence")
+		return m, nil
+	}
+	return m, func() tea.Msg { return enterBulkSilenceMsg{} }
 }
 
 // chordHelpBindings generates key.Binding entries for the help display.
@@ -118,6 +138,9 @@ func chordHelpBindings() []key.Binding {
 	prefix := "ctrl+x"
 	var bindings []key.Binding
 	for _, entry := range chordRegistry {
+		if entry.Hidden {
+			continue
+		}
 		bindings = append(bindings, key.NewBinding(
 			key.WithKeys(prefix+" "+entry.Key),
 			key.WithHelp(prefix+" "+entry.Key, entry.Description),

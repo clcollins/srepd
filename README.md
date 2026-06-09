@@ -142,7 +142,7 @@ Press `h` to toggle the help overlay inside srepd.
 | `ctrl+q`/`ctrl+c` | Quit | `1`-`9` | Select cluster |
 | `i`/`:` | Ask Claude | `m` | Merge incident |
 | `ctrl+x` + key | Chord commands | `ctrl+x ?` | Show chord help |
-| `Tab`/`Shift+Tab` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |
+| `Tab`/`Shift+Tab`/`←`/`→` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |
 
 Chord commands use a configurable prefix (default `ctrl+x`) followed by a second key. Set `chord_prefix` in config to change.
 

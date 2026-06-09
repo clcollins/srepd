@@ -61,6 +61,9 @@ func (m model) View() string {
 	case m.configModeRequested:
 		s.WriteString("  Loading configuration...")
 
+	case m.bulkSilenceMode:
+		s.WriteString(m.bulkSilenceForm.View())
+
 	case m.teamSelectMode:
 		s.WriteString(m.teamSelectForm.View())
 
@@ -726,6 +729,13 @@ var funcMap = template.FuncMap{
 		}
 		return url
 	},
+	"blockquote": func(s string) template.HTML {
+		lines := strings.Split(s, "\n")
+		for i, line := range lines {
+			lines[i] = "> " + template.HTMLEscapeString(line)
+		}
+		return template.HTML(strings.Join(lines, "\n"))
+	},
 }
 
 func renderIncidentMarkdown(m *model, content string) (string, error) {
@@ -895,7 +905,7 @@ const alertTabTemplate = `
 const noteTabTemplate = `
 ### Note {{ add1 .Index }}/{{ .Total }}
 
-> {{ .Note.Content }}
+{{ blockquote .Note.Content }}
 
 -- {{ .Note.User }} @ {{ .Note.Created }}
 `

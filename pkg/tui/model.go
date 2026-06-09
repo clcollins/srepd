@@ -129,6 +129,11 @@ type model struct {
 	mergeTable          table.Model
 	mergeTeamMode       bool
 
+	// Bulk silence state — triggered via chord ctrl+x s
+	bulkSilenceMode bool
+	bulkSilenceForm *huh.Form
+	bulkSilenceIDs  []string
+
 	// Team selection state — shown on first run or via --pick-teams
 	teamSelectMode  bool
 	teamSelectForm  *huh.Form

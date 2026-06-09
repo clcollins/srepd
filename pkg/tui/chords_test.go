@@ -3,6 +3,7 @@ package tui
 import (
 	"testing"
 
+	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 )
@@ -321,13 +322,18 @@ func TestChordKeymap_ImplementsHelpKeyMap(t *testing.T) {
 		km := chordKeymap{prefix: "ctrl+x"}
 		full := km.FullHelp()
 		assert.NotEmpty(t, full, "FullHelp should return at least one column")
-		// Should have bindings for each chord registry entry
 		totalBindings := 0
 		for _, col := range full {
 			totalBindings += len(col)
 		}
-		assert.GreaterOrEqual(t, totalBindings, len(chordRegistry),
-			"FullHelp should have at least as many bindings as chord registry entries")
+		visibleCount := 0
+		for _, entry := range chordRegistry {
+			if !entry.Hidden {
+				visibleCount++
+			}
+		}
+		assert.GreaterOrEqual(t, totalBindings, visibleCount,
+			"FullHelp should have at least as many bindings as visible chord registry entries")
 	})
 }
 
@@ -356,6 +362,44 @@ func TestChord_WorksInIncidentViewMode(t *testing.T) {
 
 		assert.True(t, updatedModel.chordPending,
 			"chordPending should be set in incident view mode")
+	})
+}
+
+func TestChordBulkSilence_Registered(t *testing.T) {
+	t.Run("bulk silence chord is registered", func(t *testing.T) {
+		action := resolveChord("s")
+		assert.NotNil(t, action, "resolveChord should return an action for 's'")
+		assert.Equal(t, "s", action.Key)
+		assert.Equal(t, "bulk silence", action.Description)
+	})
+}
+
+func TestChordBulkSilence_NoIncidents(t *testing.T) {
+	t.Run("bulk silence with no incidents shows status", func(t *testing.T) {
+		m := createTestModel()
+		m.incidentList = nil
+
+		result, cmd := chordBulkSilence(m)
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "no incidents")
+		assert.Nil(t, cmd)
+	})
+}
+
+func TestChordBulkSilence_WithIncidents(t *testing.T) {
+	t.Run("bulk silence with incidents returns enterBulkSilenceMsg", func(t *testing.T) {
+		m := createTestModel()
+		m.incidentList = []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Title: "Test"},
+		}
+
+		_, cmd := chordBulkSilence(m)
+		assert.NotNil(t, cmd, "should return a command")
+
+		msg := cmd()
+		_, ok := msg.(enterBulkSilenceMsg)
+		assert.True(t, ok, "command should produce enterBulkSilenceMsg, got %T", msg)
 	})
 }
 
