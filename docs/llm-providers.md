@@ -164,6 +164,16 @@ Choose your provider based on your organization's data handling requirements.
 - Missing `api_key_env` environment variable: provider still created (key is optional), but authenticated endpoints will return 401 errors at query time
 - Provider health check failure: does not block startup; health is checked on demand
 
+## Watcher Integration
+
+The configured LLM provider is used by the ambient watcher system for:
+
+- **`:watcher` queries**: direct LLM analysis of incidents with full context
+- **Pattern synthesis**: when heuristic detectors identify cross-incident patterns, the LLM synthesizes a natural-language observation
+- **Health monitoring**: provider connectivity checked every 60 seconds, status shown in the footer
+
+The watcher system prompt is configurable via `watcher_system_prompt` in the config file. See [AI Agents](ai-agents.md) for full usage documentation.
+
 ## Adding New Providers
 
 The provider system is extensible. To add a new provider:
