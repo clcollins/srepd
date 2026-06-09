@@ -191,6 +191,7 @@ func (m *model) runDetectors() []tea.Cmd {
 
 		if m.aiProvider != nil && m.aiHealthy && !m.watcherAnalyzing {
 			m.watcherAnalyzing = true
+			m.watcherQueryStart = time.Now()
 			summary := buildIncidentSummary(m.incidentList)
 			cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, obs.Summary, summary))
 		} else {

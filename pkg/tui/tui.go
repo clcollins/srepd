@@ -477,6 +477,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("querying watcher: %s", truncatePrompt(msg.prompt, 40)))
 		m.watcherAnalyzing = true
 		m.apiInProgress = true
+		m.watcherQueryStart = time.Now()
 
 		if !m.watcherExpanded {
 			m.watcherExpanded = true

@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"slices"
 	"strings"
+	"time"
 
 	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
@@ -958,10 +959,10 @@ func (m model) renderWatcherStatus() string {
 		}
 	}
 
-	analyzingLabel := "analyzing..."
 	if m.claudeQuerying || m.watcherAnalyzing {
+		elapsed := time.Since(m.watcherQueryStart).Truncate(time.Second)
 		highlight := lipgloss.NewStyle().Foreground(m.theme.Highlight)
-		parts = append(parts, m.spinner.View()+" "+highlight.Render(analyzingLabel))
+		parts = append(parts, m.spinner.View()+" "+highlight.Render(fmt.Sprintf("analyzing... %s", elapsed)))
 	} else {
 		parts = append(parts, "idle")
 	}

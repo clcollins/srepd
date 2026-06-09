@@ -149,6 +149,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	m.setStatus(fmt.Sprintf("querying agent: %s", truncatePrompt(msg.prompt, 40)))
 	m.claudeQuerying = true
 	m.apiInProgress = true
+	m.watcherQueryStart = time.Now()
 
 	if !m.watcherExpanded {
 		m.watcherExpanded = true
