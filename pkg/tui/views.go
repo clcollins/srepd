@@ -141,15 +141,21 @@ func (m model) View() string {
 }
 
 func (m model) renderFooter() string {
-	var s strings.Builder
-	s.WriteString(
-		lipgloss.JoinHorizontal(
-			0.2,
-			m.styles.Padded.Render(refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)),
-		),
-	)
+	left := refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)
 
-	return s.String()
+	if !m.watcherExpanded {
+		return m.styles.Padded.Render(left)
+	}
+
+	right := m.renderWatcherStatus()
+	leftWidth := windowSize.Width * layoutTableShareNum / layoutTableShareDen
+	rightWidth := windowSize.Width - leftWidth
+
+	return lipgloss.JoinHorizontal(
+		0.2,
+		m.styles.Padded.Width(leftWidth).Render(left),
+		m.styles.Muted.Width(rightWidth).Align(lipgloss.Right).Padding(0, 1, 0, 0).Render(right),
+	)
 }
 
 func (m model) renderHeader() string {
@@ -936,15 +942,10 @@ func (m model) renderWatcherPane() string {
 		return ""
 	}
 
-	var s strings.Builder
-	s.WriteString(m.renderWatcherHeader())
-	s.WriteString("\n")
-	s.WriteString(m.styles.WatcherContainer.Render(m.watcherViewport.View()))
-	s.WriteString("\n")
-	return s.String()
+	return m.styles.WatcherContainer.Render(m.watcherViewport.View()) + "\n"
 }
 
-func (m model) renderWatcherHeader() string {
+func (m model) renderWatcherStatus() string {
 	parts := []string{"[AI Watcher]"}
 
 	if m.aiProvider != nil {
@@ -962,5 +963,5 @@ func (m model) renderWatcherHeader() string {
 		parts = append(parts, "idle")
 	}
 
-	return m.styles.Muted.Render("  " + strings.Join(parts, " | "))
+	return strings.Join(parts, " | ")
 }

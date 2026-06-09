@@ -25,8 +25,7 @@ const (
 	configFormReserved      = layoutHeaderLines + layoutBottomStatusLines + configFormBottomPadding
 
 	layoutWatcherBorderOverhead = 2
-	layoutWatcherHeaderLines    = 1
-	layoutWatcherOverhead       = layoutWatcherBorderOverhead + layoutWatcherHeaderLines
+	layoutWatcherOverhead       = layoutWatcherBorderOverhead
 
 	layoutMinTableRows       = 10
 	layoutMinWatcherRows     = 5
