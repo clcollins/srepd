@@ -19,14 +19,14 @@ func TestInputCharLimit_Increased(t *testing.T) {
 }
 
 func TestClaudePrompt_DispatchesCommand(t *testing.T) {
-	// When the user is in input focus mode and presses Enter with /agent prefix,
+	// When the user is in input focus mode and presses Enter with :agent prefix,
 	// a claudePromptMsg should be dispatched with the query text (prefix stripped),
 	// the input should be reset and blurred.
 
 	m := createTestModel()
 	m.input = newTextInput()
 	m.input.Focus()
-	m.input.SetValue("/agent investigate this alert")
+	m.input.SetValue(":agent investigate this alert")
 
 	// Simulate pressing Enter in input focus mode
 	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
@@ -34,7 +34,7 @@ func TestClaudePrompt_DispatchesCommand(t *testing.T) {
 	updatedModel := result.(model)
 
 	// Input stays focused for follow-up queries, value is cleared
-	assert.True(t, updatedModel.input.Focused(), "Input should stay focused after /agent dispatch")
+	assert.True(t, updatedModel.input.Focused(), "Input should stay focused after :agent dispatch")
 	assert.Equal(t, "", updatedModel.input.Value(), "Input value should be cleared after dispatch")
 
 	// A command should be returned
@@ -44,7 +44,7 @@ func TestClaudePrompt_DispatchesCommand(t *testing.T) {
 	msg := cmd()
 	promptMsg, ok := msg.(claudePromptMsg)
 	assert.True(t, ok, "Command should produce a claudePromptMsg, got %T", msg)
-	assert.Equal(t, "investigate this alert", promptMsg.prompt, "Prompt text should have /agent prefix stripped")
+	assert.Equal(t, "investigate this alert", promptMsg.prompt, "Prompt text should have :agent prefix stripped")
 }
 
 func TestClaudePrompt_EmptyInput(t *testing.T) {
@@ -255,7 +255,7 @@ func TestInputFocusMode_TableRegainsFocusOnBlur(t *testing.T) {
 	m := createTestModelWithTableRows(incidents)
 	m.input = newTextInput()
 	m.input.Focus()
-	m.input.SetValue("/agent query text")
+	m.input.SetValue(":agent query text")
 
 	// Simulate pressing Enter
 	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
@@ -553,15 +553,15 @@ func TestBuildClaudeEnvVars_NoAlerts(t *testing.T) {
 }
 
 func TestIsAgentCommand_Valid(t *testing.T) {
-	assert.True(t, isAgentCommand("/agent investigate this alert"))
+	assert.True(t, isAgentCommand(":agent investigate this alert"))
 }
 
 func TestIsAgentCommand_BareSlashAgent(t *testing.T) {
-	assert.True(t, isAgentCommand("/agent"))
+	assert.True(t, isAgentCommand(":agent"))
 }
 
 func TestIsAgentCommand_WithLeadingSpace(t *testing.T) {
-	assert.True(t, isAgentCommand("  /agent query"))
+	assert.True(t, isAgentCommand("  :agent query"))
 }
 
 func TestIsAgentCommand_NotAgent(t *testing.T) {
@@ -573,31 +573,31 @@ func TestIsAgentCommand_PlainText(t *testing.T) {
 }
 
 func TestParseAgentQuery_ExtractsQuery(t *testing.T) {
-	assert.Equal(t, "investigate this", parseAgentQuery("/agent investigate this"))
+	assert.Equal(t, "investigate this", parseAgentQuery(":agent investigate this"))
 }
 
 func TestParseAgentQuery_EmptyAfterPrefix(t *testing.T) {
-	assert.Equal(t, "", parseAgentQuery("/agent"))
+	assert.Equal(t, "", parseAgentQuery(":agent"))
 }
 
 func TestParseAgentQuery_PreservesExtraSpaces(t *testing.T) {
-	assert.Equal(t, "what happened to cluster abc", parseAgentQuery("/agent what happened to cluster abc"))
+	assert.Equal(t, "what happened to cluster abc", parseAgentQuery(":agent what happened to cluster abc"))
 }
 
 func TestInputMode_AgentCommand_DispatchesClaude(t *testing.T) {
-	m := createInputFocusedModel("/agent what happened")
+	m := createInputFocusedModel(":agent what happened")
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.True(t, updated.input.Focused(), "input stays focused after /agent dispatch")
-	assert.NotNil(t, cmd, "/agent command must dispatch a command")
+	assert.True(t, updated.input.Focused(), "input stays focused after :agent dispatch")
+	assert.NotNil(t, cmd, ":agent command must dispatch a command")
 
 	msg := cmd()
 	promptMsg, ok := msg.(claudePromptMsg)
 	assert.True(t, ok, "dispatched message must be claudePromptMsg")
-	assert.Equal(t, "what happened", promptMsg.prompt, "query must have /agent prefix stripped")
+	assert.Equal(t, "what happened", promptMsg.prompt, "query must have :agent prefix stripped")
 }
 
 func TestInputMode_BareText_ShowsError(t *testing.T) {
@@ -613,12 +613,12 @@ func TestInputMode_BareText_ShowsError(t *testing.T) {
 }
 
 func TestInputMode_EmptyAgent_ShowsUsage(t *testing.T) {
-	m := createInputFocusedModel("/agent")
+	m := createInputFocusedModel(":agent")
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.Nil(t, cmd, "/agent with no query must not dispatch")
+	assert.Nil(t, cmd, ":agent with no query must not dispatch")
 	assert.Contains(t, updated.status, "usage", "status must show usage hint")
 }

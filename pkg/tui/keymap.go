@@ -17,7 +17,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 		// Column 1: Help at top, navigation
 		{k.Help, k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
 		// Column 2: Primary incident actions
-		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence, k.Merge, k.Flag},
+		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence, k.Merge, k.Input},
 		// Column 3: Settings & toggles, Quit at bottom
 		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.Watcher, k.ViewLog, k.Quit},
 		// Column 4: Tab navigation (incident viewer)
@@ -56,9 +56,8 @@ type keymap struct {
 	Open        key.Binding
 	SOP         key.Binding
 	ViewLog     key.Binding
-	Merge       key.Binding
-	Flag        key.Binding
-	Watcher     key.Binding
+	Merge   key.Binding
+	Watcher key.Binding
 	TabNext     key.Binding
 	TabPrev     key.Binding
 }
@@ -166,8 +165,8 @@ var defaultKeyMap = keymap{
 		key.WithHelp("u", "toggle urgency filter"),
 	),
 	Input: key.NewBinding(
-		key.WithKeys("i", ":", "/"),
-		key.WithHelp("i/:/", "command input"),
+		key.WithKeys(":", "/"),
+		key.WithHelp(":/", "command input"),
 	),
 	Login: key.NewBinding(
 		key.WithKeys("l"),
@@ -188,10 +187,6 @@ var defaultKeyMap = keymap{
 	Merge: key.NewBinding(
 		key.WithKeys("m"),
 		key.WithHelp("m", "merge incident"),
-	),
-	Flag: key.NewBinding(
-		key.WithKeys("f"),
-		key.WithHelp("f", "flag condition"),
 	),
 	Watcher: key.NewBinding(
 		key.WithKeys("w"),

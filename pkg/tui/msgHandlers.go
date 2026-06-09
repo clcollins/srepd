@@ -168,18 +168,11 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Commands for any focus mode
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
-		if msg.(tea.KeyMsg).String() == "/" {
-			m.input.SetValue("/")
+		keyStr := msg.(tea.KeyMsg).String()
+		if keyStr == ":" || keyStr == "/" {
+			m.input.SetValue(keyStr)
 			m.input.SetCursor(1)
 		}
-		return m, tea.Sequence(
-			m.input.Focus(),
-		)
-	}
-
-	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Flag) {
-		m.input.SetValue("/flag ")
-		m.input.SetCursor(len("/flag "))
 		return m, tea.Sequence(
 			m.input.Focus(),
 		)
@@ -728,7 +721,7 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if isAgentCommand(prompt) {
 				query := parseAgentQuery(prompt)
 				if query == "" {
-					m.setStatus("usage: /agent <query>")
+					m.setStatus("usage: :agent <query>")
 					return m, nil
 				}
 				m.input.Reset()
@@ -745,7 +738,7 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.dispatchFlagCommand(prompt)
 			}
 
-			m.setStatus("unknown command — try /agent <query> or /flag <type> <value>")
+			m.setStatus("unknown command — try :agent <query> or :flag <type> <value>")
 			return m, nil
 
 		default:

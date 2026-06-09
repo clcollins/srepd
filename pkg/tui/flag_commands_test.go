@@ -13,8 +13,8 @@ import (
 )
 
 func TestParseFlagCommand_ClusterID(t *testing.T) {
-	t.Run("parses /flag cluster <id>", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flag cluster 1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+	t.Run("parses :flag cluster <id>", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":flag cluster 1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -26,8 +26,8 @@ func TestParseFlagCommand_ClusterID(t *testing.T) {
 }
 
 func TestParseFlagCommand_OrgName(t *testing.T) {
-	t.Run("parses /flag org <pattern>", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flag org ^Acme*")
+	t.Run("parses :flag org <pattern>", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":flag org ^Acme*")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -40,7 +40,7 @@ func TestParseFlagCommand_OrgName(t *testing.T) {
 
 func TestParseFlagCommand_OrgNameMultiWord(t *testing.T) {
 	t.Run("parses org pattern with spaces", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flag org Red Hat Inc")
+		cmd, err := parseFlagCommand(":flag org Red Hat Inc")
 
 		require.NoError(t, err)
 		assert.Equal(t, FlagOrgName, cmd.condition.Type)
@@ -49,8 +49,8 @@ func TestParseFlagCommand_OrgNameMultiWord(t *testing.T) {
 }
 
 func TestParseFlagCommand_List(t *testing.T) {
-	t.Run("parses /flags as list command", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flags")
+	t.Run("parses :flags as list command", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":flags")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -59,8 +59,8 @@ func TestParseFlagCommand_List(t *testing.T) {
 }
 
 func TestParseFlagCommand_Unflag(t *testing.T) {
-	t.Run("parses /unflag <id>", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/unflag 3")
+	t.Run("parses :unflag <id>", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":unflag 3")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -70,8 +70,8 @@ func TestParseFlagCommand_Unflag(t *testing.T) {
 }
 
 func TestParseFlagCommand_UnflagAll(t *testing.T) {
-	t.Run("parses /unflag all", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/unflag all")
+	t.Run("parses :unflag all", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":unflag all")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -80,8 +80,8 @@ func TestParseFlagCommand_UnflagAll(t *testing.T) {
 }
 
 func TestParseFlagCommand_FlagsSave(t *testing.T) {
-	t.Run("parses /flags save", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flags save")
+	t.Run("parses :flags save", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":flags save")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -91,8 +91,8 @@ func TestParseFlagCommand_FlagsSave(t *testing.T) {
 }
 
 func TestParseFlagCommand_FlagsSavePath(t *testing.T) {
-	t.Run("parses /flags save <path>", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flags save /tmp/myflags.json")
+	t.Run("parses :flags save <path>", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":flags save /tmp/myflags.json")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -102,8 +102,8 @@ func TestParseFlagCommand_FlagsSavePath(t *testing.T) {
 }
 
 func TestParseFlagCommand_FlagsLoad(t *testing.T) {
-	t.Run("parses /flags load", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flags load")
+	t.Run("parses :flags load", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":flags load")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -112,8 +112,8 @@ func TestParseFlagCommand_FlagsLoad(t *testing.T) {
 }
 
 func TestParseFlagCommand_FlagsLoadPath(t *testing.T) {
-	t.Run("parses /flags load <path>", func(t *testing.T) {
-		cmd, err := parseFlagCommand("/flags load /tmp/myflags.json")
+	t.Run("parses :flags load <path>", func(t *testing.T) {
+		cmd, err := parseFlagCommand(":flags load /tmp/myflags.json")
 
 		require.NoError(t, err)
 		require.NotNil(t, cmd)
@@ -124,7 +124,7 @@ func TestParseFlagCommand_FlagsLoadPath(t *testing.T) {
 
 func TestParseFlagCommand_InvalidType(t *testing.T) {
 	t.Run("returns error for unknown flag type", func(t *testing.T) {
-		_, err := parseFlagCommand("/flag badtype value")
+		_, err := parseFlagCommand(":flag badtype value")
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown flag type")
@@ -132,40 +132,40 @@ func TestParseFlagCommand_InvalidType(t *testing.T) {
 }
 
 func TestParseFlagCommand_MissingValue(t *testing.T) {
-	t.Run("returns error for /flag cluster with no value", func(t *testing.T) {
-		_, err := parseFlagCommand("/flag cluster")
+	t.Run("returns error for :flag cluster with no value", func(t *testing.T) {
+		_, err := parseFlagCommand(":flag cluster")
 
 		assert.Error(t, err)
 	})
 }
 
 func TestParseFlagCommand_MissingOrgValue(t *testing.T) {
-	t.Run("returns error for /flag org with no value", func(t *testing.T) {
-		_, err := parseFlagCommand("/flag org")
+	t.Run("returns error for :flag org with no value", func(t *testing.T) {
+		_, err := parseFlagCommand(":flag org")
 
 		assert.Error(t, err)
 	})
 }
 
 func TestParseFlagCommand_FlagNoArgs(t *testing.T) {
-	t.Run("returns error for bare /flag", func(t *testing.T) {
-		_, err := parseFlagCommand("/flag")
+	t.Run("returns error for bare :flag", func(t *testing.T) {
+		_, err := parseFlagCommand(":flag")
 
 		assert.Error(t, err)
 	})
 }
 
 func TestParseFlagCommand_UnflagInvalidID(t *testing.T) {
-	t.Run("returns error for /unflag with non-numeric id", func(t *testing.T) {
-		_, err := parseFlagCommand("/unflag abc")
+	t.Run("returns error for :unflag with non-numeric id", func(t *testing.T) {
+		_, err := parseFlagCommand(":unflag abc")
 
 		assert.Error(t, err)
 	})
 }
 
 func TestParseFlagCommand_UnflagNoArgs(t *testing.T) {
-	t.Run("returns error for bare /unflag", func(t *testing.T) {
-		_, err := parseFlagCommand("/unflag")
+	t.Run("returns error for bare :unflag", func(t *testing.T) {
+		_, err := parseFlagCommand(":unflag")
 
 		assert.Error(t, err)
 	})
@@ -214,7 +214,7 @@ func TestSaveFlagsCmd_CreatesDirectory(t *testing.T) {
 
 func TestSaveFlagsCmd_InvalidPath(t *testing.T) {
 	t.Run("returns error for invalid path", func(t *testing.T) {
-		cmd := saveFlagsCmd([]FlagCondition{{ID: 1}}, "/dev/null/impossible/flags.json")
+		cmd := saveFlagsCmd([]FlagCondition{{ID: 1}}, "/dev/null/impossible:flags.json")
 		msg := cmd()
 
 		saved := msg.(flagsSavedMsg)
@@ -246,7 +246,7 @@ func TestLoadFlagsCmd_ReadsJSON(t *testing.T) {
 
 func TestLoadFlagsCmd_FileNotFound(t *testing.T) {
 	t.Run("returns error for missing file", func(t *testing.T) {
-		cmd := loadFlagsCmd("/nonexistent/flags.json")
+		cmd := loadFlagsCmd("/nonexistent:flags.json")
 		msg := cmd()
 
 		loaded := msg.(flagsLoadedMsg)
@@ -297,11 +297,11 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 }
 
 func TestDispatchFlagCommand_Add(t *testing.T) {
-	t.Run("dispatches addFlagConditionMsg for /flag cluster", func(t *testing.T) {
+	t.Run("dispatches addFlagConditionMsg for :flag cluster", func(t *testing.T) {
 		m := createTestModel()
 		m.flagMarker = emojiFlagMarker
 
-		cmd := m.dispatchFlagCommand("/flag cluster abc123")
+		cmd := m.dispatchFlagCommand(":flag cluster abc123")
 		require.NotNil(t, cmd)
 
 		msg := cmd()
@@ -313,11 +313,11 @@ func TestDispatchFlagCommand_Add(t *testing.T) {
 }
 
 func TestDispatchFlagCommand_List(t *testing.T) {
-	t.Run("dispatches listFlagConditionsMsg for /flags", func(t *testing.T) {
+	t.Run("dispatches listFlagConditionsMsg for :flags", func(t *testing.T) {
 		m := createTestModel()
 		m.flagMarker = emojiFlagMarker
 
-		cmd := m.dispatchFlagCommand("/flags")
+		cmd := m.dispatchFlagCommand(":flags")
 		require.NotNil(t, cmd)
 
 		msg := cmd()
@@ -331,7 +331,7 @@ func TestDispatchFlagCommand_Invalid(t *testing.T) {
 		m := createTestModel()
 		m.flagMarker = emojiFlagMarker
 
-		cmd := m.dispatchFlagCommand("/flag badtype value")
+		cmd := m.dispatchFlagCommand(":flag badtype value")
 		require.NotNil(t, cmd)
 
 		// The flash notification returns a tea.Cmd that produces setStatusMsg
@@ -349,13 +349,13 @@ func TestIsFlagCommand(t *testing.T) {
 		input string
 		want  bool
 	}{
-		{"flag command", "/flag cluster abc", true},
-		{"flags command", "/flags", true},
-		{"unflag command", "/unflag 3", true},
+		{"flag command", ":flag cluster abc", true},
+		{"flags command", ":flags", true},
+		{"unflag command", ":unflag 3", true},
 		{"not a flag command", "hello world", false},
 		{"claude prompt", "explain this code", false},
-		{"partial match", "/flagged", false},
-		{"flags save", "/flags save", true},
+		{"partial match", ":flagged", false},
+		{"flags save", ":flags save", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

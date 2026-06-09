@@ -207,9 +207,9 @@ func defaultLookPath(file string) (string, error) {
 
 func isAgentCommand(input string) bool {
 	trimmed := strings.TrimSpace(input)
-	return strings.HasPrefix(trimmed, "/agent ") || trimmed == "/agent"
+	return strings.HasPrefix(trimmed, ":agent ") || trimmed == ":agent"
 }
 
 func parseAgentQuery(input string) string {
-	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), "/agent"))
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), ":agent"))
 }

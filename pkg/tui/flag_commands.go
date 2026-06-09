@@ -43,12 +43,12 @@ type flagsLoadedMsg struct {
 
 func isFlagCommand(input string) bool {
 	trimmed := strings.TrimSpace(input)
-	return trimmed == "/flags" ||
-		strings.HasPrefix(trimmed, "/flags ") ||
-		strings.HasPrefix(trimmed, "/flag ") ||
-		trimmed == "/flag" ||
-		strings.HasPrefix(trimmed, "/unflag ") ||
-		trimmed == "/unflag"
+	return trimmed == ":flags" ||
+		strings.HasPrefix(trimmed, ":flags ") ||
+		strings.HasPrefix(trimmed, ":flag ") ||
+		trimmed == ":flag" ||
+		strings.HasPrefix(trimmed, ":unflag ") ||
+		trimmed == ":unflag"
 }
 
 func parseFlagCommand(input string) (*parsedFlagCommand, error) {
@@ -60,11 +60,11 @@ func parseFlagCommand(input string) (*parsedFlagCommand, error) {
 	}
 
 	switch parts[0] {
-	case "/flags":
+	case ":flags":
 		return parseFlagsSubcommand(parts[1:])
-	case "/flag":
+	case ":flag":
 		return parseFlagAdd(parts[1:])
-	case "/unflag":
+	case ":unflag":
 		return parseUnflag(parts[1:])
 	default:
 		return nil, fmt.Errorf("unknown command: %s", parts[0])
