@@ -27,3 +27,22 @@ Add explicit requirements to AGENTS.md:
 
 - `go test ./... -count=1` passes with zero failures.
 - AGENTS.md content reviewed for correctness and clarity.
+
+## Lessons Learned
+
+**GENUINE ERROR — vague test requirement was not actionable**
+(Fixed by: [059-agents-md-precommit-checks.md](059-agents-md-precommit-checks.md))
+
+The instruction to "run `make test-all` before committing" was
+incomplete — `make test-all` did not cover all CI checks (lint, format,
+README check), and the requirement was vague enough that agents and
+developers continued to skip checks, causing repeated CI failures.
+
+Why it wasn't caught: the plan focused on adding *a* requirement rather
+than verifying that the requirement covered *everything* CI checks.
+`make test-all` sounded comprehensive but actually missed several gates.
+
+Prevention: process documentation must be explicit and exhaustive —
+list every command, not a summary target that may not cover everything.
+The fix replaced the vague instruction with an explicit parallel
+checklist of all 7 CI checks.

@@ -64,3 +64,41 @@ Add a `--dev` / `-D` CLI flag (and `SREPD_DEV=true` env var) that:
 - [ ] TestDevClient_SilenceUpdatesPolicy - policy changes in memory
 - [ ] TestLoadFixtures - JSON files load correctly
 - [ ] All existing tests continue to pass
+
+## Lessons Learned
+
+**GENUINE ERROR — Go map iteration caused non-deterministic incident ordering**
+(Fixed by: [059-fix-dev-mode-reorder.md](059-fix-dev-mode-reorder.md))
+
+DevPagerDutyClient stored incidents in a `map[string]*pagerduty.Incident`
+and iterated over it in `ListIncidentsWithContext`. Go map iteration is
+non-deterministic, so after any state mutation (acknowledge, silence),
+the incident list reordered unpredictably in the TUI.
+
+Why it wasn't caught: tests did not verify iteration order stability
+across mutations — they only checked that the correct incidents were
+present, not their order.
+
+Prevention: any Go code that iterates a map for user-visible list
+output should use an order-preserving data structure (e.g., a separate
+`[]string` for keys). Review should flag map iteration in display paths.
+
+---
+
+**GENUINE ERROR — incomplete dev fixtures caused rendering discrepancies**
+(Fixed by: [066-fix-dev-fixture-display.md](066-fix-dev-fixture-display.md))
+
+Dev mode fixtures were missing fields (`html_url`, incident references)
+that real PagerDuty API responses include. This caused incident viewer
+tabs to render differently in dev mode vs production, undermining the
+purpose of dev mode for UI iteration.
+
+Why it wasn't caught: fixtures were written to cover the fields needed
+at implementation time, not to mirror the complete API response
+structure. No comparison against real (sanitized) API responses was
+done.
+
+Prevention: when creating API fixtures, compare against a real API
+response (sanitized) to ensure structural completeness. Dev mode
+fixtures must mirror production response structure, not just the subset
+of fields currently consumed.

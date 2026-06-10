@@ -59,3 +59,23 @@ ignored user set.
 - Phase 3: Escalation level filtering (`ctrl+x e` chord)
 - Phase 4: Service discovery via `ListServicesWithContext`
 - Phase 5: Full `ignoredusers` removal after deprecation period
+
+## Lessons Learned
+
+**GENUINE ERROR — deprecation left stale references in templates and help**
+(Fixed by: [084-remove-ignoredusers-config.md](084-remove-ignoredusers-config.md))
+
+This plan added auto-discovery to replace `ignoredusers` but left
+behind references to the deprecated key in the `config --create`
+template, the optional keys help text, and the README config table.
+Users following the config template would still see and potentially
+configure the deprecated key.
+
+Why it wasn't caught: the deprecation focused on the runtime behavior
+(auto-discovery vs manual list) without auditing all user-facing
+references to the key. No checklist existed for deprecation cleanup.
+
+Prevention: when deprecating any user-facing configuration, grep the
+entire codebase for the key name and remove/update all references
+atomically in the same PR — templates, help text, README, examples,
+and comments.

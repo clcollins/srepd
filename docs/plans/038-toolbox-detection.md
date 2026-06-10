@@ -45,6 +45,24 @@ with injectable dependencies avoids environment-dependent test flakiness.
 The `checkToolbox()` / `NewClusterLauncherWithToolbox()` pattern follows
 this same principle.
 
+**GENUINE ERROR — env vars silently lost across flatpak-spawn boundary**
+(Fixed by: [044-toolbox-env-var-passing.md](044-toolbox-env-var-passing.md))
+
+The initial implementation added BOTH `--env=` flags on `flatpak-spawn`
+AND `-e` flags on `ocm-container` redundantly, and did not handle the
+fact that `exec.Cmd.Env` does not propagate environment variables to
+the host process launched via `flatpak-spawn --host`. Environment
+variables silently disappeared.
+
+Why it wasn't caught: tests did not run inside a Toolbox container, so
+the `flatpak-spawn` env var boundary was never exercised. The unit
+tests verified command construction but not runtime env propagation.
+
+Prevention: when implementing container-aware features, document and
+test the env var propagation path for each execution flow. The fix
+required three-way flow detection (ocm-container, non-ocm in toolbox,
+non-ocm outside toolbox), each with different env var mechanisms.
+
 ## Files Modified
 
 - `pkg/container/container.go` -- new package: `IsRunningInToolbox()`,
