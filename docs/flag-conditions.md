@@ -7,29 +7,28 @@ which flags matched.
 
 ## Quick Start
 
-Press `f` to open the flag input prompt (pre-filled with `/flag `), or enter
-input mode with `:` and type the command manually.
+Press `:` to enter command mode, then type:
 
 ```
-/flag cluster 1q2w3e4rfakeidtest9o0p1a2s3d4f5g
-/flag org ^Acme*
+:flag cluster 1q2w3e4rfakeidtest9o0p1a2s3d4f5g
+:flag org ^Acme*
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/flag cluster <id>` | Flag incidents involving a specific cluster (matches OCM internal ID, external ID, or raw alert cluster ID) |
-| `/flag org <pattern>` | Flag incidents involving clusters owned by an organization matching the pattern |
-| `/flags` | List all active flag conditions |
-| `/unflag <id>` | Remove a flag condition by its session ID |
-| `/unflag all` | Clear all flag conditions |
-| `/flags save [path]` | Save flag conditions to a JSON file |
-| `/flags load [path]` | Load flag conditions from a JSON file |
+| `:flag cluster <id>` | Flag incidents involving a specific cluster (matches OCM internal ID, external ID, or raw alert cluster ID) |
+| `:flag org <pattern>` | Flag incidents involving clusters owned by an organization matching the pattern |
+| `:flags` | List all active flag conditions |
+| `:unflag <id>` | Remove a flag condition by its session ID |
+| `:unflag all` | Clear all flag conditions |
+| `:flags save [path]` | Save flag conditions to a JSON file |
+| `:flags load [path]` | Load flag conditions from a JSON file |
 
 ## Condition Types
 
-### Cluster ID (`/flag cluster <id>`)
+### Cluster ID (`:flag cluster <id>`)
 
 Matches any incident whose alerts reference the given cluster. The ID is
 compared against:
@@ -41,7 +40,7 @@ compared against:
 Matching is case-insensitive. If OCM enrichment has not yet completed for a
 cluster, only the raw alert cluster ID is checked.
 
-### Organization Name (`/flag org <pattern>`)
+### Organization Name (`:flag org <pattern>`)
 
 Matches incidents involving clusters whose `Organization` field (from OCM)
 matches the pattern. Requires OCM enrichment to be active.
@@ -82,19 +81,15 @@ section at the bottom:
 
 ## Configuration
 
-### `flag_marker` (optional)
+### `emoji` (optional)
 
-The prefix marker shown on flagged incidents. Default: `🚩 ` (flag emoji +
-space).
-
-For terminals that don't render emoji well, set to `|►` (no trailing space
-needed):
+Controls the flag marker style. Default: `true` (🚩). Set to `false` for text fallback (|►).
 
 ```yaml
-flag_marker: "|►"
+emoji: false
 ```
 
-Add this to your `~/.config/srepd/srepd.yaml`.
+This also controls the agent (🤖/☻) and watcher (📡/☺) markers. See [configuration.md](configuration.md) for details.
 
 ## Persistence
 
@@ -102,10 +97,10 @@ Flag conditions are **session-only by default** — they are lost when srepd
 exits. To persist them:
 
 ```
-/flags save              # saves to ~/.config/srepd/flags.json
-/flags save /tmp/my.json # saves to a custom path
-/flags load              # loads from ~/.config/srepd/flags.json
-/flags load /tmp/my.json # loads from a custom path
+:flags save              # saves to ~/.config/srepd:flags.json
+:flags save /tmp/my.json # saves to a custom path
+:flags load              # loads from ~/.config/srepd:flags.json
+:flags load /tmp/my.json # loads from a custom path
 ```
 
 ### Save File Format (`flags.json`)
@@ -141,7 +136,7 @@ The save file is a JSON array of flag condition objects:
 | `label` | string | Human-readable description shown in the UI. |
 | `created_at` | string | ISO 8601 timestamp of when the condition was created. |
 
-**Default path:** `~/.config/srepd/flags.json`
+**Default path:** `~/.config/srepd:flags.json`
 
 The directory is created automatically if it doesn't exist. The file is
 overwritten on each save (not appended).

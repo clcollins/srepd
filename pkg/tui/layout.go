@@ -24,6 +24,15 @@ const (
 	configFormBottomPadding = 1
 	configFormReserved      = layoutHeaderLines + layoutBottomStatusLines + configFormBottomPadding
 
+	layoutWatcherBorderOverhead = 2
+	layoutWatcherOverhead       = layoutWatcherBorderOverhead
+
+	layoutMinTableRows       = 10
+	layoutMinWatcherRows     = 5
+	layoutDefaultWatcherRows = 10
+	layoutTableShareNum      = 2
+	layoutTableShareDen      = 3
+
 	layoutMinTableHeight          = 4
 	layoutMinIncidentViewerHeight = 10
 	layoutMinFormHeight           = 1
@@ -48,6 +57,9 @@ type Layout struct {
 	IncidentViewerWidth  int
 	IncidentViewerHeight int
 
+	WatcherWidth  int
+	WatcherHeight int
+
 	FormWidth            int
 	FormHeight           int
 	TeamSelectFormHeight int
@@ -56,7 +68,7 @@ type Layout struct {
 	ClusterSelectServiceWidth   int
 }
 
-func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string) Layout {
+func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcherExpanded bool) Layout {
 	mainHOverhead := styles.Main.GetHorizontalMargins() +
 		styles.Main.GetHorizontalPadding() +
 		styles.Main.GetHorizontalBorderSize()
@@ -81,7 +93,37 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string) Layout 
 	helpLines := strings.Count(helpView, "\n") + 1
 
 	tableWidth := ws.Width - mainHOverhead - containerHOverhead - cellHOverhead
-	tableHeight := ws.Height - mainVOverhead - containerVOverhead - tableFixedOverhead - helpLines
+	watcherWidth := ws.Width - mainHOverhead - containerHOverhead
+
+	// Total available rows for table + watcher content
+	availableRows := ws.Height - mainVOverhead - containerVOverhead - tableFixedOverhead - helpLines
+
+	var tableHeight, watcherHeight int
+
+	if !watcherExpanded {
+		tableHeight = availableRows
+	} else {
+		// Subtract watcher chrome (header + borders) and its own container border overhead
+		watcherContainerOverhead := styles.WatcherContainer.GetVerticalMargins() +
+			styles.WatcherContainer.GetVerticalPadding() +
+			styles.WatcherContainer.GetVerticalBorderSize()
+		availableForBoth := availableRows - layoutWatcherOverhead - watcherContainerOverhead
+
+		if availableForBoth >= layoutMinTableRows+layoutDefaultWatcherRows {
+			// Enough room: split 2/3 table, 1/3 watcher
+			tableHeight = availableForBoth * layoutTableShareNum / layoutTableShareDen
+			watcherHeight = availableForBoth - tableHeight
+		} else if availableForBoth >= layoutMinTableRows+layoutMinWatcherRows {
+			// Tight: table gets minimum, watcher gets the rest
+			tableHeight = layoutMinTableRows
+			watcherHeight = availableForBoth - tableHeight
+		} else {
+			// Very tight: both get minimums
+			tableHeight = layoutMinTableRows
+			watcherHeight = layoutMinWatcherRows
+		}
+	}
+
 	if tableHeight < layoutMinTableHeight {
 		tableHeight = layoutMinTableHeight
 	}
@@ -131,6 +173,8 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string) Layout 
 		FormWidth:                   formWidth,
 		FormHeight:                  formHeight,
 		TeamSelectFormHeight:        teamSelectFormHeight,
+		WatcherWidth:                watcherWidth,
+		WatcherHeight:               watcherHeight,
 		ClusterSelectClusterIDWidth: clusterIDWidth,
 		ClusterSelectServiceWidth:   serviceWidth,
 	}
@@ -152,6 +196,12 @@ func (m *model) recomputeLayout() {
 	}
 
 	helpView := m.help.View(helpKeyMap)
-	m.layout = computeLayout(windowSize, m.styles, helpView)
+
+	m.layout = computeLayout(windowSize, m.styles, helpView, m.watcherExpanded)
 	m.table.SetHeight(m.layout.TableHeight)
+
+	if m.watcherExpanded {
+		m.watcherViewport.Width = m.layout.WatcherWidth
+		m.watcherViewport.Height = m.layout.WatcherHeight
+	}
 }

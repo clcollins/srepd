@@ -204,7 +204,7 @@ func launchTUI() {
 		viper.GetString("agent_cli_command"),
 	)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	if ocmAuthPending {
 		go func() {
@@ -386,7 +386,7 @@ func runDevMode() {
 		"",  // agentCLICommand — uses default in dev mode
 	)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	go func() {
 		for {
@@ -461,6 +461,9 @@ func configureLogging() {
 
 	// Check if user wants to log to journal (default: true)
 	viper.SetDefault("log_to_journal", true)
+	viper.SetDefault("emoji", true)
+	viper.SetDefault("agent_system_prompt", pkgconfig.DefaultOptionalKeys["agent_system_prompt"])
+	viper.SetDefault("watcher_system_prompt", pkgconfig.DefaultOptionalKeys["watcher_system_prompt"])
 	logToJournal := viper.GetBool("log_to_journal")
 
 	dest, logPath := determineLogDestination(runtime.GOOS, logToJournal, journal.Enabled())

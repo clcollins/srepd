@@ -28,6 +28,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	watcherQueryTimeout     = 60 * time.Second
+	watcherSynthesisTimeout = 30 * time.Second
+)
+
 // This file contains the commands that are used in the Bubble Tea update function.
 // These commands are functions that return a tea.Cmd, which performs I/O with
 // another system, such as the PagerDuty API, the filesystem, or the user's terminal,
@@ -206,6 +211,33 @@ type aiHealthCheckMsg struct {
 	err     error
 }
 
+type watcherResponseMsg struct {
+	response string
+	err      error
+}
+
+func watcherQueryCmd(provider ai.Provider, systemPrompt string, userPrompt string, incidentContext string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), watcherQueryTimeout)
+		defer cancel()
+
+		fullPrompt := userPrompt
+		if incidentContext != "" {
+			fullPrompt = fmt.Sprintf("%s\n\nContext:\n%s", userPrompt, incidentContext)
+		}
+
+		log.Debug("watcher.query", "provider", provider.Name(), "prompt", userPrompt)
+
+		response, err := provider.Query(ctx, systemPrompt, fullPrompt)
+		if err != nil {
+			log.Warn("watcher.query", "error", err)
+			return watcherResponseMsg{err: err}
+		}
+
+		return watcherResponseMsg{response: response}
+	}
+}
+
 func aiHealthCheckCmd(provider ai.Provider) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -225,6 +257,34 @@ func aiHealthCheckCmd(provider ai.Provider) tea.Cmd {
 
 		log.Debug("ai.HealthCheck", "provider", provider.Name(), "status", "healthy")
 		return aiHealthCheckMsg{healthy: true}
+	}
+}
+
+type watcherSynthesisMsg struct {
+	observation string
+	response    string
+	err         error
+}
+
+func watcherSynthesizeCmd(provider ai.Provider, systemPrompt string, observation string, incidentSummary string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), watcherSynthesisTimeout)
+		defer cancel()
+
+		synthesisPrefix := "A pattern detector identified the following observation. " +
+			"Provide a brief (1-3 sentence) analysis of what this pattern might indicate " +
+			"and any suggested investigation steps. Be concise."
+		userPrompt := fmt.Sprintf("%s\n\nObservation: %s\n\nCurrent incidents:\n%s", synthesisPrefix, observation, incidentSummary)
+
+		log.Debug("watcher.synthesize", "provider", provider.Name(), "observation", observation)
+
+		response, err := provider.Query(ctx, systemPrompt, userPrompt)
+		if err != nil {
+			log.Warn("watcher.synthesize", "error", err)
+			return watcherSynthesisMsg{observation: observation, err: err}
+		}
+
+		return watcherSynthesisMsg{observation: observation, response: response}
 	}
 }
 

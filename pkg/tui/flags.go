@@ -16,7 +16,10 @@ const (
 	FlagOrgName
 )
 
-const defaultFlagMarker = "🚩 "
+const (
+	emojiFlagMarker   = "🚩 "
+	noEmojiFlagMarker = "|► "
+)
 
 // FlagCondition is a user-defined rule that marks matching incidents.
 type FlagCondition struct {
@@ -156,7 +159,7 @@ func (m model) renderFlagConditionsSection() string {
 
 func formatFlagsList(conditions []FlagCondition) string {
 	if len(conditions) == 0 {
-		return "No active flag conditions.\n\nUse `/flag cluster <id>` or `/flag org <pattern>` to add one."
+		return "No active flag conditions.\n\nUse `:flag cluster <id>` or `:flag org <pattern>` to add one."
 	}
 
 	var b strings.Builder

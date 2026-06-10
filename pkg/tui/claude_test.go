@@ -8,6 +8,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,23 +20,22 @@ func TestInputCharLimit_Increased(t *testing.T) {
 }
 
 func TestClaudePrompt_DispatchesCommand(t *testing.T) {
-	// When the user is in input focus mode and presses Enter with /agent prefix,
+	// When the user is in input focus mode and presses Enter with :agent prefix,
 	// a claudePromptMsg should be dispatched with the query text (prefix stripped),
 	// the input should be reset and blurred.
 
 	m := createTestModel()
 	m.input = newTextInput()
 	m.input.Focus()
-	m.input.SetValue("/agent investigate this alert")
+	m.input.SetValue(":agent investigate this alert")
 
 	// Simulate pressing Enter in input focus mode
 	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := switchInputFocusMode(m, enterMsg)
 	updatedModel := result.(model)
 
-	// Input should be blurred and reset
-	assert.False(t, updatedModel.input.Focused(), "Input should be blurred after Enter")
-	assert.Equal(t, "", updatedModel.input.Value(), "Input should be reset after Enter")
+	assert.False(t, updatedModel.input.Focused(), "Input should blur after :agent dispatch")
+	assert.Equal(t, "", updatedModel.input.Value(), "Input value should be cleared after dispatch")
 
 	// A command should be returned
 	assert.NotNil(t, cmd, "Enter in input mode should return a command")
@@ -44,7 +44,7 @@ func TestClaudePrompt_DispatchesCommand(t *testing.T) {
 	msg := cmd()
 	promptMsg, ok := msg.(claudePromptMsg)
 	assert.True(t, ok, "Command should produce a claudePromptMsg, got %T", msg)
-	assert.Equal(t, "investigate this alert", promptMsg.prompt, "Prompt text should have /agent prefix stripped")
+	assert.Equal(t, "investigate this alert", promptMsg.prompt, "Prompt text should have :agent prefix stripped")
 }
 
 func TestClaudePrompt_EmptyInput(t *testing.T) {
@@ -66,20 +66,18 @@ func TestClaudePrompt_EmptyInput(t *testing.T) {
 	assert.Nil(t, cmd, "Empty input should not dispatch a command")
 }
 
-func TestClaudeNotFound_ShowsStatus(t *testing.T) {
+func TestClaudeNotFound_ShowsFlash(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.agentCLICommand = "nonexistent-binary --print"
 
 	msg := claudePromptMsg{prompt: "test query"}
 
-	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+	_, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
 		return "", fmt.Errorf("not found: %s", s)
 	})
-	updatedModel := result.(model)
 
-	assert.Contains(t, updatedModel.status, "not found on PATH")
-	assert.Nil(t, cmd)
+	assert.NotNil(t, cmd, "should return flash notification command")
 }
 
 func TestClaudePrompt_ShowsSpinner(t *testing.T) {
@@ -105,16 +103,11 @@ func TestClaudePrompt_ShowsSpinner(t *testing.T) {
 	assert.NotNil(t, cmd, "A command should be returned to execute the query")
 }
 
-func TestClaudeResponse_RendersInViewport(t *testing.T) {
-	// When claudeResponseMsg is received with a successful response,
-	// the content should be set in the incidentViewer and viewingIncident
-	// should be true
-
+func TestClaudeResponse_RendersInWatcherPane(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.claudeQuerying = true
 	m.apiInProgress = true
-	m.incidentViewer = newIncidentViewer()
 
 	msg := claudeResponseMsg{
 		response: "Based on the alert, the cluster appears to have high CPU usage.",
@@ -126,7 +119,9 @@ func TestClaudeResponse_RendersInViewport(t *testing.T) {
 
 	assert.False(t, updatedModel.claudeQuerying, "claudeQuerying should be false after response")
 	assert.False(t, updatedModel.apiInProgress, "apiInProgress should be false after response")
-	assert.True(t, updatedModel.viewingIncident, "viewingIncident should be true to show response")
+	assert.False(t, updatedModel.viewingIncident, "viewingIncident should remain false — response goes to watcher pane")
+	assert.True(t, updatedModel.watcherExpanded, "watcher pane should auto-expand on response")
+	assert.Equal(t, 1, updatedModel.watcherBuffer.Len(), "response should be appended to watcher buffer")
 }
 
 func TestClaudeResponse_Error(t *testing.T) {
@@ -142,19 +137,15 @@ func TestClaudeResponse_Error(t *testing.T) {
 		err:      assert.AnError,
 	}
 
-	result, _ := m.Update(msg)
+	result, cmd := m.Update(msg)
 	updatedModel := result.(model)
 
 	assert.False(t, updatedModel.claudeQuerying, "claudeQuerying should be false after error")
 	assert.False(t, updatedModel.apiInProgress, "apiInProgress should be false after error")
-	assert.Contains(t, updatedModel.status, "Claude query failed",
-		"Status should indicate failure")
+	assert.NotNil(t, cmd, "should return flash notification for error")
 }
 
 func TestClaudeResponse_EmptyResponse(t *testing.T) {
-	// When claudeResponseMsg has no error but empty response,
-	// the status should indicate no response
-
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.claudeQuerying = true
@@ -165,12 +156,11 @@ func TestClaudeResponse_EmptyResponse(t *testing.T) {
 		err:      nil,
 	}
 
-	result, _ := m.Update(msg)
+	result, cmd := m.Update(msg)
 	updatedModel := result.(model)
 
 	assert.False(t, updatedModel.claudeQuerying, "claudeQuerying should be false after empty response")
-	assert.Contains(t, updatedModel.status, "no response",
-		"Status should indicate no response")
+	assert.NotNil(t, cmd, "should return flash notification for empty response")
 }
 
 func TestClaudeQuery_PassesContext(t *testing.T) {
@@ -219,12 +209,16 @@ func TestClaudeQuery_PassesContext(t *testing.T) {
 		"Should include cluster ID from alerts")
 }
 
-func TestClaudeQuery_SystemPrompt(t *testing.T) {
-	// The system prompt should specify read-only investigation mode
-	assert.Contains(t, claudeSystemPrompt, "read-only",
-		"System prompt should specify read-only mode")
-	assert.Contains(t, claudeSystemPrompt, "investigation",
-		"System prompt should mention investigation")
+func TestDefaultAgentSystemPrompt(t *testing.T) {
+	defaultPrompt := pkgconfig.DefaultOptionalKeys["agent_system_prompt"]
+	assert.Contains(t, defaultPrompt, "read-only")
+	assert.Contains(t, defaultPrompt, "investigation")
+}
+
+func TestDefaultWatcherSystemPrompt(t *testing.T) {
+	defaultPrompt := pkgconfig.DefaultOptionalKeys["watcher_system_prompt"]
+	assert.Contains(t, defaultPrompt, "SRE assistant")
+	assert.Contains(t, defaultPrompt, "destructive")
 }
 
 func TestInputFocusMode_EscBlursInput(t *testing.T) {
@@ -258,7 +252,7 @@ func TestInputFocusMode_TableRegainsFocusOnBlur(t *testing.T) {
 	m := createTestModelWithTableRows(incidents)
 	m.input = newTextInput()
 	m.input.Focus()
-	m.input.SetValue("/agent query text")
+	m.input.SetValue(":agent query text")
 
 	// Simulate pressing Enter
 	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
@@ -276,13 +270,10 @@ func TestClaudePrompt_InputModeKeyMapUpdated(t *testing.T) {
 		"Enter key help description should say 'ask Claude'")
 }
 
-func TestClaudePrompt_WithViewingIncident(t *testing.T) {
-	// When in incident view, entering input mode and submitting should work
-	// by setting viewingIncident to true for the response display
-
+func TestClaudePrompt_AutoExpandsWatcher(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
-	m.viewingIncident = true
+	m.watcherExpanded = false
 	m.selectedIncident = &pagerduty.Incident{
 		APIObject: pagerduty.APIObject{ID: "Q123"},
 	}
@@ -295,6 +286,7 @@ func TestClaudePrompt_WithViewingIncident(t *testing.T) {
 	updatedModel := result.(model)
 
 	assert.True(t, updatedModel.claudeQuerying, "Should start querying")
+	assert.True(t, updatedModel.watcherExpanded, "Watcher pane should auto-expand on query")
 	assert.NotNil(t, cmd, "Should dispatch query command")
 }
 
@@ -304,27 +296,23 @@ func TestNewTextInputWidth(t *testing.T) {
 	assert.Equal(t, 120, input.Width, "Input width should be 120")
 }
 
-func TestClaudeResponse_RendersWithPrefix(t *testing.T) {
-	// When Claude response is rendered in the viewport, it should have
-	// a clear prefix indicating it's from Claude
-
+func TestClaudeResponse_AppendsToWatcherBuffer(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.claudeQuerying = true
 	m.apiInProgress = true
-	m.incidentViewer = newIncidentViewer()
 
 	msg := claudeResponseMsg{
 		response: "The cluster is experiencing high CPU usage.",
 		err:      nil,
 	}
 
-	result, _ := m.Update(msg)
-	_ = result.(model)
+	result, cmd := m.Update(msg)
+	updatedModel := result.(model)
 
-	// The response content is set on the viewport - we can't directly read it back
-	// from viewport.Model in tests, but we verify the model state is correct
-	// The actual prefix is added in the Update handler
+	assert.Equal(t, 1, updatedModel.watcherBuffer.Len(), "should have placeholder entry for typewriter")
+	assert.NotNil(t, updatedModel.typewriter, "typewriter should be active")
+	assert.NotNil(t, cmd, "should return typewriter tick command")
 }
 
 func TestDefaultLookPath_NoPanic(t *testing.T) {
@@ -336,7 +324,7 @@ func TestDefaultLookPath_NoPanic(t *testing.T) {
 }
 
 func TestAgentQuery_EmptyCommand(t *testing.T) {
-	cmd := agentQuery("", "test prompt", nil, nil)
+	cmd := agentQuery("", "test system", "test prompt", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -345,7 +333,7 @@ func TestAgentQuery_EmptyCommand(t *testing.T) {
 }
 
 func TestAgentQuery_CommandParsing(t *testing.T) {
-	cmd := agentQuery("echo hello world", "ignored", nil, nil)
+	cmd := agentQuery("echo hello world", "", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -354,7 +342,7 @@ func TestAgentQuery_CommandParsing(t *testing.T) {
 }
 
 func TestAgentQuery_MultiWordCommand(t *testing.T) {
-	cmd := agentQuery("echo -n test", "ignored", nil, nil)
+	cmd := agentQuery("echo -n test", "", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -363,7 +351,7 @@ func TestAgentQuery_MultiWordCommand(t *testing.T) {
 }
 
 func TestAgentQuery_CommandNotFound(t *testing.T) {
-	cmd := agentQuery("nonexistent-binary-99999 --flag", "test", nil, nil)
+	cmd := agentQuery("nonexistent-binary-99999 --flag", "", "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -376,7 +364,7 @@ func TestAgentQuery_StderrCaptured(t *testing.T) {
 	err := os.WriteFile(script, []byte("#!/bin/sh\necho oops >&2\nexit 1\n"), 0755)
 	assert.NoError(t, err)
 
-	cmd := agentQuery(script, "test", nil, nil)
+	cmd := agentQuery(script, "", "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -397,7 +385,7 @@ func TestAgentQuery_PassesEnvVars(t *testing.T) {
 		Service:   pagerduty.APIObject{Summary: "svc"},
 	}
 
-	cmd := agentQuery(script, "test", incident, nil)
+	cmd := agentQuery(script, "", "test", "", incident, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -406,13 +394,13 @@ func TestAgentQuery_PassesEnvVars(t *testing.T) {
 }
 
 func TestAgentQuery_PipesStdin(t *testing.T) {
-	cmd := agentQuery("cat", "user question here", nil, nil)
+	cmd := agentQuery("cat", "test system prompt", "user question here", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
 	assert.NoError(t, resp.err)
 	assert.Contains(t, resp.response, "user question here")
-	assert.Contains(t, resp.response, claudeSystemPrompt)
+	assert.Contains(t, resp.response, "test system prompt")
 }
 
 func TestHandleClaudePrompt_DefaultCommand(t *testing.T) {
@@ -562,15 +550,15 @@ func TestBuildClaudeEnvVars_NoAlerts(t *testing.T) {
 }
 
 func TestIsAgentCommand_Valid(t *testing.T) {
-	assert.True(t, isAgentCommand("/agent investigate this alert"))
+	assert.True(t, isAgentCommand(":agent investigate this alert"))
 }
 
 func TestIsAgentCommand_BareSlashAgent(t *testing.T) {
-	assert.True(t, isAgentCommand("/agent"))
+	assert.True(t, isAgentCommand(":agent"))
 }
 
 func TestIsAgentCommand_WithLeadingSpace(t *testing.T) {
-	assert.True(t, isAgentCommand("  /agent query"))
+	assert.True(t, isAgentCommand("  :agent query"))
 }
 
 func TestIsAgentCommand_NotAgent(t *testing.T) {
@@ -582,31 +570,31 @@ func TestIsAgentCommand_PlainText(t *testing.T) {
 }
 
 func TestParseAgentQuery_ExtractsQuery(t *testing.T) {
-	assert.Equal(t, "investigate this", parseAgentQuery("/agent investigate this"))
+	assert.Equal(t, "investigate this", parseAgentQuery(":agent investigate this"))
 }
 
 func TestParseAgentQuery_EmptyAfterPrefix(t *testing.T) {
-	assert.Equal(t, "", parseAgentQuery("/agent"))
+	assert.Equal(t, "", parseAgentQuery(":agent"))
 }
 
 func TestParseAgentQuery_PreservesExtraSpaces(t *testing.T) {
-	assert.Equal(t, "what happened to cluster abc", parseAgentQuery("/agent what happened to cluster abc"))
+	assert.Equal(t, "what happened to cluster abc", parseAgentQuery(":agent what happened to cluster abc"))
 }
 
 func TestInputMode_AgentCommand_DispatchesClaude(t *testing.T) {
-	m := createInputFocusedModel("/agent what happened")
+	m := createInputFocusedModel(":agent what happened")
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.False(t, updated.input.Focused(), "input must be blurred after Enter")
-	assert.NotNil(t, cmd, "/agent command must dispatch a command")
+	assert.False(t, updated.input.Focused(), "input should blur after :agent dispatch")
+	assert.NotNil(t, cmd, ":agent command must dispatch a command")
 
 	msg := cmd()
 	promptMsg, ok := msg.(claudePromptMsg)
 	assert.True(t, ok, "dispatched message must be claudePromptMsg")
-	assert.Equal(t, "what happened", promptMsg.prompt, "query must have /agent prefix stripped")
+	assert.Equal(t, "what happened", promptMsg.prompt, "query must have :agent prefix stripped")
 }
 
 func TestInputMode_BareText_ShowsError(t *testing.T) {
@@ -622,12 +610,12 @@ func TestInputMode_BareText_ShowsError(t *testing.T) {
 }
 
 func TestInputMode_EmptyAgent_ShowsUsage(t *testing.T) {
-	m := createInputFocusedModel("/agent")
+	m := createInputFocusedModel(":agent")
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.Nil(t, cmd, "/agent with no query must not dispatch")
+	assert.Nil(t, cmd, ":agent with no query must not dispatch")
 	assert.Contains(t, updated.status, "usage", "status must show usage hint")
 }

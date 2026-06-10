@@ -1067,13 +1067,13 @@ func TestInputMode_Escape_StillExitsInput(t *testing.T) {
 }
 
 func TestInputMode_Enter_StillDispatchesPrompt(t *testing.T) {
-	m := createInputFocusedModel("/agent investigate this alert")
+	m := createInputFocusedModel(":agent investigate this alert")
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.False(t, updated.input.Focused(), "Enter must blur the input")
+	assert.False(t, updated.input.Focused(), "input should blur after agent dispatch")
 	assert.Empty(t, updated.input.Value(), "Enter must reset the input value")
 	assert.NotNil(t, cmd, "Enter must dispatch a command")
 

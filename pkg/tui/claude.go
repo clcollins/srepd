@@ -15,11 +15,6 @@ import (
 
 const (
 	claudeTimeout = 60 * time.Second
-
-	claudeSystemPrompt = "You are in read-only investigation mode for SRE PagerDuty incident triage. " +
-		"Suggest commands for the user to run if changes are needed. Do not modify cluster state. " +
-		"All cluster commands must be read-only (oc get, oc describe, NOT oc delete/patch). " +
-		"If a fix requires changes, OUTPUT the commands for the SRE to review and run manually."
 )
 
 // claudePromptMsg is sent when the user submits a prompt from the input field
@@ -76,7 +71,7 @@ func buildClaudeEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inciden
 // agentQuery dispatches a prompt to the configured CLI agent and returns the
 // response. The command is parsed from the agentCLICommand config string.
 // The prompt is piped via stdin for safety.
-func agentQuery(agentCLICommand string, prompt string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
+func agentQuery(agentCLICommand string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
 		defer cancel()
@@ -86,8 +81,13 @@ func agentQuery(agentCLICommand string, prompt string, incident *pagerduty.Incid
 			return claudeResponseMsg{err: fmt.Errorf("agent_cli_command is empty")}
 		}
 
+		fullPrompt := systemPrompt + "\n\n" + prompt
+		if incidentContext != "" {
+			fullPrompt += "\n\nContext:\n" + incidentContext
+		}
+
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.Stdin = strings.NewReader(claudeSystemPrompt + "\n\n" + prompt)
+		cmd.Stdin = strings.NewReader(fullPrompt)
 		cmd.Env = append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
 
 		var stderr strings.Builder
@@ -138,8 +138,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 
 	binary := strings.Fields(agentCmd)[0]
 	if _, err := lookPath(binary); err != nil {
-		m.setStatus(fmt.Sprintf("agent CLI %q not found on PATH", binary))
-		return m, nil
+		return m, m.flashNotification(fmt.Sprintf("agent CLI %q not found on PATH", binary))
 	}
 
 	incidentID := ""
@@ -150,10 +149,18 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	m.setStatus(fmt.Sprintf("querying agent: %s", truncatePrompt(msg.prompt, 40)))
 	m.claudeQuerying = true
 	m.apiInProgress = true
+	m.watcherQueryStart = time.Now()
+	m.watcherQueryTimeout = claudeTimeout
 
+	if !m.watcherExpanded {
+		m.watcherExpanded = true
+		m.recomputeLayout()
+	}
+
+	incidentContext := buildWatcherContext(&m)
 	return m, tea.Batch(
 		m.spinner.Tick,
-		agentQuery(agentCmd, msg.prompt, m.selectedIncident, m.selectedIncidentAlerts),
+		agentQuery(agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
 	)
 }
 
@@ -164,33 +171,23 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 	m.apiInProgress = false
 
 	if msg.err != nil {
-		m.setStatus(fmt.Sprintf("Claude query failed: %s", msg.err))
-		return m, nil
+		return m, m.flashNotification(fmt.Sprintf("agent query failed: %s", msg.err))
 	}
 
 	if msg.response == "" {
-		m.setStatus("no response from Claude")
-		return m, nil
+		return m, m.flashNotification("agent returned empty response")
 	}
 
-	// Format the response with a Claude header
-	content := fmt.Sprintf("# Claude Response\n\n%s", msg.response)
-
-	// Render as markdown if renderer is available
-	if m.markdownRenderer != nil {
-		rendered, err := m.markdownRenderer.Render(content)
-		if err == nil {
-			content = rendered
-		}
+	if !m.watcherExpanded {
+		m.watcherExpanded = true
+		m.recomputeLayout()
 	}
 
-	m.incidentViewer.SetContent(content)
-	m.incidentViewer.GotoTop()
-	m.viewingIncident = true
 	log.Info("claude response received")
 	m.setStatus("Claude response received")
 
-	return m, nil
+	m.watcherBuffer.Append("")
+	return m, m.startTypewriter(m.agentMarker, msg.response)
 }
 
 // truncatePrompt shortens a prompt string for display in the status bar
@@ -208,9 +205,9 @@ func defaultLookPath(file string) (string, error) {
 
 func isAgentCommand(input string) bool {
 	trimmed := strings.TrimSpace(input)
-	return strings.HasPrefix(trimmed, "/agent ") || trimmed == "/agent"
+	return strings.HasPrefix(trimmed, ":agent ") || trimmed == ":agent"
 }
 
 func parseAgentQuery(input string) string {
-	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), "/agent"))
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), ":agent"))
 }

@@ -128,7 +128,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Skip logging for very frequent messages
 	switch msgType {
 	case reflect.TypeOf(TickMsg{}),
-		reflect.TypeOf(spinner.TickMsg{}):
+		reflect.TypeOf(spinner.TickMsg{}),
+		reflect.TypeOf(tea.MouseMsg{}),
+		reflect.TypeOf(ocmServiceLogsMsg{}),
+		reflect.TypeOf(limitedSupportMsg{}):
 		shouldLog = false
 	}
 
@@ -379,7 +382,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.condition.ID = m.flagNextID
 		m.flagConditions = append(m.flagConditions, msg.condition)
 		m.rebuildFlagMatchCache()
-		return m, m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
+		watcherCmds := m.runDetectors()
+		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
+		rebuildCmd := func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
+		return m, tea.Batch(append(watcherCmds, flashCmd, rebuildCmd)...)
 
 	case removeFlagConditionMsg:
 		for i, c := range m.flagConditions {
@@ -389,12 +395,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.rebuildFlagMatchCache()
-		return m, m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
+		watcherCmds := m.runDetectors()
+		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
+		rebuildCmd := func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
+		return m, tea.Batch(append(watcherCmds, flashCmd, rebuildCmd)...)
 
 	case clearFlagConditionsMsg:
 		m.flagConditions = nil
 		m.rebuildFlagMatchCache()
-		return m, m.flashNotification("all flags cleared")
+		return m, tea.Batch(
+			m.flashNotification("all flags cleared"),
+			func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} },
+		)
 
 	case listFlagConditionsMsg:
 		content := formatFlagsList(m.flagConditions)
@@ -427,7 +439,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.flagNextID = maxID
 		m.rebuildFlagMatchCache()
-		return m, m.flashNotification(fmt.Sprintf("flags loaded (%d conditions)", len(m.flagConditions)))
+
+		enrichCmds := []tea.Cmd{
+			m.flashNotification(fmt.Sprintf("flags loaded (%d conditions)", len(m.flagConditions))),
+			func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} },
+		}
+		for _, inc := range m.incidentList {
+			if _, ok := m.incidentClusterMap[inc.ID]; !ok {
+				if m.config != nil {
+					enrichCmds = append(enrichCmds, getIncidentAlerts(m.config, inc.ID))
+				}
+			}
+		}
+		return m, tea.Batch(enrichCmds...)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -437,12 +461,79 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TickMsg:
 		return m, tea.Batch(runScheduledJobs(&m)...)
 
+	case typewriterTickMsg:
+		return m, m.advanceTypewriter()
+
 	case aiHealthCheckMsg:
 		m.aiHealthy = msg.healthy
 		return m, nil
 
+	case watcherPromptMsg:
+		if m.aiProvider == nil {
+			return m, m.flashNotification("LLM provider not configured — add llm_api section to config")
+		}
+		if !m.aiHealthy {
+			return m, m.flashNotification("LLM provider offline")
+		}
+
+		log.Info("watcher query initiated", "prompt", truncatePrompt(msg.prompt, 80))
+		m.setStatus(fmt.Sprintf("querying watcher: %s", truncatePrompt(msg.prompt, 40)))
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+		m.watcherQueryStart = time.Now()
+		m.watcherQueryTimeout = watcherQueryTimeout
+
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+
+		incidentContext := buildWatcherContext(&m)
+		return m, tea.Batch(
+			m.spinner.Tick,
+			watcherQueryCmd(m.aiProvider, m.watcherSystemPrompt, msg.prompt, incidentContext),
+		)
+
+	case watcherResponseMsg:
+		m.watcherAnalyzing = false
+		m.apiInProgress = false
+
+		if msg.err != nil {
+			return m, m.flashNotification(fmt.Sprintf("watcher query failed: %s", msg.err))
+		}
+
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		m.setStatus("watcher response received")
+		m.watcherBuffer.Append("")
+		return m, m.startTypewriter(m.watcherMarker, msg.response)
+
+	case watcherSynthesisMsg:
+		m.watcherAnalyzing = false
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		if msg.err != nil {
+			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
+			m.updateWatcherViewport()
+			return m, nil
+		}
+		m.watcherBuffer.Append("")
+		return m, m.startTypewriter(m.watcherMarker, msg.response)
+
 	case tea.WindowSizeMsg:
 		return m.windowSizeMsgHandler(msg)
+
+	case tea.MouseMsg:
+		if m.watcherExpanded {
+			var cmd tea.Cmd
+			m.watcherViewport, cmd = m.watcherViewport.Update(msg)
+			return m, cmd
+		}
+		return m, nil
 
 	case tea.KeyMsg:
 		return m.keyMsgHandler(msg)
@@ -844,6 +935,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd := m.syncSelectedIncidentToHighlightedRow(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+
+		cmds = append(cmds, m.runDetectors()...)
 
 	case parseTemplateForNoteMsg:
 		if m.selectedIncident == nil {
@@ -1372,6 +1465,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clusterCache[msg.clusterID] = msg.info
 		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
+
+		m.rebuildFlagMatchCache()
 
 		// Phase 2: dispatch service logs and limited support using the
 		// OCM internal ID for the API call but the PD cluster ID as cache key.

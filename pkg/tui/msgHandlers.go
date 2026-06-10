@@ -54,6 +54,11 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.logViewer.Width = m.layout.IncidentViewerWidth
 	m.logViewer.Height = m.layout.IncidentViewerHeight
 
+	if m.watcherExpanded {
+		m.watcherViewport.Width = m.layout.WatcherWidth
+		m.watcherViewport.Height = m.layout.WatcherHeight
+	}
+
 	if m.configMode && m.configForm != nil {
 		m.configForm.WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
 		form, cmd := m.configForm.Update(msg)
@@ -155,16 +160,19 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
 	}
 
-	// Commands for any focus mode
-	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
-		return m, tea.Sequence(
-			m.input.Focus(),
-		)
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Watcher) {
+		m.watcherExpanded = !m.watcherExpanded
+		m.recomputeLayout()
+		return m, nil
 	}
 
-	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Flag) {
-		m.input.SetValue("/flag ")
-		m.input.SetCursor(len("/flag "))
+	// Commands for any focus mode
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
+		keyStr := msg.(tea.KeyMsg).String()
+		if keyStr == ":" || keyStr == "/" {
+			m.input.SetValue(keyStr)
+			m.input.SetCursor(1)
+		}
 		return m, tea.Sequence(
 			m.input.Focus(),
 		)
@@ -703,22 +711,21 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, defaultKeyMap.Enter):
 			prompt := m.input.Value()
+
+			if prompt == "" {
+				m.input.Blur()
+				m.table.Focus()
+				return m, nil
+			}
+
 			m.input.Reset()
 			m.input.Blur()
 			m.table.Focus()
 
-			if prompt == "" {
-				return m, nil
-			}
-
-			if isFlagCommand(prompt) {
-				return m, m.dispatchFlagCommand(prompt)
-			}
-
 			if isAgentCommand(prompt) {
 				query := parseAgentQuery(prompt)
 				if query == "" {
-					m.setStatus("usage: /agent <query>")
+					m.setStatus("usage: :agent <query>")
 					return m, nil
 				}
 				return m, func() tea.Msg {
@@ -726,7 +733,24 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			m.setStatus("unknown command — try /agent <query> or /flag <type> <value>")
+			if isWatcherCommand(prompt) {
+				query := parseWatcherQuery(prompt)
+				if query == "" {
+					m.setStatus("usage: :watcher <query>")
+					return m, nil
+				}
+				return m, func() tea.Msg {
+					return watcherPromptMsg{prompt: query}
+				}
+			}
+
+			if isFlagCommand(prompt) {
+				log.Debug("switchInputFocusMode", "msg", "dispatching flag command", "prompt", prompt)
+				return m, m.dispatchFlagCommand(prompt)
+			}
+
+			log.Debug("switchInputFocusMode", "msg", "unknown command", "prompt", prompt)
+			m.setStatus("unknown command — try :agent, :watcher, or :flag")
 			return m, nil
 
 		default:

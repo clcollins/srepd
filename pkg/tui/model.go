@@ -23,6 +23,7 @@ import (
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/spf13/viper"
 )
 
 // cachedIncidentData stores fetched incident data for reuse
@@ -118,13 +119,27 @@ type model struct {
 	chordHelpActive bool
 
 	// claudeQuerying is true while a Claude CLI query is in progress
-	claudeQuerying  bool
-	agentCLICommand string
+	claudeQuerying      bool
+	agentCLICommand     string
+	agentSystemPrompt   string
+	watcherSystemPrompt string
 
 	// aiProvider is the configured LLM API provider, or nil when unconfigured
 	aiProvider ai.Provider
 	// aiHealthy tracks whether the last LLM provider health check succeeded
 	aiHealthy bool
+
+	// watcherExpanded is true when the AI watcher pane is visible below the table
+	watcherExpanded     bool
+	watcherViewport     viewport.Model
+	watcherBuffer       *watcherBuffer
+	watcherMarker       string
+	agentMarker         string
+	watcherDedup        *watcherDedup
+	watcherAnalyzing    bool
+	watcherQueryStart   time.Time
+	watcherQueryTimeout time.Duration
+	typewriter          *typewriterState
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
@@ -258,14 +273,23 @@ func InitialModel(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
-		flagMarker:            defaultFlagMarker,
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
 		configModeRequested:   configMode,
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
+		watcherViewport:       newWatcherViewport(),
+		watcherBuffer:         newWatcherBuffer(50),
 	}
+
+	mk := resolveMarkers(viper.GetBool("emoji"))
+	m.flagMarker = mk.flag
+	m.watcherMarker = mk.watcher
+	m.agentMarker = mk.agent
+	m.watcherDedup = newWatcherDedup(5 * time.Minute)
+	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
+	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
@@ -354,12 +378,21 @@ func InitialModelWithConfig(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
-		flagMarker:            defaultFlagMarker,
 		theme:                 theme,
 		styles:                styles,
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
+		watcherViewport:       newWatcherViewport(),
+		watcherBuffer:         newWatcherBuffer(50),
 	}
+
+	mk2 := resolveMarkers(viper.GetBool("emoji"))
+	m.flagMarker = mk2.flag
+	m.watcherMarker = mk2.watcher
+	m.agentMarker = mk2.agent
+	m.watcherDedup = newWatcherDedup(5 * time.Minute)
+	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
+	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
@@ -611,7 +644,11 @@ func newIncidentViewer() viewport.Model {
 
 func newLogViewer() viewport.Model {
 	vp := viewport.New(100, 100)
-	// Viewport uses container border from View(), no style needed here
+	return vp
+}
+
+func newWatcherViewport() viewport.Model {
+	vp := viewport.New(100, layoutDefaultWatcherRows)
 	return vp
 }
 

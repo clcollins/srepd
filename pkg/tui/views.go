@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"slices"
 	"strings"
+	"time"
 
 	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
@@ -86,14 +87,13 @@ func (m model) View() string {
 	default:
 		s.WriteString(m.styles.TableContainer.Render(m.table.View()))
 		s.WriteString("\n")
-		// Render refresh status line immediately below main table
 		s.WriteString(m.renderFooter())
 		s.WriteString("\n")
-		// Input field always reserves a line (empty if not focused)
+		s.WriteString(m.renderWatcherPane())
 		if m.input.Focused() {
 			s.WriteString(m.input.View())
 		} else {
-			s.WriteString("") // Preserve empty line when input not focused
+			s.WriteString("")
 		}
 	}
 
@@ -142,15 +142,22 @@ func (m model) View() string {
 }
 
 func (m model) renderFooter() string {
-	var s strings.Builder
-	s.WriteString(
-		lipgloss.JoinHorizontal(
-			0.2,
-			m.styles.Padded.Render(refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)),
-		),
-	)
+	left := refreshArea(m.autoRefresh, m.autoAcknowledge, m.showLowUrgency)
 
-	return s.String()
+	if !m.watcherExpanded {
+		return m.styles.Padded.Render(left)
+	}
+
+	right := m.renderWatcherStatus()
+	renderedRight := m.styles.Muted.Render(right)
+	rightWidth := lipgloss.Width(renderedRight)
+	leftWidth := windowSize.Width - rightWidth - m.styles.Padded.GetHorizontalPadding() - m.styles.Padded.GetHorizontalBorderSize()
+
+	return lipgloss.JoinHorizontal(
+		0.2,
+		m.styles.Padded.Width(leftWidth).Render(left),
+		renderedRight,
+	)
 }
 
 func (m model) renderHeader() string {
@@ -931,3 +938,37 @@ const noteTemplate = `
 # Service: {{ .Service }}
 #
 `
+
+func (m model) renderWatcherPane() string {
+	if !m.watcherExpanded {
+		return ""
+	}
+
+	return m.styles.WatcherContainer.Render(m.watcherViewport.View()) + "\n"
+}
+
+func (m model) renderWatcherStatus() string {
+	parts := []string{"[AI Watcher]"}
+
+	if m.aiProvider != nil {
+		parts = append(parts, m.aiProvider.Name())
+		if m.aiHealthy {
+			parts = append(parts, "healthy")
+		} else {
+			parts = append(parts, "offline")
+		}
+	}
+
+	if m.claudeQuerying || m.watcherAnalyzing {
+		remaining := m.watcherQueryTimeout - time.Since(m.watcherQueryStart).Truncate(time.Second)
+		if remaining < 0 {
+			remaining = 0
+		}
+		highlight := lipgloss.NewStyle().Foreground(m.theme.Highlight)
+		parts = append(parts, m.spinner.View()+" "+highlight.Render(fmt.Sprintf("analyzing... %s", remaining)))
+	} else {
+		parts = append(parts, "idle")
+	}
+
+	return strings.Join(parts, " | ")
+}

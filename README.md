@@ -21,9 +21,11 @@ A PagerDuty terminal user interface focused on common SRE tasks.
 * Add notes, auto-refresh with selection preservation, auto-acknowledge when on-call
 * PagerDuty environment variables passed automatically to terminal sessions
 * [Flag conditions](docs/flag-conditions.md): mark incidents matching cluster ID or organization name patterns
+* [AI agents](docs/ai-agents.md): `:agent` CLI queries and `:watcher` LLM analysis with ambient incident pattern detection
 * OCM integration: cluster enrichment with display names, service logs, limited support history
 * 6-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History
 * Auto-update notification and `srepd update` self-update command
+* Full [configuration reference](docs/configuration.md)
 
 ## Installation
 
@@ -70,8 +72,13 @@ If no config file exists, running `srepd` automatically enters the configuration
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 | `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`) |
-| `agent_cli_command` | `string` | `claude --print` | CLI agent command for `/agent` queries |
+| `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries |
+| `emoji` | `bool` | `true` | Use emoji markers or text fallbacks for flags/agent/watcher |
+| `agent_system_prompt` | `string` | (read-only investigation) | System prompt for `:agent` CLI queries |
+| `watcher_system_prompt` | `string` | (SRE assistant) | System prompt for `:watcher` LLM queries |
 | `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
+
+See [docs/configuration.md](docs/configuration.md) for the full reference including CLI arguments.
 
 ### Colors
 
@@ -129,7 +136,9 @@ OCM features are optional — if OCM is not configured, the remaining TUI functi
 
 ## LLM Integration
 
-SREPD supports configurable LLM providers for AI-assisted incident analysis. Configuration is entirely optional — AI features are disabled when unconfigured. See [docs/llm-providers.md](docs/llm-providers.md) for full provider documentation.
+SREPD supports configurable LLM providers for AI-assisted incident analysis and an ambient watcher that detects cross-incident patterns. Configuration is entirely optional — AI features are disabled when unconfigured. See [docs/ai-agents.md](docs/ai-agents.md) for usage and [docs/llm-providers.md](docs/llm-providers.md) for provider setup.
+
+Use `:agent <query>` for CLI agent queries and `:watcher <query>` for LLM analysis. Press `w` to toggle the watcher pane.
 
 ### Quick Start
 
@@ -175,8 +184,8 @@ Press `h` to toggle the help overlay inside srepd.
 | `ctrl+r` | Toggle auto-refresh | `u` | Toggle urgency filter |
 | `ctrl+a` | Toggle auto-acknowledge | `ctrl+l` | View debug log |
 | `ctrl+q`/`ctrl+c` | Quit | `1`-`9` | Select cluster |
-| `i`/`:` | Command input | `m` | Merge incident |
-| `f` | Flag condition | | |
+| `:`/`/` | Command input | `m` | Merge incident |
+| `w` | Toggle watcher pane | | |
 | `ctrl+x` + key | Chord commands | `ctrl+x ?` | Show chord help |
 | `Tab`/`Shift+Tab`/`←`/`→` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |
 

@@ -9,6 +9,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	cellPaddingV = 0
+	cellPaddingH = 1
+)
+
 var hexColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$`)
 
 func isValidHexColor(s string) bool {
@@ -28,17 +33,18 @@ type Theme struct {
 }
 
 type Styles struct {
-	Main           lipgloss.Style
-	Padded         lipgloss.Style
-	Muted          lipgloss.Style
-	Warning        lipgloss.Style
-	Error          lipgloss.Style
-	TableContainer lipgloss.Style
-	Table          table.Styles
-	ActiveTab      lipgloss.Style
-	InactiveTab    lipgloss.Style
-	TabWindow      lipgloss.Style
-	GlamourStyle   ansi.StyleConfig
+	Main             lipgloss.Style
+	Padded           lipgloss.Style
+	Muted            lipgloss.Style
+	Warning          lipgloss.Style
+	Error            lipgloss.Style
+	TableContainer   lipgloss.Style
+	Table            table.Styles
+	ActiveTab        lipgloss.Style
+	InactiveTab      lipgloss.Style
+	TabWindow        lipgloss.Style
+	WatcherContainer lipgloss.Style
+	GlamourStyle     ansi.StyleConfig
 }
 
 func DefaultTheme() Theme {
@@ -117,9 +123,15 @@ func BuildStyles(theme Theme) Styles {
 		BorderForeground(theme.Border).
 		Foreground(theme.Text)
 
-	tableCell := lipgloss.NewStyle().Padding(0, 1)
+	watcherContainer := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder(), true).
+		BorderForeground(theme.Border).
+		Foreground(theme.Text).
+		Padding(cellPaddingV, cellPaddingH)
+
+	tableCell := lipgloss.NewStyle().Padding(cellPaddingV, cellPaddingH)
 	tableHeader := lipgloss.NewStyle().
-		Padding(0, 1).
+		Padding(cellPaddingV, cellPaddingH).
 		Border(lipgloss.RoundedBorder(), false, false, true).
 		BorderForeground(theme.Border).
 		Foreground(theme.Highlight).
@@ -145,7 +157,8 @@ func BuildStyles(theme Theme) Styles {
 			Background(theme.Error).
 			BorderForeground(theme.Border).
 			Padding(1, 3, 1, 3),
-		TableContainer: tableContainer,
+		TableContainer:   tableContainer,
+		WatcherContainer: watcherContainer,
 		Table: table.Styles{
 			Cell:     tableCell,
 			Selected: tableSelected,
