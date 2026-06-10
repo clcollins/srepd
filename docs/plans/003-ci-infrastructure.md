@@ -34,3 +34,39 @@ Predecessor: [002-project-docs.md](002-project-docs.md)
 - `make test-all` passes locally
 - All GitHub Actions jobs pass on the PR
 - `make help` shows all new targets
+
+## Lessons Learned
+
+**GENUINE ERROR — push + pull_request triggers caused double CI runs**
+(Fixed by: [021-fix-ci-double-trigger.md](021-fix-ci-double-trigger.md))
+
+The workflow triggered on both `push` to `srepd/**` branches AND
+`pull_request` to `main`. Every PR branch commit ran all CI jobs
+twice — once on push and once on pull_request — doubling runner usage.
+
+Why it wasn't caught: the CI was confirmed to "work" (jobs passed),
+but nobody checked whether it was running redundantly. GitHub Actions'
+dual-trigger behavior is a common pitfall.
+
+Prevention: use only `pull_request` for PR validation, or add explicit
+path/branch exclusions to prevent overlap between push and
+pull_request triggers.
+
+---
+
+**GENUINE ERROR — Codecov upload silently failed due to three bugs**
+(Fixed by: [058-fix-codecov-ci.md](058-fix-codecov-ci.md))
+
+The Codecov integration had three compounding bugs: outdated action
+version (v4 instead of v5), token passed via `env:` instead of `with:`
+(required by v5), and `make coverage` deleted `coverage.out` before
+the upload step could read it.
+
+Why it wasn't caught: the upload step did not verify success, and
+Codecov coverage was treated as optional rather than validated. All
+three bugs contributed to silent failure — no error, just missing
+coverage data.
+
+Prevention: CI integrations that upload artifacts should include a
+verification step confirming the upload succeeded. Test CI
+integrations in a real CI run before merging, not just locally.

@@ -61,3 +61,24 @@ behavior.
 - `golangci-lint run` -- zero issues
 - Manual review: drop counter uses `sync/atomic` for thread safety,
   `io.Writer` interface enables dependency injection for tests
+
+## Lessons Learned
+
+**GENUINE ERROR — asyncWriter silently abandoned by cobra init layering**
+(Fixed by: [042-fix-asyncwriter-architecture.md](042-fix-asyncwriter-architecture.md))
+
+This plan added drop counting and io.Writer refactoring to asyncWriter
+in `main.go`, but the component was silently abandoned at runtime:
+`cmd/root.go`'s `configureLogging()` replaced `log.SetOutput()` during
+`cobra.OnInitialize`, bypassing the asyncWriter entirely. The buffering
+never took effect and the file handle leaked.
+
+Why it wasn't caught: there were no integration tests verifying the
+logging pipeline end-to-end. Unit tests confirmed asyncWriter worked in
+isolation, but nothing verified it was actually the active log writer in
+the running application.
+
+Prevention: before enhancing a component, trace its lifecycle in the
+running system to confirm it is active. Add at least one integration
+test that verifies the component is wired into the real execution path,
+not just that it works in isolation.
