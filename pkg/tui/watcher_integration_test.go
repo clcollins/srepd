@@ -156,7 +156,7 @@ func TestMouseMsg_WatcherExpanded(t *testing.T) {
 	m.watcherViewport.Height = m.layout.WatcherHeight
 	m.watcherViewport.SetContent("some content\nto scroll\nthrough")
 
-	mouseMsg := tea.MouseMsg{Type: tea.MouseWheelDown}
+	mouseMsg := tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonWheelDown}
 	result, _ := m.Update(mouseMsg)
 	_ = result.(model)
 }
@@ -165,7 +165,7 @@ func TestMouseMsg_WatcherCollapsed(t *testing.T) {
 	m := createTestModel()
 	m.watcherExpanded = false
 
-	mouseMsg := tea.MouseMsg{Type: tea.MouseWheelDown}
+	mouseMsg := tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonWheelDown}
 	_, cmd := m.Update(mouseMsg)
 
 	assert.Nil(t, cmd)
