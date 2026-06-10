@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
@@ -183,6 +184,11 @@ type model struct {
 	serviceLogCache       map[string][]ocm.ServiceLog
 	limitedSupportCache   map[string][]ocm.LimitedSupportReason
 
+	// Backplane enrichment state
+	backplaneClient    backplane.BackplaneClient
+	backplaneConfig    *backplane.Config
+	clusterReportCache map[string][]backplane.ReportSummary
+
 	// Flag conditions state
 	flagConditions []FlagCondition
 	flagNextID     int
@@ -223,6 +229,8 @@ func InitialModel(
 	ocmAuthPending bool,
 	aiProvider ai.Provider,
 	agentCLICommand string,
+	backplaneClient backplane.BackplaneClient,
+	backplaneConfig *backplane.Config,
 ) (tea.Model, tea.Cmd) {
 	var err error
 
@@ -273,6 +281,9 @@ func InitialModel(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
+		backplaneClient:       backplaneClient,
+		backplaneConfig:       backplaneConfig,
+		clusterReportCache:    make(map[string][]backplane.ReportSummary),
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
@@ -330,6 +341,7 @@ func InitialModelWithConfig(
 	ocmClient ocm.OCMClient,
 	aiProvider ai.Provider,
 	agentCLICommand string,
+	backplaneClient backplane.BackplaneClient,
 ) (tea.Model, tea.Cmd) {
 
 	theme := DefaultTheme()
@@ -378,6 +390,8 @@ func InitialModelWithConfig(
 		clusterCache:          make(map[string]*ocm.ClusterInfo),
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
+		backplaneClient:       backplaneClient,
+		clusterReportCache:    make(map[string][]backplane.ReportSummary),
 		theme:                 theme,
 		styles:                styles,
 		aiProvider:            aiProvider,
@@ -457,6 +471,7 @@ func (m *model) clearOCMCacheForIncident(incidentID string) {
 			delete(m.clusterCache, cid)
 			delete(m.serviceLogCache, cid)
 			delete(m.limitedSupportCache, cid)
+			delete(m.clusterReportCache, cid)
 			delete(m.clusterEnrichInFlight, cid)
 		}
 	}

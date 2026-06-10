@@ -43,5 +43,7 @@ type OCMClient interface {
 	GetCluster(ctx context.Context, clusterID string) (*ClusterInfo, error)
 	GetServiceLogs(ctx context.Context, clusterID, externalID string) ([]ServiceLog, error)
 	GetLimitedSupportHistory(ctx context.Context, clusterID string) ([]LimitedSupportReason, error)
+	GetAccessToken() (string, error)
+	GetBackplaneURL() (string, error)
 	Close()
 }
