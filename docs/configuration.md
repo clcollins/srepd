@@ -83,7 +83,7 @@ See [LLM Providers](llm-providers.md) for provider-specific setup.
 |-----|------|---------|-------------|
 | `colors` | `map[string]string` | (defaults) | Custom color scheme with hex values |
 
-Available color keys: `text`, `border`, `highlight`, `selected`, `warning`, `error`, `muted`, `tab`.
+Available color keys: `text`, `border`, `highlight`, `selected`, `warning`, `error`, `muted`, `tab`. See [Colors](colors.md) for color key descriptions and pre-built palettes.
 
 ```yaml
 colors:
