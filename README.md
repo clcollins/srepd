@@ -23,7 +23,8 @@ A PagerDuty terminal user interface focused on common SRE tasks.
 * [Flag conditions](docs/flag-conditions.md): mark incidents matching cluster ID or organization name patterns
 * [AI agents](docs/ai-agents.md): `:agent` CLI queries and `:watcher` LLM analysis with ambient incident pattern detection
 * OCM integration: cluster enrichment with display names, service logs, limited support history
-* 6-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History
+* Backplane integration: CORA cluster diagnostic reports via backplane API
+* 7-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History, Reports
 * Auto-update notification and `srepd update` self-update command
 * Full [configuration reference](docs/configuration.md)
 
@@ -130,9 +131,12 @@ Enriched data includes:
 * **Cluster tab** shows OCM cluster details: name, ID, state, region, provider, version, CCS, Hypershift
 * **Service Logs tab** shows recent service logs per cluster
 * **Limited Support History tab** shows LS reasons per cluster
+* **Reports tab** shows CORA cluster diagnostic reports from the backplane API
 * Multi-cluster incidents show `(+N)` in the service column
 
 OCM features are optional — if OCM is not configured, the remaining TUI functions normally.
+
+The Reports tab requires `~/.config/backplane/config.json` (standard backplane-cli config). The backplane URL is resolved from OCM environment metadata. If the config file is missing, the tab shows a message indicating backplane is not enabled.
 
 ## LLM Integration
 
