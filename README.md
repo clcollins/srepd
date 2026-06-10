@@ -82,7 +82,7 @@ See [docs/configuration.md](docs/configuration.md) for the full reference includ
 
 ### Colors
 
-All color keys are optional. Unspecified keys use defaults. Values must be hex colors (e.g., `#778da9`).
+All color keys are optional. Unspecified keys use defaults. Values must be hex colors (e.g., `#778da9`). See [docs/colors.md](docs/colors.md) for color key descriptions and pre-built palettes (Nord, Catppuccin Latte).
 
 ```yaml
 colors:
