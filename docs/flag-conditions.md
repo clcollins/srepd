@@ -81,19 +81,15 @@ section at the bottom:
 
 ## Configuration
 
-### `flag_marker` (optional)
+### `emoji` (optional)
 
-The prefix marker shown on flagged incidents. Default: `🚩 ` (flag emoji +
-space).
-
-For terminals that don't render emoji well, set to `|►` (no trailing space
-needed):
+Controls the flag marker style. Default: `true` (🚩). Set to `false` for text fallback (|►).
 
 ```yaml
-flag_marker: "|►"
+emoji: false
 ```
 
-Add this to your `~/.config/srepd/srepd.yaml`.
+This also controls the agent (🤖/☻) and watcher (📡/☺) markers. See [configuration.md](configuration.md) for details.
 
 ## Persistence
 
