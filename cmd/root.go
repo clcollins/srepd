@@ -36,6 +36,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
@@ -186,6 +187,34 @@ func launchTUI() {
 		}
 	}
 
+	var bpClient backplane.BackplaneClient
+	var bpConfig *backplane.Config
+	bpCfg, bpErr := backplane.LoadConfig()
+	if bpErr != nil {
+		log.Info("Backplane config not available", "error", bpErr)
+	} else {
+		bpConfig = bpCfg
+		if ocmClient != nil {
+			if bpCfg.URL == "" {
+				resolvedURL, urlErr := ocmClient.GetBackplaneURL()
+				if urlErr != nil {
+					log.Warn("Backplane URL resolution from OCM failed", "error", urlErr)
+				} else {
+					bpCfg.URL = resolvedURL
+					log.Info("Backplane URL resolved from OCM", "url", resolvedURL)
+				}
+			}
+			if bpCfg.URL != "" {
+				bpClient = backplane.NewClient(bpCfg, ocmClient.GetAccessToken)
+				log.Info("Backplane client initialized")
+			} else {
+				log.Warn("Backplane client not created: no URL available")
+			}
+		} else {
+			log.Info("Backplane config loaded, client deferred until OCM auth completes")
+		}
+	}
+
 	m, _ := tui.InitialModel(
 		viper.GetString("token"),
 		viper.GetStringSlice("teams"),
@@ -202,6 +231,8 @@ func launchTUI() {
 		ocmAuthPending,
 		aiProvider,
 		viper.GetString("agent_cli_command"),
+		bpClient,
+		bpConfig,
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
@@ -376,6 +407,12 @@ func runDevMode() {
 		log.Warn("Dev mode: OCM fixtures not loaded", "error", ocmErr)
 	}
 
+	// Load backplane mock client with fixture data for dev mode
+	bpMock, bpErr := backplane.LoadMockClientFromFixtures(fixturesDir)
+	if bpErr != nil {
+		log.Warn("Dev mode: backplane fixtures not loaded", "error", bpErr)
+	}
+
 	m, _ := tui.InitialModelWithConfig(
 		config,
 		viper.GetStringSlice("editor"),
@@ -384,6 +421,7 @@ func runDevMode() {
 		ocmMock,
 		nil, // aiProvider — not used in dev mode
 		"",  // agentCLICommand — uses default in dev mode
+		bpMock,
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())

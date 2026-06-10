@@ -1236,16 +1236,22 @@ func TestTabSwitch_TabKey(t *testing.T) {
 			expectedTab: tabCluster,
 		},
 		{
-			name:        "Tab wraps from LimitedSupport to Details",
+			name:        "Tab from LimitedSupport goes to Reports",
 			initialTab:  tabLimitedSupport,
+			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
+			expectedTab: tabReports,
+		},
+		{
+			name:        "Tab wraps from Reports to Details",
+			initialTab:  tabReports,
 			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
 			expectedTab: tabDetails,
 		},
 		{
-			name:        "Shift+Tab from Details goes to LimitedSupport",
+			name:        "Shift+Tab from Details goes to Reports",
 			initialTab:  tabDetails,
 			keyMsg:      tea.KeyMsg{Type: tea.KeyShiftTab},
-			expectedTab: tabLimitedSupport,
+			expectedTab: tabReports,
 		},
 		{
 			name:        "Shift+Tab from Alerts goes to Details",
@@ -1450,7 +1456,7 @@ func TestInitialModel_ValidConfig(t *testing.T) {
 			},
 		}
 
-		teaModel, cmd := InitialModelWithConfig(config, editor, l, false, nil, nil, "")
+		teaModel, cmd := InitialModelWithConfig(config, editor, l, false, nil, nil, "", nil)
 		assert.NotNil(t, teaModel, "InitialModelWithConfig should return a non-nil model")
 		assert.NotNil(t, cmd, "InitialModelWithConfig should return a non-nil cmd")
 
@@ -1477,7 +1483,7 @@ func TestInitialModel_DebugFlag(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, true, nil, nil, "")
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, true, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.True(t, m.debug, "debug should be true when passed as true")
@@ -1486,7 +1492,7 @@ func TestInitialModel_DebugFlag(t *testing.T) {
 
 func TestInitialModelWithConfig_NilConfig(t *testing.T) {
 	t.Run("nil config sets m.err", func(t *testing.T) {
-		teaModel, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "")
+		teaModel, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.NotNil(t, m.err, "m.err should be set when config is nil")
@@ -1504,7 +1510,7 @@ func TestInitialModelWithConfig_SetsConfig(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "")
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.Equal(t, config, m.config, "config should be stored on the model")
@@ -1521,7 +1527,7 @@ func TestInitialModelWithConfig_CmdReturnsErrMsg(t *testing.T) {
 			},
 		}
 
-		_, cmd := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "")
+		_, cmd := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
 		assert.NotNil(t, cmd, "cmd should be non-nil")
 
 		msg := cmd()
@@ -1533,7 +1539,7 @@ func TestInitialModelWithConfig_CmdReturnsErrMsg(t *testing.T) {
 
 func TestInitialModelWithConfig_CmdReturnsErrMsgForNilConfig(t *testing.T) {
 	t.Run("cmd produces errMsg with non-nil error for nil config", func(t *testing.T) {
-		_, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "")
+		_, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
 		assert.NotNil(t, cmd, "cmd should be non-nil")
 
 		msg := cmd()
@@ -1552,7 +1558,7 @@ func TestInitialModel_ScheduledJobsInitialized(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "")
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.GreaterOrEqual(t, len(m.scheduledJobs), 1, "should have at least one scheduled job (PollIncidents)")
@@ -1568,7 +1574,7 @@ func TestInitialModel_MarkdownRenderer(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "")
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		// markdownRenderer should be non-nil (created by NewTermRenderer)
@@ -1753,7 +1759,7 @@ func TestInitialModelWithConfig_FieldInitialization(t *testing.T) {
 	launcher := launcher.ClusterLauncher{}
 	debug := true
 
-	result, cmd := InitialModelWithConfig(mockConfig, editor, launcher, debug, nil, nil, "")
+	result, cmd := InitialModelWithConfig(mockConfig, editor, launcher, debug, nil, nil, "", nil)
 
 	assert.NotNil(t, result, "model should not be nil")
 	assert.NotNil(t, cmd, "cmd should not be nil")

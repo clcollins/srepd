@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
@@ -131,7 +132,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reflect.TypeOf(spinner.TickMsg{}),
 		reflect.TypeOf(tea.MouseMsg{}),
 		reflect.TypeOf(ocmServiceLogsMsg{}),
-		reflect.TypeOf(limitedSupportMsg{}):
+		reflect.TypeOf(limitedSupportMsg{}),
+		reflect.TypeOf(clusterReportsMsg{}):
 		shouldLog = false
 	}
 
@@ -357,6 +359,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.ocmClient = msg.Client
 		log.Info("OCM connected (async)")
+
+		if m.backplaneClient == nil && m.backplaneConfig != nil {
+			if m.backplaneConfig.URL == "" {
+				resolvedURL, urlErr := msg.Client.GetBackplaneURL()
+				if urlErr != nil {
+					log.Warn("Backplane URL resolution from OCM failed (deferred)", "error", urlErr)
+				} else {
+					m.backplaneConfig.URL = resolvedURL
+					log.Info("Backplane URL resolved from OCM (deferred)", "url", resolvedURL)
+				}
+			}
+			if m.backplaneConfig.URL != "" {
+				m.backplaneClient = backplane.NewClient(m.backplaneConfig, msg.Client.GetAccessToken)
+				log.Info("Backplane client initialized (deferred)")
+			} else {
+				log.Warn("Backplane client not created (deferred): no URL available")
+			}
+		}
 
 		var enrichCmds []tea.Cmd
 		for _, clusterIDs := range m.incidentClusterMap {
@@ -1487,6 +1507,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 		}
+		if m.backplaneClient != nil {
+			if _, cached := m.clusterReportCache[cacheKey]; !cached {
+				phase2Cmds = append(phase2Cmds,
+					getClusterReports(m.backplaneClient, internalID, cacheKey),
+				)
+			}
+		}
 
 		// Rebuild table immediately so display names update
 		incidents := m.incidentList
@@ -1526,6 +1553,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.limitedSupportCache[msg.clusterID] = msg.reasons
 		log.Debug("ocm.GetLimitedSupportHistory cached", "cluster_id", msg.clusterID, "count", len(msg.reasons))
+		return m, nil
+
+	case clusterReportsMsg:
+		if msg.err != nil {
+			log.Debug("backplane.ListReports failed", "cluster_id", msg.clusterID, "error", msg.err)
+			return m, nil
+		}
+		if m.clusterReportCache == nil {
+			m.clusterReportCache = make(map[string][]backplane.ReportSummary)
+		}
+		m.clusterReportCache[msg.clusterID] = msg.reports
+		log.Debug("backplane.ListReports cached", "cluster_id", msg.clusterID, "count", len(msg.reports))
 		return m, nil
 
 	case updateAvailableMsg:

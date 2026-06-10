@@ -45,4 +45,12 @@ func (m *MockClient) GetLimitedSupportHistory(_ context.Context, clusterID strin
 	return reasons, nil
 }
 
+func (m *MockClient) GetAccessToken() (string, error) {
+	return "mock-access-token", nil
+}
+
+func (m *MockClient) GetBackplaneURL() (string, error) {
+	return "https://mock-backplane.example.com", nil
+}
+
 func (m *MockClient) Close() {}

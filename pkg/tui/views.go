@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/alert"
+	"github.com/clcollins/srepd/pkg/backplane"
 	"github.com/clcollins/srepd/pkg/ocm"
 )
 
@@ -304,6 +305,8 @@ func (m model) renderTabContent() (string, error) {
 		return m.renderServiceLogsTab()
 	case tabLimitedSupport:
 		return m.renderLimitedSupportTab()
+	case tabReports:
+		return m.renderClusterReportsTab()
 	}
 	return "", nil
 }
@@ -520,6 +523,48 @@ func (m model) renderLimitedSupportTab() (string, error) {
 		if r.Details != "" {
 			fmt.Fprintf(&content, "\n> %s\n", r.Details)
 		}
+		if i < total-1 {
+			content.WriteString("\n---\n")
+		}
+	}
+	return content.String(), nil
+}
+
+func (m model) renderClusterReportsTab() (string, error) {
+	if m.backplaneClient == nil {
+		return "\n_Backplane not enabled; ensure your ~/.config/backplane/config.json exists and is readable..._\n", nil
+	}
+
+	if len(m.clusterReportCache) == 0 {
+		if m.ocmClient == nil {
+			if m.ocmAuthPending {
+				return "\n_OCM authenticating — complete login in browser..._\n", nil
+			}
+			return "\n_OCM not connected_\n", nil
+		}
+		return "\n_Loading cluster reports..._\n", nil
+	}
+
+	var allReports []backplane.ReportSummary
+	for _, id := range m.sortedClusterIDs() {
+		allReports = append(allReports, m.clusterReportCache[id]...)
+	}
+
+	if len(allReports) == 0 {
+		return "\n_No cluster reports_\n", nil
+	}
+
+	slices.SortFunc(allReports, func(a, b backplane.ReportSummary) int {
+		return strings.Compare(b.CreatedAt, a.CreatedAt)
+	})
+
+	total := len(allReports)
+	var content strings.Builder
+	for i, r := range allReports {
+		fmt.Fprintf(&content, "### Report %d/%d\n\n", i+1, total)
+		fmt.Fprintf(&content, "* ID: %s\n", r.ReportID)
+		fmt.Fprintf(&content, "* Summary: %s\n", r.Summary)
+		fmt.Fprintf(&content, "* Timestamp: %s\n", r.CreatedAt)
 		if i < total-1 {
 			content.WriteString("\n---\n")
 		}
@@ -784,7 +829,8 @@ const (
 	tabCluster        = 3
 	tabServiceLogs    = 4
 	tabLimitedSupport = 5
-	tabCount          = 6
+	tabReports        = 6
+	tabCount          = 7
 )
 
 func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
@@ -836,6 +882,12 @@ func (m model) renderTabBar() string {
 		lsCount += len(m.limitedSupportCache[id])
 	}
 	tabLabels[tabLimitedSupport] = fmt.Sprintf("LS History (%d)", lsCount)
+
+	reportCount := 0
+	for _, id := range incidentClusters {
+		reportCount += len(m.clusterReportCache[id])
+	}
+	tabLabels[tabReports] = fmt.Sprintf("Reports (%d)", reportCount)
 
 	var renderedTabs []string
 	for i, label := range tabLabels {

@@ -313,6 +313,27 @@ func (c *Client) GetLimitedSupportHistory(ctx context.Context, clusterID string)
 	return reasons, nil
 }
 
+func (c *Client) GetBackplaneURL() (string, error) {
+	resp, err := c.conn.ClustersMgmt().V1().Environment().Get().Send()
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch OCM environment: %w", err)
+	}
+	url, ok := resp.Body().GetBackplaneURL()
+	if !ok || url == "" {
+		return "", fmt.Errorf("backplane URL not available in OCM environment %q", resp.Body().Name())
+	}
+	log.Debug("ocm.GetBackplaneURL", "url", url, "environment", resp.Body().Name())
+	return url, nil
+}
+
+func (c *Client) GetAccessToken() (string, error) {
+	accessToken, _, err := c.conn.Tokens()
+	if err != nil {
+		return "", fmt.Errorf("failed to get OCM access token: %w", err)
+	}
+	return accessToken, nil
+}
+
 func (c *Client) Close() {
 	if c.conn != nil {
 		c.conn.Close() //nolint:errcheck

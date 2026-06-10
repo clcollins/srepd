@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/backplane"
 	"github.com/clcollins/srepd/pkg/ocm"
 )
 
@@ -26,6 +27,12 @@ type ocmServiceLogsMsg struct {
 type limitedSupportMsg struct {
 	clusterID string
 	reasons   []ocm.LimitedSupportReason
+	err       error
+}
+
+type clusterReportsMsg struct {
+	clusterID string
+	reports   []backplane.ReportSummary
 	err       error
 }
 
@@ -85,5 +92,16 @@ func getLimitedSupportHistory(client ocm.OCMClient, clusterID, cacheKey string) 
 		reasons, err := client.GetLimitedSupportHistory(ctx, clusterID)
 		log.Debug("ocm.GetLimitedSupportHistory", "cluster_id", clusterID, "count", len(reasons))
 		return limitedSupportMsg{clusterID: cacheKey, reasons: reasons, err: err}
+	}
+}
+
+func getClusterReports(client backplane.BackplaneClient, clusterID, cacheKey string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
+		defer cancel()
+		log.Debug("backplane.ListReports", "cluster_id", clusterID)
+		reports, err := client.ListReports(ctx, clusterID)
+		log.Debug("backplane.ListReports", "cluster_id", clusterID, "count", len(reports))
+		return clusterReportsMsg{clusterID: cacheKey, reports: reports, err: err}
 	}
 }
