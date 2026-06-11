@@ -9,6 +9,6 @@ runs:
         echo "GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_ENV
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: ${{ env.GO_VERSION }}
