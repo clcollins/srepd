@@ -31,6 +31,7 @@ func createTestModel() model {
 		incidentList:    []pagerduty.Incident{},
 		theme:           theme,
 		styles:          styles,
+		cmdExecutor:     &execCommandExecutor{},
 		watcherBuffer:   newWatcherBuffer(50),
 		watcherViewport: newWatcherViewport(),
 		watcherMarker:   emojiWatcherMarker,

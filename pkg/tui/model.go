@@ -122,6 +122,7 @@ type model struct {
 	// claudeQuerying is true while a Claude CLI query is in progress
 	claudeQuerying      bool
 	agentCLICommand     string
+	cmdExecutor         CommandExecutor
 	agentSystemPrompt   string
 	watcherSystemPrompt string
 
@@ -290,6 +291,7 @@ func InitialModel(
 		configModeRequested:   configMode,
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
+		cmdExecutor:           &execCommandExecutor{},
 		watcherViewport:       newWatcherViewport(),
 		watcherBuffer:         newWatcherBuffer(50),
 	}
@@ -396,6 +398,7 @@ func InitialModelWithConfig(
 		styles:                styles,
 		aiProvider:            aiProvider,
 		agentCLICommand:       agentCLICommand,
+		cmdExecutor:           &execCommandExecutor{},
 		watcherViewport:       newWatcherViewport(),
 		watcherBuffer:         newWatcherBuffer(50),
 	}
