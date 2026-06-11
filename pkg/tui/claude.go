@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -12,6 +13,27 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 )
+
+// CommandExecutor abstracts command execution so tests can inject a mock
+// instead of spawning real subprocesses.
+type CommandExecutor interface {
+	Execute(ctx context.Context, name string, args []string, stdin io.Reader, env []string) (stdout []byte, stderr string, err error)
+}
+
+// execCommandExecutor is the default implementation that uses os/exec.
+type execCommandExecutor struct{}
+
+func (e *execCommandExecutor) Execute(ctx context.Context, name string, args []string, stdin io.Reader, env []string) ([]byte, string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = stdin
+	cmd.Env = env
+
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
+
+	output, err := cmd.Output()
+	return output, strings.TrimSpace(stderrBuf.String()), err
+}
 
 const (
 	claudeTimeout = 60 * time.Second
@@ -70,8 +92,9 @@ func buildClaudeEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inciden
 
 // agentQuery dispatches a prompt to the configured CLI agent and returns the
 // response. The command is parsed from the agentCLICommand config string.
-// The prompt is piped via stdin for safety.
-func agentQuery(agentCLICommand string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
+// The prompt is piped via stdin for safety. The executor parameter abstracts
+// command execution for testability.
+func agentQuery(executor CommandExecutor, agentCLICommand string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
 		defer cancel()
@@ -86,18 +109,12 @@ func agentQuery(agentCLICommand string, systemPrompt string, prompt string, inci
 			fullPrompt += "\n\nContext:\n" + incidentContext
 		}
 
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.Stdin = strings.NewReader(fullPrompt)
-		cmd.Env = append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
-
-		var stderr strings.Builder
-		cmd.Stderr = &stderr
+		env := append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
 
 		log.Debug("tui.agentQuery()", "command", agentCLICommand, "prompt", prompt)
 
-		output, err := cmd.Output()
+		output, stderrStr, err := executor.Execute(ctx, args[0], args[1:], strings.NewReader(fullPrompt), env)
 		if err != nil {
-			stderrStr := strings.TrimSpace(stderr.String())
 			if stderrStr != "" {
 				log.Warn("tui.agentQuery()", "stderr", stderrStr)
 			}
@@ -160,7 +177,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	incidentContext := buildWatcherContext(&m)
 	return m, tea.Batch(
 		m.spinner.Tick,
-		agentQuery(agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
+		agentQuery(m.cmdExecutor, agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
 	)
 }
 

@@ -1,9 +1,9 @@
 package tui
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io"
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -11,6 +11,30 @@ import (
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
+
+// mockCommandExecutor records the arguments passed to Execute and returns
+// pre-configured results, eliminating all real subprocess calls.
+type mockCommandExecutor struct {
+	name      string
+	args      []string
+	stdinData string
+	env       []string
+
+	stdout []byte
+	stderr string
+	err    error
+}
+
+func (m *mockCommandExecutor) Execute(_ context.Context, name string, args []string, stdin io.Reader, env []string) ([]byte, string, error) {
+	m.name = name
+	m.args = args
+	m.env = env
+	if stdin != nil {
+		data, _ := io.ReadAll(stdin)
+		m.stdinData = string(data)
+	}
+	return m.stdout, m.stderr, m.err
+}
 
 func TestInputCharLimit_Increased(t *testing.T) {
 	// newTextInput should have a CharLimit of 500 (increased from 32)
@@ -324,7 +348,8 @@ func TestDefaultLookPath_NoPanic(t *testing.T) {
 }
 
 func TestAgentQuery_EmptyCommand(t *testing.T) {
-	cmd := agentQuery("", "test system", "test prompt", "", nil, nil)
+	mock := &mockCommandExecutor{}
+	cmd := agentQuery(mock, "", "test system", "test prompt", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -333,25 +358,32 @@ func TestAgentQuery_EmptyCommand(t *testing.T) {
 }
 
 func TestAgentQuery_CommandParsing(t *testing.T) {
-	cmd := agentQuery("echo hello world", "", "ignored", "", nil, nil)
+	mock := &mockCommandExecutor{stdout: []byte("hello world")}
+	cmd := agentQuery(mock, "echo hello world", "", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
 	assert.NoError(t, resp.err)
 	assert.Equal(t, "hello world", resp.response)
+	assert.Equal(t, "echo", mock.name)
+	assert.Equal(t, []string{"hello", "world"}, mock.args)
 }
 
 func TestAgentQuery_MultiWordCommand(t *testing.T) {
-	cmd := agentQuery("echo -n test", "", "ignored", "", nil, nil)
+	mock := &mockCommandExecutor{stdout: []byte("test")}
+	cmd := agentQuery(mock, "echo -n test", "", "ignored", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
 	assert.NoError(t, resp.err)
 	assert.Equal(t, "test", resp.response)
+	assert.Equal(t, "echo", mock.name)
+	assert.Equal(t, []string{"-n", "test"}, mock.args)
 }
 
 func TestAgentQuery_CommandNotFound(t *testing.T) {
-	cmd := agentQuery("nonexistent-binary-99999 --flag", "", "test", "", nil, nil)
+	mock := &mockCommandExecutor{err: fmt.Errorf("exec: \"nonexistent-binary-99999\": executable file not found in $PATH")}
+	cmd := agentQuery(mock, "nonexistent-binary-99999 --flag", "", "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -360,11 +392,11 @@ func TestAgentQuery_CommandNotFound(t *testing.T) {
 }
 
 func TestAgentQuery_StderrCaptured(t *testing.T) {
-	script := filepath.Join(t.TempDir(), "fail.sh")
-	err := os.WriteFile(script, []byte("#!/bin/sh\necho oops >&2\nexit 1\n"), 0755)
-	assert.NoError(t, err)
-
-	cmd := agentQuery(script, "", "test", "", nil, nil)
+	mock := &mockCommandExecutor{
+		stderr: "oops",
+		err:    fmt.Errorf("exit status 1"),
+	}
+	cmd := agentQuery(mock, "/bin/fail", "", "test", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
@@ -373,9 +405,7 @@ func TestAgentQuery_StderrCaptured(t *testing.T) {
 }
 
 func TestAgentQuery_PassesEnvVars(t *testing.T) {
-	script := filepath.Join(t.TempDir(), "env.sh")
-	err := os.WriteFile(script, []byte("#!/bin/sh\necho $PAGERDUTY_INCIDENT_ID\n"), 0755)
-	assert.NoError(t, err)
+	mock := &mockCommandExecutor{stdout: []byte("ok")}
 
 	incident := &pagerduty.Incident{
 		APIObject: pagerduty.APIObject{ID: "PD999"},
@@ -385,22 +415,33 @@ func TestAgentQuery_PassesEnvVars(t *testing.T) {
 		Service:   pagerduty.APIObject{Summary: "svc"},
 	}
 
-	cmd := agentQuery(script, "", "test", "", incident, nil)
+	cmd := agentQuery(mock, "/bin/agent", "", "test", "", incident, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
 	assert.NoError(t, resp.err)
-	assert.Equal(t, "PD999", resp.response)
+
+	envMap := make(map[string]string)
+	for _, e := range mock.env {
+		for i := 0; i < len(e); i++ {
+			if e[i] == '=' {
+				envMap[e[:i]] = e[i+1:]
+				break
+			}
+		}
+	}
+	assert.Equal(t, "PD999", envMap["PAGERDUTY_INCIDENT_ID"])
 }
 
 func TestAgentQuery_PipesStdin(t *testing.T) {
-	cmd := agentQuery("cat", "test system prompt", "user question here", "", nil, nil)
+	mock := &mockCommandExecutor{stdout: []byte("ok")}
+	cmd := agentQuery(mock, "cat", "test system prompt", "user question here", "", nil, nil)
 	msg := cmd()
 	resp, ok := msg.(claudeResponseMsg)
 	assert.True(t, ok)
 	assert.NoError(t, resp.err)
-	assert.Contains(t, resp.response, "user question here")
-	assert.Contains(t, resp.response, "test system prompt")
+	assert.Contains(t, mock.stdinData, "user question here")
+	assert.Contains(t, mock.stdinData, "test system prompt")
 }
 
 func TestHandleClaudePrompt_DefaultCommand(t *testing.T) {
