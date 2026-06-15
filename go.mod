@@ -5,6 +5,7 @@ go 1.26.4
 require (
 	charm.land/glamour/v2 v2.0.0
 	github.com/PagerDuty/go-pagerduty v1.8.0
+	github.com/anthropics/anthropic-sdk-go v1.48.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v1.0.0
@@ -12,7 +13,7 @@ require (
 	github.com/charmbracelet/log v1.0.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/openshift-online/ocm-common v0.0.40
-	github.com/openshift-online/ocm-sdk-go v0.1.502
+	github.com/openshift-online/ocm-sdk-go v0.1.503
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
@@ -26,7 +27,6 @@ require (
 	github.com/99designs/keyring v1.2.2 // indirect
 	github.com/alecthomas/chroma/v2 v2.17.0 // indirect
 	github.com/alessio/shellescape v1.4.1 // indirect
-	github.com/anthropics/anthropic-sdk-go v1.48.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
@@ -82,8 +82,8 @@ require (
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/openshift-online/ocm-api-model/clientapi v0.0.456 // indirect
-	github.com/openshift-online/ocm-api-model/model v0.0.456 // indirect
+	github.com/openshift-online/ocm-api-model/clientapi v0.0.457 // indirect
+	github.com/openshift-online/ocm-api-model/model v0.0.457 // indirect
 	github.com/openshift-online/ocm-cli v1.0.2 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
