@@ -378,6 +378,7 @@ func switchClusterSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.clusterSelectMode = false
 			m.clusterSelectOptions = nil
+			m.rosaBoundaryClusterSelect = false
 			m.setStatus("cluster selection cancelled")
 			m.table.Focus()
 			return m, nil
@@ -389,9 +390,14 @@ func switchClusterSelectFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			selected := selectedRow[0]
+			isRosaBoundary := m.rosaBoundaryClusterSelect
 			m.clusterSelectMode = false
 			m.clusterSelectOptions = nil
+			m.rosaBoundaryClusterSelect = false
 			m.table.Focus()
+			if isRosaBoundary {
+				return m, func() tea.Msg { return rosaBoundaryClusterSelectedMsg(selected) }
+			}
 			return m, func() tea.Msg { return clusterSelectedMsg(selected) }
 
 		default:

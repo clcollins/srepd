@@ -215,6 +215,16 @@ func launchTUI() {
 		}
 	}
 
+	var rbl launcher.ClusterLauncher
+	rbCmd := viper.GetString("rosa_boundary_command")
+	if rbCmd != "" {
+		rbl, err = launcher.NewClusterLauncher(viper.GetString("terminal"), rbCmd, viper.GetString("toolbox_mode"))
+		if err != nil {
+			log.Warn("rosa-boundary launcher disabled", "error", err)
+			rbl = launcher.ClusterLauncher{}
+		}
+	}
+
 	m, _ := tui.InitialModel(
 		viper.GetString("token"),
 		viper.GetStringSlice("teams"),
@@ -222,6 +232,7 @@ func launchTUI() {
 		viper.GetStringSlice("ignoredusers"),
 		viper.GetStringSlice("editor"),
 		l,
+		rbl,
 		viper.GetBool("debug"),
 		ocmClient,
 		viper.GetStringMapString("colors"),
@@ -417,6 +428,7 @@ func runDevMode() {
 		config,
 		viper.GetStringSlice("editor"),
 		devLauncher,
+		launcher.ClusterLauncher{}, // rosa-boundary not needed in dev mode
 		viper.GetBool("debug"),
 		ocmMock,
 		nil, // aiProvider — not used in dev mode

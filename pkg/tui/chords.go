@@ -23,6 +23,7 @@ var chordRegistry = []struct {
 	Hidden      bool
 }{
 	{Key: "?", Description: "show chord help"},
+	{Key: "b", Description: "rosa-boundary login"},
 	{Key: "d", Description: "view debug log"},
 	{Key: "s", Description: "bulk silence", Hidden: true},
 }
@@ -33,6 +34,7 @@ var chordRegistry = []struct {
 func getChordActions() []chordAction {
 	handlers := map[string]func(m model) (tea.Model, tea.Cmd){
 		"?": chordShowHelp,
+		"b": chordRosaBoundaryLogin,
 		"d": chordViewLog,
 		"s": chordBulkSilence,
 	}
@@ -118,6 +120,30 @@ func chordHelpText(prefix string) string {
 		fmt.Fprintf(&b, "%s=%s", entry.Key, entry.Description)
 	}
 	return b.String()
+}
+
+func chordRosaBoundaryLogin(m model) (tea.Model, tea.Cmd) {
+	if !m.rosaBoundaryLauncher.Enabled {
+		m.setStatus("rosa-boundary not configured")
+		return m, nil
+	}
+	if m.viewingIncident {
+		if m.selectedIncident == nil {
+			m.setStatus("no incident selected")
+			return m, nil
+		}
+		if !m.incidentAlertsLoaded {
+			m.setStatus("Loading incident alerts, please wait...")
+			return m, nil
+		}
+		return m, func() tea.Msg { return rosaBoundaryLoginMsg("login") }
+	}
+	return m, doIfIncidentSelected(&m, func() tea.Msg {
+		return waitForSelectedIncidentThenDoMsg{
+			action: func() tea.Msg { return rosaBoundaryLoginMsg("login") },
+			msg:    "wait",
+		}
+	})
 }
 
 // chordBulkSilence enters the bulk-silence incident selection mode.

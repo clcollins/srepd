@@ -1058,6 +1058,13 @@ func TestBuildSummary_TokenMasked(t *testing.T) {
 
 // --- BuildFullConfig tests ---
 
+func TestDefaultOptionalKeys_RosaBoundaryCommand(t *testing.T) {
+	val, ok := DefaultOptionalKeys["rosa_boundary_command"]
+	assert.True(t, ok, "rosa_boundary_command must be in DefaultOptionalKeys")
+	assert.Contains(t, val, "%%CLUSTER_ID%%", "default must contain %%CLUSTER_ID%% placeholder")
+	assert.Contains(t, val, "rosa-boundary", "default must reference the rosa-boundary CLI")
+}
+
 func TestBuildFullConfig_AllFields(t *testing.T) {
 	final := ResolvedValues{
 		Token: "test-token-value",
@@ -1079,6 +1086,7 @@ func TestBuildFullConfig_AllFields(t *testing.T) {
 	assert.Contains(t, output, "cluster_login_command: ocm backplane login %%CLUSTER_ID%%")
 	assert.Contains(t, output, "toolbox_mode: auto")
 	assert.Contains(t, output, "chord_prefix: ctrl+x")
+	assert.Contains(t, output, "rosa_boundary_command: rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect")
 }
 
 func TestBuildFullConfig_MinimalNoOptionals(t *testing.T) {
@@ -1441,6 +1449,7 @@ func TestBuildFullConfig_OptionalKeysAreRealValues(t *testing.T) {
 	assert.Equal(t, "ocm backplane login %%CLUSTER_ID%%", parsed["cluster_login_command"])
 	assert.Equal(t, "auto", parsed["toolbox_mode"])
 	assert.Equal(t, "ctrl+x", parsed["chord_prefix"])
+	assert.Equal(t, "rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect", parsed["rosa_boundary_command"])
 }
 
 func TestBuildFullConfig_OptionalKeysHaveDescriptionComments(t *testing.T) {
@@ -1499,6 +1508,7 @@ func TestEndToEnd_NewFileWritesRealDefaults(t *testing.T) {
 	assert.Contains(t, parsed["cluster_login_command"], "%%CLUSTER_ID%%")
 	assert.Equal(t, "auto", parsed["toolbox_mode"])
 	assert.Equal(t, "ctrl+x", parsed["chord_prefix"])
+	assert.Contains(t, parsed["rosa_boundary_command"], "%%CLUSTER_ID%%")
 }
 
 // --- CommentOutOldPolicies tests ---

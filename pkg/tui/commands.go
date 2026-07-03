@@ -526,6 +526,10 @@ type loginMsg string
 // multi-cluster selection prompt. The string value is the cluster_id.
 type clusterSelectedMsg string
 
+type rosaBoundaryLoginMsg string
+
+type rosaBoundaryClusterSelectedMsg string
+
 type loginFinishedMsg struct {
 	err error
 }
@@ -731,6 +735,33 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 		err := c.Wait()
 		if err != nil {
 			log.Debug("tui.login(): terminal process exited", "error", err)
+		}
+	}()
+
+	return func() tea.Msg {
+		return loginFinishedMsg{}
+	}
+}
+
+func rosaBoundaryLogin(vars map[string]string, l launcher.ClusterLauncher) tea.Cmd {
+	command := l.BuildLoginCommand(vars)
+
+	c := exec.Command(command[0], command[1:]...)
+
+	log.Debug("tui.rosaBoundaryLogin()", "command", c.String())
+
+	startCmdErr := c.Start()
+	if startCmdErr != nil {
+		log.Error("tui.rosaBoundaryLogin()", "error", startCmdErr)
+		return func() tea.Msg {
+			return loginFinishedMsg{startCmdErr}
+		}
+	}
+
+	go func() {
+		err := c.Wait()
+		if err != nil {
+			log.Debug("tui.rosaBoundaryLogin(): terminal process exited", "error", err)
 		}
 	}()
 

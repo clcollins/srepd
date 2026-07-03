@@ -5,6 +5,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -425,5 +426,46 @@ func TestChordViewLog_ReturnsCommand(t *testing.T) {
 		assert.True(t, ok, "command should produce a logFileContentMsg, got %T", result)
 		assert.Contains(t, string(msg), "No log file found",
 			"should indicate log file not found for nonexistent path")
+	})
+}
+
+func TestChordRosaBoundaryLogin_Registered(t *testing.T) {
+	t.Run("rosa-boundary chord is registered", func(t *testing.T) {
+		action := resolveChord("b")
+		assert.NotNil(t, action, "resolveChord should return an action for 'b'")
+		assert.Equal(t, "b", action.Key)
+		assert.Equal(t, "rosa-boundary login", action.Description)
+	})
+}
+
+func TestChordRosaBoundaryLogin_LauncherDisabled(t *testing.T) {
+	t.Run("rosa-boundary login with disabled launcher shows status", func(t *testing.T) {
+		m := createTestModel()
+		m.rosaBoundaryLauncher = launcher.ClusterLauncher{}
+
+		result, cmd := chordRosaBoundaryLogin(m)
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "rosa-boundary not configured")
+		assert.Nil(t, cmd)
+	})
+}
+
+func TestChordRosaBoundaryLogin_LauncherEnabled(t *testing.T) {
+	t.Run("rosa-boundary login with enabled launcher returns message from incident view", func(t *testing.T) {
+		m := createTestModel()
+		m.rosaBoundaryLauncher = launcher.ClusterLauncher{Enabled: true}
+		m.viewingIncident = true
+		m.selectedIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "P123"},
+		}
+		m.incidentAlertsLoaded = true
+
+		_, cmd := chordRosaBoundaryLogin(m)
+		assert.NotNil(t, cmd, "should return a command")
+
+		msg := cmd()
+		_, ok := msg.(rosaBoundaryLoginMsg)
+		assert.True(t, ok, "command should produce rosaBoundaryLoginMsg, got %T", msg)
 	})
 }

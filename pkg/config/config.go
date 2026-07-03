@@ -35,6 +35,7 @@ var (
 		"emoji":                 "true",
 		"agent_system_prompt":   "You are in read-only investigation mode for SRE PagerDuty incident triage. Suggest commands for the user to run if changes are needed. Do not modify cluster state. All cluster commands must be read-only (oc get, oc describe, NOT oc delete/patch). If a fix requires changes, OUTPUT the commands for the SRE to review and run manually.",
 		"watcher_system_prompt": "You are an SRE assistant with access to PagerDuty incident data and OpenShift cluster information. Provide concise, actionable analysis. Do not suggest destructive commands.",
+		"rosa_boundary_command": "rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect",
 	}
 	OptionalKeys = map[string]string{
 		"editor":                             fmt.Sprintf("Editor to use for notes (default: %v)", DefaultOptionalKeys["editor"]),
@@ -47,6 +48,7 @@ var (
 		"emoji":                              "Use emoji markers for flags/agent/watcher (default: true, set false for text fallbacks)",
 		"agent_system_prompt":                "System prompt for :agent CLI queries (customizable per-user)",
 		"watcher_system_prompt":              "System prompt for :watcher LLM queries and ambient analysis (customizable per-user)",
+		"rosa_boundary_command":              fmt.Sprintf("rosa-boundary login command (default: %v)", DefaultOptionalKeys["rosa_boundary_command"]),
 		"colors":                             "Custom color scheme (map of color name to hex value)",
 		"default_silent_escalation_policy":   "Default silent escalation policy ID (auto-discovered via srepd config)",
 		"custom_service_escalation_policies": "Per-service silent policy overrides (service ID → policy ID)",
@@ -379,6 +381,7 @@ func BuildFullConfig(final ResolvedValues, teamNames map[string]string, silentPo
 		{"cluster_login_command", "ocm backplane login %%CLUSTER_ID%%"},
 		{"toolbox_mode", "auto"},
 		{"chord_prefix", "ctrl+x"},
+		{"rosa_boundary_command", "rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect"},
 	} {
 		fmt.Fprintf(&sb, "%s: %s\n", entry.key, entry.val)
 	}
