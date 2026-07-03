@@ -70,6 +70,7 @@ If no config file exists, running `srepd` automatically enters the configuration
 | `editor` | `string` | `vim` | Editor for incident notes |
 | `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
+| `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary cluster login command |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 | `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`) |
@@ -106,6 +107,7 @@ teams:
 default_silent_escalation_policy: P654321
 terminal: gnome-terminal
 cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
+rosa_boundary_command: rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect
 toolbox_mode: auto
 ```
 
@@ -194,6 +196,14 @@ Press `h` to toggle the help overlay inside srepd.
 | `Tab`/`Shift+Tab`/`←`/`→` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |
 
 Chord commands use a configurable prefix (default `ctrl+x`) followed by a second key. Set `chord_prefix` in config to change.
+
+### rosa-boundary Support
+
+SREPD supports [rosa-boundary](https://github.com/openshift-online/rosa-boundary) as
+an alternative cluster login method. Use `ctrl+x b` to open a rosa-boundary session
+for the selected incident's cluster. The default command is
+`rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect`. Override via the
+`rosa_boundary_command` config key or `SREPD_ROSA_BOUNDARY_COMMAND` environment variable.
 
 ## Environment Variables
 

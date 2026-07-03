@@ -98,6 +98,7 @@ func launchTUIWithConfig() {
 		viper.GetStringSlice("ignoredusers"),
 		viper.GetStringSlice("editor"),
 		l,
+		launcher.ClusterLauncher{}, // rosa-boundary not needed in config mode
 		viper.GetBool("debug"),
 		ocmClient,
 		viper.GetStringMapString("colors"),

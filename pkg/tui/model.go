@@ -59,9 +59,10 @@ var initialScheduledJobs = []*scheduledJob{
 type model struct {
 	err error
 
-	config   *pd.Config
-	editor   []string
-	launcher launcher.ClusterLauncher
+	config               *pd.Config
+	editor               []string
+	launcher             launcher.ClusterLauncher
+	rosaBoundaryLauncher launcher.ClusterLauncher
 
 	table table.Model
 	input textinput.Model
@@ -105,10 +106,11 @@ type model struct {
 
 	// clusterSelectMode is true when the user must choose which cluster to log into
 	// because the incident has alerts referencing multiple distinct cluster_ids.
-	clusterSelectMode    bool
-	clusterSelectOptions []string
-	clusterSelectTable   table.Model
-	clusterSelectPrompt  string
+	clusterSelectMode         bool
+	clusterSelectOptions      []string
+	clusterSelectTable        table.Model
+	clusterSelectPrompt       string
+	rosaBoundaryClusterSelect bool
 
 	// chordPending is true when the chord prefix key has been pressed and
 	// the system is waiting for the second key to complete the chord.
@@ -221,6 +223,7 @@ func InitialModel(
 	ignoredusers []string,
 	editor []string,
 	launcher launcher.ClusterLauncher,
+	rosaBoundaryLauncher launcher.ClusterLauncher,
 	debug bool,
 	ocmClient ocm.OCMClient,
 	colors map[string]string,
@@ -259,6 +262,7 @@ func InitialModel(
 
 		editor:                editor,
 		launcher:              launcher,
+		rosaBoundaryLauncher:  rosaBoundaryLauncher,
 		debug:                 debug,
 		help:                  newHelp(),
 		table:                 t,
@@ -339,6 +343,7 @@ func InitialModelWithConfig(
 	config *pd.Config,
 	editor []string,
 	launcher launcher.ClusterLauncher,
+	rosaBoundaryLauncher launcher.ClusterLauncher,
 	debug bool,
 	ocmClient ocm.OCMClient,
 	aiProvider ai.Provider,
@@ -369,6 +374,7 @@ func InitialModelWithConfig(
 
 		editor:                editor,
 		launcher:              launcher,
+		rosaBoundaryLauncher:  rosaBoundaryLauncher,
 		debug:                 debug,
 		help:                  newHelp(),
 		table:                 t,

@@ -1078,6 +1078,78 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
 		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
+	case rosaBoundaryLoginMsg:
+		if m.selectedIncident == nil {
+			m.setStatus("unable to login via rosa-boundary - no selected incident")
+			return m, nil
+		}
+
+		if len(m.selectedIncidentAlerts) == 0 {
+			log.Debug("tui.Update()", "msg_type", reflect.TypeOf(msg), "msg", "no alerts found for incident - requeuing")
+			return m, func() tea.Msg { return rosaBoundaryLoginMsg("requeue") }
+		}
+
+		clusters := getUniqueClusters(m.selectedIncidentAlerts)
+
+		var cluster string
+		switch len(clusters) {
+		case 0:
+			return m, m.flashNotification("No cluster_id found in alerts — cannot login via rosa-boundary")
+		case 1:
+			cluster = clusters[0]
+			m.setStatus(fmt.Sprintf("rosa-boundary login to cluster %s", cluster))
+		default:
+			m.clusterSelectMode = true
+			m.rosaBoundaryClusterSelect = true
+			m.clusterSelectOptions = clusters
+			m.clusterSelectPrompt = "Select cluster for rosa-boundary login (Enter=select, Esc=cancel):"
+			clusterServices := mapClusterServices(m.selectedIncidentAlerts)
+			cols := []table.Column{
+				{Title: "Cluster ID", Width: m.layout.ClusterSelectClusterIDWidth},
+				{Title: "Service", Width: m.layout.ClusterSelectServiceWidth},
+			}
+			var rows []table.Row
+			for _, c := range clusters {
+				rows = append(rows, table.Row{c, clusterServices[c]})
+			}
+			m.clusterSelectTable = table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true))
+			m.clusterSelectTable.SetStyles(m.styles.Table)
+			return m, nil
+		}
+
+		var vars = map[string]string{
+			"%%CLUSTER_ID%%":  cluster,
+			"%%INCIDENT_ID%%": m.selectedIncident.ID,
+		}
+
+		log.Info("rosa-boundary login initiated",
+			"user_id", m.config.CurrentUser.ID,
+			"cluster_id", cluster,
+			"reason", m.selectedIncident.HTMLURL,
+			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
+		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher))
+
+	case rosaBoundaryClusterSelectedMsg:
+		if m.selectedIncident == nil {
+			m.setStatus("unable to login via rosa-boundary - no selected incident")
+			return m, nil
+		}
+
+		cluster := string(msg)
+		m.setStatus(fmt.Sprintf("rosa-boundary login to cluster %s", cluster))
+
+		var vars = map[string]string{
+			"%%CLUSTER_ID%%":  cluster,
+			"%%INCIDENT_ID%%": m.selectedIncident.ID,
+		}
+
+		log.Info("rosa-boundary login initiated",
+			"user_id", m.config.CurrentUser.ID,
+			"cluster_id", cluster,
+			"reason", m.selectedIncident.HTMLURL,
+			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
+		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher))
+
 	case loginFinishedMsg:
 		if msg.err != nil {
 			m.status = fmt.Sprintf("failed to login: %s", msg.err)
