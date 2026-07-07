@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ocmconfig "github.com/openshift-online/ocm-common/pkg/ocm/config"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
 
 func TestCheckTokens_NoConfigFile(t *testing.T) {
@@ -120,5 +121,109 @@ func TestNewClientFromConfig_NilConfig(t *testing.T) {
 		_, err := NewClientFromConfig(nil, "test-version")
 
 		assert.Error(t, err)
+	})
+}
+
+func TestClusterFromResponse(t *testing.T) {
+	t.Run("basic field mapping", func(t *testing.T) {
+		cluster, err := cmv1.NewCluster().
+			ID("internal-id-123").
+			ExternalID("ext-uuid-456").
+			Name("mycluster").
+			OpenshiftVersion("4.16.38").
+			State(cmv1.ClusterStateReady).
+			Build()
+		require.NoError(t, err)
+
+		info := clusterFromResponse(cluster)
+
+		assert.Equal(t, "internal-id-123", info.ID)
+		assert.Equal(t, "ext-uuid-456", info.ExternalID)
+		assert.Equal(t, "mycluster", info.Name)
+		assert.Equal(t, "mycluster", info.DisplayName)
+		assert.Equal(t, "4.16.38", info.Version)
+		assert.Equal(t, "ready", info.State)
+	})
+
+	t.Run("display name uses domain prefix and DNS", func(t *testing.T) {
+		cluster, err := cmv1.NewCluster().
+			ID("id-1").
+			Name("mycluster").
+			DomainPrefix("mycluster").
+			DNS(cmv1.NewDNS().BaseDomain("abc1.p1.openshiftapps.com")).
+			Build()
+		require.NoError(t, err)
+
+		info := clusterFromResponse(cluster)
+
+		assert.Equal(t, "mycluster.abc1.p1.openshiftapps.com", info.DisplayName)
+		assert.Equal(t, "mycluster", info.Name)
+	})
+
+	t.Run("region extraction", func(t *testing.T) {
+		cluster, err := cmv1.NewCluster().
+			ID("id-1").
+			Name("test").
+			Region(cmv1.NewCloudRegion().ID("us-east-1")).
+			Build()
+		require.NoError(t, err)
+
+		info := clusterFromResponse(cluster)
+
+		assert.Equal(t, "us-east-1", info.Region)
+	})
+
+	t.Run("hypershift flag", func(t *testing.T) {
+		cluster, err := cmv1.NewCluster().
+			ID("id-1").
+			Name("test").
+			Hypershift(cmv1.NewHypershift().Enabled(true)).
+			Build()
+		require.NoError(t, err)
+
+		info := clusterFromResponse(cluster)
+
+		assert.True(t, info.Hypershift)
+	})
+
+	t.Run("CCS flag", func(t *testing.T) {
+		cluster, err := cmv1.NewCluster().
+			ID("id-1").
+			Name("test").
+			CCS(cmv1.NewCCS().Enabled(true)).
+			Build()
+		require.NoError(t, err)
+
+		info := clusterFromResponse(cluster)
+
+		assert.True(t, info.CCS)
+	})
+
+	t.Run("nil optional fields are safe", func(t *testing.T) {
+		cluster, err := cmv1.NewCluster().
+			ID("id-1").
+			Name("test").
+			Build()
+		require.NoError(t, err)
+
+		info := clusterFromResponse(cluster)
+
+		assert.Empty(t, info.Region)
+		assert.False(t, info.Hypershift)
+		assert.False(t, info.CCS)
+		assert.Empty(t, info.Organization)
+	})
+
+	t.Run("cloud provider extraction", func(t *testing.T) {
+		cluster, err := cmv1.NewCluster().
+			ID("id-1").
+			Name("test").
+			CloudProvider(cmv1.NewCloudProvider().ID("aws")).
+			Build()
+		require.NoError(t, err)
+
+		info := clusterFromResponse(cluster)
+
+		assert.Equal(t, "aws", info.CloudProvider)
 	})
 }
