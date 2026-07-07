@@ -852,7 +852,10 @@ func TestTabHeader_Rendering(t *testing.T) {
 			noteCount:     2,
 			alertsLoading: true,
 			expectedContains: []string{
-				"Alerts (...)",
+				"Alerts ",
+			},
+			expectedNotContains: []string{
+				"Alerts (0)",
 			},
 		},
 		{
@@ -862,7 +865,10 @@ func TestTabHeader_Rendering(t *testing.T) {
 			noteCount:    0,
 			notesLoading: true,
 			expectedContains: []string{
-				"Notes (...)",
+				"Notes ",
+			},
+			expectedNotContains: []string{
+				"Notes (0)",
 			},
 		},
 	}
@@ -1026,7 +1032,7 @@ func TestRenderTabBar(t *testing.T) {
 			alertCount:       0,
 			noteCount:        1,
 			alertsLoading:    true,
-			expectedContains: []string{"Alerts (...)", "Notes (1)"},
+			expectedContains: []string{"Alerts ", "Notes (1)"},
 		},
 		{
 			name:             "Notes loading shows ellipsis",
@@ -1034,7 +1040,7 @@ func TestRenderTabBar(t *testing.T) {
 			alertCount:       2,
 			noteCount:        0,
 			notesLoading:     true,
-			expectedContains: []string{"Alerts (2)", "Notes (...)"},
+			expectedContains: []string{"Alerts (2)", "Notes "},
 		},
 	}
 

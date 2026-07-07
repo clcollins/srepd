@@ -1243,16 +1243,22 @@ func TestTabSwitch_TabKey(t *testing.T) {
 			expectedTab: tabReports,
 		},
 		{
-			name:        "Tab wraps from Reports to Details",
+			name:        "Tab from Reports goes to PD History",
 			initialTab:  tabReports,
+			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
+			expectedTab: tabPDHistory,
+		},
+		{
+			name:        "Tab wraps from PD History to Details",
+			initialTab:  tabPDHistory,
 			keyMsg:      tea.KeyMsg{Type: tea.KeyTab},
 			expectedTab: tabDetails,
 		},
 		{
-			name:        "Shift+Tab from Details goes to Reports",
+			name:        "Shift+Tab from Details goes to PD History",
 			initialTab:  tabDetails,
 			keyMsg:      tea.KeyMsg{Type: tea.KeyShiftTab},
-			expectedTab: tabReports,
+			expectedTab: tabPDHistory,
 		},
 		{
 			name:        "Shift+Tab from Alerts goes to Details",

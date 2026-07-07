@@ -63,32 +63,38 @@ func TestExecErr_Error(t *testing.T) {
 	}
 }
 
+func TestHelperProcess(t *testing.T) {
+	code := os.Getenv("SREPD_TEST_EXIT_CODE")
+	if code == "" {
+		return
+	}
+	exitCode := 0
+	_, _ = fmt.Sscanf(code, "%d", &exitCode)
+	os.Exit(exitCode)
+}
+
 func TestExecErr_Code(t *testing.T) {
-	// exec.ExitError requires a real process exit, so use a process that exits with code 1
-	// We test this indirectly by constructing an execErr with a real ExitError
 	tests := []struct {
 		name         string
-		command      string
-		args         []string
+		exitCode     string
 		expectedCode int
 	}{
 		{
 			name:         "exit code 1",
-			command:      "sh",
-			args:         []string{"-c", "exit 1"},
+			exitCode:     "1",
 			expectedCode: 1,
 		},
 		{
 			name:         "exit code 2",
-			command:      "sh",
-			args:         []string{"-c", "exit 2"},
+			exitCode:     "2",
 			expectedCode: 2,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command(tt.command, tt.args...)
+			cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
+			cmd.Env = append(os.Environ(), "SREPD_TEST_EXIT_CODE="+tt.exitCode)
 			err := cmd.Run()
 			exitErr, ok := err.(*exec.ExitError)
 			assert.True(t, ok, "expected *exec.ExitError")

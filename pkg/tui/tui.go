@@ -133,7 +133,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reflect.TypeOf(tea.MouseMsg{}),
 		reflect.TypeOf(ocmServiceLogsMsg{}),
 		reflect.TypeOf(limitedSupportMsg{}),
-		reflect.TypeOf(clusterReportsMsg{}):
+		reflect.TypeOf(clusterReportsMsg{}),
+		reflect.TypeOf(priorAlertsMsg{}):
 		shouldLog = false
 	}
 
@@ -752,6 +753,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			enrichCmds := enrichClusters(m.ocmClient, uncachedClusters, m.devMode)
 			if len(enrichCmds) > 0 {
 				cmds = append(cmds, enrichCmds...)
+			}
+
+			if m.config != nil && len(clusterIDs) > 0 {
+				var teamIDs []string
+				for _, team := range m.config.Teams {
+					teamIDs = append(teamIDs, team.ID)
+				}
+
+				currentAlertName := ""
+				svcSeen := make(map[string]bool)
+				var serviceIDs []string
+				for _, a := range msg.alerts {
+					if a.Service.ID != "" && !svcSeen[a.Service.ID] {
+						svcSeen[a.Service.ID] = true
+						serviceIDs = append(serviceIDs, a.Service.ID)
+					}
+					if currentAlertName == "" {
+						normalized := alert.NormalizeAlert(a.Service.Summary, "", a)
+						if normalized.AlertName != "" {
+							currentAlertName = normalized.AlertName
+						} else {
+							name := getDetailFieldFromAlert("alert_name", a)
+							if name != "" {
+								currentAlertName = name
+							}
+						}
+					}
+				}
+
+				for _, cid := range clusterIDs {
+					if _, cached := m.priorAlertCache[cid]; cached {
+						continue
+					}
+					if m.priorAlertPending[cid] > 0 {
+						continue
+					}
+					weekCmds := dispatchPriorAlertWeeks(
+						m.config.Client,
+						serviceIDs,
+						teamIDs,
+						cid,
+						currentAlertName,
+						msg.incidentID,
+					)
+					m.priorAlertPending[cid] = len(weekCmds)
+					cmds = append(cmds, weekCmds...)
+				}
 			}
 
 			// Re-render if we're viewing the incident to show the alerts progressively
@@ -1637,6 +1685,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clusterReportCache[msg.clusterID] = msg.reports
 		log.Debug("backplane.ListReports cached", "cluster_id", msg.clusterID, "count", len(msg.reports))
+		return m, nil
+
+	case priorAlertsMsg:
+		if m.priorAlertPending[msg.clusterID] > 0 {
+			m.priorAlertPending[msg.clusterID]--
+		}
+		if m.priorAlertPending[msg.clusterID] == 0 {
+			delete(m.priorAlertPending, msg.clusterID)
+		}
+		if m.priorAlertCache == nil {
+			m.priorAlertCache = make(map[string]*PriorAlertData)
+		}
+		existing := m.priorAlertCache[msg.clusterID]
+		if existing == nil {
+			existing = &PriorAlertData{}
+			m.priorAlertCache[msg.clusterID] = existing
+		}
+		if msg.err != nil {
+			log.Debug("fetchPriorAlerts week failed", "cluster_id", msg.clusterID, "error", msg.err)
+		} else if msg.data != nil {
+			existing.SameAlert = append(existing.SameAlert, msg.data.SameAlert...)
+			existing.OtherAlerts = append(existing.OtherAlerts, msg.data.OtherAlerts...)
+			log.Debug("fetchPriorAlerts week merged", "cluster_id", msg.clusterID,
+				"week_same", len(msg.data.SameAlert), "week_other", len(msg.data.OtherAlerts),
+				"total_same", len(existing.SameAlert), "total_other", len(existing.OtherAlerts),
+				"pending", m.priorAlertPending[msg.clusterID])
+		}
+		if m.viewingIncident && m.activeTab == tabPDHistory {
+			return m, func() tea.Msg { return renderIncidentMsg("prior alerts arrived") }
+		}
 		return m, nil
 
 	case updateAvailableMsg:

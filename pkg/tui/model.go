@@ -192,6 +192,10 @@ type model struct {
 	backplaneConfig    *backplane.Config
 	clusterReportCache map[string][]backplane.ReportSummary
 
+	// Prior alerts state
+	priorAlertCache   map[string]*PriorAlertData
+	priorAlertPending map[string]int
+
 	// Flag conditions state
 	flagConditions []FlagCondition
 	flagNextID     int
@@ -289,6 +293,8 @@ func InitialModel(
 		backplaneClient:       backplaneClient,
 		backplaneConfig:       backplaneConfig,
 		clusterReportCache:    make(map[string][]backplane.ReportSummary),
+		priorAlertCache:       make(map[string]*PriorAlertData),
+		priorAlertPending:     make(map[string]int),
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
@@ -400,6 +406,8 @@ func InitialModelWithConfig(
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
 		backplaneClient:       backplaneClient,
 		clusterReportCache:    make(map[string][]backplane.ReportSummary),
+		priorAlertCache:       make(map[string]*PriorAlertData),
+		priorAlertPending:     make(map[string]int),
 		theme:                 theme,
 		styles:                styles,
 		aiProvider:            aiProvider,
@@ -481,6 +489,8 @@ func (m *model) clearOCMCacheForIncident(incidentID string) {
 			delete(m.serviceLogCache, cid)
 			delete(m.limitedSupportCache, cid)
 			delete(m.clusterReportCache, cid)
+			delete(m.priorAlertCache, cid)
+			delete(m.priorAlertPending, cid)
 			delete(m.clusterEnrichInFlight, cid)
 		}
 	}
