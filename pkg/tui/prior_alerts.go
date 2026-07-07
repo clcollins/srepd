@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -15,7 +16,7 @@ const (
 	priorAlertMaxMatches         = 15
 	priorAlertLookbackDays       = 90
 	priorAlertWeekDays           = 7
-	priorAlertMaxIncidentsToScan = 200
+	priorAlertMaxIncidentsToScan = 500
 	priorAlertTimeout            = 5 * time.Minute
 )
 
@@ -31,21 +32,114 @@ type PriorAlertData struct {
 	OtherAlerts []PriorAlert
 }
 
+type priorAlertWeek struct {
+	since time.Time
+	until time.Time
+}
+
 type priorAlertsMsg struct {
 	clusterID        string
 	currentAlertName string
 	data             *PriorAlertData
 	err              error
+	nextWeeks        []priorAlertWeek
+	client           pd.PagerDutyClient
+	serviceIDs       []string
+	teamIDs          []string
+	incidentID       string
 }
 
-func fetchPriorAlertsWeek(client pd.PagerDutyClient, serviceIDs []string, teamIDs []string, clusterID string, currentAlertName string, currentIncidentID string, weekSince time.Time, weekUntil time.Time) tea.Cmd {
+func buildPriorAlertWeeks() []priorAlertWeek {
+	now := time.Now()
+	lookbackStart := now.AddDate(0, 0, -priorAlertLookbackDays)
+
+	var weeks []priorAlertWeek
+	weekEnd := now
+	for weekEnd.After(lookbackStart) {
+		weekStart := weekEnd.AddDate(0, 0, -priorAlertWeekDays)
+		if weekStart.Before(lookbackStart) {
+			weekStart = lookbackStart
+		}
+		weeks = append(weeks, priorAlertWeek{since: weekStart, until: weekEnd})
+		weekEnd = weekStart
+	}
+	return weeks
+}
+
+// matchIncidentToCluster checks if an incident is related to the target cluster
+// using a three-tier strategy that avoids separate GetAlerts API calls:
+//
+// Tier 1 (1:1 services): osd_hive services are 1:1 with a cluster — every
+// incident from that service matches. Always returns true for these.
+//
+// Tier 2 (title match): rhobs_hcp titles contain the cluster UUID
+// ("for HCP: <uuid>"). Check with strings.Contains.
+//
+// Tier 3 (log entry): Use FirstTriggerLogEntry.Channel.Raw to extract
+// cluster_id from the inline alert payload (requires include[]=first_trigger_log_entries).
+func matchIncidentToCluster(incident pagerduty.Incident, clusterID string) bool {
+	serviceType := alert.IdentifyType(incident.Service.Summary)
+
+	switch serviceType {
+	case "osd_hive":
+		return true
+	case "rhobs_hcp":
+		return strings.Contains(incident.Title, clusterID)
+	}
+
+	return extractClusterFromLogEntry(incident) == clusterID
+}
+
+func extractClusterFromLogEntry(incident pagerduty.Incident) string {
+	raw := incident.FirstTriggerLogEntry.Channel.Raw
+	if raw == nil {
+		return ""
+	}
+
+	if details, ok := raw["details"].(map[string]interface{}); ok {
+		if cid, ok := details["cluster_id"].(string); ok && cid != "" {
+			return cid
+		}
+	}
+
+	if details, ok := raw["custom_details"].(map[string]interface{}); ok {
+		if cid, ok := details["cluster_id"].(string); ok && cid != "" {
+			return cid
+		}
+	}
+
+	return ""
+}
+
+func extractAlertNameFromIncident(incident pagerduty.Incident) string {
+	normalized := alert.NormalizeAlert(incident.Service.Summary, incident.Title, pagerduty.IncidentAlert{})
+	if normalized.AlertName != "" {
+		return normalized.AlertName
+	}
+
+	raw := incident.FirstTriggerLogEntry.Channel.Raw
+	if raw == nil {
+		return ""
+	}
+	for _, key := range []string{"details", "custom_details"} {
+		if details, ok := raw[key].(map[string]interface{}); ok {
+			if name, ok := details["alert_name"].(string); ok && name != "" {
+				return name
+			}
+		}
+	}
+
+	return ""
+}
+
+func fetchPriorAlertsWeek(client pd.PagerDutyClient, serviceIDs []string, teamIDs []string, clusterID string, currentAlertName string, currentIncidentID string, week priorAlertWeek, remainingWeeks []priorAlertWeek) tea.Cmd {
 	return func() tea.Msg {
-		since := weekSince.Format(time.RFC3339)
-		until := weekUntil.Format(time.RFC3339)
-		weekLabel := weekSince.Format("Jan 02") + " - " + weekUntil.Format("Jan 02")
+		since := week.since.Format(time.RFC3339)
+		until := week.until.Format(time.RFC3339)
+		weekLabel := week.since.Format("Jan 02") + " - " + week.until.Format("Jan 02")
 
 		log.Debug("priorAlerts: week starting", "cluster_id", clusterID, "week", weekLabel,
-			"alert_name", currentAlertName, "service_ids", serviceIDs, "team_ids", teamIDs)
+			"remaining", len(remainingWeeks), "alert_name", currentAlertName)
 
 		ctx, cancel := context.WithTimeout(context.Background(), priorAlertTimeout)
 		defer cancel()
@@ -59,6 +153,7 @@ func fetchPriorAlertsWeek(client pd.PagerDutyClient, serviceIDs []string, teamID
 		}
 
 		scan := func(label string, opts pagerduty.ListIncidentsOptions) {
+			opts.Includes = []string{"first_trigger_log_entries"}
 			checkedCount := 0
 			pageCount := 0
 			for {
@@ -70,12 +165,13 @@ func fetchPriorAlertsWeek(client pd.PagerDutyClient, serviceIDs []string, teamID
 				}
 
 				log.Debug("priorAlerts: page fetched", "scan", label, "week", weekLabel,
-					"page", pageCount, "incidents_in_page", len(resp.Incidents), "more", resp.More)
+					"page", pageCount, "incidents", len(resp.Incidents), "more", resp.More)
 
 				for _, incident := range resp.Incidents {
 					if incident.ID == currentIncidentID || seen[incident.ID] {
 						continue
 					}
+					seen[incident.ID] = true
 
 					checkedCount++
 					if checkedCount > priorAlertMaxIncidentsToScan {
@@ -83,49 +179,27 @@ func fetchPriorAlertsWeek(client pd.PagerDutyClient, serviceIDs []string, teamID
 						return
 					}
 
-					alerts, err := pd.GetAlerts(client, incident.ID, pagerduty.ListIncidentAlertsOptions{})
-					if err != nil {
-						log.Debug("priorAlerts: GetAlerts failed", "scan", label, "incident", incident.ID, "error", err)
+					if !matchIncidentToCluster(incident, clusterID) {
 						continue
 					}
 
-					for _, a := range alerts {
-						alertCluster := getDetailFieldFromAlert("cluster_id", a)
-						if alertCluster == "" {
-							normalized := alert.NormalizeAlert(a.Service.Summary, "", a)
-							alertCluster = normalized.ClusterID
-						}
+					alertName := extractAlertNameFromIncident(incident)
 
-						if alertCluster != clusterID {
-							continue
-						}
+					entry := PriorAlert{
+						Date:        incident.CreatedAt,
+						AlertName:   alertName,
+						IncidentURL: incident.HTMLURL,
+						IncidentID:  incident.ID,
+					}
 
-						seen[incident.ID] = true
-
-						normalized := alert.NormalizeAlert(a.Service.Summary, incident.Title, a)
-						alertName := normalized.AlertName
-						if alertName == "" {
-							alertName = getDetailFieldFromAlert("alert_name", a)
-						}
-
-						entry := PriorAlert{
-							Date:        incident.CreatedAt,
-							AlertName:   alertName,
-							IncidentURL: incident.HTMLURL,
-							IncidentID:  incident.ID,
-						}
-
-						if alertName == currentAlertName && len(sameAlert) < priorAlertMaxMatches {
-							sameAlert = append(sameAlert, entry)
-							log.Debug("priorAlerts: match (same)", "scan", label, "incident", incident.ID,
-								"alert", alertName, "date", incident.CreatedAt)
-						} else if alertName != currentAlertName && len(otherAlerts) < priorAlertMaxMatches {
-							otherAlerts = append(otherAlerts, entry)
-							log.Debug("priorAlerts: match (other)", "scan", label, "incident", incident.ID,
-								"alert", alertName, "date", incident.CreatedAt)
-						}
-
-						break
+					if alertName == currentAlertName && len(sameAlert) < priorAlertMaxMatches {
+						sameAlert = append(sameAlert, entry)
+						log.Debug("priorAlerts: match (same)", "scan", label, "incident", incident.ID,
+							"alert", alertName, "date", incident.CreatedAt)
+					} else if alertName != currentAlertName && len(otherAlerts) < priorAlertMaxMatches {
+						otherAlerts = append(otherAlerts, entry)
+						log.Debug("priorAlerts: match (other)", "scan", label, "incident", incident.ID,
+							"alert", alertName, "date", incident.CreatedAt)
 					}
 
 					if full() {
@@ -177,31 +251,11 @@ func fetchPriorAlertsWeek(client pd.PagerDutyClient, serviceIDs []string, teamID
 				SameAlert:   sameAlert,
 				OtherAlerts: otherAlerts,
 			},
+			nextWeeks:  remainingWeeks,
+			client:     client,
+			serviceIDs: serviceIDs,
+			teamIDs:    teamIDs,
+			incidentID: currentIncidentID,
 		}
 	}
-}
-
-func dispatchPriorAlertWeeks(client pd.PagerDutyClient, serviceIDs []string, teamIDs []string, clusterID string, currentAlertName string, currentIncidentID string) []tea.Cmd {
-	now := time.Now()
-	lookbackStart := now.AddDate(0, 0, -priorAlertLookbackDays)
-
-	var cmds []tea.Cmd
-	weekEnd := now
-	for weekEnd.After(lookbackStart) {
-		weekStart := weekEnd.AddDate(0, 0, -priorAlertWeekDays)
-		if weekStart.Before(lookbackStart) {
-			weekStart = lookbackStart
-		}
-		cmds = append(cmds, fetchPriorAlertsWeek(
-			client, serviceIDs, teamIDs,
-			clusterID, currentAlertName, currentIncidentID,
-			weekStart, weekEnd,
-		))
-		weekEnd = weekStart
-	}
-
-	log.Debug("priorAlerts: dispatched weeks", "cluster_id", clusterID,
-		"alert_name", currentAlertName, "weeks", len(cmds))
-
-	return cmds
 }

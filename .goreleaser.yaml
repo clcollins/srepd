@@ -12,7 +12,7 @@ builds:
   - env:
       - CGO_ENABLED=0
     ldflags:
-      - -X github.com/clcollins/srepd/pkg/tui.Version={{.Tag}}
+      - -X github.com/clcollins/srepd/pkg/tui.Version={{ if .IsSnapshot }}{{.ShortCommit}}{{ else }}{{.Version}}{{ end }}
       - -X github.com/clcollins/srepd/pkg/tui.GitSHA={{.ShortCommit}}
     goos:
       - linux

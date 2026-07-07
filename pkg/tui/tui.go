@@ -789,16 +789,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.priorAlertPending[cid] > 0 {
 						continue
 					}
-					weekCmds := dispatchPriorAlertWeeks(
+					weeks := buildPriorAlertWeeks()
+					if len(weeks) == 0 {
+						continue
+					}
+					m.priorAlertPending[cid] = len(weeks)
+					cmds = append(cmds, fetchPriorAlertsWeek(
 						m.config.Client,
 						serviceIDs,
 						teamIDs,
 						cid,
 						currentAlertName,
 						msg.incidentID,
-					)
-					m.priorAlertPending[cid] = len(weekCmds)
-					cmds = append(cmds, weekCmds...)
+						weeks[0],
+						weeks[1:],
+					))
 				}
 			}
 
@@ -1681,7 +1686,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.clusterReportCache == nil {
-			m.clusterReportCache = make(map[string][]backplane.ReportSummary)
+			m.clusterReportCache = make(map[string][]backplane.Report)
 		}
 		m.clusterReportCache[msg.clusterID] = msg.reports
 		log.Debug("backplane.ListReports cached", "cluster_id", msg.clusterID, "count", len(msg.reports))
@@ -1712,8 +1717,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"total_same", len(existing.SameAlert), "total_other", len(existing.OtherAlerts),
 				"pending", m.priorAlertPending[msg.clusterID])
 		}
+		var nextCmd tea.Cmd
+		if len(msg.nextWeeks) > 0 {
+			nextCmd = fetchPriorAlertsWeek(
+				msg.client,
+				msg.serviceIDs,
+				msg.teamIDs,
+				msg.clusterID,
+				msg.currentAlertName,
+				msg.incidentID,
+				msg.nextWeeks[0],
+				msg.nextWeeks[1:],
+			)
+		}
 		if m.viewingIncident && m.activeTab == tabPDHistory {
-			return m, func() tea.Msg { return renderIncidentMsg("prior alerts arrived") }
+			renderCmd := func() tea.Msg { return renderIncidentMsg("prior alerts arrived") }
+			if nextCmd != nil {
+				return m, tea.Batch(renderCmd, nextCmd)
+			}
+			return m, renderCmd
+		}
+		if nextCmd != nil {
+			return m, nextCmd
 		}
 		return m, nil
 

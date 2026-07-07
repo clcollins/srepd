@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"slices"
@@ -212,15 +213,16 @@ func (m model) renderBottomStatus() string {
 			Padding(0, 1).
 			Align(lipgloss.Center)
 
-		sideWidth := windowSize.Width / 6
-		centerWidth := windowSize.Width - (sideWidth * 2)
+		leftWidth := windowSize.Width / 6
+		rightWidth := windowSize.Width / 4
+		centerWidth := windowSize.Width - leftWidth - rightWidth
 
 		s.WriteString(
 			lipgloss.JoinHorizontal(
 				0.2,
-				m.styles.Muted.Width(sideWidth).Padding(0, 0, 0, 1).Render(selectedID),
+				m.styles.Muted.Width(leftWidth).Padding(0, 0, 0, 1).Render(selectedID),
 				updateStyle.Width(centerWidth).Render(updateNotice),
-				m.styles.Muted.Width(sideWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
+				m.styles.Muted.Width(rightWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
 			),
 		)
 	} else {
@@ -556,7 +558,7 @@ func (m model) renderClusterReportsTab() (string, error) {
 		return "\n_Loading cluster reports..._\n", nil
 	}
 
-	var allReports []backplane.ReportSummary
+	var allReports []backplane.Report
 	for _, id := range m.sortedClusterIDs() {
 		allReports = append(allReports, m.clusterReportCache[id]...)
 	}
@@ -565,7 +567,7 @@ func (m model) renderClusterReportsTab() (string, error) {
 		return "\n_No cluster reports_\n", nil
 	}
 
-	slices.SortFunc(allReports, func(a, b backplane.ReportSummary) int {
+	slices.SortFunc(allReports, func(a, b backplane.Report) int {
 		return strings.Compare(b.CreatedAt, a.CreatedAt)
 	})
 
@@ -573,9 +575,17 @@ func (m model) renderClusterReportsTab() (string, error) {
 	var content strings.Builder
 	for i, r := range allReports {
 		fmt.Fprintf(&content, "### Report %d/%d\n\n", i+1, total)
-		fmt.Fprintf(&content, "* ID: %s\n", r.ReportID)
 		fmt.Fprintf(&content, "* Summary: %s\n", r.Summary)
 		fmt.Fprintf(&content, "* Timestamp: %s\n", r.CreatedAt)
+		if r.Data != "" {
+			decoded, err := base64.StdEncoding.DecodeString(r.Data)
+			if err != nil {
+				decoded = []byte(r.Data)
+			}
+			content.WriteString("\n")
+			content.Write(decoded)
+			content.WriteString("\n")
+		}
 		if i < total-1 {
 			content.WriteString("\n---\n")
 		}
@@ -626,9 +636,26 @@ func (m model) renderPDHistoryTab() (string, error) {
 		return strings.Compare(b.Date, a.Date)
 	})
 
+	totalWeeks := (priorAlertLookbackDays + priorAlertWeekDays - 1) / priorAlertWeekDays
+	weeksRemaining := 0
+	for _, id := range clusterIDs {
+		if n := m.priorAlertPending[id]; n > weeksRemaining {
+			weeksRemaining = n
+		}
+	}
+	weeksComplete := totalWeeks - weeksRemaining
+	daysCovered := weeksComplete * priorAlertWeekDays
+	if daysCovered > priorAlertLookbackDays {
+		daysCovered = priorAlertLookbackDays
+	}
+	timeRange := fmt.Sprintf("last %d days", daysCovered)
+	if !anyLoading {
+		timeRange = fmt.Sprintf("last %d days", priorAlertLookbackDays)
+	}
+
 	var content strings.Builder
 
-	content.WriteString("## Same Alert\n\n")
+	fmt.Fprintf(&content, "## Same Alert (%s)\n\n", timeRange)
 	if len(allSame) == 0 {
 		content.WriteString("_No prior instances of this alert for this cluster_\n")
 	} else {
@@ -643,7 +670,7 @@ func (m model) renderPDHistoryTab() (string, error) {
 		}
 	}
 
-	content.WriteString("\n## Other Alerts for this Cluster\n\n")
+	fmt.Fprintf(&content, "\n## Other Alerts for this Cluster (%s)\n\n", timeRange)
 	if len(allOther) == 0 {
 		content.WriteString("_No other alerts found for this cluster_\n")
 	} else {
@@ -659,7 +686,7 @@ func (m model) renderPDHistoryTab() (string, error) {
 	}
 
 	if anyLoading {
-		content.WriteString("\n_Still loading PD history for some clusters..._\n")
+		content.WriteString("\n_Loading older history..._\n")
 	}
 
 	return content.String(), nil
