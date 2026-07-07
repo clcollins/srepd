@@ -52,6 +52,16 @@ type MockPagerDutyClient struct {
 
 	// ListEscalationPoliciesResponses is a queue of responses for ListEscalationPoliciesWithContext.
 	ListEscalationPoliciesResponses []pagerduty.ListEscalationPoliciesResponse
+
+	// ListIncidentsResponses is an optional response queue for
+	// ListIncidentsWithContext. When populated, successive calls pop from the
+	// front. When empty or nil, the default hardcoded response is returned.
+	ListIncidentsResponses []pagerduty.ListIncidentsResponse
+
+	// ListIncidentAlertsResponses maps incident ID to a specific alerts response
+	// for ListIncidentAlertsWithContext. When non-nil and a matching key exists,
+	// that response is returned. Otherwise falls back to the default response.
+	ListIncidentAlertsResponses map[string]*pagerduty.ListAlertsResponse
 }
 
 // recordCall increments the call count for the named method, lazily
@@ -83,10 +93,16 @@ func (m *MockPagerDutyClient) GetIncidentWithContext(ctx context.Context, id str
 
 func (m *MockPagerDutyClient) ListIncidentsWithContext(ctx context.Context, opts pagerduty.ListIncidentsOptions) (*pagerduty.ListIncidentsResponse, error) {
 	m.recordCall("ListIncidentsWithContext")
-	// Provided so we can mock error responses for unit tests
 	if opts.UserIDs != nil && opts.UserIDs[0] == "err" {
 		return &pagerduty.ListIncidentsResponse{}, ErrMockError
 	}
+
+	if len(m.ListIncidentsResponses) > 0 {
+		resp := m.ListIncidentsResponses[0]
+		m.ListIncidentsResponses = m.ListIncidentsResponses[1:]
+		return &resp, nil
+	}
+
 	return &pagerduty.ListIncidentsResponse{
 		Incidents: []pagerduty.Incident{
 			{
@@ -108,6 +124,13 @@ func (m *MockPagerDutyClient) ListIncidentAlertsWithContext(ctx context.Context,
 	if id == "err" {
 		return &pagerduty.ListAlertsResponse{}, ErrMockError
 	}
+
+	if m.ListIncidentAlertsResponses != nil {
+		if resp, ok := m.ListIncidentAlertsResponses[id]; ok {
+			return resp, nil
+		}
+	}
+
 	return &pagerduty.ListAlertsResponse{
 		Alerts: []pagerduty.IncidentAlert{
 			{

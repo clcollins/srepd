@@ -1,14 +1,16 @@
 package cmd
 
 import (
-	"os"
+	_ "embed"
 	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
+
+//go:embed config.go
+var configGoSource string
 
 // setValidConfig populates viper with a complete, valid configuration
 // for use in tests. Each test should call viper.Reset() first, then
@@ -219,20 +221,12 @@ func TestEnsureViperDefaults_NewUserReadyForLaunch(t *testing.T) {
 }
 
 func TestWizardHasZeroHuhFormsInCmd(t *testing.T) {
-	source, err := os.ReadFile("config.go")
-	require.NoError(t, err)
-
-	content := string(source)
-	formCount := strings.Count(content, "huh.NewForm(")
+	formCount := strings.Count(configGoSource, "huh.NewForm(")
 
 	assert.Equal(t, 0, formCount, "cmd/config.go should have zero huh.NewForm calls; the form is now in pkg/tui/")
 }
 
 func TestRunConfigWizardCallsLaunchTUIWithConfig(t *testing.T) {
-	source, err := os.ReadFile("config.go")
-	require.NoError(t, err)
-
-	content := string(source)
-	assert.Contains(t, content, "launchTUIWithConfig()",
+	assert.Contains(t, configGoSource, "launchTUIWithConfig()",
 		"runConfigWizard should call launchTUIWithConfig to launch the TUI in config mode")
 }

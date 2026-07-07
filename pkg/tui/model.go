@@ -190,7 +190,11 @@ type model struct {
 	// Backplane enrichment state
 	backplaneClient    backplane.BackplaneClient
 	backplaneConfig    *backplane.Config
-	clusterReportCache map[string][]backplane.ReportSummary
+	clusterReportCache map[string][]backplane.Report
+
+	// Prior alerts state
+	priorAlertCache   map[string]*PriorAlertData
+	priorAlertPending map[string]int
 
 	// Flag conditions state
 	flagConditions []FlagCondition
@@ -288,7 +292,9 @@ func InitialModel(
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
 		backplaneClient:       backplaneClient,
 		backplaneConfig:       backplaneConfig,
-		clusterReportCache:    make(map[string][]backplane.ReportSummary),
+		clusterReportCache:    make(map[string][]backplane.Report),
+		priorAlertCache:       make(map[string]*PriorAlertData),
+		priorAlertPending:     make(map[string]int),
 		chordPrefix:           "ctrl+x",
 		theme:                 theme,
 		styles:                styles,
@@ -399,7 +405,9 @@ func InitialModelWithConfig(
 		serviceLogCache:       make(map[string][]ocm.ServiceLog),
 		limitedSupportCache:   make(map[string][]ocm.LimitedSupportReason),
 		backplaneClient:       backplaneClient,
-		clusterReportCache:    make(map[string][]backplane.ReportSummary),
+		clusterReportCache:    make(map[string][]backplane.Report),
+		priorAlertCache:       make(map[string]*PriorAlertData),
+		priorAlertPending:     make(map[string]int),
 		theme:                 theme,
 		styles:                styles,
 		aiProvider:            aiProvider,
@@ -481,6 +489,8 @@ func (m *model) clearOCMCacheForIncident(incidentID string) {
 			delete(m.serviceLogCache, cid)
 			delete(m.limitedSupportCache, cid)
 			delete(m.clusterReportCache, cid)
+			delete(m.priorAlertCache, cid)
+			delete(m.priorAlertPending, cid)
 			delete(m.clusterEnrichInFlight, cid)
 		}
 	}

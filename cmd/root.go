@@ -558,8 +558,12 @@ func setupFileLogging(filePath string) {
 // enabling log retrieval via "journalctl -t srepd".
 const syslogIdentifier = "srepd"
 
+type journalSendFunc func(message string, priority journal.Priority, vars map[string]string) error
+
 // journalWriter implements io.Writer for systemd journal
-type journalWriter struct{}
+type journalWriter struct {
+	sendFunc journalSendFunc
+}
 
 func (jw journalWriter) Write(p []byte) (n int, err error) {
 	message := strings.TrimSpace(string(p))
@@ -567,7 +571,11 @@ func (jw journalWriter) Write(p []byte) (n int, err error) {
 	vars := map[string]string{
 		"SYSLOG_IDENTIFIER": syslogIdentifier,
 	}
-	err = journal.Send(message, priority, vars)
+	send := jw.sendFunc
+	if send == nil {
+		send = journal.Send
+	}
+	err = send(message, priority, vars)
 	if err != nil {
 		return 0, err
 	}
