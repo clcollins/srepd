@@ -120,6 +120,67 @@ func TestBuildStyles(t *testing.T) {
 	})
 }
 
+func TestBuildGlamourStyle(t *testing.T) {
+	theme := DefaultTheme()
+	style := buildGlamourStyle(theme)
+
+	t.Run("document color matches theme text", func(t *testing.T) {
+		assert.NotNil(t, style.Document.Color)
+		assert.Equal(t, theme.Text.Dark, *style.Document.Color)
+	})
+
+	t.Run("heading colors match theme highlight", func(t *testing.T) {
+		assert.NotNil(t, style.Heading.Color)
+		assert.Equal(t, theme.Highlight.Dark, *style.Heading.Color)
+		assert.NotNil(t, style.H1.Color)
+		assert.Equal(t, theme.Highlight.Dark, *style.H1.Color)
+		assert.NotNil(t, style.H2.Color)
+		assert.Equal(t, theme.Highlight.Dark, *style.H2.Color)
+		assert.NotNil(t, style.H3.Color)
+		assert.Equal(t, theme.Highlight.Dark, *style.H3.Color)
+	})
+
+	t.Run("H1 background cleared", func(t *testing.T) {
+		assert.Nil(t, style.H1.BackgroundColor)
+	})
+
+	t.Run("link colors match theme border", func(t *testing.T) {
+		assert.NotNil(t, style.Link.Color)
+		assert.Equal(t, theme.Border.Dark, *style.Link.Color)
+		assert.NotNil(t, style.HorizontalRule.Color)
+		assert.Equal(t, theme.Border.Dark, *style.HorizontalRule.Color)
+	})
+
+	t.Run("link text uses theme text color and bold", func(t *testing.T) {
+		assert.NotNil(t, style.LinkText.Color)
+		assert.Equal(t, theme.Text.Dark, *style.LinkText.Color)
+		assert.NotNil(t, style.LinkText.Bold)
+		assert.True(t, *style.LinkText.Bold)
+	})
+
+	t.Run("strong is bold", func(t *testing.T) {
+		assert.NotNil(t, style.Strong.Bold)
+		assert.True(t, *style.Strong.Bold)
+	})
+
+	t.Run("heading is bold", func(t *testing.T) {
+		assert.NotNil(t, style.Heading.Bold)
+		assert.True(t, *style.Heading.Bold)
+	})
+
+	t.Run("custom theme colors propagate", func(t *testing.T) {
+		custom := ThemeFromConfig(map[string]string{
+			"text":      "#112233",
+			"border":    "#445566",
+			"highlight": "#778899",
+		})
+		customStyle := buildGlamourStyle(custom)
+		assert.Equal(t, custom.Text.Dark, *customStyle.Document.Color)
+		assert.Equal(t, custom.Highlight.Dark, *customStyle.Heading.Color)
+		assert.Equal(t, custom.Border.Dark, *customStyle.Link.Color)
+	})
+}
+
 func TestIsValidHexColor(t *testing.T) {
 	tests := []struct {
 		name  string
