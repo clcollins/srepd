@@ -152,6 +152,85 @@ func TestFetchPriorAlerts_NoMatches(t *testing.T) {
 	assert.Empty(t, msg.data.OtherAlerts)
 }
 
+func TestBuildPriorAlertWeeks(t *testing.T) {
+	weeks := buildPriorAlertWeeks()
+	assert.NotEmpty(t, weeks, "should produce at least one week")
+	expectedCount := (priorAlertLookbackDays + priorAlertWeekDays - 1) / priorAlertWeekDays
+	assert.Equal(t, expectedCount, len(weeks), "should produce correct number of weeks")
+	assert.True(t, weeks[0].until.After(weeks[0].since), "week should have valid time range")
+	assert.True(t, weeks[len(weeks)-1].since.Before(weeks[0].until), "weeks should span the lookback period")
+}
+
+func TestExtractAlertNameFromIncident(t *testing.T) {
+	tests := []struct {
+		name     string
+		incident pagerduty.Incident
+		expected string
+	}{
+		{
+			name: "extracts from osd_hive title",
+			incident: pagerduty.Incident{
+				Title:   "ClusterOperatorDown CRITICAL (1)",
+				Service: pagerduty.APIObject{Summary: "osd-test-hive-cluster"},
+			},
+			expected: "ClusterOperatorDown",
+		},
+		{
+			name: "extracts from rhobs_hcp title",
+			incident: pagerduty.Incident{
+				Title:   "[HCP] [RHOBS] (Critical) SomeAlert for HCP: abc-123",
+				Service: pagerduty.APIObject{Summary: "rhobs-hcp-prod-critical-us-east-1"},
+			},
+			expected: "SomeAlert",
+		},
+		{
+			name: "extracts from log entry details",
+			incident: pagerduty.Incident{
+				Title:   "unknown title",
+				Service: pagerduty.APIObject{Summary: "unknown-service"},
+				FirstTriggerLogEntry: pagerduty.FirstTriggerLogEntry{
+					CommonLogEntryField: pagerduty.CommonLogEntryField{
+						Channel: pagerduty.Channel{Raw: map[string]interface{}{
+							"details": map[string]interface{}{"alert_name": "MyAlert"},
+						}},
+					},
+				},
+			},
+			expected: "MyAlert",
+		},
+		{
+			name: "extracts from log entry custom_details",
+			incident: pagerduty.Incident{
+				Title:   "unknown title",
+				Service: pagerduty.APIObject{Summary: "unknown-service"},
+				FirstTriggerLogEntry: pagerduty.FirstTriggerLogEntry{
+					CommonLogEntryField: pagerduty.CommonLogEntryField{
+						Channel: pagerduty.Channel{Raw: map[string]interface{}{
+							"custom_details": map[string]interface{}{"alert_name": "CustomAlert"},
+						}},
+					},
+				},
+			},
+			expected: "CustomAlert",
+		},
+		{
+			name: "returns empty when no data available",
+			incident: pagerduty.Incident{
+				Title:   "no useful info",
+				Service: pagerduty.APIObject{Summary: "unknown-service"},
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractAlertNameFromIncident(tt.incident)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestMatchIncidentToCluster_Tiers(t *testing.T) {
 	tests := []struct {
 		name      string
