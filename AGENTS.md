@@ -94,9 +94,31 @@ git diff origin/main --name-only | grep README   # readme updated
 3. Implement minimum code to pass tests
 4. Run the full pre-commit checks (see above) — **all must pass**
 5. Fix any failures before proceeding
-6. Push and create PR against `main`
-7. CI runs all checks via `make` targets
-8. Review, approve, merge
+6. **Create a plan document** in `docs/plans/` (see below)
+7. **Update README.md** if `keymap.go`, `root.go`, or `commands.go` changed
+8. Push and create PR against `main`
+9. CI runs all checks via `make` targets
+10. Review, approve, merge
+
+## CI Requirements for PRs
+
+Every non-Dependabot PR must pass these CI checks:
+
+| Check | Make Target | What It Verifies |
+|-------|-------------|------------------|
+| Format Check | `make fmt-check` | `gofmt -s` formatting |
+| Go Vet | `make vet` | `go vet ./...` |
+| Lint | `make lint` | `golangci-lint` |
+| Unit Tests | `make test` | `go test ./...` |
+| Race Detection | `make test-race` | `go test -race ./...` |
+| **Plan Document** | `make plan-check` | A new/modified `docs/plans/*.md` file exists in the diff |
+| **README Update** | `make readme-check` | If `keymap.go`, `root.go`, or `commands.go` changed, `README.md` must also be in the diff. Add label `skip-readme` to bypass when the change is purely internal (no user-facing config/flag/keybinding changes) |
+
+### Plan Document
+
+Every PR must include a plan document at `docs/plans/<number>-<description>.md`.
+Use the next available number. The plan should describe the problem,
+approach, and key design decisions. See existing plans for format examples.
 
 ## Key Files
 

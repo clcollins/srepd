@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -411,11 +412,13 @@ func TestConfigureLogging_SetsLogWriter(t *testing.T) {
 }
 
 func TestJournalWriter_Write(t *testing.T) {
-	if !journal.Enabled() {
-		t.Skip("systemd journal not available")
+	var sentMessages []string
+	mockSend := func(message string, priority journal.Priority, vars map[string]string) error {
+		sentMessages = append(sentMessages, message)
+		return nil
 	}
 
-	jw := journalWriter{}
+	jw := journalWriter{sendFunc: mockSend}
 
 	tests := []struct {
 		name    string
@@ -442,6 +445,7 @@ func TestJournalWriter_Write(t *testing.T) {
 			assert.Equal(t, len(tt.message), n, "journalWriter.Write should return the message length")
 		})
 	}
+	assert.Len(t, sentMessages, 3)
 }
 
 func TestAutoCommentOldPolicies_BothFormatsPresent(t *testing.T) {
@@ -517,13 +521,12 @@ service_escalation_policies:
 }
 
 func TestJournalWriter_WriteReturnsCorrectLength(t *testing.T) {
-	if !journal.Enabled() {
-		t.Skip("systemd journal not available")
+	mockSend := func(message string, priority journal.Priority, vars map[string]string) error {
+		return nil
 	}
 
-	jw := journalWriter{}
+	jw := journalWriter{sendFunc: mockSend}
 
-	// Test with various message sizes
 	messages := []string{
 		"short",
 		"a medium length log message with some details about what happened",
@@ -536,4 +539,16 @@ func TestJournalWriter_WriteReturnsCorrectLength(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, len(msg), n, "Write should return len of input for message: %s", msg)
 	}
+}
+
+func TestJournalWriter_WriteError(t *testing.T) {
+	mockSend := func(message string, priority journal.Priority, vars map[string]string) error {
+		return fmt.Errorf("journal unavailable")
+	}
+
+	jw := journalWriter{sendFunc: mockSend}
+
+	n, err := jw.Write([]byte("test"))
+	assert.Error(t, err)
+	assert.Equal(t, 0, n)
 }

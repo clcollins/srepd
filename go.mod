@@ -5,6 +5,7 @@ go 1.26.4
 require (
 	charm.land/glamour/v2 v2.0.0
 	github.com/PagerDuty/go-pagerduty v1.8.0
+	github.com/anthropics/anthropic-sdk-go v1.48.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v1.0.0
@@ -26,7 +27,6 @@ require (
 	github.com/99designs/keyring v1.2.2 // indirect
 	github.com/alecthomas/chroma/v2 v2.17.0 // indirect
 	github.com/alessio/shellescape v1.4.1 // indirect
-	github.com/anthropics/anthropic-sdk-go v1.48.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect

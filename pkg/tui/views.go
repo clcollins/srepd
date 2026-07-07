@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"slices"
@@ -212,15 +213,16 @@ func (m model) renderBottomStatus() string {
 			Padding(0, 1).
 			Align(lipgloss.Center)
 
-		sideWidth := windowSize.Width / 6
-		centerWidth := windowSize.Width - (sideWidth * 2)
+		leftWidth := windowSize.Width / 6
+		rightWidth := windowSize.Width / 4
+		centerWidth := windowSize.Width - leftWidth - rightWidth
 
 		s.WriteString(
 			lipgloss.JoinHorizontal(
 				0.2,
-				m.styles.Muted.Width(sideWidth).Padding(0, 0, 0, 1).Render(selectedID),
+				m.styles.Muted.Width(leftWidth).Padding(0, 0, 0, 1).Render(selectedID),
 				updateStyle.Width(centerWidth).Render(updateNotice),
-				m.styles.Muted.Width(sideWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
+				m.styles.Muted.Width(rightWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
 			),
 		)
 	} else {
@@ -307,6 +309,8 @@ func (m model) renderTabContent() (string, error) {
 		return m.renderLimitedSupportTab()
 	case tabReports:
 		return m.renderClusterReportsTab()
+	case tabPDHistory:
+		return m.renderPDHistoryTab()
 	}
 	return "", nil
 }
@@ -465,11 +469,20 @@ func (m model) renderServiceLogsTab() (string, error) {
 
 	var allLogs []ocm.ServiceLog
 	for _, id := range m.sortedClusterIDs() {
-		allLogs = append(allLogs, m.serviceLogCache[id]...)
+		for _, l := range m.serviceLogCache[id] {
+			if strings.EqualFold(l.Severity, "info") {
+				continue
+			}
+			allLogs = append(allLogs, l)
+		}
 	}
 	slices.SortFunc(allLogs, func(a, b ocm.ServiceLog) int {
 		return strings.Compare(b.Timestamp, a.Timestamp)
 	})
+
+	if len(allLogs) == 0 {
+		return "\n_No service logs (info-severity filtered)_\n", nil
+	}
 
 	total := len(allLogs)
 	var content strings.Builder
@@ -545,7 +558,7 @@ func (m model) renderClusterReportsTab() (string, error) {
 		return "\n_Loading cluster reports..._\n", nil
 	}
 
-	var allReports []backplane.ReportSummary
+	var allReports []backplane.Report
 	for _, id := range m.sortedClusterIDs() {
 		allReports = append(allReports, m.clusterReportCache[id]...)
 	}
@@ -554,7 +567,7 @@ func (m model) renderClusterReportsTab() (string, error) {
 		return "\n_No cluster reports_\n", nil
 	}
 
-	slices.SortFunc(allReports, func(a, b backplane.ReportSummary) int {
+	slices.SortFunc(allReports, func(a, b backplane.Report) int {
 		return strings.Compare(b.CreatedAt, a.CreatedAt)
 	})
 
@@ -562,13 +575,120 @@ func (m model) renderClusterReportsTab() (string, error) {
 	var content strings.Builder
 	for i, r := range allReports {
 		fmt.Fprintf(&content, "### Report %d/%d\n\n", i+1, total)
-		fmt.Fprintf(&content, "* ID: %s\n", r.ReportID)
 		fmt.Fprintf(&content, "* Summary: %s\n", r.Summary)
 		fmt.Fprintf(&content, "* Timestamp: %s\n", r.CreatedAt)
+		if r.Data != "" {
+			decoded, err := base64.StdEncoding.DecodeString(r.Data)
+			if err != nil {
+				decoded = []byte(r.Data)
+			}
+			content.WriteString("\n")
+			content.Write(decoded)
+			content.WriteString("\n")
+		}
 		if i < total-1 {
 			content.WriteString("\n---\n")
 		}
 	}
+	return content.String(), nil
+}
+
+func (m model) renderPDHistoryTab() (string, error) {
+	if m.selectedIncident == nil {
+		return "\n_No incident selected_\n", nil
+	}
+
+	clusterIDs := m.incidentClusterMap[m.selectedIncident.ID]
+	if len(clusterIDs) == 0 {
+		return "\n_No cluster identified for this incident_\n", nil
+	}
+
+	anyLoading := false
+	for _, id := range clusterIDs {
+		if m.priorAlertPending[id] > 0 {
+			anyLoading = true
+			break
+		}
+	}
+
+	var allSame []PriorAlert
+	var allOther []PriorAlert
+	anyData := false
+	for _, id := range clusterIDs {
+		if data, ok := m.priorAlertCache[id]; ok {
+			anyData = true
+			allSame = append(allSame, data.SameAlert...)
+			allOther = append(allOther, data.OtherAlerts...)
+		}
+	}
+
+	if !anyData {
+		if anyLoading {
+			return "\n_Loading PD history..._\n", nil
+		}
+		return "\n_No PD history available_\n", nil
+	}
+
+	slices.SortFunc(allSame, func(a, b PriorAlert) int {
+		return strings.Compare(b.Date, a.Date)
+	})
+	slices.SortFunc(allOther, func(a, b PriorAlert) int {
+		return strings.Compare(b.Date, a.Date)
+	})
+
+	totalWeeks := (priorAlertLookbackDays + priorAlertWeekDays - 1) / priorAlertWeekDays
+	weeksRemaining := 0
+	for _, id := range clusterIDs {
+		if n := m.priorAlertPending[id]; n > weeksRemaining {
+			weeksRemaining = n
+		}
+	}
+	weeksComplete := totalWeeks - weeksRemaining
+	daysCovered := weeksComplete * priorAlertWeekDays
+	if daysCovered > priorAlertLookbackDays {
+		daysCovered = priorAlertLookbackDays
+	}
+	timeRange := fmt.Sprintf("last %d days", daysCovered)
+	if !anyLoading {
+		timeRange = fmt.Sprintf("last %d days", priorAlertLookbackDays)
+	}
+
+	var content strings.Builder
+
+	fmt.Fprintf(&content, "## Same Alert (%s)\n\n", timeRange)
+	if len(allSame) == 0 {
+		content.WriteString("_No prior instances of this alert for this cluster_\n")
+	} else {
+		content.WriteString("| Date | Alert Name | Incident |\n")
+		content.WriteString("|------|-----------|----------|\n")
+		for _, pa := range allSame {
+			date := pa.Date
+			if t, err := time.Parse(time.RFC3339, pa.Date); err == nil {
+				date = t.Format("2006-01-02 15:04")
+			}
+			fmt.Fprintf(&content, "| %s | %s | [%s](%s) |\n", date, pa.AlertName, pa.IncidentID, pa.IncidentURL)
+		}
+	}
+
+	fmt.Fprintf(&content, "\n## Other Alerts for this Cluster (%s)\n\n", timeRange)
+	if len(allOther) == 0 {
+		content.WriteString("_No other alerts found for this cluster_\n")
+	} else {
+		content.WriteString("| Date | Alert Name | Incident |\n")
+		content.WriteString("|------|-----------|----------|\n")
+		for _, pa := range allOther {
+			date := pa.Date
+			if t, err := time.Parse(time.RFC3339, pa.Date); err == nil {
+				date = t.Format("2006-01-02 15:04")
+			}
+			fmt.Fprintf(&content, "| %s | %s | [%s](%s) |\n", date, pa.AlertName, pa.IncidentID, pa.IncidentURL)
+		}
+	}
+
+	if anyLoading {
+		content.WriteString("\n_Loading older history..._\n")
+	}
+
 	return content.String(), nil
 }
 
@@ -830,7 +950,8 @@ const (
 	tabServiceLogs    = 4
 	tabLimitedSupport = 5
 	tabReports        = 6
-	tabCount          = 7
+	tabPDHistory      = 7
+	tabCount          = 8
 )
 
 func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
@@ -845,14 +966,16 @@ func (m model) renderTabBar() string {
 	tabLabels := make([]string, tabCount)
 	tabLabels[tabDetails] = "Details"
 
+	spin := m.spinner.View()
+
 	if !m.incidentAlertsLoaded {
-		tabLabels[tabAlerts] = "Alerts (...)"
+		tabLabels[tabAlerts] = fmt.Sprintf("Alerts %s", spin)
 	} else {
 		tabLabels[tabAlerts] = fmt.Sprintf("Alerts (%d)", len(m.selectedIncidentAlerts))
 	}
 
 	if !m.incidentNotesLoaded {
-		tabLabels[tabNotes] = "Notes (...)"
+		tabLabels[tabNotes] = fmt.Sprintf("Notes %s", spin)
 	} else {
 		tabLabels[tabNotes] = fmt.Sprintf("Notes (%d)", len(m.selectedIncidentNotes))
 	}
@@ -863,31 +986,75 @@ func (m model) renderTabBar() string {
 		incidentClusters = m.incidentClusterMap[m.selectedIncident.ID]
 	}
 
+	ocmLoading := false
+	for _, id := range incidentClusters {
+		if m.clusterEnrichInFlight[id] {
+			ocmLoading = true
+			break
+		}
+	}
+
 	clusterCount := 0
 	for _, id := range incidentClusters {
 		if _, ok := m.clusterCache[id]; ok {
 			clusterCount++
 		}
 	}
-	tabLabels[tabCluster] = fmt.Sprintf("Cluster (%d)", clusterCount)
+	if ocmLoading && clusterCount == 0 {
+		tabLabels[tabCluster] = fmt.Sprintf("Cluster %s", spin)
+	} else {
+		tabLabels[tabCluster] = fmt.Sprintf("Cluster (%d)", clusterCount)
+	}
 
 	logCount := 0
 	for _, id := range incidentClusters {
-		logCount += len(m.serviceLogCache[id])
+		for _, l := range m.serviceLogCache[id] {
+			if !strings.EqualFold(l.Severity, "info") {
+				logCount++
+			}
+		}
 	}
-	tabLabels[tabServiceLogs] = fmt.Sprintf("SLs (%d)", logCount)
+	if ocmLoading && logCount == 0 {
+		tabLabels[tabServiceLogs] = fmt.Sprintf("SLs %s", spin)
+	} else {
+		tabLabels[tabServiceLogs] = fmt.Sprintf("SLs (%d)", logCount)
+	}
 
 	lsCount := 0
 	for _, id := range incidentClusters {
 		lsCount += len(m.limitedSupportCache[id])
 	}
-	tabLabels[tabLimitedSupport] = fmt.Sprintf("LS History (%d)", lsCount)
+	if ocmLoading && lsCount == 0 {
+		tabLabels[tabLimitedSupport] = fmt.Sprintf("LS History %s", spin)
+	} else {
+		tabLabels[tabLimitedSupport] = fmt.Sprintf("LS History (%d)", lsCount)
+	}
 
 	reportCount := 0
 	for _, id := range incidentClusters {
 		reportCount += len(m.clusterReportCache[id])
 	}
-	tabLabels[tabReports] = fmt.Sprintf("Reports (%d)", reportCount)
+	if ocmLoading && reportCount == 0 {
+		tabLabels[tabReports] = fmt.Sprintf("Reports %s", spin)
+	} else {
+		tabLabels[tabReports] = fmt.Sprintf("Reports (%d)", reportCount)
+	}
+
+	priorLoading := false
+	priorCount := 0
+	for _, id := range incidentClusters {
+		if m.priorAlertPending[id] > 0 {
+			priorLoading = true
+		}
+		if data, ok := m.priorAlertCache[id]; ok {
+			priorCount += len(data.SameAlert) + len(data.OtherAlerts)
+		}
+	}
+	if priorLoading {
+		tabLabels[tabPDHistory] = fmt.Sprintf("PD History %s", spin)
+	} else {
+		tabLabels[tabPDHistory] = fmt.Sprintf("PD History (%d)", priorCount)
+	}
 
 	var renderedTabs []string
 	for i, label := range tabLabels {

@@ -97,7 +97,7 @@ func checkForUpdate(devMode bool, apiURL string) tea.Cmd {
 }
 
 func isNewerVersion(current, latest string) bool {
-	if current == "dev" {
+	if current == "dev" || !strings.Contains(current, ".") {
 		return true
 	}
 

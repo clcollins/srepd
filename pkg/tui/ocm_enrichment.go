@@ -32,7 +32,7 @@ type limitedSupportMsg struct {
 
 type clusterReportsMsg struct {
 	clusterID string
-	reports   []backplane.ReportSummary
+	reports   []backplane.Report
 	err       error
 }
 
@@ -97,11 +97,31 @@ func getLimitedSupportHistory(client ocm.OCMClient, clusterID, cacheKey string) 
 
 func getClusterReports(client backplane.BackplaneClient, clusterID, cacheKey string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), ocmAPITimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		log.Debug("backplane.ListReports", "cluster_id", clusterID)
-		reports, err := client.ListReports(ctx, clusterID)
-		log.Debug("backplane.ListReports", "cluster_id", clusterID, "count", len(reports))
-		return clusterReportsMsg{clusterID: cacheKey, reports: reports, err: err}
+		summaries, err := client.ListReports(ctx, clusterID)
+		if err != nil {
+			log.Debug("backplane.ListReports failed", "cluster_id", clusterID, "error", err)
+			return clusterReportsMsg{clusterID: cacheKey, err: err}
+		}
+		log.Debug("backplane.ListReports", "cluster_id", clusterID, "count", len(summaries))
+
+		var reports []backplane.Report
+		for _, s := range summaries {
+			report, err := client.GetReport(ctx, clusterID, s.ReportID)
+			if err != nil {
+				log.Debug("backplane.GetReport failed", "cluster_id", clusterID, "report_id", s.ReportID, "error", err)
+				reports = append(reports, backplane.Report{
+					ReportID:  s.ReportID,
+					Summary:   s.Summary,
+					CreatedAt: s.CreatedAt,
+				})
+				continue
+			}
+			reports = append(reports, *report)
+		}
+		log.Debug("backplane.GetReports done", "cluster_id", clusterID, "count", len(reports))
+		return clusterReportsMsg{clusterID: cacheKey, reports: reports, err: nil}
 	}
 }
