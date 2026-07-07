@@ -24,7 +24,7 @@ A PagerDuty terminal user interface focused on common SRE tasks.
 * [AI agents](docs/ai-agents.md): `:agent` CLI queries and `:watcher` LLM analysis with ambient incident pattern detection
 * OCM integration: cluster enrichment with display names, service logs, limited support history
 * Backplane integration: CORA cluster diagnostic reports via backplane API
-* 7-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History, Reports
+* 8-tab incident viewer: Details, Alerts, Notes, Cluster, SLs, LS History, Reports, PD History
 * Auto-update notification and `srepd update` self-update command
 * Full [configuration reference](docs/configuration.md)
 
