@@ -13,7 +13,7 @@ require (
 	github.com/charmbracelet/log v1.0.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/openshift-online/ocm-common v0.0.44
-	github.com/openshift-online/ocm-sdk-go v0.1.502
+	github.com/openshift-online/ocm-sdk-go v0.1.505
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
@@ -82,8 +82,8 @@ require (
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/openshift-online/ocm-api-model/clientapi v0.0.456 // indirect
-	github.com/openshift-online/ocm-api-model/model v0.0.456 // indirect
+	github.com/openshift-online/ocm-api-model/clientapi v0.0.461 // indirect
+	github.com/openshift-online/ocm-api-model/model v0.0.461 // indirect
 	github.com/openshift-online/ocm-cli v1.0.2 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
