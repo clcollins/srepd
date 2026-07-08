@@ -69,22 +69,18 @@ func buildPriorAlertWeeks() []priorAlertWeek {
 // matchIncidentToCluster checks if an incident is related to the target cluster
 // using a three-tier strategy that avoids separate GetAlerts API calls:
 //
-// Tier 1 (1:1 services): osd_hive services are 1:1 with a cluster — every
-// incident from that service matches. Always returns true for these.
+// matchIncidentToCluster checks if an incident is related to the target cluster.
+// For service-scoped queries (1:1 hive services), all results already match —
+// call this only for the team-wide fallback scan.
 //
-// Tier 2 (title match): rhobs_hcp titles contain the cluster UUID
+// Tier 1 (title match): rhobs_hcp titles contain the cluster UUID
 // ("for HCP: <uuid>"). Check with strings.Contains.
 //
-// Tier 3 (log entry): Use FirstTriggerLogEntry.Channel.Raw to extract
+// Tier 2 (log entry): Use FirstTriggerLogEntry.Channel.Raw to extract
 // cluster_id from the inline alert payload (requires include[]=first_trigger_log_entries).
 func matchIncidentToCluster(incident pagerduty.Incident, clusterID string) bool {
-	serviceType := alert.IdentifyType(incident.Service.Summary)
-
-	switch serviceType {
-	case "osd_hive":
+	if strings.Contains(incident.Title, clusterID) {
 		return true
-	case "rhobs_hcp":
-		return strings.Contains(incident.Title, clusterID)
 	}
 
 	return extractClusterFromLogEntry(incident) == clusterID

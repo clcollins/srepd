@@ -2264,7 +2264,7 @@ func TestReadLogFile_ExistingFile(t *testing.T) {
 	err := os.WriteFile(logPath, []byte(expectedContent), 0644)
 	assert.NoError(t, err)
 
-	cmd := readLogFile(logPath)
+	cmd := readLogFile(logPath, time.Time{})
 	result := cmd()
 
 	msg, ok := result.(logFileContentMsg)
@@ -2273,7 +2273,7 @@ func TestReadLogFile_ExistingFile(t *testing.T) {
 }
 
 func TestReadLogFile_MissingFile(t *testing.T) {
-	cmd := readLogFile("/tmp/nonexistent-log-file-srepd-test.log")
+	cmd := readLogFile("/tmp/nonexistent-log-file-srepd-test.log", time.Time{})
 	result := cmd()
 
 	msg, ok := result.(logFileContentMsg)

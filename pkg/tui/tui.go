@@ -74,6 +74,22 @@ type scheduledJob struct {
 	frequency time.Duration
 }
 
+func wrapLines(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	var wrapped []string
+	for _, line := range lines {
+		for len(line) > width {
+			wrapped = append(wrapped, line[:width])
+			line = line[width:]
+		}
+		wrapped = append(wrapped, line)
+	}
+	return strings.Join(wrapped, "\n")
+}
+
 func filterMsgContent(msg tea.Msg) tea.Msg {
 	var truncatedMsg string
 	switch msg := msg.(type) {
@@ -134,7 +150,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reflect.TypeOf(ocmServiceLogsMsg{}),
 		reflect.TypeOf(limitedSupportMsg{}),
 		reflect.TypeOf(clusterReportsMsg{}),
-		reflect.TypeOf(priorAlertsMsg{}):
+		reflect.TypeOf(priorAlertsMsg{}),
+		reflect.TypeOf(lazyEnrichMsg{}):
 		shouldLog = false
 	}
 
@@ -578,6 +595,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiInProgress = true
 		return m, tea.Batch(m.spinner.Tick, updateIncidentList(m.config))
 
+	case lazyEnrichMsg:
+		cmd := pickNextEnrichment(&m)
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+
 	// Command to get an incident by ID
 	case getIncidentMsg:
 		if msg == "" {
@@ -631,6 +655,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if shouldUpdate {
+			log.Info("incident details fetched", "incident_id", msg.incident.ID, "title", msg.incident.Title)
 			m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
 			m.selectedIncident = msg.incident
 			m.incidentDataLoaded = true
@@ -676,6 +701,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.selectedIncidentNotes = msg.notes
 			m.incidentNotesLoaded = true
+			log.Info("notes fetched", "incident_id", msg.incidentID, "count", len(msg.notes))
 
 			// Stop spinner if all incident data is loaded (details, notes, alerts)
 			if m.incidentDataLoaded && m.incidentNotesLoaded && m.incidentAlertsLoaded {
@@ -718,6 +744,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.selectedIncidentAlerts = msg.alerts
 			m.incidentAlertsLoaded = true
+			log.Info("alerts fetched", "incident_id", msg.incidentID, "count", len(msg.alerts))
 
 			// Stop spinner if all incident data is loaded (details, notes, alerts)
 			if m.incidentDataLoaded && m.incidentNotesLoaded && m.incidentAlertsLoaded {
@@ -844,6 +871,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			resolvedMsg := fmt.Sprintf("Resolved: %s", strings.Join(resolvedIDs, ", "))
 			cmds = append(cmds, m.flashNotification(resolvedMsg))
+		}
+
+		// Detect new incidents
+		oldIDs := make(map[string]bool, len(m.incidentList))
+		for _, i := range m.incidentList {
+			oldIDs[i.ID] = true
+		}
+		var newIDs []string
+		for _, i := range msg.incidents {
+			if !oldIDs[i.ID] {
+				newIDs = append(newIDs, i.ID)
+			}
+		}
+		if len(newIDs) > 0 {
+			log.Info("new incidents", "count", len(newIDs), "ids", newIDs)
+		}
+
+		oldCount := len(m.incidentList)
+		newCount := len(msg.incidents)
+		if oldCount != newCount && oldCount > 0 {
+			log.Info("incident count changed", "old", oldCount, "new", newCount)
 		}
 
 		// Overwrite m.incidentList with current incidents
@@ -1001,6 +1049,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, getIncidentAlerts(m.config, id))
 				}
 			}
+		}
+
+		// Kick off enrichment for the first un-enriched incident immediately
+		if enrichCmd := pickNextEnrichment(&m); enrichCmd != nil {
+			cmds = append(cmds, enrichCmd)
 		}
 
 		// Re-sync selectedIncident to match highlighted row
@@ -1291,7 +1344,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, msg.action
 
 	case logFileContentMsg:
-		m.logViewer.SetContent(string(msg))
+		m.logViewer.SetContent(wrapLines(string(msg), m.logViewer.Width))
 		m.logViewer.GotoBottom()
 		m.viewingLog = true
 		return m, nil
@@ -1415,6 +1468,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case reassignedIncidentsMsg:
 		incidentIDs := getIDsFromIncidents(msg)
+		log.Info("reassigned incidents", "incident_ids", incidentIDs)
 		m.setStatus(fmt.Sprintf("reassigned incidents %v; refreshing Incident List ", incidentIDs))
 		return m, func() tea.Msg { return updateIncidentListMsg("sender: reassignedIncidentsMsg") }
 
@@ -1609,7 +1663,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clusterCache = make(map[string]*ocm.ClusterInfo)
 		}
 		m.clusterCache[msg.clusterID] = msg.info
-		log.Debug("ocm.GetCluster cached", "cluster_id", msg.clusterID)
+		log.Info("OCM enriched cluster", "cluster_id", msg.clusterID, "name", msg.info.DisplayName, "region", msg.info.Region)
 
 		m.rebuildFlagMatchCache()
 
@@ -1665,7 +1719,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.serviceLogCache = make(map[string][]ocm.ServiceLog)
 		}
 		m.serviceLogCache[msg.clusterID] = msg.logs
-		log.Debug("ocm.GetServiceLogs cached", "cluster_id", msg.clusterID, "count", len(msg.logs))
+		log.Info("service logs fetched", "cluster_id", msg.clusterID, "count", len(msg.logs))
 		return m, nil
 
 	case limitedSupportMsg:
@@ -1677,7 +1731,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
 		}
 		m.limitedSupportCache[msg.clusterID] = msg.reasons
-		log.Debug("ocm.GetLimitedSupportHistory cached", "cluster_id", msg.clusterID, "count", len(msg.reasons))
+		log.Info("limited support fetched", "cluster_id", msg.clusterID, "count", len(msg.reasons))
 		return m, nil
 
 	case clusterReportsMsg:
@@ -1689,14 +1743,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clusterReportCache = make(map[string][]backplane.Report)
 		}
 		m.clusterReportCache[msg.clusterID] = msg.reports
-		log.Debug("backplane.ListReports cached", "cluster_id", msg.clusterID, "count", len(msg.reports))
+		log.Info("cluster reports fetched", "cluster_id", msg.clusterID, "count", len(msg.reports))
 		return m, nil
 
 	case priorAlertsMsg:
 		if m.priorAlertPending[msg.clusterID] > 0 {
 			m.priorAlertPending[msg.clusterID]--
 		}
-		if m.priorAlertPending[msg.clusterID] == 0 {
+		allWeeksDone := m.priorAlertPending[msg.clusterID] == 0
+		if allWeeksDone {
 			delete(m.priorAlertPending, msg.clusterID)
 		}
 		if m.priorAlertCache == nil {
@@ -1716,6 +1771,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"week_same", len(msg.data.SameAlert), "week_other", len(msg.data.OtherAlerts),
 				"total_same", len(existing.SameAlert), "total_other", len(existing.OtherAlerts),
 				"pending", m.priorAlertPending[msg.clusterID])
+		}
+		if allWeeksDone {
+			log.Info("PD history complete", "cluster_id", msg.clusterID,
+				"same_alert", len(existing.SameAlert), "other_alerts", len(existing.OtherAlerts))
 		}
 		var nextCmd tea.Cmd
 		if len(msg.nextWeeks) > 0 {

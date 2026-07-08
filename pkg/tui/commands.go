@@ -297,18 +297,94 @@ type clearFlashMsg struct {
 
 type PollIncidentsMsg struct{}
 
+type lazyEnrichMsg struct{}
+
+func pickNextEnrichment(m *model) tea.Cmd {
+	if m.config == nil {
+		return nil
+	}
+
+	rows := m.table.Rows()
+	if len(rows) == 0 {
+		return nil
+	}
+
+	cursor := m.table.Cursor()
+	n := len(rows)
+
+	for offset := 0; offset < n; offset++ {
+		var indices []int
+		if offset == 0 {
+			indices = []int{cursor}
+		} else {
+			above := cursor - offset
+			below := cursor + offset
+			if below < n {
+				indices = append(indices, below)
+			}
+			if above >= 0 {
+				indices = append(indices, above)
+			}
+		}
+
+		for _, idx := range indices {
+			if idx < 0 || idx >= n {
+				continue
+			}
+			row := rows[idx]
+			if len(row) < 2 {
+				continue
+			}
+			incidentID := row[1]
+			if _, exists := m.incidentCache[incidentID]; exists {
+				continue
+			}
+			return func() tea.Msg { return getIncidentMsg(incidentID) }
+		}
+	}
+
+	return nil
+}
+
 // logFileContentMsg is a message containing the contents of the debug log file.
 type logFileContentMsg string
 
-// readLogFile returns a command that reads the log file at the given path.
-// If the file does not exist, it returns a logFileContentMsg with an error message.
-func readLogFile(path string) tea.Cmd {
+// readLogFile returns a command that reads the log file at the given path,
+// filtered to lines from the current session (on or after since).
+func readLogFile(path string, since time.Time) tea.Cmd {
 	return func() tea.Msg {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return logFileContentMsg(fmt.Sprintf("No log file found at %s", path))
 		}
-		return logFileContentMsg(string(data))
+		if since.IsZero() {
+			return logFileContentMsg(string(data))
+		}
+		lines := strings.Split(string(data), "\n")
+		sinceStr := since.Format("2006/01/02 15:04:05")
+		startIdx := len(lines)
+		for i, line := range lines {
+			if len(line) >= 19 && line[:19] >= sinceStr {
+				startIdx = i
+				break
+			}
+		}
+		return logFileContentMsg(strings.Join(lines[startIdx:], "\n"))
+	}
+}
+
+func readJournalLog(since time.Time) tea.Cmd {
+	return func() tea.Msg {
+		sinceStr := since.Format("2006-01-02 15:04:05")
+		cmd := exec.Command("journalctl", "_COMM=srepd", "--since", sinceStr, "--no-pager")
+		out, err := cmd.Output()
+		if err != nil {
+			return logFileContentMsg(fmt.Sprintf("Failed to read journal: %v", err))
+		}
+		if len(out) == 0 {
+			return logFileContentMsg("No journal entries found for this session")
+		}
+		return logFileContentMsg(string(out))
 	}
 }
 

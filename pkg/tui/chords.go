@@ -101,7 +101,7 @@ func (k chordKeymap) FullHelp() [][]key.Binding {
 
 // chordViewLog opens the debug log viewer (same as ctrl+l).
 func chordViewLog(m model) (tea.Model, tea.Cmd) {
-	return m, readLogFile(m.logFilePath)
+	return m, m.readLog()
 }
 
 // chordHelpText generates a human-readable help string listing all chord commands.

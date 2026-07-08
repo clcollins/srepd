@@ -31,6 +31,21 @@ direct `ocm backplane` login.
 Pass extra test flags via `TESTOPTS`, e.g.:
 `make test TESTOPTS="-run TestFoo"`
 
+## Build and Versioning
+
+- `make build` runs `goreleaser build --snapshot --clean --single-target`
+- Goreleaser sets `Version` and `GitSHA` via `-ldflags` at build time
+- **Snapshot builds** (local): `Version` = git short commit hash (e.g., `51e405a`),
+  `GitSHA` = same hash. Shown in footer as `51e405a - 51e405a`
+- **Release builds** (CI/tagged): `Version` = semver from tag (e.g., `1.4.0`),
+  `GitSHA` = commit hash
+- **CRITICAL**: Goreleaser bakes the **last committed** hash into the binary.
+  Uncommitted changes are NOT reflected in the version string. You MUST
+  commit before building if you want the binary to show a new version.
+- The update banner triggers when `isNewerVersion(current, latest)` returns
+  true. For snapshot builds (no dot in version string), it always returns true.
+- Config: `.goreleaser.yaml` ldflags section
+
 ## Architecture
 
 - **Pattern**: Bubble Tea Model-View-Update (MVU)
