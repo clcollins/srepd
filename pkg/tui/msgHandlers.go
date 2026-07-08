@@ -693,7 +693,7 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(m.flashNotification(fmt.Sprintf("Opened SOP for %s", m.selectedIncident.ID)), openBrowserCmd(c, link))
 
 		case key.Matches(msg, defaultKeyMap.ViewLog):
-			return m, readLogFile(m.logFilePath)
+			return m, m.readLog()
 
 		}
 	}

@@ -361,6 +361,21 @@ func readLogFile(path string) tea.Cmd {
 	}
 }
 
+func readJournalLog(since time.Time) tea.Cmd {
+	return func() tea.Msg {
+		sinceStr := since.Format("2006-01-02 15:04:05")
+		cmd := exec.Command("journalctl", "_COMM=srepd", "--since", sinceStr, "--no-pager")
+		out, err := cmd.Output()
+		if err != nil {
+			return logFileContentMsg(fmt.Sprintf("Failed to read journal: %v", err))
+		}
+		if len(out) == 0 {
+			return logFileContentMsg("No journal entries found for this session")
+		}
+		return logFileContentMsg(string(out))
+	}
+}
+
 type renderIncidentMsg string
 
 type renderedIncidentMsg struct {

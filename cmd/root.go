@@ -520,11 +520,13 @@ func configureLogging() {
 
 	switch dest {
 	case LogToJournal:
+		tui.LogDestination = "journal"
 		logWriter = newAsyncWriter(journalWriter{}, asyncWriterBufferSize)
 		log.SetOutput(logWriter)
 		log.Info("Logging to systemd journal")
 
 	case LogToFile:
+		tui.LogDestination = "file"
 		// Expand home directory if needed
 		if strings.HasPrefix(logPath, "~/") {
 			home, err := os.UserHomeDir()

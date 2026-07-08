@@ -76,6 +76,8 @@ type model struct {
 	viewingLog       bool
 	logViewer        viewport.Model
 	logFilePath      string
+	logDestination   string
+	startupTime      time.Time
 	help             help.Model
 	spinner          spinner.Model
 	apiInProgress    bool
@@ -278,6 +280,8 @@ func InitialModel(
 		incidentViewer:        newIncidentViewer(),
 		logViewer:             newLogViewer(),
 		logFilePath:           defaultLogFilePath(),
+		logDestination:        LogDestination,
+		startupTime:           time.Now(),
 		spinner:               s,
 		markdownRenderer:      renderer,
 		apiInProgress:         false,
@@ -392,6 +396,8 @@ func InitialModelWithConfig(
 		incidentViewer:        newIncidentViewer(),
 		logViewer:             newLogViewer(),
 		logFilePath:           defaultLogFilePath(),
+		logDestination:        LogDestination,
+		startupTime:           time.Now(),
 		spinner:               s,
 		markdownRenderer:      renderer,
 		apiInProgress:         false,
@@ -445,6 +451,13 @@ func InitialModelWithConfig(
 	return m, func() tea.Msg {
 		return errMsg{m.err}
 	}
+}
+
+func (m *model) readLog() tea.Cmd {
+	if m.logDestination == "journal" {
+		return readJournalLog(m.startupTime)
+	}
+	return readLogFile(m.logFilePath)
 }
 
 func (m *model) clearSelectedIncident(reason interface{}) {
