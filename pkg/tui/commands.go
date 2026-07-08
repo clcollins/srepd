@@ -504,6 +504,46 @@ func UserIsOnCall(p *pd.Config, id string) bool {
 	return false
 }
 
+// noAcknowledgeMsg is a no-op result from checkOnCallAndAcknowledge indicating
+// that no incidents should be auto-acknowledged (user not on-call, on-call check
+// failed, or no candidate matched). It is deliberately distinct from
+// acknowledgeIncidentsMsg: emitting acknowledgeIncidentsMsg{incidents: nil} would
+// fall back to acknowledging the currently selected incident (see the
+// acknowledgeIncidentsMsg handler), which must never happen from the background
+// auto-ack sweep.
+type noAcknowledgeMsg struct{}
+
+// checkOnCallAndAcknowledge runs the on-call check OFF the Bubble Tea Update loop
+// (so a slow PagerDuty request never freezes the UI), then filters the candidate
+// incidents by the FRESH on-call result and emits an acknowledgeIncidentsMsg for
+// those that should be auto-acknowledged.
+//
+// On-call status is NEVER cached — it is checked live on every refresh. A cached
+// value would keep auto-acknowledging incidents after the user's shift ends if they
+// leave SREPD running; checking live means auto-ack stops within one refresh cycle
+// of going off-call. For the same reason, the re-escalate/reassign paths must also
+// perform a live check and must never read a cached on-call value.
+func checkOnCallAndAcknowledge(p *pd.Config, id string, candidates []pagerduty.Incident) tea.Cmd {
+	return func() tea.Msg {
+		if !UserIsOnCall(p, id) {
+			return noAcknowledgeMsg{}
+		}
+
+		var toAck []pagerduty.Incident
+		for _, i := range candidates {
+			if ShouldBeAcknowledgedCached(i, id, true) {
+				toAck = append(toAck, i)
+			}
+		}
+
+		if len(toAck) == 0 {
+			return noAcknowledgeMsg{}
+		}
+
+		return acknowledgeIncidentsMsg{incidents: toAck}
+	}
+}
+
 // TODO: Can we use a single function and struct to handle
 // the openEditorCmd, login and openBrowserCmd commands?
 
