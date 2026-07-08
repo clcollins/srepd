@@ -187,15 +187,6 @@ func TestGetIncident(t *testing.T) {
 				err: nil,
 			},
 		},
-		{
-			name:   "return gotIncidentMsg with not-nil error if error occurs",
-			config: mockConfig,
-			id:     "err", // "err" signals the mock client to produce a mock error
-			expected: gotIncidentMsg{
-				incident: &pagerduty.Incident{},
-				err:      pd.ErrMockError,
-			},
-		},
 	}
 
 	for _, test := range tests {
@@ -204,6 +195,25 @@ func TestGetIncident(t *testing.T) {
 			actual := cmd()
 			assert.Equal(t, test.expected, actual)
 		})
+	}
+}
+
+// TestGetIncident_ErrorIsWrapped verifies the error path separately. getIncident now
+// routes through pd.GetIncident, which applies a timeout AND wraps the underlying
+// error with a "pd.GetIncident():" prefix for context (consistent with the sibling
+// pd.GetAlerts / pd.GetNotes wrappers). The wrapped message still contains the
+// original mock error text, so callers that surface the error string see strictly
+// more context than before — an intentional improvement, not a regression.
+func TestGetIncident_ErrorIsWrapped(t *testing.T) {
+	mockConfig := &pd.Config{Client: &pd.MockPagerDutyClient{}}
+
+	msg := getIncident(mockConfig, "err")()
+
+	got, ok := msg.(gotIncidentMsg)
+	assert.True(t, ok, "expected gotIncidentMsg")
+	if assert.Error(t, got.err) {
+		assert.Contains(t, got.err.Error(), "pd.GetIncident()", "error should carry the wrapper prefix")
+		assert.Contains(t, got.err.Error(), pd.ErrMockError.Error(), "wrapped error must retain the original message")
 	}
 }
 

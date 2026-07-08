@@ -86,8 +86,9 @@ func getIncident(p *pd.Config, id string) tea.Cmd {
 		if id == "" {
 			return setStatusMsg{nilIncidentMsg}
 		}
-		ctx := context.Background()
-		i, err := p.Client.GetIncidentWithContext(ctx, id)
+		// Route through pd.GetIncident, which applies the default API timeout,
+		// instead of calling the raw client with context.Background().
+		i, err := pd.GetIncident(p.Client, id)
 		return gotIncidentMsg{i, err}
 	}
 }
@@ -914,7 +915,7 @@ type reassignedIncidentsMsg []pagerduty.Incident
 
 func reassignIncidents(p *pd.Config, i []pagerduty.Incident, users []*pagerduty.User) tea.Cmd {
 	return func() tea.Msg {
-		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		u, err := pd.GetCurrentUser(p.Client)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -1023,7 +1024,7 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, file *os.File
 
 		note := removeCommentsFromBytes(bytes, "#")
 
-		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		u, err := pd.GetCurrentUser(p.Client)
 		if err != nil {
 			return errMsg{err}
 		}
