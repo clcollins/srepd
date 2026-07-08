@@ -349,15 +349,27 @@ func pickNextEnrichment(m *model) tea.Cmd {
 // logFileContentMsg is a message containing the contents of the debug log file.
 type logFileContentMsg string
 
-// readLogFile returns a command that reads the log file at the given path.
-// If the file does not exist, it returns a logFileContentMsg with an error message.
-func readLogFile(path string) tea.Cmd {
+// readLogFile returns a command that reads the log file at the given path,
+// filtered to lines from the current session (on or after since).
+func readLogFile(path string, since time.Time) tea.Cmd {
 	return func() tea.Msg {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return logFileContentMsg(fmt.Sprintf("No log file found at %s", path))
 		}
-		return logFileContentMsg(string(data))
+		if since.IsZero() {
+			return logFileContentMsg(string(data))
+		}
+		lines := strings.Split(string(data), "\n")
+		sinceStr := since.Format("2006/01/02 15:04:05")
+		startIdx := len(lines)
+		for i, line := range lines {
+			if len(line) >= 19 && line[:19] >= sinceStr {
+				startIdx = i
+				break
+			}
+		}
+		return logFileContentMsg(strings.Join(lines[startIdx:], "\n"))
 	}
 }
 

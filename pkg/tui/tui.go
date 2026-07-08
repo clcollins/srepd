@@ -74,6 +74,22 @@ type scheduledJob struct {
 	frequency time.Duration
 }
 
+func wrapLines(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	var wrapped []string
+	for _, line := range lines {
+		for len(line) > width {
+			wrapped = append(wrapped, line[:width])
+			line = line[width:]
+		}
+		wrapped = append(wrapped, line)
+	}
+	return strings.Join(wrapped, "\n")
+}
+
 func filterMsgContent(msg tea.Msg) tea.Msg {
 	var truncatedMsg string
 	switch msg := msg.(type) {
@@ -1328,7 +1344,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, msg.action
 
 	case logFileContentMsg:
-		m.logViewer.SetContent(string(msg))
+		m.logViewer.SetContent(wrapLines(string(msg), m.logViewer.Width))
 		m.logViewer.GotoBottom()
 		m.viewingLog = true
 		return m, nil

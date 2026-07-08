@@ -457,7 +457,7 @@ func (m *model) readLog() tea.Cmd {
 	if m.logDestination == "journal" {
 		return readJournalLog(m.startupTime)
 	}
-	return readLogFile(m.logFilePath)
+	return readLogFile(m.logFilePath, m.startupTime)
 }
 
 func (m *model) clearSelectedIncident(reason interface{}) {
