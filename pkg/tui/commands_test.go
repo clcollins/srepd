@@ -2705,3 +2705,153 @@ func TestGetEscalationPolicyKey_CustomPolicy(t *testing.T) {
 		assert.Equal(t, silentDefaultPolicyKey, key)
 	})
 }
+
+// --- PR1: async on-call auto-acknowledge ---
+//
+// checkOnCallAndAcknowledge performs the on-call check OFF the Bubble Tea Update
+// loop (so it never blocks the UI), then filters the candidate incidents by the
+// FRESH on-call result. On-call status is NEVER cached — it is checked live on
+// every refresh so that a user who leaves SREPD running past their shift stops
+// auto-acknowledging within one refresh cycle.
+
+// drainCmd executes a tea.Cmd tree, recursively expanding tea.BatchMsg, and invokes
+// visit for every non-batch message produced. It is used to inspect what an Update
+// dispatch actually does without running a full tea.Program.
+func drainCmd(t *testing.T, cmd tea.Cmd, visit func(tea.Msg)) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			drainCmd(t, c, visit)
+		}
+		return
+	}
+	if msg != nil {
+		visit(msg)
+	}
+}
+
+// onCallAckCandidate returns an incident assigned to id and not yet acknowledged
+// by id (i.e. one that passes ShouldBeAcknowledgedCached when the user is on-call).
+func onCallAckCandidate(incidentID, userID string) pagerduty.Incident {
+	return pagerduty.Incident{
+		APIObject:        pagerduty.APIObject{ID: incidentID},
+		Assignments:      []pagerduty.Assignment{{Assignee: pagerduty.APIObject{ID: userID}}},
+		Acknowledgements: []pagerduty.Acknowledgement{},
+	}
+}
+
+func onCallMockClient(t *testing.T, onCall bool) *pd.MockPagerDutyClient {
+	t.Helper()
+	now := time.Now().UTC()
+	start, end := now.Add(-1*time.Hour), now.Add(5*time.Hour)
+	if !onCall {
+		start, end = now.Add(-5*time.Hour), now.Add(-1*time.Hour)
+	}
+	return &pd.MockPagerDutyClient{
+		ListOnCallsResponses: []pagerduty.ListOnCallsResponse{
+			{OnCalls: []pagerduty.OnCall{{
+				User:  pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+				Start: start.Format("2006-01-02T15:04:05Z"),
+				End:   end.Format("2006-01-02T15:04:05Z"),
+			}}},
+		},
+	}
+}
+
+func TestCheckOnCallAndAcknowledge_OnCall_ReturnsAckMsg(t *testing.T) {
+	config := &pd.Config{Client: onCallMockClient(t, true)}
+	candidates := []pagerduty.Incident{
+		onCallAckCandidate("INC1", "USER1"),
+		onCallAckCandidate("INC2", "USER1"),
+	}
+
+	msg := checkOnCallAndAcknowledge(config, "USER1", candidates)()
+
+	ackMsg, ok := msg.(acknowledgeIncidentsMsg)
+	assert.True(t, ok, "on-call user with candidates should yield acknowledgeIncidentsMsg")
+	assert.Len(t, ackMsg.incidents, 2)
+	if len(ackMsg.incidents) == 2 {
+		assert.Equal(t, "INC1", ackMsg.incidents[0].ID)
+		assert.Equal(t, "INC2", ackMsg.incidents[1].ID)
+	}
+}
+
+func TestCheckOnCallAndAcknowledge_NotOnCall_ReturnsNoOp(t *testing.T) {
+	config := &pd.Config{Client: onCallMockClient(t, false)}
+	candidates := []pagerduty.Incident{onCallAckCandidate("INC1", "USER1")}
+
+	msg := checkOnCallAndAcknowledge(config, "USER1", candidates)()
+
+	// MUST NOT be an acknowledgeIncidentsMsg — a nil-incidents ack would fall back
+	// to acknowledging the selected incident, which would be a serious bug.
+	_, isAck := msg.(acknowledgeIncidentsMsg)
+	assert.False(t, isAck, "off-call user must not produce an acknowledge message")
+	_, isNoOp := msg.(noAcknowledgeMsg)
+	assert.True(t, isNoOp, "off-call user should produce a no-op message")
+}
+
+func TestCheckOnCallAndAcknowledge_OnCallError_ReturnsNoOp(t *testing.T) {
+	// "err" user ID triggers the mock's error convention.
+	config := &pd.Config{Client: &pd.MockPagerDutyClient{}}
+	candidates := []pagerduty.Incident{onCallAckCandidate("INC1", "err")}
+
+	msg := checkOnCallAndAcknowledge(config, "err", candidates)()
+
+	_, isAck := msg.(acknowledgeIncidentsMsg)
+	assert.False(t, isAck, "on-call check failure must not produce an acknowledge message")
+	_, isNoOp := msg.(noAcknowledgeMsg)
+	assert.True(t, isNoOp, "on-call check failure should produce a no-op message")
+}
+
+func TestCheckOnCallAndAcknowledge_OnCallButNoneMatch_ReturnsNoOp(t *testing.T) {
+	config := &pd.Config{Client: onCallMockClient(t, true)}
+	// Candidate assigned to a DIFFERENT user — filtered out by ShouldBeAcknowledgedCached.
+	candidates := []pagerduty.Incident{onCallAckCandidate("INC1", "OTHERUSER")}
+
+	msg := checkOnCallAndAcknowledge(config, "USER1", candidates)()
+
+	_, isAck := msg.(acknowledgeIncidentsMsg)
+	assert.False(t, isAck, "when no candidate matches, must not produce an acknowledge message")
+	_, isNoOp := msg.(noAcknowledgeMsg)
+	assert.True(t, isNoOp, "when no candidate matches, should produce a no-op message")
+}
+
+// TestUpdatedIncidentList_AutoAck_DispatchesFreshOnCallCheck is the regression test
+// for PR1: the auto-ack sweep must NOT block the Update loop with an inline on-call
+// call, and must NOT cache on-call status. It drives updatedIncidentListMsg with
+// auto-ack on and an assigned+unacked incident, then executes the returned command
+// and asserts it performs a *fresh* on-call check (a live ListOnCalls call) and, when
+// on-call, yields an acknowledgeIncidentsMsg for that incident.
+func TestUpdatedIncidentList_AutoAck_DispatchesFreshOnCallCheck(t *testing.T) {
+	mockClient := onCallMockClient(t, true)
+	m := createTestModel()
+	m.autoAcknowledge = true
+	m.config = &pd.Config{
+		Client:      mockClient,
+		CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+	}
+
+	incoming := []pagerduty.Incident{onCallAckCandidate("INC1", "USER1")}
+	result, cmd := m.Update(updatedIncidentListMsg{incidents: incoming})
+
+	// No on-call field should exist on the model to cache — structurally guaranteed —
+	// and the sweep must have produced a command to run off-loop, not blocked inline.
+	_ = result
+	assert.NotNil(t, cmd, "auto-ack with a candidate should dispatch an async command")
+
+	// Execute the batched command tree and confirm a fresh on-call check ran and
+	// produced an acknowledge message for the assigned+unacked incident.
+	foundAck := false
+	drainCmd(t, cmd, func(msg tea.Msg) {
+		if ack, ok := msg.(acknowledgeIncidentsMsg); ok && len(ack.incidents) == 1 && ack.incidents[0].ID == "INC1" {
+			foundAck = true
+		}
+	})
+	assert.True(t, foundAck, "fresh on-call check should acknowledge the assigned+unacked incident")
+	assert.GreaterOrEqual(t, mockClient.CallCounts["ListOnCallsWithContext"], 1,
+		"on-call status must be checked live (ListOnCalls called), never cached")
+}
