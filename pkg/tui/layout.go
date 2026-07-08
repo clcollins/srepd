@@ -132,7 +132,7 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcher
 
 	tabWindowBorders := styles.TabWindow.GetHorizontalBorderSize()
 	incidentViewerWidth := ws.Width - mainHOverhead - tabWindowBorders
-	incidentViewerHeight := ws.Height - incidentViewerFixedOverhead
+	incidentViewerHeight := ws.Height - incidentViewerFixedOverhead - helpLines
 	if incidentViewerHeight < layoutMinIncidentViewerHeight {
 		incidentViewerHeight = layoutMinIncidentViewerHeight
 	}
@@ -199,6 +199,11 @@ func (m *model) recomputeLayout() {
 
 	m.layout = computeLayout(windowSize, m.styles, helpView, m.watcherExpanded)
 	m.table.SetHeight(m.layout.TableHeight)
+
+	m.incidentViewer.Width = m.layout.IncidentViewerWidth
+	m.incidentViewer.Height = m.layout.IncidentViewerHeight
+	m.logViewer.Width = m.layout.IncidentViewerWidth
+	m.logViewer.Height = m.layout.IncidentViewerHeight
 
 	if m.watcherExpanded {
 		m.watcherViewport.Width = m.layout.WatcherWidth
