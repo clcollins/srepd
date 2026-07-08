@@ -166,3 +166,53 @@ func TestAsyncWriter_CopiesInput(t *testing.T) {
 	assert.NotContains(t, buf.String(), "modified",
 		"mutation of input slice should not affect written data")
 }
+
+// TestAsyncWriter_ConcurrentWriteClose stresses concurrent Write vs Close. Under the
+// race detector it must not report a data race on the closed flag, and it must never
+// panic with "send on closed channel" (a Write that passes the closed check before
+// Close runs must not then send on a closed channel). Writes after Close return
+// os.ErrClosed.
+func TestAsyncWriter_ConcurrentWriteClose(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		var buf syncBuffer
+		aw := newAsyncWriter(&buf, 4)
+
+		var wg sync.WaitGroup
+		for w := 0; w < 8; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for j := 0; j < 50; j++ {
+					// A returned error (os.ErrClosed) is fine; a panic is not.
+					_, _ = aw.Write([]byte("log line\n"))
+				}
+			}()
+		}
+
+		// Close concurrently with the writers.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = aw.Close()
+		}()
+
+		wg.Wait()
+
+		// Writes after close must report closed, not panic.
+		_, err := aw.Write([]byte("after close\n"))
+		assert.ErrorIs(t, err, os.ErrClosed)
+	}
+}
+
+// syncBuffer is a minimal concurrency-safe io.Writer for the stress test (the
+// asyncWriter goroutine writes to it while the test may read).
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
