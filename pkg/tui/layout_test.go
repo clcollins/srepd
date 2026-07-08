@@ -234,6 +234,40 @@ func TestWindowResize_IncidentViewMode(t *testing.T) {
 	})
 }
 
+func TestComputeLayout_HelpExpandedReducesIncidentViewerHeight(t *testing.T) {
+	t.Run("expanded help produces shorter incident viewer", func(t *testing.T) {
+		ws := tea.WindowSizeMsg{Width: 80, Height: 24}
+		styles := defaultStyles()
+
+		compactLayout := computeLayout(ws, styles, shortHelp(), false)
+		expandedLayout := computeLayout(ws, styles, longHelp(), false)
+
+		assert.Greater(t, compactLayout.IncidentViewerHeight, expandedLayout.IncidentViewerHeight,
+			"compact help should yield taller incident viewer than expanded help")
+	})
+}
+
+func TestRecomputeLayout_UpdatesIncidentViewer(t *testing.T) {
+	t.Run("recomputeLayout updates incidentViewer and logViewer heights", func(t *testing.T) {
+		m := createTestModel()
+		m.help = newHelp()
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 40}
+
+		m.help.ShowAll = false
+		m.recomputeLayout()
+		collapsedHeight := m.incidentViewer.Height
+
+		m.help.ShowAll = true
+		m.recomputeLayout()
+		expandedHeight := m.incidentViewer.Height
+
+		assert.Greater(t, collapsedHeight, expandedHeight,
+			"incident viewer should shrink when help is expanded")
+		assert.Equal(t, m.incidentViewer.Height, m.logViewer.Height,
+			"logViewer height should match incidentViewer height")
+	})
+}
+
 func TestComputeLayout_WatcherReducesTableHeight(t *testing.T) {
 	t.Run("watcher expanded reduces table height", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 60}
