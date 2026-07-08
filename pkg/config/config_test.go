@@ -28,7 +28,21 @@ type mockFS struct {
 	writeData   []byte
 	writeErr    error
 	writePath   string
+	writePerm   os.FileMode
 	backupData  []byte
+	backupPerm  os.FileMode
+	chmodPerm   os.FileMode
+	backupChmod os.FileMode
+	chmodErr    error
+}
+
+func (m *mockFS) Chmod(name string, mode os.FileMode) error {
+	if strings.HasSuffix(name, "~") {
+		m.backupChmod = mode
+	} else {
+		m.chmodPerm = mode
+	}
+	return m.chmodErr
 }
 
 func (m *mockFS) MkdirAll(path string, perm os.FileMode) error {
@@ -54,9 +68,11 @@ func (m *mockFS) WriteFile(name string, data []byte, perm os.FileMode) error {
 	}
 	if strings.HasSuffix(name, "~") {
 		m.backupData = data
+		m.backupPerm = perm
 	} else {
 		m.writePath = name
 		m.writeData = data
+		m.writePerm = perm
 	}
 	return nil
 }
@@ -1346,6 +1362,67 @@ func TestWriteConfig_WriteError(t *testing.T) {
 	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true)
 
 	require.Error(t, err)
+}
+
+// --- secret file permission tests ---
+//
+// The config file (and its ~ backup) contain the plaintext PagerDuty token, so
+// they must be written 0600 (owner-only), never world-readable 0644.
+
+func TestWriteConfig_NewFile_Uses0600(t *testing.T) {
+	m := &mockFS{}
+	final := ResolvedValues{Token: "my-token", Teams: []string{"TEAM1"}}
+	changes := ConfigChanges{TokenChanged: true, TeamsChanged: true}
+
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), m.writePerm, "new config file must be written 0600")
+	// Chmod enforces 0600 even when the file already exists (WriteFile's mode is
+	// ignored on an existing file).
+	assert.Equal(t, os.FileMode(0600), m.chmodPerm, "config file must be chmod'd 0600")
+}
+
+func TestWriteConfig_ExistingFileAndBackup_Use0600(t *testing.T) {
+	m := &mockFS{readData: []byte("token: old\nteams:\n  - TEAM1\n")}
+	final := ResolvedValues{Token: "new-token", Teams: []string{"TEAM1"}}
+	changes := ConfigChanges{TokenChanged: true}
+
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), m.chmodPerm, "config file must be chmod'd 0600")
+	assert.Equal(t, os.FileMode(0600), m.backupChmod, "config backup must be chmod'd 0600 (it also holds the token)")
+}
+
+func TestWriteConfigTeams_Use0600(t *testing.T) {
+	m := &mockFS{readData: []byte("token: tok\nteams:\n  - OLD\n")}
+
+	err := WriteConfigTeams(m, "/fake/home", []string{"TEAM1"}, map[string]string{"TEAM1": "T"})
+
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), m.chmodPerm)
+	assert.Equal(t, os.FileMode(0600), m.backupChmod)
+}
+
+func TestWriteConfigKey_Use0600(t *testing.T) {
+	m := &mockFS{readData: []byte("token: tok\n")}
+
+	err := WriteConfigKey(m, "/fake/home", "editor", "nvim")
+
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), m.chmodPerm)
+	assert.Equal(t, os.FileMode(0600), m.backupChmod)
+}
+
+func TestWriteConfigMap_Use0600(t *testing.T) {
+	m := &mockFS{readData: []byte("token: tok\n")}
+
+	err := WriteConfigMap(m, "/fake/home", "service_escalation_policies", map[string]string{"SVC": "POL"})
+
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), m.chmodPerm)
+	assert.Equal(t, os.FileMode(0600), m.backupChmod)
 }
 
 // --- end-to-end config flow tests ---

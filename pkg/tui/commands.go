@@ -1234,13 +1234,22 @@ func writeTeamsToConfigCmd(teamIDs []string, teamNames map[string]string) tea.Cm
 			return teamsConfigUpdatedMsg{err: err}
 		}
 
+		// 0600: the config file (and its backup) contain the plaintext PagerDuty
+		// token and must not be world-readable. Chmod after WriteFile because
+		// WriteFile's mode is ignored when the file already exists.
 		backupFile := configFile + "~"
-		if err := os.WriteFile(backupFile, data, 0644); err != nil {
+		if err := os.WriteFile(backupFile, data, 0600); err != nil {
 			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to create config backup: %w", err)}
 		}
+		if err := os.Chmod(backupFile, 0600); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to secure config backup: %w", err)}
+		}
 
-		if err := os.WriteFile(configFile, updated, 0644); err != nil {
+		if err := os.WriteFile(configFile, updated, 0600); err != nil {
 			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to write config: %w", err)}
+		}
+		if err := os.Chmod(configFile, 0600); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to secure config: %w", err)}
 		}
 
 		return teamsConfigUpdatedMsg{}
@@ -1411,6 +1420,10 @@ func (realFS) WriteFile(name string, data []byte, perm os.FileMode) error {
 	return os.WriteFile(name, data, perm)
 }
 
+func (realFS) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
+}
+
 // writeConfigCmd writes the config to disk using the resolved values.
 func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool, fs pkgconfig.ConfigFS) tea.Cmd {
 	return func() tea.Msg {
@@ -1419,7 +1432,9 @@ func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChan
 			return configSavedMsg{err: err}
 		}
 		configDir := filepath.Join(home, pkgconfig.CfgFileDir)
-		if err := fs.MkdirAll(configDir, 0755); err != nil {
+		// 0700: the config dir holds the token-bearing config file; keep it
+		// owner-only.
+		if err := fs.MkdirAll(configDir, 0700); err != nil {
 			return configSavedMsg{err: err}
 		}
 		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile); err != nil {
