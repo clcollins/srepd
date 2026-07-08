@@ -26,7 +26,7 @@ direct `ocm backplane` login.
 | `make test-race` | Run tests with race detector |
 | `make test-vuln` | Check for known vulnerabilities |
 | `make test-coverage-threshold` | Enforce minimum coverage threshold (55%) |
-| `make test-all` | Run all checks: fmt-check, vet, lint, test, test-race |
+| `make test-all` | Run all checks: fmt-check, vet, lint, test, test-race, test-fixtures |
 
 Pass extra test flags via `TESTOPTS`, e.g.:
 `make test TESTOPTS="-run TestFoo"`
@@ -149,4 +149,6 @@ approach, and key design decisions. See existing plans for format examples.
 | `pkg/tui/msgHandlers.go` | Focus-mode key dispatch |
 | `pkg/launcher/launcher.go` | Terminal command builder |
 | `cmd/root.go` | CLI entry point |
-| `cmd/config.go` | Config validation |
+| `cmd/config.go` | Config validation + interactive wizard launcher |
+| `cmd/update.go` | Self-update / version-check command |
+| `cmd/asyncwriter.go` | Non-blocking async log writer |

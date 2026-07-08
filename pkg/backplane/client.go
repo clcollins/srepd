@@ -27,7 +27,15 @@ type Client struct {
 
 // NewClient creates a BackplaneClient from config and a token provider function.
 func NewClient(cfg *Config, tokenFunc func() (string, error)) BackplaneClient {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// http.DefaultTransport is a mutable package global; use comma-ok and fall back
+	// to a fresh transport if some imported package has replaced it with a different
+	// RoundTripper, rather than panicking on the type assertion.
+	var transport *http.Transport
+	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = dt.Clone()
+	} else {
+		transport = &http.Transport{}
+	}
 
 	if cfg.ProxyURL != nil && *cfg.ProxyURL != "" && !cfg.Govcloud {
 		proxyURL, err := url.Parse(*cfg.ProxyURL)

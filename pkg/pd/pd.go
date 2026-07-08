@@ -421,6 +421,10 @@ func loopManageIncidents(client PagerDutyClient, ctx context.Context, email stri
 
 // ReassignIncidents reassigns a list of incidents to a list of users
 func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, users []*pagerduty.User) ([]pagerduty.Incident, error) {
+	if user == nil {
+		return nil, fmt.Errorf("pd.ReassignIncidents(): from-user is nil")
+	}
+
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
 
@@ -446,6 +450,13 @@ func ReassignIncidents(client PagerDutyClient, incidents []pagerduty.Incident, u
 
 // ReEscalateIncidents re-escalates a list of incidents to an escalation policy at a specific level
 func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident, user *pagerduty.User, policy *pagerduty.EscalationPolicy, level uint) ([]pagerduty.Incident, error) {
+	if user == nil {
+		return nil, fmt.Errorf("pd.ReEscalateIncidents(): user is nil")
+	}
+	if policy == nil {
+		return nil, fmt.Errorf("pd.ReEscalateIncidents(): policy is nil")
+	}
+
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
 

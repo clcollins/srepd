@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	auth "github.com/openshift-online/ocm-sdk-go/authentication"
@@ -21,6 +22,9 @@ import (
 const (
 	productionURL = "https://api.openshift.com"
 	clientID      = "ocm-cli"
+
+	// ocmRequestTimeout bounds OCM calls that do not receive a caller context.
+	ocmRequestTimeout = 30 * time.Second
 )
 
 var clusterIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
@@ -314,7 +318,9 @@ func (c *Client) GetLimitedSupportHistory(ctx context.Context, clusterID string)
 }
 
 func (c *Client) GetBackplaneURL() (string, error) {
-	resp, err := c.conn.ClustersMgmt().V1().Environment().Get().Send()
+	ctx, cancel := context.WithTimeout(context.Background(), ocmRequestTimeout)
+	defer cancel()
+	resp, err := c.conn.ClustersMgmt().V1().Environment().Get().SendContext(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch OCM environment: %w", err)
 	}
@@ -327,7 +333,9 @@ func (c *Client) GetBackplaneURL() (string, error) {
 }
 
 func (c *Client) GetAccessToken() (string, error) {
-	accessToken, _, err := c.conn.Tokens()
+	ctx, cancel := context.WithTimeout(context.Background(), ocmRequestTimeout)
+	defer cancel()
+	accessToken, _, err := c.conn.TokensContext(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get OCM access token: %w", err)
 	}
