@@ -197,15 +197,20 @@ func (c *Client) GetCluster(ctx context.Context, key string) (*ClusterInfo, erro
 		log.Debug("ocm.GetCluster", "msg", "subscription search failed, trying cluster search", "error", err)
 	}
 
+	var orgID string
 	if err == nil {
 		log.Debug("ocm.GetCluster", "msg", "subscription search completed", "total", subsResponse.Total())
 		if subsResponse.Total() == 1 && len(subsResponse.Items().Slice()) > 0 {
-			internalID, ok := subsResponse.Items().Slice()[0].GetClusterID()
-			log.Debug("ocm.GetCluster", "msg", "subscription found", "has_cluster_id", ok)
+			sub := subsResponse.Items().Slice()[0]
+			orgID, _ = sub.GetOrganizationID()
+			internalID, ok := sub.GetClusterID()
+			log.Debug("ocm.GetCluster", "msg", "subscription found", "has_cluster_id", ok, "org_id", orgID)
 			if ok {
 				clusterResponse, clusterErr := clustersResource.Cluster(internalID).Get().SendContext(ctx)
 				if clusterErr == nil {
-					return clusterFromResponse(clusterResponse.Body()), nil
+					info := clusterFromResponse(clusterResponse.Body())
+					c.enrichOrganization(ctx, info, orgID)
+					return info, nil
 				}
 				log.Debug("ocm.GetCluster", "msg", "cluster get by sub ID failed", "error", clusterErr)
 			}
@@ -229,7 +234,9 @@ func (c *Client) GetCluster(ctx context.Context, key string) (*ClusterInfo, erro
 		return nil, fmt.Errorf("cluster %q not found via subscription or cluster search", key)
 	}
 
-	return clusterFromResponse(clustersResponse.Items().Slice()[0]), nil
+	info := clusterFromResponse(clustersResponse.Items().Slice()[0])
+	c.enrichOrganization(ctx, info, orgID)
+	return info, nil
 }
 
 func clusterFromResponse(cluster *cmv1.Cluster) *ClusterInfo {
@@ -257,11 +264,22 @@ func clusterFromResponse(cluster *cmv1.Cluster) *ClusterInfo {
 	if cluster.CCS() != nil {
 		info.CCS = cluster.CCS().Enabled()
 	}
-	if cluster.Subscription() != nil {
-		info.Organization = cluster.Subscription().ID()
-	}
 
 	return info
+}
+
+func (c *Client) enrichOrganization(ctx context.Context, info *ClusterInfo, orgID string) {
+	if orgID == "" {
+		return
+	}
+	info.OrganizationID = orgID
+	resp, err := c.conn.AccountsMgmt().V1().Organizations().Organization(orgID).Get().SendContext(ctx)
+	if err != nil {
+		log.Debug("ocm.enrichOrganization", "msg", "organization lookup failed", "org_id", orgID, "error", err)
+		return
+	}
+	info.Organization = resp.Body().Name()
+	log.Debug("ocm.enrichOrganization", "org_id", orgID, "org_name", info.Organization)
 }
 
 func (c *Client) GetServiceLogs(ctx context.Context, clusterID, externalID string) ([]ServiceLog, error) {

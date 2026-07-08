@@ -10,7 +10,8 @@
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Aeronautical Ltd"
+    "organization": "Fake Aeronautical Ltd",
+    "organization_id": "1a2b3c4d5e6f7g8h9i0j"
   },
   "b2d4e6f8-fake-uuid-test-def012345678": {
     "id": "cluster-osd-002",
@@ -23,7 +24,8 @@
     "version": "4.17.1",
     "hypershift": false,
     "ccs": false,
-    "organization": "Fake Bank Ltd"
+    "organization": "Fake Bank Ltd",
+    "organization_id": "2b3c4d5e6f7g8h9i0j1k"
   },
   "a4ba96fe-fake-uuid-test-17d38eeaab99": {
     "id": "cluster-hcp-001",
@@ -36,7 +38,8 @@
     "version": "4.16.3",
     "hypershift": true,
     "ccs": true,
-    "organization": "Fake United Airways"
+    "organization": "Fake United Airways",
+    "organization_id": "3c4d5e6f7g8h9i0j1k2l"
   },
   "1b20416f-fake-uuid-test-5a6e450114eb": {
     "id": "cluster-hcp-002",
@@ -49,7 +52,8 @@
     "version": "4.16.3",
     "hypershift": true,
     "ccs": true,
-    "organization": "Fake Co Industries"
+    "organization": "Fake Co Industries",
+    "organization_id": "4d5e6f7g8h9i0j1k2l3m"
   },
   "06f058a0-fake-uuid-test-f39184fee819": {
     "id": "cluster-dms-001",
@@ -62,7 +66,8 @@
     "version": "4.15.8",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Logistics Corp"
+    "organization": "Fake Logistics Corp",
+    "organization_id": "5e6f7g8h9i0j1k2l3m4n"
   },
   "c1d2e3f4-fake-uuid-test-123456789001": {
     "id": "cluster-large-001",
@@ -75,7 +80,8 @@
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Enterprise Co"
+    "organization": "Fake Enterprise Co",
+    "organization_id": "6f7g8h9i0j1k2l3m4n5o"
   },
   "fakeid0000000000000000000000002": {
     "id": "cluster-appsre-001",
@@ -88,7 +94,8 @@
     "version": "4.21.16",
     "hypershift": false,
     "ccs": false,
-    "organization": "Fake Telecom Inc"
+    "organization": "Fake Telecom Inc",
+    "organization_id": "7g8h9i0j1k2l3m4n5o6p"
   },
   "3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d": {
     "id": "cluster-multi-001",
@@ -101,7 +108,8 @@
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Global Services"
+    "organization": "Fake Global Services",
+    "organization_id": "8h9i0j1k2l3m4n5o6p7q"
   },
   "7f2e8d4a-fake-uuid-test-1b9c3a5d7e0f": {
     "id": "cluster-multi-002",
@@ -114,7 +122,8 @@
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Global Services"
+    "organization": "Fake Global Services",
+    "organization_id": "8h9i0j1k2l3m4n5o6p7q"
   },
   "5d1a8f3e-fake-uuid-test-9c2b4e6d0a7f": {
     "id": "cluster-multi-003",
@@ -127,7 +136,8 @@
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Global Services"
+    "organization": "Fake Global Services",
+    "organization_id": "8h9i0j1k2l3m4n5o6p7q"
   },
   "2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c": {
     "id": "cluster-acked-001",
@@ -140,7 +150,8 @@
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Retail Group"
+    "organization": "Fake Retail Group",
+    "organization_id": "9i0j1k2l3m4n5o6p7q8r"
   },
   "8e1d3c5b-fake-uuid-test-4a6f2d8e0b7c": {
     "id": "cluster-mutated-001",
@@ -153,6 +164,7 @@
     "version": "4.16.5",
     "hypershift": false,
     "ccs": true,
-    "organization": "Fake Healthcare Ltd"
+    "organization": "Fake Healthcare Ltd",
+    "organization_id": "0j1k2l3m4n5o6p7q8r9s"
   }
 }

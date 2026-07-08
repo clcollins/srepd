@@ -212,6 +212,7 @@ func TestClusterFromResponse(t *testing.T) {
 		assert.False(t, info.Hypershift)
 		assert.False(t, info.CCS)
 		assert.Empty(t, info.Organization)
+		assert.Empty(t, info.OrganizationID)
 	})
 
 	t.Run("cloud provider extraction", func(t *testing.T) {

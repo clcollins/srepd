@@ -449,6 +449,7 @@ func (m model) renderClusterTab() (string, error) {
 		fmt.Fprintf(&content, "* Hypershift: %v\n", info.Hypershift)
 		fmt.Fprintf(&content, "* CCS: %v\n", info.CCS)
 		fmt.Fprintf(&content, "* Organization: %s\n", info.Organization)
+		fmt.Fprintf(&content, "* Organization ID: %s\n", info.OrganizationID)
 		if i < len(clusters)-1 {
 			content.WriteString("\n---\n")
 		}

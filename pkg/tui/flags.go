@@ -126,8 +126,11 @@ func matchClusterID(pattern string, clusterIDs []string, clusterCache map[string
 
 func matchOrgName(pattern string, clusterIDs []string, clusterCache map[string]*ocm.ClusterInfo) bool {
 	for _, cid := range clusterIDs {
-		if info, ok := clusterCache[cid]; ok && info.Organization != "" {
-			if matchGlob(pattern, info.Organization) {
+		if info, ok := clusterCache[cid]; ok {
+			if info.Organization != "" && matchGlob(pattern, info.Organization) {
+				return true
+			}
+			if info.OrganizationID != "" && matchGlob(pattern, info.OrganizationID) {
 				return true
 			}
 		}

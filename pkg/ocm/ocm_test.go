@@ -14,17 +14,18 @@ func TestMockClient_GetCluster(t *testing.T) {
 	t.Run("returns cluster info for known cluster", func(t *testing.T) {
 		mock := NewMockClient()
 		mock.Clusters["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"] = &ClusterInfo{
-			ID:            "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
-			ExternalID:    "00000000-fake-uuid-test-999999999999",
-			Name:          "fake-osd-webapp",
-			DisplayName:   "fake-osd-webapp.7x9k.p1.example.org",
-			State:         "ready",
-			Region:        "us-east-1",
-			CloudProvider: "aws",
-			Version:       "4.16.5",
-			Hypershift:    false,
-			CCS:           true,
-			Organization:  "Fake Aeronautical Ltd",
+			ID:             "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			ExternalID:     "00000000-fake-uuid-test-999999999999",
+			Name:           "fake-osd-webapp",
+			DisplayName:    "fake-osd-webapp.7x9k.p1.example.org",
+			State:          "ready",
+			Region:         "us-east-1",
+			CloudProvider:  "aws",
+			Version:        "4.16.5",
+			Hypershift:     false,
+			CCS:            true,
+			Organization:   "Fake Aeronautical Ltd",
+			OrganizationID: "1a2b3c4d5e6f7g8h9i0j",
 		}
 
 		info, err := mock.GetCluster(context.Background(), "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
