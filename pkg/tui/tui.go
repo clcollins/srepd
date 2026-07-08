@@ -134,7 +134,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reflect.TypeOf(ocmServiceLogsMsg{}),
 		reflect.TypeOf(limitedSupportMsg{}),
 		reflect.TypeOf(clusterReportsMsg{}),
-		reflect.TypeOf(priorAlertsMsg{}):
+		reflect.TypeOf(priorAlertsMsg{}),
+		reflect.TypeOf(lazyEnrichMsg{}):
 		shouldLog = false
 	}
 
@@ -577,6 +578,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.apiInProgress = true
 		return m, tea.Batch(m.spinner.Tick, updateIncidentList(m.config))
+
+	case lazyEnrichMsg:
+		cmd := pickNextEnrichment(&m)
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
 
 	// Command to get an incident by ID
 	case getIncidentMsg:

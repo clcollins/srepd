@@ -626,7 +626,7 @@ func (m model) renderPDHistoryTab() (string, error) {
 		if anyLoading {
 			return "\n_Loading PD history..._\n", nil
 		}
-		return "\n_No PD history available_\n", nil
+		return "\n_No prior PD history found for this cluster_\n", nil
 	}
 
 	slices.SortFunc(allSame, func(a, b PriorAlert) int {
@@ -655,7 +655,7 @@ func (m model) renderPDHistoryTab() (string, error) {
 
 	var content strings.Builder
 
-	fmt.Fprintf(&content, "## Same Alert (%s)\n\n", timeRange)
+	fmt.Fprintf(&content, "## Prior Instances of Alert (%s)\n\n", timeRange)
 	if len(allSame) == 0 {
 		content.WriteString("_No prior instances of this alert for this cluster_\n")
 	} else {

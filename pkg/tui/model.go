@@ -51,6 +51,10 @@ var initialScheduledJobs = []*scheduledJob{
 		frequency: time.Second * 15,
 	},
 	{
+		jobMsg:    func() tea.Msg { return lazyEnrichMsg{} },
+		frequency: 3 * time.Second,
+	},
+	{
 		jobMsg:    checkForUpdate(false, ""),
 		frequency: time.Hour,
 	},

@@ -297,6 +297,55 @@ type clearFlashMsg struct {
 
 type PollIncidentsMsg struct{}
 
+type lazyEnrichMsg struct{}
+
+func pickNextEnrichment(m *model) tea.Cmd {
+	if m.config == nil {
+		return nil
+	}
+
+	rows := m.table.Rows()
+	if len(rows) == 0 {
+		return nil
+	}
+
+	cursor := m.table.Cursor()
+	n := len(rows)
+
+	for offset := 0; offset < n; offset++ {
+		var indices []int
+		if offset == 0 {
+			indices = []int{cursor}
+		} else {
+			above := cursor - offset
+			below := cursor + offset
+			if below < n {
+				indices = append(indices, below)
+			}
+			if above >= 0 {
+				indices = append(indices, above)
+			}
+		}
+
+		for _, idx := range indices {
+			if idx < 0 || idx >= n {
+				continue
+			}
+			row := rows[idx]
+			if len(row) < 2 {
+				continue
+			}
+			incidentID := row[1]
+			if _, exists := m.incidentCache[incidentID]; exists {
+				continue
+			}
+			return func() tea.Msg { return getIncidentMsg(incidentID) }
+		}
+	}
+
+	return nil
+}
+
 // logFileContentMsg is a message containing the contents of the debug log file.
 type logFileContentMsg string
 

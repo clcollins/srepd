@@ -239,15 +239,16 @@ func TestMatchIncidentToCluster_Tiers(t *testing.T) {
 		expected  bool
 	}{
 		{
-			name: "Tier 1: hive service always matches",
+			name: "hive service without cluster_id in title does not match",
 			incident: pagerduty.Incident{
+				Title:   "ClusterOperatorDown CRITICAL (1)",
 				Service: pagerduty.APIObject{Summary: "osd-test-hive-cluster"},
 			},
-			clusterID: "anything",
-			expected:  true,
+			clusterID: "abc-123",
+			expected:  false,
 		},
 		{
-			name: "Tier 2: rhobs_hcp title contains cluster UUID",
+			name: "title contains cluster UUID",
 			incident: pagerduty.Incident{
 				Title:   "[HCP] [RHOBS] (Critical) AlertName for HCP: abc-123",
 				Service: pagerduty.APIObject{Summary: "rhobs-hcp-prod-critical-us-east-1"},
@@ -336,7 +337,7 @@ func TestRenderPDHistoryTab_WithData(t *testing.T) {
 
 	result, err := m.renderPDHistoryTab()
 	assert.NoError(t, err)
-	assert.Contains(t, result, "Same Alert")
+	assert.Contains(t, result, "Prior Instances of Alert")
 	assert.Contains(t, result, "Other Alerts for this Cluster")
 	assert.Contains(t, result, "ClusterOperatorDown")
 	assert.Contains(t, result, "KubePodNotReady")
@@ -397,7 +398,7 @@ func TestRenderPDHistoryTab_FetchDoneNoData(t *testing.T) {
 
 	result, err := m.renderPDHistoryTab()
 	assert.NoError(t, err)
-	assert.Contains(t, result, "No PD history available")
+	assert.Contains(t, result, "No prior PD history found")
 }
 
 func TestTabConstants(t *testing.T) {
