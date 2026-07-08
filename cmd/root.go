@@ -130,7 +130,9 @@ func autoCommentOldPolicies(configFile string) (bool, error) {
 		return false, nil
 	}
 
-	if err := os.WriteFile(configFile, migrated, 0644); err != nil {
+	// 0600: this rewrites the token-bearing config file in place; keep it
+	// owner-only rather than world-readable.
+	if err := os.WriteFile(configFile, migrated, 0600); err != nil {
 		return false, fmt.Errorf("failed to write migrated config: %w", err)
 	}
 

@@ -214,6 +214,22 @@ type ConfigFS interface {
 	OpenFile(name string, flag int, perm os.FileMode) (io.WriteCloser, error)
 	ReadFile(name string) ([]byte, error)
 	WriteFile(name string, data []byte, perm os.FileMode) error
+	Chmod(name string, mode os.FileMode) error
+}
+
+// secretFileMode is the permission for files that contain the plaintext
+// PagerDuty token (the config file and its backup): owner read/write only.
+const secretFileMode = os.FileMode(0600)
+
+// writeSecretFile writes data to name and enforces secretFileMode. os.WriteFile
+// only applies the mode when creating a new file — on an existing file it keeps
+// the old (possibly world-readable) permissions — so an explicit Chmod is required
+// to guarantee the token file is never left 0644.
+func writeSecretFile(fs ConfigFS, name string, data []byte) error {
+	if err := fs.WriteFile(name, data, secretFileMode); err != nil {
+		return err
+	}
+	return fs.Chmod(name, secretFileMode)
 }
 
 func MaskToken(token string) string {
@@ -285,7 +301,7 @@ func WriteConfig(fs ConfigFS, baseDir string, final ResolvedValues, changes Conf
 
 	if isNewFile {
 		data := BuildFullConfig(final, teamNames, final.SilentPolicy, customPolicies)
-		if err := fs.WriteFile(configFile, data, 0644); err != nil {
+		if err := writeSecretFile(fs, configFile, data); err != nil {
 			return fmt.Errorf("failed to write config file: %w", err)
 		}
 		return nil
@@ -302,11 +318,11 @@ func WriteConfig(fs ConfigFS, baseDir string, final ResolvedValues, changes Conf
 	}
 
 	backupFile := configFile + "~"
-	if err := fs.WriteFile(backupFile, existingData, 0644); err != nil {
+	if err := writeSecretFile(fs, backupFile, existingData); err != nil {
 		return fmt.Errorf("failed to create config backup: %w", err)
 	}
 
-	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+	if err := writeSecretFile(fs, configFile, updated); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -564,11 +580,11 @@ func WriteConfigTeams(fs ConfigFS, baseDir string, teamIDs []string, teamNames m
 	}
 
 	backupFile := configFile + "~"
-	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
+	if err := writeSecretFile(fs, backupFile, data); err != nil {
 		return fmt.Errorf("failed to create config backup: %w", err)
 	}
 
-	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+	if err := writeSecretFile(fs, configFile, updated); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -589,11 +605,11 @@ func WriteConfigKey(fs ConfigFS, baseDir string, key string, value string) error
 	}
 
 	backupFile := configFile + "~"
-	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
+	if err := writeSecretFile(fs, backupFile, data); err != nil {
 		return fmt.Errorf("failed to create config backup: %w", err)
 	}
 
-	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+	if err := writeSecretFile(fs, configFile, updated); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -614,11 +630,11 @@ func WriteConfigMap(fs ConfigFS, baseDir string, key string, values map[string]s
 	}
 
 	backupFile := configFile + "~"
-	if err := fs.WriteFile(backupFile, data, 0644); err != nil {
+	if err := writeSecretFile(fs, backupFile, data); err != nil {
 		return fmt.Errorf("failed to create config backup: %w", err)
 	}
 
-	if err := fs.WriteFile(configFile, updated, 0644); err != nil {
+	if err := writeSecretFile(fs, configFile, updated); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
