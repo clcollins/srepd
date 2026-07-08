@@ -68,7 +68,7 @@ but rather a simple tool to make on-call tasks easier.`,
 			if viper.GetBool("debug") {
 				return log.DebugLevel
 			}
-			return log.WarnLevel
+			return log.InfoLevel
 		}())
 	},
 	PreRun: func(cmd *cobra.Command, args []string) {

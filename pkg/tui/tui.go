@@ -639,6 +639,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if shouldUpdate {
+			log.Info("incident details fetched", "incident_id", msg.incident.ID, "title", msg.incident.Title)
 			m.setStatus(fmt.Sprintf("got incident %s", msg.incident.ID))
 			m.selectedIncident = msg.incident
 			m.incidentDataLoaded = true
@@ -684,6 +685,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.selectedIncidentNotes = msg.notes
 			m.incidentNotesLoaded = true
+			log.Info("notes fetched", "incident_id", msg.incidentID, "count", len(msg.notes))
 
 			// Stop spinner if all incident data is loaded (details, notes, alerts)
 			if m.incidentDataLoaded && m.incidentNotesLoaded && m.incidentAlertsLoaded {
@@ -726,6 +728,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.selectedIncidentAlerts = msg.alerts
 			m.incidentAlertsLoaded = true
+			log.Info("alerts fetched", "incident_id", msg.incidentID, "count", len(msg.alerts))
 
 			// Stop spinner if all incident data is loaded (details, notes, alerts)
 			if m.incidentDataLoaded && m.incidentNotesLoaded && m.incidentAlertsLoaded {
@@ -1030,6 +1033,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, getIncidentAlerts(m.config, id))
 				}
 			}
+		}
+
+		// Kick off enrichment for the first un-enriched incident immediately
+		if enrichCmd := pickNextEnrichment(&m); enrichCmd != nil {
+			cmds = append(cmds, enrichCmd)
 		}
 
 		// Re-sync selectedIncident to match highlighted row
