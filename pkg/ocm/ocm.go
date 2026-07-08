@@ -4,17 +4,18 @@ import "context"
 
 // ClusterInfo contains enriched cluster data from the OCM API.
 type ClusterInfo struct {
-	ID            string
-	ExternalID    string
-	Name          string
-	DisplayName   string
-	State         string
-	Region        string
-	CloudProvider string
-	Version       string
-	Hypershift    bool
-	CCS           bool
-	Organization  string
+	ID             string
+	ExternalID     string
+	Name           string
+	DisplayName    string
+	State          string
+	Region         string
+	CloudProvider  string
+	Version        string
+	Hypershift     bool
+	CCS            bool
+	Organization   string
+	OrganizationID string
 }
 
 // ServiceLog represents a single service log entry.
