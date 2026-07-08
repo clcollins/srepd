@@ -230,3 +230,36 @@ func TestRunConfigWizardCallsLaunchTUIWithConfig(t *testing.T) {
 	assert.Contains(t, configGoSource, "launchTUIWithConfig()",
 		"runConfigWizard should call launchTUIWithConfig to launch the TUI in config mode")
 }
+
+// TestMaskConfigValue verifies the config-value masking used in --debug logging is
+// allowlist-based: only known-safe keys reveal their value; everything else (any
+// current or future secret-bearing key, not just those literally named "token") is
+// masked.
+func TestMaskConfigValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		key    string
+		value  string
+		masked bool
+	}{
+		{"token is masked", "token", "PCGXUDY1", true},
+		{"api_key is masked", "api_key", "sk-secret", true},
+		{"secret is masked", "webhook_secret", "shh", true},
+		{"password is masked", "password", "hunter2", true},
+		{"unknown key masked by default", "some_future_key", "sensitive", true},
+		{"teams is revealed", "teams", "TEAM1", false},
+		{"editor is revealed", "editor", "vim", false},
+		{"terminal is revealed", "terminal", "gnome-terminal --", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := maskConfigValue(tt.key, tt.value)
+			if tt.masked {
+				assert.Equal(t, "*****", got, "value should be masked")
+				assert.NotContains(t, got, tt.value)
+			} else {
+				assert.Equal(t, tt.value, got, "known-safe key should reveal its value")
+			}
+		})
+	}
+}

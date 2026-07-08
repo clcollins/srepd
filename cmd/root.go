@@ -77,14 +77,15 @@ but rather a simple tool to make on-call tasks easier.`,
 			return
 		}
 
-		home, _ := os.UserHomeDir()
-		configFile := filepath.Join(home, pkgconfig.CfgFileDir, pkgconfig.CfgFileName)
+		configFile, err := resolveConfigFilePath(os.UserHomeDir)
+		if err != nil {
+			log.Fatal("could not determine config file path", "error", err)
+		}
 		if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
 			return
 		}
 
-		err := validateConfig()
-		if err != nil {
+		if err := validateConfig(); err != nil {
 			log.Fatal(err)
 		}
 
@@ -99,8 +100,10 @@ but rather a simple tool to make on-call tasks easier.`,
 			return
 		}
 
-		home, _ := os.UserHomeDir()
-		configFile := filepath.Join(home, pkgconfig.CfgFileDir, pkgconfig.CfgFileName)
+		configFile, err := resolveConfigFilePath(os.UserHomeDir)
+		if err != nil {
+			log.Fatal("could not determine config file path", "error", err)
+		}
 		if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
 			ensureViperDefaults()
 			launchTUIWithConfig()
@@ -109,6 +112,17 @@ but rather a simple tool to make on-call tasks easier.`,
 
 		launchTUI()
 	},
+}
+
+// resolveConfigFilePath builds the path to the srepd config file, surfacing (rather
+// than swallowing) any error from the home-directory lookup. homeDir is injectable
+// for testing; production callers pass os.UserHomeDir.
+func resolveConfigFilePath(homeDir func() (string, error)) (string, error) {
+	home, err := homeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	return filepath.Join(home, pkgconfig.CfgFileDir, pkgconfig.CfgFileName), nil
 }
 
 func autoCommentOldPolicies(configFile string) (bool, error) {
