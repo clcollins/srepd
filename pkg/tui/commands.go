@@ -86,8 +86,9 @@ func getIncident(p *pd.Config, id string) tea.Cmd {
 		if id == "" {
 			return setStatusMsg{nilIncidentMsg}
 		}
-		ctx := context.Background()
-		i, err := p.Client.GetIncidentWithContext(ctx, id)
+		// Route through pd.GetIncident, which applies the default API timeout,
+		// instead of calling the raw client with context.Background().
+		i, err := pd.GetIncident(p.Client, id)
 		return gotIncidentMsg{i, err}
 	}
 }
@@ -504,6 +505,46 @@ func UserIsOnCall(p *pd.Config, id string) bool {
 	return false
 }
 
+// noAcknowledgeMsg is a no-op result from checkOnCallAndAcknowledge indicating
+// that no incidents should be auto-acknowledged (user not on-call, on-call check
+// failed, or no candidate matched). It is deliberately distinct from
+// acknowledgeIncidentsMsg: emitting acknowledgeIncidentsMsg{incidents: nil} would
+// fall back to acknowledging the currently selected incident (see the
+// acknowledgeIncidentsMsg handler), which must never happen from the background
+// auto-ack sweep.
+type noAcknowledgeMsg struct{}
+
+// checkOnCallAndAcknowledge runs the on-call check OFF the Bubble Tea Update loop
+// (so a slow PagerDuty request never freezes the UI), then filters the candidate
+// incidents by the FRESH on-call result and emits an acknowledgeIncidentsMsg for
+// those that should be auto-acknowledged.
+//
+// On-call status is NEVER cached — it is checked live on every refresh. A cached
+// value would keep auto-acknowledging incidents after the user's shift ends if they
+// leave SREPD running; checking live means auto-ack stops within one refresh cycle
+// of going off-call. For the same reason, the re-escalate/reassign paths must also
+// perform a live check and must never read a cached on-call value.
+func checkOnCallAndAcknowledge(p *pd.Config, id string, candidates []pagerduty.Incident) tea.Cmd {
+	return func() tea.Msg {
+		if !UserIsOnCall(p, id) {
+			return noAcknowledgeMsg{}
+		}
+
+		var toAck []pagerduty.Incident
+		for _, i := range candidates {
+			if ShouldBeAcknowledgedCached(i, id, true) {
+				toAck = append(toAck, i)
+			}
+		}
+
+		if len(toAck) == 0 {
+			return noAcknowledgeMsg{}
+		}
+
+		return acknowledgeIncidentsMsg{incidents: toAck}
+	}
+}
+
 // TODO: Can we use a single function and struct to handle
 // the openEditorCmd, login and openBrowserCmd commands?
 
@@ -874,7 +915,7 @@ type reassignedIncidentsMsg []pagerduty.Incident
 
 func reassignIncidents(p *pd.Config, i []pagerduty.Incident, users []*pagerduty.User) tea.Cmd {
 	return func() tea.Msg {
-		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		u, err := pd.GetCurrentUser(p.Client)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -983,7 +1024,7 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, file *os.File
 
 		note := removeCommentsFromBytes(bytes, "#")
 
-		u, err := p.Client.GetCurrentUserWithContext(context.Background(), pagerduty.GetCurrentUserOptions{})
+		u, err := pd.GetCurrentUser(p.Client)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -1069,7 +1110,11 @@ func getSOPLink(alerts []pagerduty.IncidentAlert) (string, bool) {
 }
 
 // getUniqueClusters extracts deduplicated cluster_ids from alerts, preserving
-// the order of first appearance. Alerts without a cluster_id are skipped.
+// the order of first appearance. Alerts without a cluster_id are skipped, as are
+// values that are not well-formed cluster IDs (ocm.ValidClusterID). Cluster IDs
+// originate from attacker-influenceable PagerDuty alert data and are later
+// substituted into launched commands, so rejecting malformed values here prevents
+// argument injection at the launcher boundary.
 func getUniqueClusters(alerts []pagerduty.IncidentAlert) []string {
 	seen := make(map[string]bool)
 	var clusters []string
@@ -1079,10 +1124,15 @@ func getUniqueClusters(alerts []pagerduty.IncidentAlert) []string {
 			normalized := alert.NormalizeAlert(a.Service.Summary, "", a)
 			cluster = normalized.ClusterID
 		}
-		if cluster != "" && !seen[cluster] {
-			seen[cluster] = true
-			clusters = append(clusters, cluster)
+		if cluster == "" || seen[cluster] {
+			continue
 		}
+		if !ocm.ValidClusterID(cluster) {
+			log.Warn("skipping malformed cluster_id from alert data", "cluster_id", cluster)
+			continue
+		}
+		seen[cluster] = true
+		clusters = append(clusters, cluster)
 	}
 	return clusters
 }
@@ -1234,13 +1284,22 @@ func writeTeamsToConfigCmd(teamIDs []string, teamNames map[string]string) tea.Cm
 			return teamsConfigUpdatedMsg{err: err}
 		}
 
+		// 0600: the config file (and its backup) contain the plaintext PagerDuty
+		// token and must not be world-readable. Chmod after WriteFile because
+		// WriteFile's mode is ignored when the file already exists.
 		backupFile := configFile + "~"
-		if err := os.WriteFile(backupFile, data, 0644); err != nil {
+		if err := os.WriteFile(backupFile, data, 0600); err != nil {
 			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to create config backup: %w", err)}
 		}
+		if err := os.Chmod(backupFile, 0600); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to secure config backup: %w", err)}
+		}
 
-		if err := os.WriteFile(configFile, updated, 0644); err != nil {
+		if err := os.WriteFile(configFile, updated, 0600); err != nil {
 			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to write config: %w", err)}
+		}
+		if err := os.Chmod(configFile, 0600); err != nil {
+			return teamsConfigUpdatedMsg{err: fmt.Errorf("failed to secure config: %w", err)}
 		}
 
 		return teamsConfigUpdatedMsg{}
@@ -1411,6 +1470,10 @@ func (realFS) WriteFile(name string, data []byte, perm os.FileMode) error {
 	return os.WriteFile(name, data, perm)
 }
 
+func (realFS) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
+}
+
 // writeConfigCmd writes the config to disk using the resolved values.
 func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool, fs pkgconfig.ConfigFS) tea.Cmd {
 	return func() tea.Msg {
@@ -1419,7 +1482,9 @@ func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChan
 			return configSavedMsg{err: err}
 		}
 		configDir := filepath.Join(home, pkgconfig.CfgFileDir)
-		if err := fs.MkdirAll(configDir, 0755); err != nil {
+		// 0700: the config dir holds the token-bearing config file; keep it
+		// owner-only.
+		if err := fs.MkdirAll(configDir, 0700); err != nil {
 			return configSavedMsg{err: err}
 		}
 		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile); err != nil {
