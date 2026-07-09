@@ -134,6 +134,11 @@ type model struct {
 	agentSystemPrompt   string
 	watcherSystemPrompt string
 
+	// reescalateLevel is the escalation level that ctrl+e re-escalates to. Default
+	// is reEscalateDefaultPolicyLevel (2, "skips Nobody"); configurable via the
+	// reescalate_level config key for policies with a different shape.
+	reescalateLevel uint
+
 	// aiProvider is the configured LLM API provider, or nil when unconfigured
 	aiProvider ai.Provider
 	// aiHealthy tracks whether the last LLM provider health check succeeded
@@ -224,6 +229,18 @@ type model struct {
 	updateAvailable  bool
 	updateVersion    string
 	updateReleaseURL string
+}
+
+// resolveReescalateLevel returns the configured re-escalate target level from the
+// reescalate_level config key, falling back to reEscalateDefaultPolicyLevel (2) when
+// unset or non-positive. Level 1 is the "Nobody" placeholder tier on the standard
+// policy, so re-escalation defaults to level 2 (the first real on-call human).
+func resolveReescalateLevel() uint {
+	lvl := viper.GetInt("reescalate_level")
+	if lvl <= 0 {
+		return reEscalateDefaultPolicyLevel
+	}
+	return uint(lvl)
 }
 
 func InitialModel(
@@ -321,6 +338,7 @@ func InitialModel(
 	m.watcherDedup = newWatcherDedup(5 * time.Minute)
 	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
+	m.reescalateLevel = resolveReescalateLevel()
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
@@ -434,6 +452,7 @@ func InitialModelWithConfig(
 	m.watcherDedup = newWatcherDedup(5 * time.Minute)
 	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
+	m.reescalateLevel = resolveReescalateLevel()
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{

@@ -9,6 +9,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // MockManageIncidentsMoreClient is a specialized mock that returns More=true
@@ -951,6 +952,54 @@ func TestReEscalateIncidents_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 2) // Mock returns 2
+}
+
+func TestReEscalateIncidents_SamePolicy_OmitsPolicySendsLevelOnly(t *testing.T) {
+	// Re-escalating in place: the target policy is the incident's CURRENT policy.
+	// PagerDuty restarts escalation at level 1 whenever escalation_policy is set, so
+	// re-sending the same policy would override the requested level (dropping the
+	// incident back to level 1 = "Nobody"). To jump to level 2 in place we must send
+	// escalation_level ONLY and OMIT escalation_policy.
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}, Email: "user@example.com"}
+	incidents := []pagerduty.Incident{
+		{
+			APIObject:        pagerduty.APIObject{ID: "INCIDENT1"},
+			EscalationPolicy: pagerduty.APIObject{ID: "POLICY1"},
+		},
+	}
+	policy := &pagerduty.EscalationPolicy{APIObject: pagerduty.APIObject{ID: "POLICY1"}}
+
+	_, err := ReEscalateIncidents(mockClient, incidents, user, policy, 2)
+
+	assert.NoError(t, err)
+	require.Len(t, mockClient.LastManageIncidentsOpts, 1)
+	opt := mockClient.LastManageIncidentsOpts[0]
+	assert.Equal(t, uint(2), opt.EscalationLevel, "should send the requested escalation level")
+	assert.Nil(t, opt.EscalationPolicy,
+		"must omit escalation_policy for in-place re-escalation, or PD resets to level 1")
+}
+
+func TestReEscalateIncidents_DifferentPolicy_SendsPolicy(t *testing.T) {
+	// Moving to a DIFFERENT policy (e.g. silencing to a silent policy) must still send
+	// escalation_policy — that is the whole point of the move.
+	mockClient := &MockPagerDutyClient{}
+	user := &pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}, Email: "user@example.com"}
+	incidents := []pagerduty.Incident{
+		{
+			APIObject:        pagerduty.APIObject{ID: "INCIDENT1"},
+			EscalationPolicy: pagerduty.APIObject{ID: "POLICY1"},
+		},
+	}
+	silentPolicy := &pagerduty.EscalationPolicy{APIObject: pagerduty.APIObject{ID: "SILENT_POLICY"}}
+
+	_, err := ReEscalateIncidents(mockClient, incidents, user, silentPolicy, 1)
+
+	assert.NoError(t, err)
+	require.Len(t, mockClient.LastManageIncidentsOpts, 1)
+	opt := mockClient.LastManageIncidentsOpts[0]
+	require.NotNil(t, opt.EscalationPolicy, "must send escalation_policy when moving to a different policy")
+	assert.Equal(t, "SILENT_POLICY", opt.EscalationPolicy.ID)
 }
 
 func TestReEscalateIncidents_EmptyIncidentID(t *testing.T) {

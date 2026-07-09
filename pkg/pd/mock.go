@@ -29,6 +29,11 @@ type MockPagerDutyClient struct {
 	// GetCurrentUserErr, when non-nil, causes GetCurrentUserWithContext to return this error.
 	GetCurrentUserErr error
 
+	// LastManageIncidentsOpts records the options from the most recent
+	// ManageIncidentsWithContext call, so tests can assert exactly what was sent
+	// (e.g. EscalationLevel and whether EscalationPolicy was included).
+	LastManageIncidentsOpts []pagerduty.ManageIncidentsOptions
+
 	// ListMembersResponses is an optional response queue for
 	// ListMembersWithContext. When populated, successive calls pop from the
 	// front of the slice. When empty or nil, a default response is returned.
@@ -164,6 +169,7 @@ func (m *MockPagerDutyClient) ListIncidentNotesWithContext(ctx context.Context, 
 
 func (m *MockPagerDutyClient) ManageIncidentsWithContext(ctx context.Context, email string, opts []pagerduty.ManageIncidentsOptions) (*pagerduty.ListIncidentsResponse, error) {
 	m.recordCall("ManageIncidentsWithContext")
+	m.LastManageIncidentsOpts = opts
 	var response = &pagerduty.ListIncidentsResponse{}
 
 	for _, opt := range opts {
