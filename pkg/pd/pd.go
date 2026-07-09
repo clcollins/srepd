@@ -482,11 +482,22 @@ func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident,
 			return nil, fmt.Errorf("pd.Re-escalateIncident(): incident is nil")
 		}
 
-		opts = append(opts, pagerduty.ManageIncidentsOptions{
-			ID:               incident.ID,
-			EscalationPolicy: &pagerduty.APIReference{ID: policy.ID, Type: "escalation_policy"},
-			EscalationLevel:  level,
-		})
+		opt := pagerduty.ManageIncidentsOptions{
+			ID:              incident.ID,
+			EscalationLevel: level,
+		}
+
+		// PagerDuty restarts escalation at level 1 whenever escalation_policy is
+		// set on an incident. So we only send escalation_policy when we are
+		// *moving* the incident to a DIFFERENT policy (e.g. silencing to a silent
+		// policy). For an in-place re-escalation — where the target policy is the
+		// incident's current policy — we omit escalation_policy so the requested
+		// EscalationLevel actually takes effect instead of being reset to level 1.
+		if policy.ID != incident.EscalationPolicy.ID {
+			opt.EscalationPolicy = &pagerduty.APIReference{ID: policy.ID, Type: "escalation_policy"}
+		}
+
+		opts = append(opts, opt)
 	}
 
 	return loopManageIncidents(client, ctx, user.Email, opts)

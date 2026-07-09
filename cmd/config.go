@@ -46,6 +46,7 @@ var safeToLogConfigKeys = map[string]bool{
 	"log_to_journal":                     true,
 	"log_level":                          true,
 	"agent_cli_command":                  true,
+	"reescalate_level":                   true,
 }
 
 // maskConfigValue returns value if key is on the safe-to-log allowlist, otherwise

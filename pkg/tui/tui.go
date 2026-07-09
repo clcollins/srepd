@@ -1436,9 +1436,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Create re-escalate commands for each policy group
 		var cmds []tea.Cmd
+		reescalateLevel := m.reescalateLevel
+		if reescalateLevel == 0 {
+			reescalateLevel = reEscalateDefaultPolicyLevel
+		}
 		for policyID, incidents := range policyGroups {
 			// Fetch the full escalation policy details for this policy ID
-			cmd := fetchEscalationPolicyAndReEscalate(m.config, incidents, policyID, reEscalateDefaultPolicyLevel)
+			cmd := fetchEscalationPolicyAndReEscalate(m.config, incidents, policyID, reescalateLevel)
 			cmds = append(cmds, cmd)
 		}
 

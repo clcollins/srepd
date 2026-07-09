@@ -76,6 +76,7 @@ If no config file exists, running `srepd` automatically enters the configuration
 | `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`) |
 | `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries |
 | `emoji` | `bool` | `true` | Use emoji markers or text fallbacks for flags/agent/watcher |
+| `reescalate_level` | `int` | `2` | Escalation level `ctrl+e` re-escalates to, skipping lower placeholder tiers (e.g. level 1 "Nobody") |
 | `agent_system_prompt` | `string` | (read-only investigation) | System prompt for `:agent` CLI queries |
 | `watcher_system_prompt` | `string` | (SRE assistant) | System prompt for `:watcher` LLM queries |
 | `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
