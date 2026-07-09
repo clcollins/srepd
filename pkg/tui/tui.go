@@ -907,20 +907,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		//    - When user presses 'l' to login (needs alerts)
 		// This reduces unnecessary API calls from O(n) to O(1) per incident list update.
 
-		// Check if any incidents should be auto-acknowledged;
-		// This must be done before adding the stale incidents
+		// Check if any incidents should be auto-acknowledged.
+		// The on-call check is done OFF the Update loop (checkOnCallAndAcknowledge)
+		// so a slow PagerDuty request never freezes the UI. On-call status is checked
+		// live every refresh — never cached — so leaving SREPD running past a shift
+		// stops auto-ack within one cycle.
+		//
+		// First compute the on-call-independent candidates (assigned && !acked). Only
+		// if there are candidates do we dispatch the on-call check, avoiding an API
+		// call every refresh when nothing is assigned to the user.
 		if m.autoAcknowledge {
-			// Cache the on-call check - it's the same for all incidents in this update
-			userIsOnCall := UserIsOnCall(m.config, m.config.CurrentUser.ID)
-
 			for _, i := range m.incidentList {
-				if ShouldBeAcknowledgedCached(i, m.config.CurrentUser.ID, userIsOnCall) {
+				if AssignedToUser(i, m.config.CurrentUser.ID) && !AcknowledgedByUser(i, m.config.CurrentUser.ID) {
 					acknowledgeIncidentsList = append(acknowledgeIncidentsList, i)
 				}
 			}
 
 			if len(acknowledgeIncidentsList) > 0 {
-				cmds = append(cmds, func() tea.Msg { return acknowledgeIncidentsMsg{incidents: acknowledgeIncidentsList} })
+				cmds = append(cmds, checkOnCallAndAcknowledge(m.config, m.config.CurrentUser.ID, acknowledgeIncidentsList))
 			}
 		}
 
@@ -1378,6 +1382,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			log.Debug("renderedIncidentMsg", "action", "discarding render - incident was closed")
 		}
+
+	case noAcknowledgeMsg:
+		// Background auto-ack sweep found nothing to acknowledge (user not on-call,
+		// on-call check failed, or no candidate matched). No-op — deliberately NOT an
+		// acknowledgeIncidentsMsg, whose nil-incidents fallback would ack the selected
+		// incident.
+		return m, nil
 
 	case acknowledgeIncidentsMsg:
 		// If incidents are provided in the message, use those

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/coreos/go-systemd/journal"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -551,4 +552,22 @@ func TestJournalWriter_WriteError(t *testing.T) {
 	n, err := jw.Write([]byte("test"))
 	assert.Error(t, err)
 	assert.Equal(t, 0, n)
+}
+
+// TestResolveConfigFilePath verifies the config-path resolver surfaces a home-dir
+// lookup error instead of silently producing a bogus relative path (the previous
+// `home, _ := os.UserHomeDir()` ignored the error, so an empty home yielded a
+// relative ".config/srepd/srepd.yaml" resolved against CWD).
+func TestResolveConfigFilePath(t *testing.T) {
+	t.Run("returns joined path on success", func(t *testing.T) {
+		path, err := resolveConfigFilePath(func() (string, error) { return "/home/user", nil })
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join("/home/user", pkgconfig.CfgFileDir, pkgconfig.CfgFileName), path)
+	})
+
+	t.Run("surfaces home dir error", func(t *testing.T) {
+		_, err := resolveConfigFilePath(func() (string, error) { return "", fmt.Errorf("no home") })
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no home")
+	})
 }

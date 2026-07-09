@@ -6,17 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 )
 
 type ollamaProvider struct {
-	endpoint   string
-	model      string
-	httpClient *http.Client
+	endpoint       string
+	model          string
+	httpClient     *http.Client
+	requestTimeout time.Duration
 }
 
 func newOllamaProvider(cfg Config) (*ollamaProvider, error) {
@@ -31,9 +32,10 @@ func newOllamaProvider(cfg Config) (*ollamaProvider, error) {
 	}
 
 	return &ollamaProvider{
-		endpoint:   strings.TrimRight(endpoint, "/"),
-		model:      model,
-		httpClient: &http.Client{},
+		endpoint:       strings.TrimRight(endpoint, "/"),
+		model:          model,
+		httpClient:     &http.Client{},
+		requestTimeout: defaultRequestTimeout,
 	}, nil
 }
 
@@ -59,6 +61,8 @@ type ollamaChatResponse struct {
 
 func (p *ollamaProvider) Query(ctx context.Context, systemPrompt string, userPrompt string) (string, error) {
 	log.Debug("ollama.Query", "endpoint", p.endpoint, "model", p.model)
+	ctx, cancel := ensureTimeout(ctx, p.requestTimeout)
+	defer cancel()
 	messages := buildOllamaMessages(systemPrompt, userPrompt)
 
 	body, err := json.Marshal(ollamaChatRequest{
@@ -83,8 +87,8 @@ func (p *ollamaProvider) Query(ctx context.Context, systemPrompt string, userPro
 	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("ollama: server returned %d: %s", resp.StatusCode, string(respBody))
+		// Status code only — the body may echo request headers (see openai provider).
+		return "", fmt.Errorf("ollama: server returned %d", resp.StatusCode)
 	}
 
 	var chatResp ollamaChatResponse
@@ -123,8 +127,8 @@ func (p *ollamaProvider) StreamQuery(ctx context.Context, systemPrompt string, u
 	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ollama: server returned %d: %s", resp.StatusCode, string(respBody))
+		// Status code only — the body may echo request headers (see openai provider).
+		return fmt.Errorf("ollama: server returned %d", resp.StatusCode)
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -157,6 +161,8 @@ func (p *ollamaProvider) StreamQuery(ctx context.Context, systemPrompt string, u
 
 func (p *ollamaProvider) Healthy(ctx context.Context) error {
 	log.Debug("ollama.Healthy", "endpoint", p.endpoint)
+	ctx, cancel := ensureTimeout(ctx, p.requestTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.endpoint+"/api/tags", nil)
 	if err != nil {
 		return fmt.Errorf("ollama: create health request: %w", err)
