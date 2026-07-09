@@ -160,6 +160,26 @@ func TestClusterIDPattern(t *testing.T) {
 	}
 }
 
+func TestValidClusterID(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		valid bool
+	}{
+		{"uuid format", "e7c5363a-fake-uuid-test-edf99fc3ea25", true},
+		{"alphanumeric with underscore", "cluster_id_123", true},
+		{"empty", "", false},
+		{"argument injection with flag", "abc --evil-flag x", false},
+		{"spaces", "cluster id", false},
+		{"shell metacharacters", "abc;rm -rf", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.valid, ValidClusterID(tt.input))
+		})
+	}
+}
+
 func TestLoadMockClientFromFixtures(t *testing.T) {
 	t.Run("loads all fixture types from directory", func(t *testing.T) {
 		mock, err := LoadMockClientFromFixtures("../../testdata/fixtures")

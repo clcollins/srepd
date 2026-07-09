@@ -380,6 +380,21 @@ func GetCurrentUserTeams(client PagerDutyClient) ([]pagerduty.Team, error) {
 	return user.Teams, nil
 }
 
+// GetCurrentUser returns the currently-authenticated PagerDuty user, applying the
+// default API timeout. It exists so callers do not open-code
+// GetCurrentUserWithContext(context.Background(), ...), which has no timeout.
+func GetCurrentUser(client PagerDutyClient) (*pagerduty.User, error) {
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	user, err := client.GetCurrentUserWithContext(ctx, pagerduty.GetCurrentUserOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("pd.GetCurrentUser(): failed to get current user: %w", err)
+	}
+
+	return user, nil
+}
+
 func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCallOptions) ([]pagerduty.OnCall, error) {
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
