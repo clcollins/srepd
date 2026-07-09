@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -156,6 +157,14 @@ type model struct {
 	watcherQueryTimeout time.Duration
 	typewriter          *typewriterState
 
+	// Live streaming state. When streamResponses is true and the provider supports
+	// streaming, watcher responses are appended token-by-token as they arrive
+	// (watcherStreamPartial accumulates the in-progress response). watcherStreamCancel
+	// aborts the in-flight stream when a new query supersedes it.
+	streamResponses      bool
+	watcherStreamPartial string
+	watcherStreamCancel  context.CancelFunc
+
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
 
@@ -241,6 +250,16 @@ func resolveReescalateLevel() uint {
 		return reEscalateDefaultPolicyLevel
 	}
 	return uint(lvl)
+}
+
+// resolveStreamResponses returns whether watcher/LLM responses should stream token
+// by token. Defaults to true (stream when the provider supports it); set the
+// stream_responses config key to false to force blocking responses.
+func resolveStreamResponses() bool {
+	if !viper.IsSet("stream_responses") {
+		return true
+	}
+	return viper.GetBool("stream_responses")
 }
 
 func InitialModel(
@@ -339,6 +358,7 @@ func InitialModel(
 	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 	m.reescalateLevel = resolveReescalateLevel()
+	m.streamResponses = resolveStreamResponses()
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
@@ -453,6 +473,7 @@ func InitialModelWithConfig(
 	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 	m.reescalateLevel = resolveReescalateLevel()
+	m.streamResponses = resolveStreamResponses()
 
 	if aiProvider != nil {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
