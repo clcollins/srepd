@@ -39,6 +39,9 @@ func (p *openaiCompatProvider) Name() string {
 	return "openai"
 }
 
+// SupportsStreaming reports that this provider streams tokens via StreamQuery.
+func (p *openaiCompatProvider) SupportsStreaming() bool { return true }
+
 type openaiChatRequest struct {
 	Model    string              `json:"model"`
 	Messages []openaiChatMessage `json:"messages"`

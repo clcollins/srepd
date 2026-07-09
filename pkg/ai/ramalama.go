@@ -26,6 +26,9 @@ func (p *ramalamaProvider) Name() string {
 	return "ramalama"
 }
 
+// SupportsStreaming reports that this provider streams tokens via StreamQuery.
+func (p *ramalamaProvider) SupportsStreaming() bool { return true }
+
 func (p *ramalamaProvider) Query(ctx context.Context, systemPrompt string, userPrompt string) (string, error) {
 	return p.inner.Query(ctx, systemPrompt, userPrompt)
 }
