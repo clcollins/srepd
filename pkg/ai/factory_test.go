@@ -234,16 +234,6 @@ func TestValidateConfig_Invalid(t *testing.T) {
 	}
 }
 
-func TestKnownProviders(t *testing.T) {
-	providers := KnownProviders()
-
-	assert.Contains(t, providers, "anthropic")
-	assert.Contains(t, providers, "ollama")
-	assert.Contains(t, providers, "openai")
-	assert.Contains(t, providers, "ramalama")
-	assert.Len(t, providers, 4)
-}
-
 func TestProviderRegistry_Defaults(t *testing.T) {
 	tests := []struct {
 		name            string

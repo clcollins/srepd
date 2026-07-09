@@ -89,12 +89,3 @@ func ValidateConfig(cfg Config) error {
 
 	return nil
 }
-
-// KnownProviders returns the names of all registered providers.
-func KnownProviders() []string {
-	names := make([]string, 0, len(providerRegistry))
-	for name := range providerRegistry {
-		names = append(names, name)
-	}
-	return names
-}
