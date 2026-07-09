@@ -153,7 +153,13 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 		agentCmd = "claude --print"
 	}
 
-	binary := strings.Fields(agentCmd)[0]
+	// Guard against a whitespace-only command: strings.Fields returns an empty
+	// slice, so indexing [0] would panic (mirrors agentQuery's len==0 check).
+	fields := strings.Fields(agentCmd)
+	if len(fields) == 0 {
+		return m, m.flashNotification("agent_cli_command is empty")
+	}
+	binary := fields[0]
 	if _, err := lookPath(binary); err != nil {
 		return m, m.flashNotification(fmt.Sprintf("agent CLI %q not found on PATH", binary))
 	}
