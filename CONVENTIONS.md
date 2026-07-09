@@ -3,7 +3,7 @@
 ## Language -- Go
 
 - Language: Go
-- Go version: 1.26.3 (from go.mod)
+- Go version: 1.26.5 (from go.mod)
 - Module path: `github.com/clcollins/srepd`
 - Entry point: `main.go` using cobra + viper
 - Linter: golangci-lint
@@ -39,13 +39,14 @@ docs/plans/       Plan documents (one per PR)
 - All targets `.PHONY`
 - Must include `build`, `test`, `lint`, `clean`, `fmt`, `coverage`,
   `vet`, and `test-all` targets
-- `test-all` runs all checks: `fmt-check`, `vet`, `lint`, `test`
+- `test-all` runs all checks: `fmt-check`, `vet`, `lint`, `test`,
+  `test-race`, `test-fixtures`
 - Each target is independently callable
 - `test` runs unit tests only (no lint dependency)
 - `fmt-check` exits non-zero if code is unformatted (CI-friendly)
 - Variables for configurable values (Go binary path, lint version)
-- Build output: goreleaser for releases, `/tmp/` or `GOPATH/bin` for
-  dev installs
+- Build output: goreleaser for releases; `make install` →
+  `$GOPATH/bin`, `make install-local` → `~/.local/bin`
 
 ## CI Testing
 

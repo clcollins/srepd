@@ -446,6 +446,32 @@ func TestGetCurrentUserTeams_Error(t *testing.T) {
 	assert.Nil(t, teams)
 }
 
+func TestGetCurrentUser_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+
+	user, err := GetCurrentUser(mockClient)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, "MOCK_USER", user.ID)
+	assert.Equal(t, "mock@example.com", user.Email)
+	// The wrapper must apply a timeout context, so it routes through
+	// GetCurrentUserWithContext (not a bare Background call).
+	assert.GreaterOrEqual(t, mockClient.CallCounts["GetCurrentUserWithContext"], 1)
+}
+
+func TestGetCurrentUser_Error(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		GetCurrentUserErr: ErrMockError,
+	}
+
+	user, err := GetCurrentUser(mockClient)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetCurrentUser()")
+	assert.Nil(t, user)
+}
+
 func TestNewConfig_Success(t *testing.T) {
 	mockClient := &MockPagerDutyClient{}
 	policies := map[string]string{
@@ -834,6 +860,30 @@ func TestReassignIncidents_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 2)
+}
+
+func TestReassignIncidents_NilUser(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	incidents := []pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}}}
+
+	// A nil "from" user must return an error, not panic on user.Email.
+	result, err := ReassignIncidents(mockClient, incidents, nil, []*pagerduty.User{})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.ReassignIncidents()")
+	assert.Nil(t, result)
+}
+
+func TestReEscalateIncidents_NilUser(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	incidents := []pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "INCIDENT1"}}}
+	policy := &pagerduty.EscalationPolicy{APIObject: pagerduty.APIObject{ID: "POL1"}}
+
+	result, err := ReEscalateIncidents(mockClient, incidents, nil, policy, 1)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.ReEscalateIncidents()")
+	assert.Nil(t, result)
 }
 
 func TestReassignIncidents_EmptyIncidents(t *testing.T) {

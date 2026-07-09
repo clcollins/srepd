@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"sync/atomic"
 )
 
@@ -34,8 +35,13 @@ import (
 // The background goroutine periodically emits a synthetic log entry
 // reporting how many messages were dropped.
 type asyncWriter struct {
-	out     chan []byte
-	done    chan struct{}
+	out  chan []byte
+	done chan struct{}
+	// mu guards closed AND the send on out in Write, so a Write can never send on
+	// a channel that Close has already closed (which would panic). A plain bool or
+	// atomic.Bool is insufficient: the closed-check and the channel-send are two
+	// separate operations, and Close could run between them.
+	mu      sync.Mutex
 	closed  bool
 	dropped uint64 // accessed atomically
 }
@@ -81,13 +87,19 @@ func newAsyncWriter(w io.Writer, bufferSize int) *asyncWriter {
 }
 
 func (aw *asyncWriter) Write(p []byte) (n int, err error) {
+	// Make a copy since the caller might reuse the buffer. Done before taking the
+	// lock to keep the critical section small.
+	msg := make([]byte, len(p))
+	copy(msg, p)
+
+	// Hold mu across the closed-check AND the send so Close cannot close aw.out
+	// between them (which would panic with "send on closed channel").
+	aw.mu.Lock()
+	defer aw.mu.Unlock()
+
 	if aw.closed {
 		return 0, os.ErrClosed
 	}
-
-	// Make a copy since the caller might reuse the buffer
-	msg := make([]byte, len(p))
-	copy(msg, p)
 
 	// Non-blocking send - if buffer is full, drop the message
 	// This prevents blocking the UI if logging falls behind
@@ -107,10 +119,19 @@ func (aw *asyncWriter) Dropped() uint64 {
 }
 
 func (aw *asyncWriter) Close() error {
-	if !aw.closed {
-		aw.closed = true
-		close(aw.out)
-		<-aw.done // Wait for goroutine to finish
+	aw.mu.Lock()
+	if aw.closed {
+		aw.mu.Unlock()
+		return nil
 	}
+	aw.closed = true
+	close(aw.out)
+	// Release the lock before waiting on the drain goroutine: Write's send is
+	// non-blocking, so the goroutine's completion does not depend on mu, and
+	// holding it would needlessly block concurrent Writes (which will now see
+	// closed==true and return os.ErrClosed).
+	aw.mu.Unlock()
+
+	<-aw.done // Wait for goroutine to finish
 	return nil
 }

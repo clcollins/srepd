@@ -6,18 +6,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 )
 
 type openaiCompatProvider struct {
-	endpoint   string
-	model      string
-	apiKey     string
-	httpClient *http.Client
+	endpoint       string
+	model          string
+	apiKey         string
+	httpClient     *http.Client
+	requestTimeout time.Duration
 }
 
 func newOpenAICompatProvider(cfg Config, apiKey string) (*openaiCompatProvider, error) {
@@ -26,10 +27,11 @@ func newOpenAICompatProvider(cfg Config, apiKey string) (*openaiCompatProvider, 
 	}
 
 	return &openaiCompatProvider{
-		endpoint:   strings.TrimRight(cfg.Endpoint, "/"),
-		model:      cfg.Model,
-		apiKey:     apiKey,
-		httpClient: &http.Client{},
+		endpoint:       strings.TrimRight(cfg.Endpoint, "/"),
+		model:          cfg.Model,
+		apiKey:         apiKey,
+		httpClient:     &http.Client{},
+		requestTimeout: defaultRequestTimeout,
 	}, nil
 }
 
@@ -59,6 +61,8 @@ type openaiChoice struct {
 
 func (p *openaiCompatProvider) Query(ctx context.Context, systemPrompt string, userPrompt string) (string, error) {
 	log.Debug("openai.Query", "endpoint", p.endpoint, "model", p.model)
+	ctx, cancel := ensureTimeout(ctx, p.requestTimeout)
+	defer cancel()
 	messages := buildOpenAIMessages(systemPrompt, userPrompt)
 
 	body, err := json.Marshal(openaiChatRequest{
@@ -83,8 +87,10 @@ func (p *openaiCompatProvider) Query(ctx context.Context, systemPrompt string, u
 	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("openai: server returned %d: %s", resp.StatusCode, string(respBody))
+		// Do NOT include the response body: a proxy/gateway may echo the
+		// Authorization header back in its error body, which would leak the API
+		// token into logs. Status code only (matches the Healthy method).
+		return "", fmt.Errorf("openai: server returned %d", resp.StatusCode)
 	}
 
 	var chatResp openaiChatResponse
@@ -127,8 +133,8 @@ func (p *openaiCompatProvider) StreamQuery(ctx context.Context, systemPrompt str
 	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("openai: server returned %d: %s", resp.StatusCode, string(respBody))
+		// Status code only — see the Query method: the body may echo the token.
+		return fmt.Errorf("openai: server returned %d", resp.StatusCode)
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -163,6 +169,8 @@ func (p *openaiCompatProvider) StreamQuery(ctx context.Context, systemPrompt str
 
 func (p *openaiCompatProvider) Healthy(ctx context.Context) error {
 	log.Debug("openai.Healthy", "endpoint", p.endpoint)
+	ctx, cancel := ensureTimeout(ctx, p.requestTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.endpoint+"/v1/models", nil)
 	if err != nil {
 		return fmt.Errorf("openai: create health request: %w", err)

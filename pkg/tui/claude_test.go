@@ -457,6 +457,25 @@ func TestHandleClaudePrompt_DefaultCommand(t *testing.T) {
 	assert.True(t, updated.claudeQuerying)
 }
 
+func TestHandleClaudePrompt_WhitespaceOnlyCommand(t *testing.T) {
+	// A whitespace-only agentCLICommand is non-empty, so it skips the "" default,
+	// but strings.Fields returns an empty slice — indexing [0] would panic. The
+	// handler must guard this (mirroring agentQuery's len==0 check) and flash an
+	// error instead of panicking. Library code must never panic.
+	m := createTestModel()
+	m.agentCLICommand = "   "
+
+	msg := claudePromptMsg{prompt: "test"}
+	assert.NotPanics(t, func() {
+		result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+			return s, nil
+		})
+		updated := result.(model)
+		assert.False(t, updated.claudeQuerying, "should not start a query on an empty command")
+		assert.NotNil(t, cmd, "should flash a notification rather than panic")
+	})
+}
+
 func TestHandleClaudePrompt_CustomCommand(t *testing.T) {
 	m := createTestModel()
 	m.agentCLICommand = "/opt/bin/my-agent --verbose --print"

@@ -19,28 +19,44 @@ import (
 
 type tuiMockFS struct {
 	mkdirAllErr error
+	mkdirPerm   os.FileMode
 	readData    []byte
 	readErr     error
 	writeData   []byte
+	writePerm   os.FileMode
 	writeErr    error
 	backupData  []byte
+	backupPerm  os.FileMode
 }
 
-func (f *tuiMockFS) MkdirAll(_ string, _ os.FileMode) error { return f.mkdirAllErr }
-func (f *tuiMockFS) ReadFile(_ string) ([]byte, error)      { return f.readData, f.readErr }
-func (f *tuiMockFS) WriteFile(name string, data []byte, _ os.FileMode) error {
+func (f *tuiMockFS) MkdirAll(_ string, perm os.FileMode) error {
+	f.mkdirPerm = perm
+	return f.mkdirAllErr
+}
+func (f *tuiMockFS) ReadFile(_ string) ([]byte, error) { return f.readData, f.readErr }
+func (f *tuiMockFS) WriteFile(name string, data []byte, perm os.FileMode) error {
 	if f.writeErr != nil {
 		return f.writeErr
 	}
 	if strings.HasSuffix(name, "~") {
 		f.backupData = data
+		f.backupPerm = perm
 	} else {
 		f.writeData = data
+		f.writePerm = perm
 	}
 	return nil
 }
 func (f *tuiMockFS) OpenFile(_ string, _ int, _ os.FileMode) (io.WriteCloser, error) {
 	return nopCloser{&bytes.Buffer{}}, nil
+}
+func (f *tuiMockFS) Chmod(name string, mode os.FileMode) error {
+	if strings.HasSuffix(name, "~") {
+		f.backupPerm = mode
+	} else {
+		f.writePerm = mode
+	}
+	return nil
 }
 
 type nopCloser struct{ io.Writer }
@@ -575,6 +591,26 @@ func TestWriteConfigCmd_NewFile(t *testing.T) {
 		assert.NotEmpty(t, fs.writeData, "should write config data")
 		assert.Contains(t, string(fs.writeData), "FAKE_TOKEN_XYZ")
 		assert.Nil(t, fs.backupData, "new file should not create backup")
+	})
+}
+
+func TestWriteConfigCmd_UsesOwnerOnlyPerms(t *testing.T) {
+	t.Run("config dir is 0700 and config file is 0600", func(t *testing.T) {
+		fs := &tuiMockFS{}
+		final := pkgconfig.ResolvedValues{
+			Token: "FAKE_TOKEN_XYZ",
+			Teams: []string{"TEAM_001"},
+		}
+		changes := pkgconfig.ConfigChanges{TokenChanged: true, TeamsChanged: true}
+
+		cmd := writeConfigCmd(final, changes, nil, nil, true, fs)
+		result := cmd()
+		savedMsg, ok := result.(configSavedMsg)
+
+		assert.True(t, ok, "should return configSavedMsg")
+		assert.NoError(t, savedMsg.err)
+		assert.Equal(t, os.FileMode(0700), fs.mkdirPerm, "config dir must be created 0700")
+		assert.Equal(t, os.FileMode(0600), fs.writePerm, "token-bearing config file must be 0600")
 	})
 }
 

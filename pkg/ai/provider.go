@@ -1,6 +1,25 @@
 package ai
 
-import "context"
+import (
+	"context"
+	"time"
+)
+
+// defaultRequestTimeout bounds non-streaming provider requests when the caller's
+// context carries no deadline. Streaming requests are intentionally not bounded here
+// (a whole-request timeout would truncate long token streams); they rely on the
+// caller's context.
+const defaultRequestTimeout = 60 * time.Second
+
+// ensureTimeout returns ctx unchanged if it already has a deadline; otherwise it
+// derives a context bounded by timeout. The returned cancel func must always be
+// called by the caller.
+func ensureTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
 
 // Provider defines the interface for LLM API integrations.
 // Implementations must be safe for concurrent use.
