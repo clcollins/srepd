@@ -27,6 +27,36 @@ const description = `The config command is used to create or validate the SREPD 
 The config file is located at ~/.config/srepd/srepd.yaml and is used to store
 the configuration options for the SREPD application.`
 
+// safeToLogConfigKeys is the allowlist of config keys whose values are safe to log
+// verbatim under --debug. Any key not in this set is masked, so secret-bearing keys
+// are protected by default rather than only when their name literally contains
+// "token" (which missed api_key, secret, password, etc.).
+var safeToLogConfigKeys = map[string]bool{
+	"teams":                              true,
+	"editor":                             true,
+	"terminal":                           true,
+	"cluster_login_command":              true,
+	"toolbox_mode":                       true,
+	"rosa_boundary_command":              true,
+	"ignoredusers":                       true,
+	"colors":                             true,
+	"default_silent_escalation_policy":   true,
+	"service_escalation_policies":        true,
+	"custom_service_escalation_policies": true,
+	"log_to_journal":                     true,
+	"log_level":                          true,
+	"agent_cli_command":                  true,
+}
+
+// maskConfigValue returns value if key is on the safe-to-log allowlist, otherwise
+// "*****". Masking by default protects any current or future secret-bearing key.
+func maskConfigValue(key, value string) string {
+	if safeToLogConfigKeys[key] {
+		return value
+	}
+	return "*****"
+}
+
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:          "config",
@@ -170,12 +200,7 @@ func validateConfig() error {
 			continue
 		}
 
-		var v string
-
-		v = fmt.Sprintf("%v", settings[k])
-		if strings.Contains(k, "token") {
-			v = "*****"
-		}
+		v := maskConfigValue(k, fmt.Sprintf("%v", settings[k]))
 
 		log.Debug("Found key", k, v)
 
