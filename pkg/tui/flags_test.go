@@ -211,6 +211,57 @@ func TestEvaluateFlags_NoOCMData(t *testing.T) {
 	})
 }
 
+func TestEvaluateFlags_OrgIDMatch(t *testing.T) {
+	t.Run("matches by organization ID", func(t *testing.T) {
+		conditions := []FlagCondition{
+			{ID: 1, Type: FlagOrgName, Pattern: "1a2b3c4d5e", CreatedAt: time.Now()},
+		}
+		result := evaluateFlags(
+			[]string{"INC001"},
+			conditions,
+			map[string][]string{"INC001": {"cluster1"}},
+			map[string]*ocm.ClusterInfo{
+				"cluster1": {ID: "cluster1", Organization: "Fake Aeronautical Ltd", OrganizationID: "1a2b3c4d5e6f7g8h9i0j"},
+			},
+		)
+		assert.Equal(t, []int{1}, result["INC001"])
+	})
+}
+
+func TestEvaluateFlags_OrgIDExactMatch(t *testing.T) {
+	t.Run("matches org ID exactly when no org name present", func(t *testing.T) {
+		conditions := []FlagCondition{
+			{ID: 1, Type: FlagOrgName, Pattern: "1a2b3c4d5e6f7g8h9i0j", CreatedAt: time.Now()},
+		}
+		result := evaluateFlags(
+			[]string{"INC001"},
+			conditions,
+			map[string][]string{"INC001": {"cluster1"}},
+			map[string]*ocm.ClusterInfo{
+				"cluster1": {ID: "cluster1", OrganizationID: "1a2b3c4d5e6f7g8h9i0j"},
+			},
+		)
+		assert.Equal(t, []int{1}, result["INC001"])
+	})
+}
+
+func TestEvaluateFlags_OrgNameMatchesButNotID(t *testing.T) {
+	t.Run("matches org name even when org ID does not match", func(t *testing.T) {
+		conditions := []FlagCondition{
+			{ID: 1, Type: FlagOrgName, Pattern: "Aeronautical", CreatedAt: time.Now()},
+		}
+		result := evaluateFlags(
+			[]string{"INC001"},
+			conditions,
+			map[string][]string{"INC001": {"cluster1"}},
+			map[string]*ocm.ClusterInfo{
+				"cluster1": {ID: "cluster1", Organization: "Fake Aeronautical Ltd", OrganizationID: "zzzzzzzzz"},
+			},
+		)
+		assert.Equal(t, []int{1}, result["INC001"])
+	})
+}
+
 func TestEvaluateFlags_MultipleConditions(t *testing.T) {
 	t.Run("returns multiple matching condition IDs", func(t *testing.T) {
 		conditions := []FlagCondition{
