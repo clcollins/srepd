@@ -1110,7 +1110,11 @@ func getSOPLink(alerts []pagerduty.IncidentAlert) (string, bool) {
 }
 
 // getUniqueClusters extracts deduplicated cluster_ids from alerts, preserving
-// the order of first appearance. Alerts without a cluster_id are skipped.
+// the order of first appearance. Alerts without a cluster_id are skipped, as are
+// values that are not well-formed cluster IDs (ocm.ValidClusterID). Cluster IDs
+// originate from attacker-influenceable PagerDuty alert data and are later
+// substituted into launched commands, so rejecting malformed values here prevents
+// argument injection at the launcher boundary.
 func getUniqueClusters(alerts []pagerduty.IncidentAlert) []string {
 	seen := make(map[string]bool)
 	var clusters []string
@@ -1120,10 +1124,15 @@ func getUniqueClusters(alerts []pagerduty.IncidentAlert) []string {
 			normalized := alert.NormalizeAlert(a.Service.Summary, "", a)
 			cluster = normalized.ClusterID
 		}
-		if cluster != "" && !seen[cluster] {
-			seen[cluster] = true
-			clusters = append(clusters, cluster)
+		if cluster == "" || seen[cluster] {
+			continue
 		}
+		if !ocm.ValidClusterID(cluster) {
+			log.Warn("skipping malformed cluster_id from alert data", "cluster_id", cluster)
+			continue
+		}
+		seen[cluster] = true
+		clusters = append(clusters, cluster)
 	}
 	return clusters
 }

@@ -1068,6 +1068,28 @@ func TestGetUniqueClusters_SingleCluster(t *testing.T) {
 	assert.Equal(t, []string{"cluster-abc-123"}, result)
 }
 
+func TestGetUniqueClusters_RejectsMalformedClusterID(t *testing.T) {
+	// A cluster_id from PagerDuty alert data that contains spaces / injected flags
+	// must be filtered out so it never reaches the launcher and injects arguments
+	// into the login command. A well-formed ID in the same batch is kept.
+	alerts := []pagerduty.IncidentAlert{
+		{Body: map[string]interface{}{"details": map[string]interface{}{
+			"cluster_id": "good-cluster-123",
+		}}},
+		{Body: map[string]interface{}{"details": map[string]interface{}{
+			"cluster_id": "evil --flag injected",
+		}}},
+		{Body: map[string]interface{}{"details": map[string]interface{}{
+			"cluster_id": "abc;rm -rf /",
+		}}},
+	}
+
+	result := getUniqueClusters(alerts)
+
+	assert.Equal(t, []string{"good-cluster-123"}, result,
+		"only well-formed cluster IDs may pass to the launcher")
+}
+
 func TestGetUniqueClusters_MultipleDifferent(t *testing.T) {
 	// 3 alerts with 2 distinct cluster_ids should return 2 entries
 	alerts := []pagerduty.IncidentAlert{
