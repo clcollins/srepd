@@ -3,7 +3,7 @@ unexport GOFLAGS
 GOOS ?= linux
 GOARCH ?= amd64
 GOENV = GOOS=${GOOS} GOARCH=${GOARCH} CGO_ENABLED=0 GOFLAGS=
-GOPATH := $(shell go env GOPATH | awk -F: '{print $1}')
+GOPATH := $(shell go env GOPATH | awk -F: '{print $$1}')
 BIN_DIR := $(GOPATH)/bin
 HOME ?= $(shell echo ~)
 
@@ -230,7 +230,7 @@ ensure-goreleaser: ## Ensure goreleaser is installed
 .PHONY: release
 release: ensure-goreleaser ## Create a release using goreleaser (RELEASE_NOTES=/path/to/notes.md optional)
 	@echo "Creating a release..."
-	GITHUB_TOKEN=$$(jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token) && \
+	@GITHUB_TOKEN=$$(jq -r .goreleaser_token ~/.config/goreleaser/goreleaser_token) && \
 	export GITHUB_TOKEN && \
 	goreleaser release --clean --parallelism 1 $(if $(RELEASE_NOTES),--release-notes $(RELEASE_NOTES),)
 

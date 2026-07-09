@@ -10,6 +10,11 @@ on:
     branches:
       - main
 
+# No job writes to the repo; the Codecov upload uses its own CODECOV_TOKEN secret,
+# not GITHUB_TOKEN. Grant the minimal read-only scope.
+permissions:
+  contents: read
+
 jobs:
   plan-doc:
     name: Plan Document
@@ -66,6 +71,19 @@ jobs:
 
       - name: Run go vet
         run: make vet
+
+  fixtures:
+    name: Fixture Sanitization
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # Pure grep; no Go toolchain required. Ensures no real customer UUIDs or
+      # domains leak into testdata fixtures — previously only enforced locally.
+      - name: Check fixture sanitization
+        run: make test-fixtures
 
   lint:
     name: Lint
@@ -156,7 +174,7 @@ jobs:
         run: go test ./... -coverprofile=coverage.out -covermode=atomic
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
         with:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}

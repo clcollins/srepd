@@ -446,6 +446,32 @@ func TestGetCurrentUserTeams_Error(t *testing.T) {
 	assert.Nil(t, teams)
 }
 
+func TestGetCurrentUser_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+
+	user, err := GetCurrentUser(mockClient)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, "MOCK_USER", user.ID)
+	assert.Equal(t, "mock@example.com", user.Email)
+	// The wrapper must apply a timeout context, so it routes through
+	// GetCurrentUserWithContext (not a bare Background call).
+	assert.GreaterOrEqual(t, mockClient.CallCounts["GetCurrentUserWithContext"], 1)
+}
+
+func TestGetCurrentUser_Error(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		GetCurrentUserErr: ErrMockError,
+	}
+
+	user, err := GetCurrentUser(mockClient)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pd.GetCurrentUser()")
+	assert.Nil(t, user)
+}
+
 func TestNewConfig_Success(t *testing.T) {
 	mockClient := &MockPagerDutyClient{}
 	policies := map[string]string{

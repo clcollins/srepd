@@ -86,6 +86,26 @@ func TestOllamaQuery_ServerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "500")
 }
 
+// TestOllamaQuery_DoesNotLeakHeadersInError ensures a non-200 error carries the
+// status code but not an echoed request body (which could contain headers).
+func TestOllamaQuery_DoesNotLeakHeadersInError(t *testing.T) {
+	const secret = "ollama-secret-marker"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("denied " + r.Header.Get("Authorization") + secret))
+	}))
+	defer server.Close()
+
+	provider, err := newOllamaProvider(Config{Endpoint: server.URL, Model: "m"})
+	assert.NoError(t, err)
+
+	_, err = provider.Query(context.Background(), "", "test")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "401")
+	assert.NotContains(t, err.Error(), secret, "error must not include the echoed response body")
+}
+
 func TestOllamaStreamQuery_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req ollamaChatRequest

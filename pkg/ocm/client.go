@@ -29,6 +29,14 @@ const (
 
 var clusterIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// ValidClusterID reports whether id is a well-formed cluster identifier
+// (non-empty, only [a-zA-Z0-9_-]). It is used to reject attacker-influenced
+// values from PagerDuty alert data before they are substituted into launched
+// commands, preventing argument injection.
+func ValidClusterID(id string) bool {
+	return clusterIDPattern.MatchString(id)
+}
+
 // Client wraps the OCM SDK connection for cluster enrichment.
 type Client struct {
 	conn *sdk.Connection
