@@ -264,20 +264,26 @@ func (l *ClusterLauncher) logCommand(command []string) {
 	}
 }
 
+// replaceVars substitutes template variables (e.g. %%CLUSTER_ID%%) in each arg,
+// operating per-arg so a substituted value never crosses argv boundaries. The
+// previous implementation joined all args on spaces, substituted, then split back
+// on spaces — which re-tokenized any substituted value containing a space into
+// extra argv elements. Because these args are passed to exec.Command (no shell),
+// that allowed attacker-controlled alert data (cluster/incident IDs) to inject
+// additional command-line arguments. Per-arg substitution closes that.
 func replaceVars(args []string, vars map[string]string) []string {
 	if args == nil || vars == nil {
 		return []string{}
 	}
 
-	str := strings.Join(args, " ")
-
-	for k, v := range vars {
-		log.Debug("launcher.replaceVars()", "string", str, "key", k, "value", v)
-		str = strings.ReplaceAll(str, k, v)
+	out := make([]string, len(args))
+	for i, arg := range args {
+		for k, v := range vars {
+			arg = strings.ReplaceAll(arg, k, v)
+		}
+		out[i] = arg
 	}
 
-	log.Debug("launcher.replaceVars()", "result", str)
-
-	transformedArgs := strings.Split(str, " ")
-	return transformedArgs
+	log.Debug("launcher.replaceVars()", "result", out)
+	return out
 }

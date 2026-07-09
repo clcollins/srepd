@@ -411,3 +411,44 @@ func TestLoginCommandBuild(t *testing.T) {
 		})
 	}
 }
+
+// TestReplaceVars_PreservesArgBoundaries verifies that a substituted value
+// containing spaces stays within its single argv element and does not get
+// re-tokenized into extra arguments. This is the core of the argument-injection
+// hardening: an attacker-controlled %%CLUSTER_ID%% like "x --evil-flag y" must
+// not inject extra arguments into the launched command.
+func TestReplaceVars_PreservesArgBoundaries(t *testing.T) {
+	t.Run("value with spaces stays a single argv element", func(t *testing.T) {
+		args := []string{"login", "-c", "%%CLUSTER_ID%%"}
+		vars := map[string]string{"%%CLUSTER_ID%%": "evil --flag injected"}
+
+		got := replaceVars(args, vars)
+
+		assert.Equal(t, []string{"login", "-c", "evil --flag injected"}, got,
+			"substituted value must occupy exactly one argv slot")
+		assert.Len(t, got, 3, "must not re-tokenize the substituted value into extra args")
+	})
+
+	t.Run("simple substitution without spaces is unchanged", func(t *testing.T) {
+		args := []string{"login", "-c", "%%CLUSTER_ID%%", "--incident", "%%INCIDENT_ID%%"}
+		vars := map[string]string{"%%CLUSTER_ID%%": "abcdefg", "%%INCIDENT_ID%%": "PD123456"}
+
+		got := replaceVars(args, vars)
+
+		assert.Equal(t, []string{"login", "-c", "abcdefg", "--incident", "PD123456"}, got)
+	})
+
+	t.Run("nil args or vars returns empty slice", func(t *testing.T) {
+		assert.Equal(t, []string{}, replaceVars(nil, map[string]string{"a": "b"}))
+		assert.Equal(t, []string{}, replaceVars([]string{"a"}, nil))
+	})
+
+	t.Run("multiple vars in one arg all substitute in place", func(t *testing.T) {
+		args := []string{"prefix-%%CLUSTER_ID%%-%%INCIDENT_ID%%-suffix"}
+		vars := map[string]string{"%%CLUSTER_ID%%": "CID", "%%INCIDENT_ID%%": "IID"}
+
+		got := replaceVars(args, vars)
+
+		assert.Equal(t, []string{"prefix-CID-IID-suffix"}, got)
+	})
+}
