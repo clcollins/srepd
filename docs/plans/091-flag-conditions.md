@@ -20,11 +20,11 @@ be saved/loaded to JSON for persistence.
 |------|--------|
 | `pkg/tui/flags.go` | New: FlagCondition types, matchGlob, evaluateFlags, matchClusterID, matchOrgName, renderFlagConditionsSection, formatFlagsList, rebuildFlagMatchCache |
 | `pkg/tui/flags_test.go` | New: 50+ tests for glob matching, flag evaluation, message handlers, display |
-| `pkg/tui/flag_commands.go` | New: Slash command parsing (/flag, /flags, /unflag), save/load, dispatch |
+| `pkg/tui/flag_commands.go` | New: Colon command parsing (:flag, :flags, :unflag), save/load, dispatch |
 | `pkg/tui/flag_commands_test.go` | New: 23 tests for command parsing and isFlagCommand |
 | `pkg/tui/model.go` | Add flagConditions, flagNextID, flagMarker, flagMatchCache fields |
 | `pkg/tui/tui.go` | Add message handlers, row annotation with flag marker, cache rebuild triggers |
-| `pkg/tui/msgHandlers.go` | Add f key handler, slash command routing in input mode |
+| `pkg/tui/msgHandlers.go` | Add f key handler, colon command routing in input mode |
 | `pkg/tui/keymap.go` | Add Flag key binding on f |
 | `pkg/tui/views.go` | Add flag conditions section to renderDetailsTab |
 | `pkg/config/config.go` | Add flag_marker optional config key |

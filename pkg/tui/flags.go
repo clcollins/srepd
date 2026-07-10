@@ -182,7 +182,7 @@ func formatFlagsList(conditions []FlagCondition) string {
 		}
 		fmt.Fprintf(&b, "* **#%d** [%s] %s\n", c.ID, typeName, c.Label)
 	}
-	b.WriteString("\nUse `/unflag <id>` to remove, `/unflag all` to clear.")
+	b.WriteString("\nUse `:unflag <id>` to remove, `:unflag all` to clear.")
 	return b.String()
 }
 

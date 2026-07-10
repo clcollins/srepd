@@ -119,7 +119,7 @@ that verify typing every printable character in input mode.
 (Fixed by: [093-agent-slash-command.md](093-agent-slash-command.md))
 
 Bare text in the input field fell through to Claude dispatch. When flag
-conditions (PR #304) added `/flag` slash commands, the dispatch model
+conditions (PR #304) added `:flag` colon commands, the dispatch model
 became inconsistent: some commands used slash prefixes and others did
 not.
 

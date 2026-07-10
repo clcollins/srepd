@@ -90,13 +90,13 @@ func parseFlagsSubcommand(args []string) (*parsedFlagCommand, error) {
 		}
 		return cmd, nil
 	default:
-		return nil, fmt.Errorf("unknown /flags subcommand: %s (use: save, load)", args[0])
+		return nil, fmt.Errorf("unknown :flags subcommand: %s (use: save, load)", args[0])
 	}
 }
 
 func parseFlagAdd(args []string) (*parsedFlagCommand, error) {
 	if len(args) == 0 {
-		return nil, fmt.Errorf("usage: /flag <cluster|org> <value>")
+		return nil, fmt.Errorf("usage: :flag <cluster|org> <value>")
 	}
 
 	flagType := args[0]
@@ -105,7 +105,7 @@ func parseFlagAdd(args []string) (*parsedFlagCommand, error) {
 	switch flagType {
 	case "cluster":
 		if value == "" {
-			return nil, fmt.Errorf("usage: /flag cluster <cluster-id>")
+			return nil, fmt.Errorf("usage: :flag cluster <cluster-id>")
 		}
 		return &parsedFlagCommand{
 			action: flagCmdAdd,
@@ -117,7 +117,7 @@ func parseFlagAdd(args []string) (*parsedFlagCommand, error) {
 		}, nil
 	case "org":
 		if value == "" {
-			return nil, fmt.Errorf("usage: /flag org <pattern>")
+			return nil, fmt.Errorf("usage: :flag org <pattern>")
 		}
 		return &parsedFlagCommand{
 			action: flagCmdAdd,
@@ -134,7 +134,7 @@ func parseFlagAdd(args []string) (*parsedFlagCommand, error) {
 
 func parseUnflag(args []string) (*parsedFlagCommand, error) {
 	if len(args) == 0 {
-		return nil, fmt.Errorf("usage: /unflag <id|all>")
+		return nil, fmt.Errorf("usage: :unflag <id|all>")
 	}
 
 	if args[0] == "all" {
