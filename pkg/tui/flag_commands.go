@@ -112,7 +112,7 @@ func parseFlagAdd(args []string) (*parsedFlagCommand, error) {
 			condition: FlagCondition{
 				Type:    FlagClusterID,
 				Pattern: value,
-				Label:   fmt.Sprintf("cluster ID matches %q", value),
+				Label:   fmt.Sprintf("cluster matches %q", value),
 			},
 		}, nil
 	case "org":

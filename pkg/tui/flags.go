@@ -110,13 +110,18 @@ func matchCondition(cond FlagCondition, clusterIDs []string, clusterCache map[st
 }
 
 func matchClusterID(pattern string, clusterIDs []string, clusterCache map[string]*ocm.ClusterInfo) bool {
-	lowerPattern := strings.ToLower(pattern)
 	for _, cid := range clusterIDs {
-		if strings.ToLower(cid) == lowerPattern {
+		if matchGlob(pattern, cid) {
 			return true
 		}
 		if info, ok := clusterCache[cid]; ok {
-			if strings.ToLower(info.ID) == lowerPattern || strings.ToLower(info.ExternalID) == lowerPattern {
+			if matchGlob(pattern, info.ID) || matchGlob(pattern, info.ExternalID) {
+				return true
+			}
+			if info.Name != "" && matchGlob(pattern, info.Name) {
+				return true
+			}
+			if info.DisplayName != "" && matchGlob(pattern, info.DisplayName) {
 				return true
 			}
 		}
