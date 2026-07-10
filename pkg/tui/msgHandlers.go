@@ -166,6 +166,18 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Tag input: ctrl+t opens input with tag prompt
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Tag) {
+		if m.table.SelectedRow() == nil {
+			m.setStatus("no incident highlighted")
+			return m, nil
+		}
+		m.tagInputActive = true
+		m.input.SetValue(tagInputPrompt)
+		m.input.SetCursor(len(tagInputPrompt))
+		return m, tea.Sequence(m.input.Focus())
+	}
+
 	// Commands for any focus mode
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
 		keyStr := msg.(tea.KeyMsg).String()
@@ -712,11 +724,40 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Esc exits input mode
 			m.input.Blur()
 			m.table.Focus()
-			m.input.Reset() // Clear the input text
+			m.input.Reset()
+			m.tagInputActive = false
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Enter):
 			prompt := m.input.Value()
+
+			if m.tagInputActive {
+				m.tagInputActive = false
+				m.input.Reset()
+				m.input.Blur()
+				m.table.Focus()
+
+				rawInput := strings.TrimPrefix(prompt, tagInputPrompt)
+				tags := ParseTags(rawInput)
+				if len(tags) == 0 {
+					m.setStatus("no tags entered")
+					return m, nil
+				}
+
+				formatted := FormatTags(tags)
+				if m.selectedIncident == nil {
+					m.setStatus("no incident selected")
+					return m, nil
+				}
+
+				newTitle := PrependTags(formatted, m.selectedIncident.Title)
+				if newTitle == m.selectedIncident.Title {
+					m.setStatus("tags already present")
+					return m, nil
+				}
+
+				return m, updateIncidentTitle(m.config, m.selectedIncident.ID, newTitle)
+			}
 
 			if prompt == "" {
 				m.input.Blur()

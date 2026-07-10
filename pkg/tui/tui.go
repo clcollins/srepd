@@ -492,6 +492,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(enrichCmds...)
 
+	case updatedIncidentTitleMsg:
+		if msg.err != nil {
+			m.setStatus("tag update failed: " + msg.err.Error())
+			return m, nil
+		}
+		for i, inc := range m.incidentList {
+			if inc.ID == msg.incidentID {
+				m.incidentList[i].Title = msg.newTitle
+				if cached, ok := m.incidentCache[msg.incidentID]; ok && cached.incident != nil {
+					cached.incident.Title = msg.newTitle
+				}
+				if m.selectedIncident != nil && m.selectedIncident.ID == msg.incidentID {
+					m.selectedIncident.Title = msg.newTitle
+				}
+				break
+			}
+		}
+		return m, tea.Batch(
+			m.flashNotification("tags updated"),
+			func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} },
+		)
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)

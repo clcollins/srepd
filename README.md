@@ -193,7 +193,7 @@ Press `h` to toggle the help overlay inside srepd.
 | `ctrl+a` | Toggle auto-acknowledge | `ctrl+l` | View debug log |
 | `ctrl+q`/`ctrl+c` | Quit | `1`-`9` | Select cluster |
 | `:`/`/` | Command input | `m` | Merge incident |
-| `w` | Toggle watcher pane | | |
+| `w` | Toggle watcher pane | `ctrl+t` | Add tags to incident |
 | `ctrl+x` + key | Chord commands | `ctrl+x ?` | Show chord help |
 | `Tab`/`Shift+Tab`/`←`/`→` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |
 

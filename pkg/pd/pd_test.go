@@ -1370,3 +1370,68 @@ func TestGetTeamEscalationPolicies_EmptyTeams(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, policies)
 }
+
+func TestUpdateIncidentTitle_Success(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	currentUser := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+
+	result, err := UpdateIncidentTitle(mockClient, "INCIDENT1", "[HCP] SomeAlert", currentUser)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	require.NotNil(t, mockClient.LastManageIncidentsOpts)
+	assert.Len(t, mockClient.LastManageIncidentsOpts, 1)
+	assert.Equal(t, "INCIDENT1", mockClient.LastManageIncidentsOpts[0].ID)
+	assert.Equal(t, "[HCP] SomeAlert", mockClient.LastManageIncidentsOpts[0].Title)
+}
+
+func TestUpdateIncidentTitle_Error(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	currentUser := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+
+	result, err := UpdateIncidentTitle(mockClient, "err", "[HCP] SomeAlert", currentUser)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestUpdateIncidentTitle_NilUser(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+
+	result, err := UpdateIncidentTitle(mockClient, "INCIDENT1", "[HCP] SomeAlert", nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestUpdateIncidentTitle_EmptyTitle(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	currentUser := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+
+	result, err := UpdateIncidentTitle(mockClient, "INCIDENT1", "", currentUser)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestUpdateIncidentTitle_EmptyIncidentID(t *testing.T) {
+	mockClient := &MockPagerDutyClient{}
+	currentUser := &pagerduty.User{
+		APIObject: pagerduty.APIObject{ID: "USER1"},
+		Email:     "user@example.com",
+	}
+
+	result, err := UpdateIncidentTitle(mockClient, "", "[HCP] SomeAlert", currentUser)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
