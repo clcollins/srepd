@@ -355,3 +355,81 @@ func TestBuildWatcherContext_WithCachedAlerts(t *testing.T) {
 	assert.Contains(t, ctx, "cluster-abc")
 	assert.Contains(t, ctx, "Investigated")
 }
+
+func TestWatcherPromptMsg_StreamingProvider_UsesStreamPath(t *testing.T) {
+	m := createTestModel()
+	provider := ai.NewMockProvider("test")
+	provider.Streaming = true
+	provider.StreamTokens = []string{"a", "b", "c"}
+	m.aiProvider = provider
+	m.aiHealthy = true
+	m.streamResponses = true
+	m.table.Focus()
+	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+	// Prompt should dispatch the streaming command (not the typewriter path).
+	result, cmd := m.Update(watcherPromptMsg{prompt: "go"})
+	m = result.(model)
+	assert.True(t, m.watcherAnalyzing)
+	assert.Nil(t, m.typewriter, "streaming path must not use the typewriter")
+
+	// Drive the batched command tree to obtain watcherStreamStartedMsg, then feed
+	// each subsequent message back through Update, accumulating chunks in the buffer.
+	var started watcherStreamStartedMsg
+	drainCmd(t, cmd, func(msg tea.Msg) {
+		if s, ok := msg.(watcherStreamStartedMsg); ok {
+			started = s
+		}
+	})
+	assert.NotNil(t, started.ch, "should have started a stream")
+
+	// Deliver started, then drain chunks/done through Update.
+	result, next := m.Update(started)
+	m = result.(model)
+	done := false
+	for i := 0; i < 10 && !done && next != nil; i++ {
+		msg := next()
+		result, next = m.Update(msg)
+		m = result.(model)
+		if _, ok := msg.(watcherStreamDoneMsg); ok {
+			done = true
+		}
+	}
+
+	assert.True(t, done, "stream should reach done")
+	assert.False(t, m.watcherAnalyzing, "analyzing cleared on done")
+	assert.Contains(t, m.watcherBuffer.Content(), "abc", "buffer should contain the accumulated stream")
+}
+
+func TestWatcherPromptMsg_StreamingDisabled_FallsBackToBlocking(t *testing.T) {
+	m := createTestModel()
+	provider := ai.NewMockProvider("test")
+	provider.Streaming = true // provider supports it...
+	m.aiProvider = provider
+	m.aiHealthy = true
+	m.streamResponses = false // ...but the user disabled streaming
+	m.table.Focus()
+	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+	result, _ := m.Update(watcherPromptMsg{prompt: "go"})
+	m = result.(model)
+
+	// Blocking path: a watcherResponseMsg (not a stream) will drive the typewriter.
+	// The stream partial must remain untouched.
+	assert.Equal(t, "", m.watcherStreamPartial)
+}
+
+func TestWatcherStreamChunkMsg_AccumulatesInPlace(t *testing.T) {
+	m := createTestModel()
+	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+	m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
+
+	ch := make(chan streamEvent)
+	result, _ := m.Update(watcherStreamChunkMsg{text: "Hello", ch: ch})
+	m = result.(model)
+	result, _ = m.Update(watcherStreamChunkMsg{text: " world", ch: ch})
+	m = result.(model)
+
+	assert.Equal(t, "Hello world", m.watcherStreamPartial)
+	assert.Contains(t, m.watcherBuffer.Content(), "Hello world")
+}
