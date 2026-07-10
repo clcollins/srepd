@@ -130,6 +130,94 @@ func TestEvaluateFlags_ClusterIDInternalViaCache(t *testing.T) {
 	})
 }
 
+func TestEvaluateFlags_ClusterNameGlob(t *testing.T) {
+	t.Run("matches cluster name by glob pattern", func(t *testing.T) {
+		conditions := []FlagCondition{
+			{ID: 1, Type: FlagClusterID, Pattern: "lk3-dev*", CreatedAt: time.Now()},
+		}
+		result := evaluateFlags(
+			[]string{"INC001"},
+			conditions,
+			map[string][]string{"INC001": {"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"}},
+			map[string]*ocm.ClusterInfo{
+				"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
+					ID:          "internal-id-fake",
+					ExternalID:  "00000000-fake-uuid-test-999999999999",
+					Name:        "lk3-dev-use2-a",
+					DisplayName: "lk3-dev-use2-a.vbah.p1.openshiftapps.com",
+				},
+			},
+		)
+		assert.Equal(t, []int{1}, result["INC001"])
+	})
+}
+
+func TestEvaluateFlags_ClusterDisplayNameContains(t *testing.T) {
+	t.Run("matches cluster display name by contains", func(t *testing.T) {
+		conditions := []FlagCondition{
+			{ID: 1, Type: FlagClusterID, Pattern: "vbah.p1", CreatedAt: time.Now()},
+		}
+		result := evaluateFlags(
+			[]string{"INC001"},
+			conditions,
+			map[string][]string{"INC001": {"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"}},
+			map[string]*ocm.ClusterInfo{
+				"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
+					ID:          "internal-id-fake",
+					ExternalID:  "00000000-fake-uuid-test-999999999999",
+					Name:        "lk3-dev-use2-a",
+					DisplayName: "lk3-dev-use2-a.vbah.p1.openshiftapps.com",
+				},
+			},
+		)
+		assert.Equal(t, []int{1}, result["INC001"])
+	})
+}
+
+func TestEvaluateFlags_ClusterNameSubstring(t *testing.T) {
+	t.Run("matches cluster name by substring in middle of service name", func(t *testing.T) {
+		conditions := []FlagCondition{
+			{ID: 1, Type: FlagClusterID, Pattern: "lk3-dev", CreatedAt: time.Now()},
+		}
+		result := evaluateFlags(
+			[]string{"INC001"},
+			conditions,
+			map[string][]string{"INC001": {"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"}},
+			map[string]*ocm.ClusterInfo{
+				"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
+					ID:          "internal-id-fake",
+					ExternalID:  "00000000-fake-uuid-test-999999999999",
+					Name:        "lk3-dev-use2-a",
+					DisplayName: "lk3-dev-use2-a.vbah.p1.openshiftapps.com",
+				},
+			},
+		)
+		assert.Equal(t, []int{1}, result["INC001"])
+	})
+}
+
+func TestEvaluateFlags_ClusterIDExactStillWorks(t *testing.T) {
+	t.Run("exact cluster ID match still works with glob logic", func(t *testing.T) {
+		conditions := []FlagCondition{
+			{ID: 1, Type: FlagClusterID, Pattern: "internal-id-fake", CreatedAt: time.Now()},
+		}
+		result := evaluateFlags(
+			[]string{"INC001"},
+			conditions,
+			map[string][]string{"INC001": {"1q2w3e4rfakeidtest9o0p1a2s3d4f5g"}},
+			map[string]*ocm.ClusterInfo{
+				"1q2w3e4rfakeidtest9o0p1a2s3d4f5g": {
+					ID:          "internal-id-fake",
+					ExternalID:  "00000000-fake-uuid-test-999999999999",
+					Name:        "lk3-dev-use2-a",
+					DisplayName: "lk3-dev-use2-a.vbah.p1.openshiftapps.com",
+				},
+			},
+		)
+		assert.Equal(t, []int{1}, result["INC001"])
+	})
+}
+
 func TestEvaluateFlags_ClusterIDNoMatch(t *testing.T) {
 	t.Run("no match returns empty for that incident", func(t *testing.T) {
 		conditions := []FlagCondition{
@@ -325,7 +413,7 @@ func TestAddFlagConditionMsg(t *testing.T) {
 		cond := FlagCondition{
 			Type:      FlagClusterID,
 			Pattern:   "cluster1",
-			Label:     "cluster ID matches \"cluster1\"",
+			Label:     "cluster matches \"cluster1\"",
 			CreatedAt: time.Now(),
 		}
 
@@ -457,7 +545,7 @@ func TestRenderFlagConditionsSection(t *testing.T) {
 		m := createTestModel()
 		m.flagMarker = emojiFlagMarker
 		m.flagConditions = []FlagCondition{
-			{ID: 1, Type: FlagClusterID, Pattern: "cluster1", Label: "cluster ID matches \"cluster1\""},
+			{ID: 1, Type: FlagClusterID, Pattern: "cluster1", Label: "cluster matches \"cluster1\""},
 			{ID: 2, Type: FlagOrgName, Pattern: "Acme", Label: "org name matches \"Acme\""},
 		}
 		m.flagMatchCache = map[string][]int{"INC001": {1, 2}}
@@ -467,7 +555,7 @@ func TestRenderFlagConditionsSection(t *testing.T) {
 
 		content := m.renderFlagConditionsSection()
 		assert.Contains(t, content, "Flag Conditions")
-		assert.Contains(t, content, "cluster ID matches")
+		assert.Contains(t, content, "cluster matches")
 		assert.Contains(t, content, "org name matches")
 	})
 }
@@ -498,14 +586,14 @@ func TestRenderFlagConditionsSection_NoIncident(t *testing.T) {
 func TestFormatFlagsList(t *testing.T) {
 	t.Run("formats list of active flags", func(t *testing.T) {
 		conditions := []FlagCondition{
-			{ID: 1, Type: FlagClusterID, Pattern: "cluster1", Label: "cluster ID matches \"cluster1\""},
+			{ID: 1, Type: FlagClusterID, Pattern: "cluster1", Label: "cluster matches \"cluster1\""},
 			{ID: 2, Type: FlagOrgName, Pattern: "^Acme*", Label: "org name matches \"^Acme*\""},
 		}
 
 		content := formatFlagsList(conditions)
 		assert.Contains(t, content, "#1")
 		assert.Contains(t, content, "#2")
-		assert.Contains(t, content, "cluster ID matches")
+		assert.Contains(t, content, "cluster matches")
 		assert.Contains(t, content, "org name matches")
 	})
 }
