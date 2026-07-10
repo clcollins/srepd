@@ -46,7 +46,7 @@ var (
 		"toolbox_mode":                       fmt.Sprintf("Toolbox detection mode: auto, true, false (default: %v)", DefaultOptionalKeys["toolbox_mode"]),
 		"chord_prefix":                       fmt.Sprintf("Chord prefix key for multi-key commands (default: %v)", DefaultOptionalKeys["chord_prefix"]),
 		"flag_marker":                        fmt.Sprintf("Prefix marker for flagged incidents (default: %v, alt: |►)", DefaultOptionalKeys["flag_marker"]),
-		"agent_cli_command":                  fmt.Sprintf("CLI agent command for /agent queries (default: %v)", DefaultOptionalKeys["agent_cli_command"]),
+		"agent_cli_command":                  fmt.Sprintf("CLI agent command for :agent queries (default: %v)", DefaultOptionalKeys["agent_cli_command"]),
 		"emoji":                              "Use emoji markers for flags/agent/watcher (default: true, set false for text fallbacks)",
 		"reescalate_level":                   fmt.Sprintf("Escalation level ctrl+e re-escalates to, skipping lower tiers (default: %v)", DefaultOptionalKeys["reescalate_level"]),
 		"stream_responses":                   "Stream :watcher/LLM responses token-by-token when the provider supports it (default: true)",

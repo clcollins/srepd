@@ -622,7 +622,7 @@ func TestIsAgentCommand_WithLeadingSpace(t *testing.T) {
 }
 
 func TestIsAgentCommand_NotAgent(t *testing.T) {
-	assert.False(t, isAgentCommand("/flag cluster abc"))
+	assert.False(t, isAgentCommand(":flag cluster abc"))
 }
 
 func TestIsAgentCommand_PlainText(t *testing.T) {

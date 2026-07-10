@@ -5,7 +5,7 @@
 
 ## Goal
 
-Replace the hardcoded `claude --print` command in `/agent` queries with a
+Replace the hardcoded `claude --print` command in `:agent` queries with a
 configurable `agent_cli_command` config key. This fixes the bug where
 `exec.CommandContext(ctx, "claude", "--print")` fails when `claude` is a
 shell alias/function or not on PATH.

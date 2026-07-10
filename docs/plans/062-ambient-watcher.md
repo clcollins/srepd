@@ -19,7 +19,7 @@ collapsible pane below the incident table.
 - Provider status merged into footer line
 
 ### Phase 2: Claude CLI responses refactored into watcher pane
-- `/agent` responses redirect from incident viewer to watcher pane
+- `:agent` responses redirect from incident viewer to watcher pane
 - Ring buffer for observation history (50 entries)
 - Configurable emoji/text markers (emoji config toggle)
 - Per-line marker prefixing, word wrap at viewport width
