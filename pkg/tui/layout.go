@@ -83,6 +83,10 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcher
 		styles.TableContainer.GetHorizontalPadding() +
 		styles.TableContainer.GetHorizontalBorderSize()
 
+	watcherHOverhead := styles.WatcherContainer.GetHorizontalMargins() +
+		styles.WatcherContainer.GetHorizontalPadding() +
+		styles.WatcherContainer.GetHorizontalBorderSize()
+
 	cellStyle := styles.Table.Cell
 	cellHOverhead := (cellStyle.GetHorizontalPadding() +
 		cellStyle.GetHorizontalMargins() +
@@ -93,7 +97,7 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcher
 	helpLines := strings.Count(helpView, "\n") + 1
 
 	tableWidth := ws.Width - mainHOverhead - containerHOverhead - cellHOverhead
-	watcherWidth := ws.Width - mainHOverhead - containerHOverhead
+	watcherWidth := ws.Width - mainHOverhead - watcherHOverhead
 
 	// Total available rows for table + watcher content
 	availableRows := ws.Height - mainVOverhead - containerVOverhead - tableFixedOverhead - helpLines

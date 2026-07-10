@@ -312,6 +312,28 @@ func TestComputeLayout_WatcherReducesTableHeight(t *testing.T) {
 	})
 }
 
+func TestComputeLayout_WatcherWidthAccountsForPadding(t *testing.T) {
+	styles := defaultStyles()
+	watcherHOverhead := styles.WatcherContainer.GetHorizontalMargins() +
+		styles.WatcherContainer.GetHorizontalPadding() +
+		styles.WatcherContainer.GetHorizontalBorderSize()
+	mainHOverhead := styles.Main.GetHorizontalMargins() +
+		styles.Main.GetHorizontalPadding() +
+		styles.Main.GetHorizontalBorderSize()
+
+	widths := []int{60, 80, 120, 200}
+	for _, w := range widths {
+		ws := tea.WindowSizeMsg{Width: w, Height: 40}
+		l := computeLayout(ws, styles, shortHelp(), true)
+
+		expected := w - mainHOverhead - watcherHOverhead
+		assert.Equal(t, expected, l.WatcherWidth,
+			"width %d: watcher width must account for WatcherContainer overhead", w)
+		assert.LessOrEqual(t, l.WatcherWidth+watcherHOverhead+mainHOverhead, w,
+			"width %d: watcher + chrome must fit within terminal", w)
+	}
+}
+
 func TestRecomputeLayout_WatcherExpanded(t *testing.T) {
 	t.Run("watcher expanded reduces table height", func(t *testing.T) {
 		m := createTestModel()
