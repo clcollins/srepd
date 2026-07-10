@@ -48,6 +48,9 @@ func (p *anthropicProvider) Name() string {
 	return "anthropic"
 }
 
+// SupportsStreaming reports that this provider streams tokens via StreamQuery.
+func (p *anthropicProvider) SupportsStreaming() bool { return true }
+
 func (p *anthropicProvider) Query(ctx context.Context, systemPrompt string, userPrompt string) (string, error) {
 	log.Debug("anthropic.Query", "model", p.model)
 	params := anthropic.MessageNewParams{

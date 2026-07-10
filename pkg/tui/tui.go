@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
@@ -527,10 +528,54 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		incidentContext := buildWatcherContext(&m)
+
+		// Stream token-by-token when the provider supports it and streaming is
+		// enabled; otherwise fall back to the blocking query + typewriter.
+		if m.streamResponses && ai.SupportsStreaming(m.aiProvider) {
+			m.watcherStreamPartial = ""
+			return m, tea.Batch(
+				m.spinner.Tick,
+				streamWatcherCmd(m.aiProvider, m.watcherSystemPrompt, msg.prompt, incidentContext),
+			)
+		}
+
 		return m, tea.Batch(
 			m.spinner.Tick,
 			watcherQueryCmd(m.aiProvider, m.watcherSystemPrompt, msg.prompt, incidentContext),
 		)
+
+	case watcherStreamStartedMsg:
+		// Abort any prior in-flight stream, then begin a fresh buffer entry that
+		// subsequent chunks grow in place.
+		if m.watcherStreamCancel != nil {
+			m.watcherStreamCancel()
+		}
+		m.watcherStreamCancel = msg.cancel
+		m.watcherStreamPartial = ""
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
+		m.updateWatcherViewport()
+		return m, readStreamCmd(msg.ch)
+
+	case watcherStreamChunkMsg:
+		m.watcherStreamPartial += msg.text
+		m.watcherBuffer.SetLast(prefixLines(m.watcherMarker, m.watcherStreamPartial))
+		m.updateWatcherViewport()
+		return m, readStreamCmd(msg.ch)
+
+	case watcherStreamDoneMsg:
+		m.watcherAnalyzing = false
+		m.apiInProgress = false
+		m.watcherStreamCancel = nil
+		if msg.err != nil {
+			// Keep whatever partial text streamed; surface the error via flash.
+			return m, m.flashNotification(fmt.Sprintf("watcher stream error: %s", msg.err))
+		}
+		m.setStatus("watcher response received")
+		return m, nil
 
 	case watcherResponseMsg:
 		m.watcherAnalyzing = false

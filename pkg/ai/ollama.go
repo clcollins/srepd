@@ -43,6 +43,9 @@ func (p *ollamaProvider) Name() string {
 	return "ollama"
 }
 
+// SupportsStreaming reports that this provider streams tokens via StreamQuery.
+func (p *ollamaProvider) SupportsStreaming() bool { return true }
+
 type ollamaChatRequest struct {
 	Model    string              `json:"model"`
 	Messages []ollamaChatMessage `json:"messages"`

@@ -35,6 +35,26 @@ type HealthChecker interface {
 	Healthy(ctx context.Context) error
 }
 
+// StreamingProvider is an optional interface a Provider may implement to advertise
+// whether it supports live token streaming via StreamQuery. Not every provider
+// streams reliably, so callers should gate streaming on SupportsStreaming rather
+// than assuming StreamQuery works. A provider that does not implement this interface
+// is treated as non-streaming.
+type StreamingProvider interface {
+	SupportsStreaming() bool
+}
+
+// SupportsStreaming reports whether p advertises live streaming support. It is false
+// for a nil provider, a provider that does not implement StreamingProvider, or one
+// whose SupportsStreaming returns false.
+func SupportsStreaming(p Provider) bool {
+	if p == nil {
+		return false
+	}
+	sp, ok := p.(StreamingProvider)
+	return ok && sp.SupportsStreaming()
+}
+
 // Config holds the configuration for an LLM API provider.
 type Config struct {
 	Provider  string `mapstructure:"provider"`

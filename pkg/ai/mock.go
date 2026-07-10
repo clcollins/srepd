@@ -10,7 +10,13 @@ type MockProvider struct {
 	StreamErr     error
 	HealthyErr    error
 	ProviderName  string
+	Streaming     bool // reported by SupportsStreaming
 	CallCounts    map[string]int
+}
+
+// SupportsStreaming reports the configured streaming capability.
+func (m *MockProvider) SupportsStreaming() bool {
+	return m.Streaming
 }
 
 // NewMockProvider creates a MockProvider with the given name.
