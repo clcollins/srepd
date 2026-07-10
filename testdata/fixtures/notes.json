@@ -1,9 +1,9 @@
 {
-  "PDEV_INC_012": [
+  "PDEV_INC_001": [
     {
       "id": "PDEV_NOTE_001",
-      "content": "Investigating HCP cluster 1b20416f - checking management cluster logs and hosted control plane pod health.",
-      "created_at": "2026-05-28T03:15:00Z",
+      "content": "ClusterOperatorDown alert for e7c5363a-fake-uuid-test-edf99fc3ea25. Ingress operator unavailable for 10 minutes. Checking pod status in openshift-ingress-operator namespace.",
+      "created_at": "2026-05-28T14:35:00Z",
       "user": {
         "id": "PDEV_USER_001",
         "type": "user_reference",
@@ -12,7 +12,105 @@
     },
     {
       "id": "PDEV_NOTE_002",
-      "content": "Found ingress operator pods CrashLooping on the management cluster. Checking subnet tags and worker node availability.",
+      "content": "Ingress operator pods are CrashLooping. Customer modified IngressController removing required annotations. Sent service log to customer. Cluster placed in limited support.",
+      "created_at": "2026-05-28T14:50:00Z",
+      "user": {
+        "id": "PDEV_USER_002",
+        "type": "user_reference",
+        "summary": "Alice Engineer"
+      }
+    }
+  ],
+  "PDEV_INC_003": [
+    {
+      "id": "PDEV_NOTE_003",
+      "content": "ClusterProvisioningDelay for edf-mas on GCP. Cluster has been in ProvisionFailed for over 4 hours. Checking installer logs and GCP project quotas.",
+      "created_at": "2026-05-28T12:20:00Z",
+      "user": {
+        "id": "PDEV_USER_001",
+        "type": "user_reference",
+        "summary": "Dev User"
+      }
+    },
+    {
+      "id": "PDEV_NOTE_004",
+      "content": "Installer logs show GCP API rate limiting during bootstrap. Retrying provision with backoff. Customer org has high cluster churn causing quota pressure.",
+      "created_at": "2026-05-28T12:45:00Z",
+      "user": {
+        "id": "PDEV_USER_003",
+        "type": "user_reference",
+        "summary": "Bob Oncall"
+      }
+    }
+  ],
+  "PDEV_INC_009": [
+    {
+      "id": "PDEV_NOTE_005",
+      "content": "Console error budget burn detected on cluster 3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d. Current 30min error rate: 6.7%. Checking probe failures and route monitor operator.",
+      "created_at": "2026-05-28T06:05:00Z",
+      "user": {
+        "id": "PDEV_USER_002",
+        "type": "user_reference",
+        "summary": "Alice Engineer"
+      }
+    },
+    {
+      "id": "PDEV_NOTE_006",
+      "content": "Customer has NetworkPolicy blocking egress from route-monitor-operator namespace. Probe failures are false positives. Cluster in limited support. Sent SL with remediation steps.",
+      "created_at": "2026-05-28T06:20:00Z",
+      "user": {
+        "id": "PDEV_USER_002",
+        "type": "user_reference",
+        "summary": "Alice Engineer"
+      }
+    },
+    {
+      "id": "PDEV_NOTE_007",
+      "content": "Also seeing same console-ErrorBudgetBurn on 7f2e8d4a-fake-uuid-test-1b9c3a5d7e0f and 5d1a8f3e-fake-uuid-test-9c2b4e6d0a7f in the same org. All three clusters share the same NetworkPolicy template.",
+      "created_at": "2026-05-28T06:30:00Z",
+      "user": {
+        "id": "PDEV_USER_002",
+        "type": "user_reference",
+        "summary": "Alice Engineer"
+      }
+    }
+  ],
+  "PDEV_INC_010": [
+    {
+      "id": "PDEV_NOTE_008",
+      "content": "api-ErrorBudgetBurn on cluster 2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c. KubeAPI latency p99 elevated to 1.2s. Checking etcd health and API server pod resources.",
+      "created_at": "2026-05-28T05:10:00Z",
+      "user": {
+        "id": "PDEV_USER_001",
+        "type": "user_reference",
+        "summary": "Dev User"
+      }
+    },
+    {
+      "id": "PDEV_NOTE_009",
+      "content": "Customer modified kube-apiserver flags via unsupported mechanism. Audit logging overhead causing API latency. Cluster in limited support. Customer aware, working on reverting.",
+      "created_at": "2026-05-28T05:25:00Z",
+      "user": {
+        "id": "PDEV_USER_001",
+        "type": "user_reference",
+        "summary": "Dev User"
+      }
+    }
+  ],
+  "PDEV_INC_012": [
+    {
+      "id": "PDEV_NOTE_010",
+      "content": "Investigating HCP cluster 1b20416f-fake-uuid-test-5a6e450114eb - KubeAPI error budget burning. Checking management cluster logs and hosted control plane pod health.",
+      "created_at": "2026-05-28T03:15:00Z",
+      "user": {
+        "id": "PDEV_USER_001",
+        "type": "user_reference",
+        "summary": "Dev User"
+      }
+    },
+    {
+      "id": "PDEV_NOTE_011",
+      "content": "kube-apiserver pod on management cluster showing elevated memory usage. Found customer admission webhooks causing increased API server load. Investigating webhook configuration.",
       "created_at": "2026-05-28T03:30:00Z",
       "user": {
         "id": "PDEV_USER_002",
@@ -21,8 +119,8 @@
       }
     },
     {
-      "id": "PDEV_NOTE_003",
-      "content": "Root cause identified: customer deleted required subnet tags. Sent service log to customer with remediation steps. Monitoring for recovery.",
+      "id": "PDEV_NOTE_012",
+      "content": "Root cause identified: customer webhook with 30s timeout on all API requests. Sent service log recommending webhook optimization. Error budget recovering.",
       "created_at": "2026-05-28T03:45:00Z",
       "user": {
         "id": "PDEV_USER_003",

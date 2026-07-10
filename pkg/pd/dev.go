@@ -49,21 +49,26 @@ type fixtureEscalationPolicy struct {
 // fixtureIncident is a simplified incident for JSON unmarshaling.
 // Fields match the PagerDuty API JSON structure.
 type fixtureIncident struct {
-	ID                 string              `json:"id"`
-	Type               string              `json:"type"`
-	Self               string              `json:"self"`
-	HTMLURL            string              `json:"html_url"`
-	IncidentNumber     uint                `json:"incident_number"`
-	Title              string              `json:"title"`
-	Status             string              `json:"status"`
-	Urgency            string              `json:"urgency"`
-	CreatedAt          string              `json:"created_at"`
-	LastStatusChangeAt string              `json:"last_status_change_at"`
-	Service            fixtureServiceRef   `json:"service"`
-	EscalationPolicy   fixtureAPIRef       `json:"escalation_policy"`
-	Assignments        []fixtureAssignment `json:"assignments"`
-	Acknowledgements   []fixtureAck        `json:"acknowledgements"`
-	Teams              []fixtureAPIRef     `json:"teams"`
+	ID                   string                    `json:"id"`
+	Type                 string                    `json:"type"`
+	Self                 string                    `json:"self"`
+	HTMLURL              string                    `json:"html_url"`
+	IncidentNumber       uint                      `json:"incident_number"`
+	Title                string                    `json:"title"`
+	Status               string                    `json:"status"`
+	Urgency              string                    `json:"urgency"`
+	CreatedAt            string                    `json:"created_at"`
+	LastStatusChangeAt   string                    `json:"last_status_change_at"`
+	Service              fixtureServiceRef         `json:"service"`
+	EscalationPolicy     fixtureAPIRef             `json:"escalation_policy"`
+	Assignments          []fixtureAssignment       `json:"assignments"`
+	Acknowledgements     []fixtureAck              `json:"acknowledgements"`
+	Teams                []fixtureAPIRef           `json:"teams"`
+	FirstTriggerLogEntry *fixtureFirstTriggerEntry `json:"first_trigger_log_entry,omitempty"`
+}
+
+type fixtureFirstTriggerEntry struct {
+	Channel map[string]interface{} `json:"channel,omitempty"`
 }
 
 type fixtureServiceRef struct {
@@ -330,6 +335,17 @@ func convertFixtureIncident(fi fixtureIncident) *pagerduty.Incident {
 			Type:    ft.Type,
 			Summary: ft.Summary,
 		})
+	}
+
+	if fi.FirstTriggerLogEntry != nil && fi.FirstTriggerLogEntry.Channel != nil {
+		incident.FirstTriggerLogEntry = pagerduty.FirstTriggerLogEntry{
+			CommonLogEntryField: pagerduty.CommonLogEntryField{
+				Channel: pagerduty.Channel{
+					Type: "trigger",
+					Raw:  fi.FirstTriggerLogEntry.Channel,
+				},
+			},
+		}
 	}
 
 	return incident
