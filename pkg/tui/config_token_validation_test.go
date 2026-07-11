@@ -43,14 +43,14 @@ func TestValidateTokenInput_Classifies401(t *testing.T) {
 }
 
 func TestFetchTeamOptions_NoTokenPrompts(t *testing.T) {
-	opts, teams := fetchTeamOptions(mockFactoryOK(), "", "", nil)
+	opts, teams, _ := fetchTeamOptions(mockFactoryOK(), "", "", nil)
 	assert.Nil(t, teams)
 	assert.Len(t, opts, 1)
 	assert.Contains(t, opts[0].Key, "enter a token first")
 }
 
 func TestFetchTeamOptions_Success(t *testing.T) {
-	opts, teams := fetchTeamOptions(mockFactoryOK(), "u+goodtoken", "", map[string]bool{"TEAM_002": true})
+	opts, teams, _ := fetchTeamOptions(mockFactoryOK(), "u+goodtoken", "", map[string]bool{"TEAM_002": true})
 	assert.Len(t, teams, 2, "mock returns two teams")
 	assert.Len(t, opts, 2)
 	assert.Contains(t, opts[0].Key, "Mock Team Alpha")
@@ -59,8 +59,9 @@ func TestFetchTeamOptions_Success(t *testing.T) {
 // OB-3: the error option must carry the classified message, and its value
 // must be empty so validation can reject it.
 func TestFetchTeamOptions_ClassifiedErrorOption(t *testing.T) {
-	opts, teams := fetchTeamOptions(mockFactoryWithErr(pagerduty.APIError{StatusCode: 429}), "u+token", "", nil)
+	opts, teams, userName := fetchTeamOptions(mockFactoryWithErr(pagerduty.APIError{StatusCode: 429}), "u+token", "", nil)
 	assert.Nil(t, teams)
+	assert.Empty(t, userName)
 	assert.Len(t, opts, 1)
 	assert.Contains(t, opts[0].Key, "rate limited")
 	assert.Equal(t, "", opts[0].Value)

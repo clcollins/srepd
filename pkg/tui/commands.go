@@ -1413,7 +1413,14 @@ type configFormState struct {
 	KeepTeams          bool
 	KeepSilent         bool
 	KeepCustom         bool
-	Confirm            bool
+	// AdvancedOptions gates the team-policy groups (custom service→policy
+	// mappings) that most users should never see; defaults to No.
+	AdvancedOptions bool
+	Confirm         bool
+	// FetchedUserName/FetchedTeamCount are set by the team OptionsFunc after
+	// a successful fetch and drive the greeting DescriptionFunc.
+	FetchedUserName  string
+	FetchedTeamCount int
 }
 
 // configWizardReadyMsg is sent when the existing config has been resolved
