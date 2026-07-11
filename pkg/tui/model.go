@@ -197,6 +197,9 @@ type model struct {
 	configPolicyNames   map[string]string
 	configModeRequested bool
 	configWizardPending *configWizardReadyMsg
+	// configPresetApplied records which wizard values were seeded from a
+	// team preset (--preset), for tagging and change forcing.
+	configPresetApplied pkgconfig.PresetApplied
 
 	// OCM enrichment state
 	ocmClient      ocm.OCMClient

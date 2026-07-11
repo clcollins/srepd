@@ -1385,11 +1385,12 @@ type configFormState struct {
 // configWizardReadyMsg is sent when the existing config has been resolved
 // and is ready to build the config wizard form.
 type configWizardReadyMsg struct {
-	existing    pkgconfig.ExistingConfig
-	kd          pkgconfig.KeepDefaults
-	isNewFile   bool
-	teamNames   map[string]string
-	policyNames map[string]string
+	existing      pkgconfig.ExistingConfig
+	kd            pkgconfig.KeepDefaults
+	isNewFile     bool
+	teamNames     map[string]string
+	policyNames   map[string]string
+	presetApplied pkgconfig.PresetApplied
 }
 
 // configSavedMsg is sent after the config has been written to disk.
@@ -1417,9 +1418,25 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			viper.GetString("custom_service_escalation_policies"),
 			viper.GetStringMapString("service_escalation_policies"),
 		)
-		existing.Terminal = viper.GetString("terminal")
-		existing.Editor = viper.GetString("editor")
+		// Environment values count as "existing" only when the user actually
+		// set them (config file or env var) — ensureViperDefaults fills viper
+		// with defaults, which must not block a team preset from applying.
+		existing.Terminal = viperConfiguredString("terminal")
+		existing.Editor = viperConfiguredString("editor")
+		existing.ClusterLoginCommand = viperConfiguredString("cluster_login_command")
 		existing.AgentCLICommand = viper.GetString("agent_cli_command")
+
+		var presetApplied pkgconfig.PresetApplied
+		if ref := viper.GetString("config_preset"); ref != "" {
+			preset, presetErr := pkgconfig.LoadPreset(ref, nil)
+			if presetErr != nil {
+				// The user explicitly asked for this preset; failing loudly
+				// beats silently dropping team policy.
+				return errMsg{fmt.Errorf("failed to load preset: %w", presetErr)}
+			}
+			existing, presetApplied = pkgconfig.ApplyPreset(existing, preset)
+		}
+
 		kd := pkgconfig.ResolveKeepDefaults(existing.Teams, existing.SilentPolicy, existing.CustomPolicies)
 
 		home, _ := os.UserHomeDir()
@@ -1455,8 +1472,23 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			}
 		}
 
-		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames, policyNames: policyNames}
+		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames, policyNames: policyNames, presetApplied: presetApplied}
 	}
+}
+
+// viperConfiguredString returns the value for key only when the user set it
+// (config file, env var, or an explicit flag) — not when it merely carries
+// an in-process default from ensureViperDefaults/validateConfig, which use
+// viper.Set. InConfig covers the file; the SREPD_* env var is checked
+// directly because AutomaticEnv values do not appear in InConfig.
+func viperConfiguredString(key string) string {
+	if viper.InConfig(key) {
+		return viper.GetString(key)
+	}
+	if v := os.Getenv("SREPD_" + strings.ToUpper(key)); v != "" {
+		return v
+	}
+	return ""
 }
 
 // realFS implements pkgconfig.ConfigFS using the real filesystem.
