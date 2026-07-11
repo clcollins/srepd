@@ -1,5 +1,5 @@
 {
-  "e7c5363a-fake-uuid-test-edf99fc3ea25": [
+  "cluster-osd-001": [
     {
       "timestamp": "2026-05-28T14:00:00Z",
       "severity": "Warning",
@@ -7,7 +7,8 @@
       "summary": "Customer notified of ClusterOperatorDown",
       "description": "SRE team contacted customer regarding ingress operator unavailability. Customer acknowledged and is investigating network configuration changes.",
       "cluster_id": "cluster-osd-001",
-      "cluster_uuid": "e7c5363a-fake-uuid-test-edf99fc3ea25"
+      "cluster_uuid": "e7c5363a-fake-uuid-test-edf99fc3ea25",
+      "internal_only": false
     },
     {
       "timestamp": "2026-05-28T12:30:00Z",
@@ -16,29 +17,106 @@
       "summary": "Cluster entered limited support",
       "description": "Cluster entered limited support due to customer modification of ingress configuration.",
       "cluster_id": "cluster-osd-001",
-      "cluster_uuid": "e7c5363a-fake-uuid-test-edf99fc3ea25"
+      "cluster_uuid": "e7c5363a-fake-uuid-test-edf99fc3ea25",
+      "internal_only": false
+    },
+    {
+      "timestamp": "2026-05-28T10:15:00Z",
+      "severity": "Info",
+      "service_name": "ClusterService",
+      "summary": "Cluster Delete Protection updated",
+      "description": "Cluster Delete Protection has been updated to 'true'",
+      "cluster_id": "cluster-osd-001",
+      "cluster_uuid": "e7c5363a-fake-uuid-test-edf99fc3ea25",
+      "internal_only": false
     }
   ],
-  "b2d4e6f8-fake-uuid-test-def012345678": [
+  "cluster-appsre-001": [
     {
-      "timestamp": "2026-05-28T13:00:00Z",
+      "timestamp": "2026-05-28T12:00:00Z",
       "severity": "Error",
-      "service_name": "etcdHealthCheck",
-      "summary": "etcd cluster health degraded",
-      "description": "etcd members reporting high commit durations. Disk I/O may be constrained. Investigating storage performance.",
-      "cluster_id": "cluster-osd-002",
-      "cluster_uuid": "b2d4e6f8-fake-uuid-test-def012345678"
+      "service_name": "ClusterProvisioningMonitor",
+      "summary": "Cluster provisioning failed: UnknownError",
+      "description": "Cluster edf-mas has been in ProvisionFailed condition for over 4 hours. Platform: GCP, image: openshift-v4.21.16. SRE investigating installer logs for root cause.",
+      "cluster_id": "cluster-appsre-001",
+      "cluster_uuid": "fakeid0000000000000000000000002",
+      "internal_only": false
+    },
+    {
+      "timestamp": "2026-05-28T11:30:00Z",
+      "severity": "Info",
+      "service_name": "ClusterService",
+      "summary": "Provision attempt initiated",
+      "description": "Cluster provision attempt started. Target platform: GCP, region: us-east-1, version: 4.21.16.",
+      "cluster_id": "cluster-appsre-001",
+      "cluster_uuid": "fakeid0000000000000000000000002",
+      "internal_only": true
     }
   ],
-  "a4ba96fe-fake-uuid-test-17d38eeaab99": [
+  "cluster-multi-001": [
     {
-      "timestamp": "2026-05-28T10:30:00Z",
+      "timestamp": "2026-05-28T05:45:00Z",
       "severity": "Warning",
+      "service_name": "SLOMonitoring",
+      "summary": "Console SLO error budget burn rate elevated",
+      "description": "Console availability SLO is burning error budget faster than normal rate. Current 30min error rate: 6.7%. Probe URL showing intermittent timeouts.",
+      "cluster_id": "cluster-multi-001",
+      "cluster_uuid": "3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d",
+      "internal_only": false
+    },
+    {
+      "timestamp": "2026-05-28T05:30:00Z",
+      "severity": "Info",
+      "service_name": "RoutemonitorOperator",
+      "summary": "Route monitor probe failure detected",
+      "description": "BlackboxExporter detected probe failures for console health endpoint. Investigating HAProxy and router pod status.",
+      "cluster_id": "cluster-multi-001",
+      "cluster_uuid": "3a7b9c1d-fake-uuid-test-8e4f2a6b0c3d",
+      "internal_only": false
+    }
+  ],
+  "cluster-acked-001": [
+    {
+      "timestamp": "2026-05-28T04:45:00Z",
+      "severity": "Warning",
+      "service_name": "SLOMonitoring",
+      "summary": "API SLO error budget burn rate critical",
+      "description": "API availability SLO is burning error budget at critical rate. KubeAPI latency p99 elevated to 1.2s. Checking etcd health and API server pod resources.",
+      "cluster_id": "cluster-acked-001",
+      "cluster_uuid": "2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c",
+      "internal_only": false
+    },
+    {
+      "timestamp": "2026-05-28T04:30:00Z",
+      "severity": "Info",
+      "service_name": "ClusterService",
+      "summary": "Minor version for automatic upgrades enabled",
+      "description": "Cluster 'cluster-acked-001' enabled for minor version of automatic upgrades",
+      "cluster_id": "cluster-acked-001",
+      "cluster_uuid": "2c4b6a8d-fake-uuid-test-7e3f1a9d5b0c",
+      "internal_only": false
+    }
+  ],
+  "cluster-hcp-002": [
+    {
+      "timestamp": "2026-05-28T02:45:00Z",
+      "severity": "Error",
       "service_name": "HCPHealthCheck",
-      "summary": "HCP control plane ingress degraded",
-      "description": "The hosted control plane ingress operator has been unavailable for 10 minutes. Automated remediation in progress.",
-      "cluster_id": "cluster-hcp-001",
-      "cluster_uuid": "a4ba96fe-fake-uuid-test-17d38eeaab99"
+      "summary": "KubeAPI error budget burning for HCP",
+      "description": "KubeAPI error budget is burning for hosted control plane. API server pod on management cluster showing elevated error rates. Checking management cluster node resources.",
+      "cluster_id": "cluster-hcp-002",
+      "cluster_uuid": "1b20416f-fake-uuid-test-5a6e450114eb",
+      "internal_only": false
+    },
+    {
+      "timestamp": "2026-05-28T02:30:00Z",
+      "severity": "Info",
+      "service_name": "SREManualAction",
+      "summary": "Investigating HCP pod health on management cluster",
+      "description": "SRE checking kube-apiserver pod in ocm-production namespace on management cluster. Memory usage elevated, investigating potential memory leak in custom admission webhooks.",
+      "cluster_id": "cluster-hcp-002",
+      "cluster_uuid": "1b20416f-fake-uuid-test-5a6e450114eb",
+      "internal_only": true
     }
   ]
 }

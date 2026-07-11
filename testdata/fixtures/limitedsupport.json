@@ -1,11 +1,29 @@
 {
-  "e7c5363a-fake-uuid-test-edf99fc3ea25": [
+  "cluster-osd-001": [
     {
       "id": "ls-001",
       "summary": "Customer modified ingress configuration",
-      "details": "Customer replaced default IngressController with custom configuration that removed required annotations.",
+      "details": "Customer replaced default IngressController with custom configuration that removed required annotations. Cluster operator unable to reconcile.",
       "detection_type": "manual",
       "created_at": "2026-05-27T09:00:00Z"
+    }
+  ],
+  "cluster-multi-001": [
+    {
+      "id": "ls-002",
+      "summary": "Custom NetworkPolicy blocking monitoring",
+      "details": "Customer applied NetworkPolicy in openshift-route-monitor-operator namespace that blocks egress to monitoring endpoints. Console SLO probes may produce false positives.",
+      "detection_type": "automated",
+      "created_at": "2026-05-27T22:00:00Z"
+    }
+  ],
+  "cluster-acked-001": [
+    {
+      "id": "ls-003",
+      "summary": "Customer modified API server flags",
+      "details": "Customer modified kube-apiserver configuration via unsupported mechanism. API server audit logging and admission webhook chain may be impacted.",
+      "detection_type": "automated",
+      "created_at": "2026-05-26T16:30:00Z"
     }
   ]
 }

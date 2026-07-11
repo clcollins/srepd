@@ -22,7 +22,7 @@ func TestLoadFixtures(t *testing.T) {
 		assert.NotNil(t, fixtures.Config)
 
 		// Verify incident count matches fixture data (12 scenarios)
-		assert.Equal(t, 12, len(fixtures.Incidents))
+		assert.Equal(t, 20, len(fixtures.Incidents))
 
 		// Verify config has user, teams, team members, and escalation policies
 		assert.NotEmpty(t, fixtures.Config.User.ID)
@@ -45,7 +45,7 @@ func TestDevClient_ListIncidents(t *testing.T) {
 		resp, err := client.ListIncidentsWithContext(ctx, pagerduty.ListIncidentsOptions{})
 		require.NoError(t, err)
 
-		assert.Equal(t, 12, len(resp.Incidents))
+		assert.Equal(t, 20, len(resp.Incidents))
 		assert.False(t, resp.More)
 	})
 
@@ -278,7 +278,7 @@ func TestDevClient_ListIncidentNotes(t *testing.T) {
 	})
 
 	t.Run("returns empty notes for incident without notes", func(t *testing.T) {
-		notes, err := client.ListIncidentNotesWithContext(ctx, "PDEV_INC_001")
+		notes, err := client.ListIncidentNotesWithContext(ctx, "PDEV_INC_002")
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(notes))
 	})
