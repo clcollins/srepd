@@ -1404,12 +1404,16 @@ func updateTeamsInYAML(configData []byte, teamIDs []string, teamNames map[string
 type configFormState struct {
 	TokenInput    string
 	SelectedTeams []string
-	SilentPolicy  string
-	CustomInput   string
-	KeepTeams     bool
-	KeepSilent    bool
-	KeepCustom    bool
-	Confirm       bool
+	// SilentPolicyChoice is the picker selection: a policy ID,
+	// policyChoiceSkip, or policyChoiceManual (reveals the free-text input
+	// bound to SilentPolicy).
+	SilentPolicyChoice string
+	SilentPolicy       string
+	CustomInput        string
+	KeepTeams          bool
+	KeepSilent         bool
+	KeepCustom         bool
+	Confirm            bool
 }
 
 // configWizardReadyMsg is sent when the existing config has been resolved
