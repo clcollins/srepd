@@ -99,4 +99,3 @@ func TestGenerateQuickstartMarkdown(t *testing.T) {
 	assert.Contains(t, result, ":agent <query>")
 	assert.Contains(t, result, "ask Claude AI")
 }
-
