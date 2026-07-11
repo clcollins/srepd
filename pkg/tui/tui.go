@@ -1897,6 +1897,67 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 }
 
+// validateTokenInput validates the wizard token input against the live API.
+// A blank input is allowed when an existing token will be kept. API errors
+// are classified into actionable messages (OB-3).
+func validateTokenInput(clientFactory func(string) pd.PagerDutyClient, input, existingToken string) error {
+	token := strings.TrimSpace(input)
+	if token == "" {
+		if existingToken != "" {
+			return nil
+		}
+		return fmt.Errorf("a PagerDuty API token is required")
+	}
+	if _, err := pd.GetCurrentUserTeams(clientFactory(token)); err != nil {
+		return fmt.Errorf("invalid token: %s", pd.ClassifyAPIError(err))
+	}
+	return nil
+}
+
+// fetchTeamOptions builds the wizard team options for the current token.
+// Placeholder and error states are returned as a single empty-valued option
+// (rejected by validateTeamValues) carrying a classified message.
+func fetchTeamOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string, existingTeamSet map[string]bool) ([]huh.Option[string], []pagerduty.Team) {
+	token := strings.TrimSpace(tokenInput)
+	if token == "" {
+		token = existingToken
+	}
+	if token == "" {
+		return []huh.Option[string]{huh.NewOption("(enter a token first)", "")}, nil
+	}
+
+	teams, err := pd.GetCurrentUserTeams(clientFactory(token))
+	if err != nil {
+		return []huh.Option[string]{
+			huh.NewOption("Error: "+pd.ClassifyAPIError(err), ""),
+		}, nil
+	}
+
+	var opts []huh.Option[string]
+	for _, team := range teams {
+		opt := huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID)
+		if existingTeamSet[team.ID] {
+			opt = opt.Selected(true)
+		}
+		opts = append(opts, opt)
+	}
+	return opts, teams
+}
+
+// validateTeamValues rejects an empty selection and the empty-valued
+// placeholder/error options fetchTeamOptions emits.
+func validateTeamValues(s []string) error {
+	if len(s) == 0 {
+		return fmt.Errorf("at least one team is required")
+	}
+	for _, v := range s {
+		if v == "" {
+			return fmt.Errorf("fix the token above (shift+tab to go back), then choose a team")
+		}
+	}
+	return nil
+}
+
 func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDesc, keepSilentDesc, keepCustomDesc string, existingTeamSet map[string]bool) *huh.Form {
 	var fetchedTeams []pagerduty.Team
 	submitted := false
@@ -1925,19 +1986,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				EchoMode(huh.EchoModePassword).
 				Value(&m.configState.TokenInput).
 				Validate(func(s string) error {
-					token := strings.TrimSpace(s)
-					if token == "" {
-						if msg.existing.Token != "" {
-							return nil
-						}
-						return fmt.Errorf("a PagerDuty API token is required")
-					}
-					client := clientFactory(token)
-					_, err := pd.GetCurrentUserTeams(client)
-					if err != nil {
-						return fmt.Errorf("invalid token: %v", err)
-					}
-					return nil
+					return validateTokenInput(clientFactory, s, msg.existing.Token)
 				}),
 		),
 		huh.NewGroup(
@@ -1951,32 +2000,9 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				Title("Select your PagerDuty teams").
 				Description("Select the team(s) whose incidents you want to monitor. Most users only need one.").
 				OptionsFunc(func() []huh.Option[string] {
-					token := strings.TrimSpace(m.configState.TokenInput)
-					if token == "" {
-						token = msg.existing.Token
-					}
-					if token == "" {
-						return []huh.Option[string]{
-							huh.NewOption("(enter a token first)", ""),
-						}
-					}
-					client := clientFactory(token)
-					teams, err := pd.GetCurrentUserTeams(client)
-					if err != nil {
-						return []huh.Option[string]{
-							huh.NewOption(fmt.Sprintf("Error: %v", err), ""),
-						}
-					}
-					fetchedTeams = teams
-					var opts []huh.Option[string]
-					for _, team := range teams {
-						opt := huh.NewOption(
-							fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID,
-						)
-						if existingTeamSet[team.ID] {
-							opt = opt.Selected(true)
-						}
-						opts = append(opts, opt)
+					opts, teams := fetchTeamOptions(clientFactory, m.configState.TokenInput, msg.existing.Token, existingTeamSet)
+					if teams != nil {
+						fetchedTeams = teams
 					}
 					return opts
 				}, &m.configState.TokenInput).
@@ -1986,10 +2012,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 						submitted = true
 						return nil
 					}
-					if len(s) == 0 {
-						return fmt.Errorf("at least one team is required")
-					}
-					return nil
+					return validateTeamValues(s)
 				}),
 		).WithHideFunc(func() bool { return m.configState.KeepTeams }),
 		huh.NewGroup(
