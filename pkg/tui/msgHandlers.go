@@ -347,6 +347,9 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			changes = pkgconfig.DetectChanges(m.configExisting, final, strings.TrimSpace(m.configState.TokenInput))
 		}
+		// Preset-seeded values equal the seeded "existing" state but are not
+		// in the file yet — force them into the write set.
+		changes = pkgconfig.ForcePresetChanges(changes, m.configPresetApplied)
 
 		if m.configExisting.OldFormatDetected {
 			if final.SilentPolicy != "" {
