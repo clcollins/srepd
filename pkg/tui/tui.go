@@ -276,12 +276,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configTeamNames = msg.teamNames
 		m.configPolicyNames = msg.policyNames
 		m.configState = &configFormState{
-			SilentPolicy: msg.existing.SilentPolicy,
-			CustomInput:  pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies),
-			KeepTeams:    msg.kd.KeepTeams,
-			KeepSilent:   msg.kd.KeepSilent,
-			KeepCustom:   msg.kd.KeepCustom,
-			Confirm:      true,
+			SilentPolicyChoice: msg.existing.SilentPolicy,
+			SilentPolicy:       msg.existing.SilentPolicy,
+			CustomInput:        pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies),
+			KeepTeams:          msg.kd.KeepTeams,
+			KeepSilent:         msg.kd.KeepSilent,
+			KeepCustom:         msg.kd.KeepCustom,
+			Confirm:            true,
 		}
 
 		existingTeamSet := make(map[string]bool)
@@ -1944,6 +1945,71 @@ func fetchTeamOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput,
 	return opts, teams
 }
 
+// Sentinel values for the silent-policy picker (OB-4). Skip maps to the
+// empty policy ID (silencing disabled until configured); manual reveals the
+// free-text ID input for policies the picker cannot discover.
+const (
+	policyChoiceSkip   = ""
+	policyChoiceManual = "__manual__"
+)
+
+// buildPolicyOptions turns fetched escalation policies into picker options:
+// SILENT-classified policies (no schedules notified — the right target for
+// silencing) lead the list with a recommendation annotation, then the rest,
+// then the skip and manual-entry escapes.
+func buildPolicyOptions(policies []pagerduty.EscalationPolicy) []huh.Option[string] {
+	var opts []huh.Option[string]
+	for _, p := range policies {
+		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent {
+			opts = append(opts, huh.NewOption(
+				fmt.Sprintf("%s — %s (recommended — no schedules notified)", p.Name, p.ID), p.ID))
+		}
+	}
+	for _, p := range policies {
+		if pd.ClassifyEscalationPolicy(&p) != pd.PolicyClassSilent {
+			opts = append(opts, huh.NewOption(fmt.Sprintf("%s — %s", p.Name, p.ID), p.ID))
+		}
+	}
+	opts = append(opts,
+		huh.NewOption("Skip — configure later", policyChoiceSkip),
+		huh.NewOption("Enter an ID manually…", policyChoiceManual),
+	)
+	return opts
+}
+
+// fetchPolicyOptions fetches the escalation policies for the selected teams
+// and builds the picker options. Errors are classified (OB-3) and rendered
+// as a skip-valued row so selecting them is harmless; the skip and manual
+// escapes are always present.
+func fetchPolicyOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string, teams []string) []huh.Option[string] {
+	token := strings.TrimSpace(tokenInput)
+	if token == "" {
+		token = existingToken
+	}
+	if token == "" || len(teams) == 0 {
+		return buildPolicyOptions(nil)
+	}
+
+	policies, err := pd.GetTeamEscalationPolicies(clientFactory(token), teams)
+	if err != nil {
+		return append(
+			[]huh.Option[string]{huh.NewOption("Error: "+pd.ClassifyAPIError(err), policyChoiceSkip)},
+			buildPolicyOptions(nil)...,
+		)
+	}
+	return buildPolicyOptions(policies)
+}
+
+// resolveSilentPolicyChoice maps the picker choice (plus the manual free-text
+// input) to the final policy ID. Emits the same bare ID string the free-text
+// step produced, so the save format and runtime consumption are unchanged.
+func resolveSilentPolicyChoice(choice, manualInput string) string {
+	if choice == policyChoiceManual {
+		return strings.TrimSpace(manualInput)
+	}
+	return choice
+}
+
 // validateTeamValues rejects an empty selection and the empty-valued
 // placeholder/error options fetchTeamOptions emits.
 func validateTeamValues(s []string) error {
@@ -2022,17 +2088,35 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				Value(&m.configState.KeepSilent),
 		).WithHideFunc(func() bool { return !msg.kd.HasSilent }),
 		huh.NewGroup(
-			huh.NewInput().
+			huh.NewSelect[string]().
 				Title("Default silent escalation policy").
 				Description(
 					"When you silence an incident, it gets reassigned to this policy —\n"+
 						"one that routes only to bot users, not on-call humans.\n"+
-						"Find the ID at People → Escalation Policies (ID is in the URL,\n"+
-						"e.g., PXXXXXX). Look for a policy like \"Silent Test\".\n"+
+						"Policies are fetched from your selected teams; ones with no\n"+
+						"schedules (nobody gets paged) are recommended.",
+				).
+				OptionsFunc(func() []huh.Option[string] {
+					teams := m.configState.SelectedTeams
+					if m.configState.KeepTeams || len(teams) == 0 {
+						teams = msg.existing.Teams
+					}
+					return fetchPolicyOptions(clientFactory, m.configState.TokenInput, msg.existing.Token, teams)
+				}, &m.configState.SelectedTeams).
+				Value(&m.configState.SilentPolicyChoice),
+		).WithHideFunc(func() bool { return m.configState.KeepSilent }),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Silent escalation policy ID").
+				Description(
+					"Enter the policy ID directly. Find it at People →\n"+
+						"Escalation Policies (the ID is in the URL, e.g., PXXXXXX).\n"+
 						"Leave blank to configure later.",
 				).
 				Value(&m.configState.SilentPolicy),
-		).WithHideFunc(func() bool { return m.configState.KeepSilent }),
+		).WithHideFunc(func() bool {
+			return m.configState.KeepSilent || m.configState.SilentPolicyChoice != policyChoiceManual
+		}),
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Keep current custom service-to-policy mappings?").
@@ -2058,7 +2142,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 					tmpFinal, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
 						TokenInput:          m.configState.TokenInput,
 						SelectedTeams:       m.configState.SelectedTeams,
-						SilentPolicyID:      m.configState.SilentPolicy,
+						SilentPolicyID:      resolveSilentPolicyChoice(m.configState.SilentPolicyChoice, m.configState.SilentPolicy),
 						CustomMappingsInput: m.configState.CustomInput,
 						KeepTeams:           m.configState.KeepTeams,
 						KeepSilent:          m.configState.KeepSilent,

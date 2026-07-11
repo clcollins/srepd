@@ -316,7 +316,7 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		final, err := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
 			TokenInput:          m.configState.TokenInput,
 			SelectedTeams:       m.configState.SelectedTeams,
-			SilentPolicyID:      m.configState.SilentPolicy,
+			SilentPolicyID:      resolveSilentPolicyChoice(m.configState.SilentPolicyChoice, m.configState.SilentPolicy),
 			CustomMappingsInput: m.configState.CustomInput,
 			KeepTeams:           m.configState.KeepTeams,
 			KeepSilent:          m.configState.KeepSilent,
