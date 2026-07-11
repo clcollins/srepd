@@ -1281,19 +1281,6 @@ func getIDsFromIncidents(incidents []pagerduty.Incident) []string {
 	return ids
 }
 
-func hasPlaceholderTeamsCfg(teams []string) bool {
-	if len(teams) == 0 {
-		return true
-	}
-	for _, team := range teams {
-		trimmed := strings.TrimSpace(team)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
-			return false
-		}
-	}
-	return true
-}
-
 type fetchedTeamsMsg struct {
 	teams []pagerduty.Team
 	err   error
