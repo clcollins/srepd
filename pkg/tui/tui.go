@@ -234,15 +234,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.teamSelectIDs = nil
 
-		theme := huh.ThemeCharm()
-		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
-		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
-		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
-		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
-		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
-		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+		theme := SrepdHuhTheme(m.theme)
 
 		m.teamSelectForm = huh.NewForm(
 			huh.NewGroup(
@@ -1639,15 +1631,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.bulkSilenceIDs = nil
 
-		theme := huh.ThemeCharm()
-		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
-		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
-		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
-		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
-		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
-		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+		theme := SrepdHuhTheme(m.theme)
 
 		m.bulkSilenceForm = huh.NewForm(
 			huh.NewGroup(
@@ -1934,15 +1918,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 	var fetchedTeams []pagerduty.Team
 	submitted := false
 
-	theme := huh.ThemeCharm()
-	theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
-	theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
-	theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
-	theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
-	theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
-	theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
-	theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
-	theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+	theme := SrepdHuhTheme(m.theme)
 
 	km := huh.NewDefaultKeyMap()
 	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "ctrl+q"), key.WithHelp("ctrl+q/ctrl+c", "quit"))

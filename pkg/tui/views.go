@@ -59,16 +59,16 @@ func (m model) View() string {
 		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))
 
 	case m.configMode:
-		s.WriteString(m.configForm.View())
+		s.WriteString(m.styles.FormContainer.Render(m.configForm.View()))
 
 	case m.configModeRequested:
 		s.WriteString("  Loading configuration...")
 
 	case m.bulkSilenceMode:
-		s.WriteString(m.bulkSilenceForm.View())
+		s.WriteString(m.styles.FormContainer.Render(m.bulkSilenceForm.View()))
 
 	case m.teamSelectMode:
-		s.WriteString(m.teamSelectForm.View())
+		s.WriteString(m.styles.FormContainer.Render(m.teamSelectForm.View()))
 
 	case m.clusterSelectMode:
 		s.WriteString("  " + m.clusterSelectPrompt + "\n")
