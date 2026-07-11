@@ -1915,34 +1915,66 @@ func validateTokenInput(clientFactory func(string) pd.PagerDutyClient, input, ex
 	return nil
 }
 
-// fetchTeamOptions builds the wizard team options for the current token.
-// Placeholder and error states are returned as a single empty-valued option
-// (rejected by validateTeamValues) carrying a classified message.
-func fetchTeamOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string, existingTeamSet map[string]bool) ([]huh.Option[string], []pagerduty.Team) {
+// teamGreeting builds the team-step description: a personal confirmation
+// that the token worked, plus single-team guidance. Falls back to neutral
+// copy when no user has been resolved yet.
+func teamGreeting(userName string, teamCount int) string {
+	const guidance = "Select the team(s) whose incidents you want to monitor; most users need exactly one."
+	if userName == "" {
+		return guidance
+	}
+	noun := "teams"
+	if teamCount == 1 {
+		noun = "team"
+	}
+	return fmt.Sprintf("Hi %s — found %d %s on your PagerDuty profile. %s", userName, teamCount, noun, guidance)
+}
+
+// teamPreselection decides which team options render preselected: teams from
+// the existing config always win; otherwise a single fetched team is
+// preselected (the common SRE case answers itself); multiple teams with no
+// existing config preselect nothing.
+func teamPreselection(existingTeamSet map[string]bool, teams []pagerduty.Team) map[string]bool {
+	if len(existingTeamSet) > 0 {
+		return existingTeamSet
+	}
+	sel := make(map[string]bool)
+	if len(teams) == 1 {
+		sel[teams[0].ID] = true
+	}
+	return sel
+}
+
+// fetchTeamOptions builds the wizard team options for the current token and
+// returns the validated user's name for the greeting. Placeholder and error
+// states are returned as a single empty-valued option (rejected by
+// validateTeamValues) carrying a classified message.
+func fetchTeamOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string, existingTeamSet map[string]bool) ([]huh.Option[string], []pagerduty.Team, string) {
 	token := strings.TrimSpace(tokenInput)
 	if token == "" {
 		token = existingToken
 	}
 	if token == "" {
-		return []huh.Option[string]{huh.NewOption("(enter a token first)", "")}, nil
+		return []huh.Option[string]{huh.NewOption("(enter a token first)", "")}, nil, ""
 	}
 
-	teams, err := pd.GetCurrentUserTeams(clientFactory(token))
+	user, err := pd.GetCurrentUserWithTeams(clientFactory(token))
 	if err != nil {
 		return []huh.Option[string]{
 			huh.NewOption("Error: "+pd.ClassifyAPIError(err), ""),
-		}, nil
+		}, nil, ""
 	}
 
+	selected := teamPreselection(existingTeamSet, user.Teams)
 	var opts []huh.Option[string]
-	for _, team := range teams {
+	for _, team := range user.Teams {
 		opt := huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID)
-		if existingTeamSet[team.ID] {
+		if selected[team.ID] {
 			opt = opt.Selected(true)
 		}
 		opts = append(opts, opt)
 	}
-	return opts, teams
+	return opts, user.Teams, user.Name
 }
 
 // Sentinel values for the silent-policy picker (OB-4). Skip maps to the
@@ -2064,11 +2096,15 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Select your PagerDuty teams").
-				Description("Select the team(s) whose incidents you want to monitor. Most users only need one.").
+				DescriptionFunc(func() string {
+					return teamGreeting(m.configState.FetchedUserName, m.configState.FetchedTeamCount)
+				}, &m.configState.FetchedUserName).
 				OptionsFunc(func() []huh.Option[string] {
-					opts, teams := fetchTeamOptions(clientFactory, m.configState.TokenInput, msg.existing.Token, existingTeamSet)
+					opts, teams, userName := fetchTeamOptions(clientFactory, m.configState.TokenInput, msg.existing.Token, existingTeamSet)
 					if teams != nil {
 						fetchedTeams = teams
+						m.configState.FetchedUserName = userName
+						m.configState.FetchedTeamCount = len(teams)
 					}
 					return opts
 				}, &m.configState.TokenInput).
@@ -2119,6 +2155,16 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		}),
 		huh.NewGroup(
 			huh.NewConfirm().
+				Title("Configure advanced options?").
+				Description(
+					"Custom service-to-policy silence overrides — a team-policy\n"+
+						"setting most users don't need. Skip unless your team's\n"+
+						"onboarding docs say otherwise.",
+				).
+				Value(&m.configState.AdvancedOptions),
+		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
+		huh.NewGroup(
+			huh.NewConfirm().
 				Title("Keep current custom service-to-policy mappings?").
 				Description(keepCustomDesc).
 				Value(&m.configState.KeepCustom),
@@ -2134,7 +2180,12 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 						"Leave blank to skip.",
 				).
 				Value(&m.configState.CustomInput),
-		).WithHideFunc(func() bool { return m.configState.KeepCustom }),
+		).WithHideFunc(func() bool {
+			if msg.kd.HasCustom {
+				return m.configState.KeepCustom
+			}
+			return !m.configState.AdvancedOptions
+		}),
 		huh.NewGroup(
 			huh.NewNote().
 				Title("Configuration summary").

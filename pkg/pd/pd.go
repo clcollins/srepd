@@ -367,6 +367,17 @@ func GetUser(client PagerDutyClient, id string, opts pagerduty.GetUserOptions) (
 }
 
 func GetCurrentUserTeams(client PagerDutyClient) ([]pagerduty.Team, error) {
+	user, err := GetCurrentUserWithTeams(client)
+	if err != nil {
+		return nil, fmt.Errorf("pd.GetCurrentUserTeams(): failed to get current user: %w", err)
+	}
+	return user.Teams, nil
+}
+
+// GetCurrentUserWithTeams returns the currently-authenticated user with
+// their teams included — one API call serving both identity (greeting,
+// validation feedback) and team discovery.
+func GetCurrentUserWithTeams(client PagerDutyClient) (*pagerduty.User, error) {
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
 
@@ -374,10 +385,9 @@ func GetCurrentUserTeams(client PagerDutyClient) ([]pagerduty.Team, error) {
 		Includes: []string{"teams"},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("pd.GetCurrentUserTeams(): failed to get current user: %w", err)
+		return nil, fmt.Errorf("pd.GetCurrentUserWithTeams(): failed to get current user: %w", err)
 	}
-
-	return user.Teams, nil
+	return user, nil
 }
 
 // GetCurrentUser returns the currently-authenticated PagerDuty user, applying the

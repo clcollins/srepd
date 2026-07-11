@@ -246,6 +246,7 @@ func (m *MockPagerDutyClient) GetCurrentUserWithContext(ctx context.Context, opt
 	}
 	user := &pagerduty.User{
 		APIObject: pagerduty.APIObject{ID: "MOCK_USER"},
+		Name:      "Mock User",
 		Email:     "mock@example.com",
 	}
 	for _, inc := range opts.Includes {
