@@ -47,11 +47,18 @@ go install .        # standard go install
 | `srepd config` | Interactive configuration wizard (`--preset <file\|https-url>` to pre-seed from a team preset) |
 | `srepd config generate` | Print a complete annotated config with defaults (`--out <path>` to write a file) |
 
+## Getting Started
+
+1. **Create a PagerDuty API User Token**: PagerDuty web → My Profile → User Settings → API Access → Create New API User Token.
+2. **Run `srepd`** — the setup wizard does the rest: it validates your token, discovers your teams and escalation policies, detects your terminal and editor, and drops you straight into the live incident view when you save.
+
+That's it. Your team may also publish a preset with its policy decisions — if so, run `srepd config --preset <url>` from your team's onboarding docs instead.
+
 ## Configuration
 
 SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Run `srepd config` to create or update your config interactively. Values from environment variables (e.g., `SREPD_TOKEN`) are pre-filled automatically.
 
-If no config file exists — or the config file is incomplete or still contains placeholder values (e.g. `<PagerDuty API token>`) — running `srepd` automatically enters the configuration wizard. The wizard form resizes dynamically when the terminal window changes size.
+If no config file exists — or the config file is incomplete or still contains placeholder values — running `srepd` automatically enters the configuration wizard. The wizard form resizes dynamically when the terminal window changes size.
 
 **Migrating from old config format:** If your config uses the deprecated `service_escalation_policies` key, running `srepd config` will automatically migrate to the new `default_silent_escalation_policy` and `custom_service_escalation_policies` keys. The old block is commented out with a deprecation note.
 
@@ -71,13 +78,12 @@ If no config file exists — or the config file is incomplete or still contains 
 | `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. Set via `srepd config`. |
 | `custom_service_escalation_policies` | `map[string]string` | (none) | Per-service silent policy overrides (service ID to policy ID) |
 | `editor` | `string` | `vim` | Editor for incident notes |
-| `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
+| `terminal` | `string` | `gnome-terminal --` | Terminal emulator for cluster login (detected and offered by the wizard) |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
 | `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary cluster login command |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
-| `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`) |
-| `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries |
+| `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries (set to `""` to disable AI features) |
 | `emoji` | `bool` | `true` | Use emoji markers or text fallbacks for flags/agent/watcher |
 | `reescalate_level` | `int` | `2` | Escalation level `ctrl+e` re-escalates to, skipping lower placeholder tiers (e.g. level 1 "Nobody") |
 | `stream_responses` | `bool` | `true` | Stream `:watcher`/LLM responses token-by-token when the provider supports it; set `false` for blocking responses |
@@ -103,14 +109,22 @@ colors:
   tab: "#7D56F4"        # Reserved for future use
 ```
 
-### Example
+### Advanced: manual configuration
+
+Prefer editing a file over the wizard? Generate a complete, annotated config with every supported key and its default:
+
+```bash
+srepd config generate --out ~/.config/srepd/srepd.yaml
+```
+
+Then fill in `token` and `teams`. **Do not copy placeholder values** like `<PagerDuty API token>` into the file — srepd treats them as unconfigured and routes you into the wizard. A minimal working config looks like:
 
 ```yaml
-token: <PagerDuty API token>
+token: u+yourRealTokenHere
 teams:
-  - <team ID>
+  - PABC123
 default_silent_escalation_policy: P654321
-terminal: gnome-terminal
+terminal: gnome-terminal --
 cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
 rosa_boundary_command: rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect
 toolbox_mode: auto
