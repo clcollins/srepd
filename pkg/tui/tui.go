@@ -633,12 +633,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.windowSizeMsgHandler(msg)
 
 	case tea.MouseMsg:
-		if m.watcherExpanded {
-			var cmd tea.Cmd
-			m.watcherViewport, cmd = m.watcherViewport.Update(msg)
-			return m, cmd
-		}
-		return m, nil
+		return m.handleMouseMsg(msg)
 
 	case tea.KeyMsg:
 		return m.keyMsgHandler(msg)
