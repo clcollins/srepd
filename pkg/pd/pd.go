@@ -503,6 +503,31 @@ func ReEscalateIncidents(client PagerDutyClient, incidents []pagerduty.Incident,
 	return loopManageIncidents(client, ctx, user.Email, opts)
 }
 
+func UpdateIncidentTitle(client PagerDutyClient, incidentID string, newTitle string, currentUser *pagerduty.User) ([]pagerduty.Incident, error) {
+	if currentUser == nil {
+		return nil, fmt.Errorf("pd.UpdateIncidentTitle(): user is nil")
+	}
+	if incidentID == "" {
+		return nil, fmt.Errorf("pd.UpdateIncidentTitle(): incident ID is empty")
+	}
+	if newTitle == "" {
+		return nil, fmt.Errorf("pd.UpdateIncidentTitle(): title is empty")
+	}
+
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	opts := []pagerduty.ManageIncidentsOptions{
+		{
+			ID:    incidentID,
+			Type:  "incident",
+			Title: newTitle,
+		},
+	}
+
+	return loopManageIncidents(client, ctx, currentUser.Email, opts)
+}
+
 func PostNote(client PagerDutyClient, id string, user *pagerduty.User, content string) (*pagerduty.IncidentNote, error) {
 	ctx, cancel := contextWithTimeout()
 	defer cancel()

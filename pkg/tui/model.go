@@ -69,8 +69,9 @@ type model struct {
 	launcher             launcher.ClusterLauncher
 	rosaBoundaryLauncher launcher.ClusterLauncher
 
-	table table.Model
-	input textinput.Model
+	table          table.Model
+	input          textinput.Model
+	tagInputActive bool
 	// This is a hack since viewport.Model doesn't have a Focused() method
 	viewingIncident  bool
 	incidentViewer   viewport.Model

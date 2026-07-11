@@ -564,6 +564,12 @@ func (d *DevPagerDutyClient) ManageIncidentsWithContext(_ context.Context, _ str
 			return nil, fmt.Errorf("DevPagerDutyClient: incident %q not found", opt.ID)
 		}
 
+		// Handle title change (tags)
+		if opt.Title != "" {
+			log.Debug("DevPagerDutyClient.ManageIncidents", "action", "title_change", "id", opt.ID, "new_title", opt.Title)
+			incident.Title = opt.Title
+		}
+
 		// Handle status change (acknowledge)
 		if opt.Status != "" {
 			log.Debug("DevPagerDutyClient.ManageIncidents", "action", "status_change", "id", opt.ID, "new_status", opt.Status)

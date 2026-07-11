@@ -17,7 +17,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 		// Column 1: Help at top, navigation
 		{k.Help, k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
 		// Column 2: Primary incident actions
-		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence, k.Merge, k.Input},
+		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence, k.Merge, k.Tag, k.Input},
 		// Column 3: Settings & toggles, Quit at bottom
 		{k.Team, k.Refresh, k.AutoRefresh, k.AutoAck, k.Urgency, k.Watcher, k.ViewLog, k.Quit},
 		// Column 4: Tab navigation (incident viewer)
@@ -58,6 +58,7 @@ type keymap struct {
 	ViewLog     key.Binding
 	Merge       key.Binding
 	Watcher     key.Binding
+	Tag         key.Binding
 	TabNext     key.Binding
 	TabPrev     key.Binding
 }
@@ -191,6 +192,10 @@ var defaultKeyMap = keymap{
 	Watcher: key.NewBinding(
 		key.WithKeys("w"),
 		key.WithHelp("w", "toggle watcher"),
+	),
+	Tag: key.NewBinding(
+		key.WithKeys("ctrl+t"),
+		key.WithHelp("ctrl+t", "add tags"),
 	),
 	TabNext: key.NewBinding(
 		key.WithKeys("tab", "right"),
