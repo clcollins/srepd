@@ -50,6 +50,7 @@ func KeyBindingEntries() []KeyBindingEntry {
 		{km.ViewLog.Help().Key, km.ViewLog.Help().Desc},
 		{km.Merge.Help().Key, km.Merge.Help().Desc},
 		{km.Watcher.Help().Key, km.Watcher.Help().Desc},
+		{km.Tag.Help().Key, km.Tag.Help().Desc},
 		{km.TabNext.Help().Key, km.TabNext.Help().Desc},
 		{km.TabPrev.Help().Key, km.TabPrev.Help().Desc},
 		{km.ViewDocs.Help().Key, km.ViewDocs.Help().Desc},

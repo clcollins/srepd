@@ -28,6 +28,7 @@
 | ctrl+l | view debug log |
 | m | merge incident |
 | w | toggle watcher |
+| ctrl+t | add tags |
 | tab/→ | next tab |
 | shift+tab/← | prev tab |
 | ctrl+h | docs |
