@@ -517,13 +517,19 @@ func BuildFullConfig(final ResolvedValues, teamNames map[string]string, silentPo
 	return []byte(sb.String())
 }
 
-func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, policyNames map[string]string) string {
-	var sb strings.Builder
+// SummaryRow is one line of the wizard's configuration summary, exposed as
+// data so the TUI can style it.
+type SummaryRow struct {
+	Label   string
+	Value   string
+	Changed bool
+}
 
-	if changes.TokenChanged {
-		fmt.Fprintf(&sb, "  Token:          %s (changed)\n", MaskToken(final.Token))
-	} else {
-		fmt.Fprintf(&sb, "  Token:          %s (unchanged)\n", MaskToken(final.Token))
+// BuildSummaryRows assembles the summary as structured rows. BuildSummary
+// renders the same rows as plain text.
+func BuildSummaryRows(existing ExistingConfig, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, policyNames map[string]string) []SummaryRow {
+	rows := []SummaryRow{
+		{Label: "Token", Value: MaskToken(final.Token), Changed: changes.TokenChanged},
 	}
 
 	var teamDisplay []string
@@ -534,43 +540,31 @@ func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigC
 			teamDisplay = append(teamDisplay, id)
 		}
 	}
-	changeLabel := " (unchanged)"
-	if changes.TeamsChanged {
-		changeLabel = " (changed)"
-	}
-	fmt.Fprintf(&sb, "  Teams:          %s%s\n", strings.Join(teamDisplay, ", "), changeLabel)
+	rows = append(rows, SummaryRow{Label: "Teams", Value: strings.Join(teamDisplay, ", "), Changed: changes.TeamsChanged})
 
 	if final.SilentPolicy != "" {
-		changeLabel = " (unchanged)"
-		if changes.SilentChanged {
-			changeLabel = " (changed)"
-		}
 		silentDisplay := final.SilentPolicy
 		if name, ok := policyNames[final.SilentPolicy]; ok {
 			silentDisplay = fmt.Sprintf("%s (%s)", name, final.SilentPolicy)
 		}
-		fmt.Fprintf(&sb, "  Silent policy:  %s%s\n", silentDisplay, changeLabel)
+		rows = append(rows, SummaryRow{Label: "Silent policy", Value: silentDisplay, Changed: changes.SilentChanged})
 	}
 
 	if changes.TerminalChanged && final.Terminal != "" {
-		fmt.Fprintf(&sb, "  Terminal:       %s (changed)\n", final.Terminal)
+		rows = append(rows, SummaryRow{Label: "Terminal", Value: final.Terminal, Changed: true})
 	}
 	if changes.EditorChanged && final.Editor != "" {
-		fmt.Fprintf(&sb, "  Editor:         %s (changed)\n", final.Editor)
+		rows = append(rows, SummaryRow{Label: "Editor", Value: final.Editor, Changed: true})
 	}
 	if changes.AgentChanged {
 		agentDisplay := final.AgentCLICommand
 		if agentDisplay == "" {
 			agentDisplay = "(disabled)"
 		}
-		fmt.Fprintf(&sb, "  AI agent:       %s (changed)\n", agentDisplay)
+		rows = append(rows, SummaryRow{Label: "AI agent", Value: agentDisplay, Changed: true})
 	}
 
 	if final.CustomMappingsInput != "" {
-		changeLabel = " (unchanged)"
-		if changes.CustomChanged {
-			changeLabel = " (changed)"
-		}
 		customDisplay := final.CustomMappingsInput
 		parsed := ParseCustomMappings(final.CustomMappingsInput)
 		if len(parsed) > 0 && len(policyNames) > 0 {
@@ -584,7 +578,21 @@ func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigC
 			}
 			customDisplay = strings.Join(parts, ", ")
 		}
-		fmt.Fprintf(&sb, "  Custom:         %s%s\n", customDisplay, changeLabel)
+		rows = append(rows, SummaryRow{Label: "Custom", Value: customDisplay, Changed: changes.CustomChanged})
+	}
+
+	return rows
+}
+
+func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, policyNames map[string]string) string {
+	var sb strings.Builder
+
+	for _, row := range BuildSummaryRows(existing, final, changes, teamNames, policyNames) {
+		marker := " (unchanged)"
+		if row.Changed {
+			marker = " (changed)"
+		}
+		fmt.Fprintf(&sb, "  %-16s%s%s\n", row.Label+":", row.Value, marker)
 	}
 
 	return sb.String()

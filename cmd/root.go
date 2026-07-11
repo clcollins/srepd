@@ -91,6 +91,9 @@ but rather a simple tool to make on-call tasks easier.`,
 		switch route {
 		case routeWizard:
 			needsWizard = true
+			// Surfaced on the wizard's welcome step so the user knows why
+			// they landed here instead of the incident view.
+			viper.Set("config_wizard_reason", reason)
 			log.Info("Config incomplete — launching setup wizard", "reason", reason)
 			return
 		case routeFatal:

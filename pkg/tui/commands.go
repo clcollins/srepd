@@ -1391,6 +1391,9 @@ type configWizardReadyMsg struct {
 	teamNames     map[string]string
 	policyNames   map[string]string
 	presetApplied pkgconfig.PresetApplied
+	// wizardReason is why the wizard auto-launched over a broken config
+	// (OB-1); shown on the welcome step. Empty for explicit `srepd config`.
+	wizardReason string
 }
 
 // configSavedMsg is sent after the config has been written to disk.
@@ -1472,7 +1475,15 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			}
 		}
 
-		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames, policyNames: policyNames, presetApplied: presetApplied}
+		return configWizardReadyMsg{
+			existing:      existing,
+			kd:            kd,
+			isNewFile:     isNewFile,
+			teamNames:     teamNames,
+			policyNames:   policyNames,
+			presetApplied: presetApplied,
+			wizardReason:  viper.GetString("config_wizard_reason"),
+		}
 	}
 }
 
