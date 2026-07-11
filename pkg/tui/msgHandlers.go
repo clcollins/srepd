@@ -192,6 +192,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Default commands for the table view
 	switch {
+	case m.tourMode:
+		return switchTourFocusMode(m, msg)
+
 	case m.configMode:
 		return switchConfigFocusMode(m, msg)
 
@@ -811,8 +814,12 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.dispatchFlagCommand(prompt)
 			}
 
+			if isTourCommand(prompt) {
+				return m.startTour()
+			}
+
 			log.Debug("switchInputFocusMode", "msg", "unknown command", "prompt", prompt)
-			m.setStatus("unknown command — try :agent, :watcher, or :flag")
+			m.setStatus("unknown command — try :agent, :watcher, :flag, or :tour")
 			return m, nil
 
 		default:

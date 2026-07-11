@@ -372,7 +372,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.config = msg.config
-		m.setStatus("config saved")
+		// One-time suggestion after first setup; never auto-forced (#324).
+		if !viper.GetBool("tour_seen") {
+			m.setStatus("config saved — new here? type :tour for a 2-minute walkthrough")
+		} else {
+			m.setStatus("config saved")
+		}
 		return m, tea.Batch(
 			func() tea.Msg { return updateIncidentListMsg("config saved") },
 			func() tea.Msg { return tea.WindowSizeMsg{Width: windowSize.Width, Height: windowSize.Height} },

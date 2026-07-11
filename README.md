@@ -54,6 +54,8 @@ go install .        # standard go install
 
 That's it. Your team may also publish a preset with its policy decisions — if so, run `srepd config --preset <url>` from your team's onboarding docs instead.
 
+New to srepd? Type `:tour` inside the app for a guided walkthrough of the incident table, actions, command mode, chords, flags, and the AI watcher.
+
 ## Configuration
 
 SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Run `srepd config` to create or update your config interactively. Values from environment variables (e.g., `SREPD_TOKEN`) are pre-filled automatically.
@@ -87,6 +89,7 @@ If no config file exists — or the config file is incomplete or still contains 
 | `emoji` | `bool` | `true` | Use emoji markers or text fallbacks for flags/agent/watcher |
 | `reescalate_level` | `int` | `2` | Escalation level `ctrl+e` re-escalates to, skipping lower placeholder tiers (e.g. level 1 "Nobody") |
 | `stream_responses` | `bool` | `true` | Stream `:watcher`/LLM responses token-by-token when the provider supports it; set `false` for blocking responses |
+| `tour_seen` | `bool` | `false` | Set automatically after the guided tour is first started; suppresses the one-time post-setup `:tour` suggestion |
 | `agent_system_prompt` | `string` | (read-only investigation) | System prompt for `:agent` CLI queries |
 | `watcher_system_prompt` | `string` | (SRE assistant) | System prompt for `:watcher` LLM queries |
 | `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
