@@ -35,6 +35,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	ocmconfig "github.com/openshift-online/ocm-common/pkg/ocm/config"
+
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
@@ -210,26 +212,7 @@ func launchTUI() {
 		log.Fatal(err)
 	}
 
-	var ocmClient ocm.OCMClient
-	var ocmAuthPending bool
-	var asyncOCMClient *ocm.Client
-
-	cfg, armed, checkErr := ocm.CheckTokens()
-	if checkErr != nil {
-		log.Warn("OCM config check failed", "error", checkErr)
-	} else if armed {
-		client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
-		if connErr != nil {
-			log.Warn("OCM connection failed", "error", connErr)
-		} else {
-			ocmClient = client
-			asyncOCMClient = client
-			log.Info("OCM connected")
-		}
-	} else {
-		ocmAuthPending = true
-		log.Info("OCM tokens not valid — will authenticate async")
-	}
+	ocmClient, asyncOCMClient, ocmAuthPending, cfg := setupOCM()
 
 	var aiProvider ai.Provider
 	llmCfg := ai.Config{
@@ -351,6 +334,37 @@ func launchTUI() {
 		fmt.Println(err)
 		log.Fatal(err)
 	}
+}
+
+// setupOCM checks OCM tokens and connects when possible. It returns the
+// client handed to the TUI, the concrete client for lifecycle cleanup,
+// whether async browser auth is still required, and the OCM config needed to
+// complete that auth. Config-wizard mode deliberately skips this (OB-6): a
+// brand-new user must not see browser-auth prompts or OCM warnings before
+// they have even saved a PagerDuty token.
+func setupOCM() (ocm.OCMClient, *ocm.Client, bool, *ocmconfig.Config) {
+	var ocmClient ocm.OCMClient
+	var concreteClient *ocm.Client
+	var authPending bool
+
+	cfg, armed, checkErr := ocm.CheckTokens()
+	if checkErr != nil {
+		log.Warn("OCM config check failed", "error", checkErr)
+	} else if armed {
+		client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
+		if connErr != nil {
+			log.Warn("OCM connection failed", "error", connErr)
+		} else {
+			ocmClient = client
+			concreteClient = client
+			log.Info("OCM connected")
+		}
+	} else {
+		authPending = true
+		log.Info("OCM tokens not valid — will authenticate async")
+	}
+
+	return ocmClient, concreteClient, authPending, cfg
 }
 
 // logWriter holds the active asyncWriter so it can be flushed on shutdown.

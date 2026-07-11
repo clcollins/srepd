@@ -1500,6 +1500,53 @@ type OCMClientReadyMsg struct {
 	Err    error
 }
 
+// connectOCMCmdIfNeeded returns a command that connects OCM after the config
+// wizard exits into a live session, so cluster enrichment works exactly like
+// a normal launch. OCM auth is deliberately skipped while the wizard runs
+// (OB-6); this is the follow-through that keeps the first session fully
+// functional. Returns nil when OCM is already connected or in dev mode. The
+// connection (including browser auth for expired tokens) blocks inside the
+// tea.Cmd goroutine, and the result flows through the existing
+// OCMClientReadyMsg handler (client, deferred backplane, enrichment).
+func (m model) connectOCMCmdIfNeeded() tea.Cmd {
+	if m.ocmClient != nil || m.devMode {
+		return nil
+	}
+	connect := m.ocmConnect
+	if connect == nil {
+		connect = func() (ocm.OCMClient, error) {
+			client, err := ocm.Connect(Version)
+			if err != nil {
+				return nil, err
+			}
+			return client, nil
+		}
+	}
+	return func() tea.Msg {
+		client, err := connect()
+		if err != nil || client == nil {
+			return OCMClientReadyMsg{Err: err}
+		}
+		return OCMClientReadyMsg{Client: client}
+	}
+}
+
+// ocmHandoffCmd wraps connectOCMCmdIfNeeded for the wizard-exit paths,
+// setting ocmAuthPending so the UI reflects the in-flight connection. When
+// requirePDConfig is true (discard/no-changes/abort paths), the handoff only
+// happens if a usable PD config exists — a brand-new user backing out of the
+// wizard must not get a browser-auth prompt on the way out.
+func (m *model) ocmHandoffCmd(requirePDConfig bool) tea.Cmd {
+	if requirePDConfig && (m.config == nil || m.config.Client == nil) {
+		return nil
+	}
+	cmd := m.connectOCMCmdIfNeeded()
+	if cmd != nil {
+		m.ocmAuthPending = true
+	}
+	return cmd
+}
+
 type pdClientInitializedMsg struct {
 	config *pd.Config
 	err    error

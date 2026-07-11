@@ -199,8 +199,11 @@ type model struct {
 	configWizardPending *configWizardReadyMsg
 
 	// OCM enrichment state
-	ocmClient             ocm.OCMClient
-	ocmAuthPending        bool
+	ocmClient      ocm.OCMClient
+	ocmAuthPending bool
+	// ocmConnect overrides the post-wizard OCM connection for tests; nil
+	// means the real ocm.Connect (which may run browser auth).
+	ocmConnect            func() (ocm.OCMClient, error)
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
 	clusterEnrichInFlight map[string]bool     // cluster IDs currently being enriched
 	clusterEnrichFailed   map[string]int      // failure count per cluster ID

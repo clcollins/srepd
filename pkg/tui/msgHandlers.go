@@ -306,7 +306,11 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.configState.Confirm {
 			m.setStatus("config changes discarded")
-			return m, func() tea.Msg { return updateIncidentListMsg("config discarded") }
+			cmds := []tea.Cmd{func() tea.Msg { return updateIncidentListMsg("config discarded") }}
+			if ocmCmd := m.ocmHandoffCmd(true); ocmCmd != nil {
+				cmds = append(cmds, ocmCmd)
+			}
+			return m, tea.Batch(cmds...)
 		}
 
 		final, err := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
@@ -341,7 +345,11 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !changes.AnyChanged() {
 			m.setStatus("config is valid, no changes needed")
-			return m, func() tea.Msg { return updateIncidentListMsg("config unchanged") }
+			cmds := []tea.Cmd{func() tea.Msg { return updateIncidentListMsg("config unchanged") }}
+			if ocmCmd := m.ocmHandoffCmd(true); ocmCmd != nil {
+				cmds = append(cmds, ocmCmd)
+			}
+			return m, tea.Batch(cmds...)
 		}
 
 		teamNames := make(map[string]string)
@@ -375,7 +383,7 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configModeRequested = false
 		m.table.Focus()
 		m.setStatus("config cancelled")
-		return m, nil
+		return m, m.ocmHandoffCmd(true)
 	}
 	return m, cmd
 }

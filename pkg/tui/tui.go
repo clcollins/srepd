@@ -351,7 +351,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.setStatus("config saved — initializing...")
 		m.table.Focus()
-		return m, initPDClientCmd()
+		cmds := []tea.Cmd{initPDClientCmd()}
+		if ocmCmd := m.ocmHandoffCmd(false); ocmCmd != nil {
+			cmds = append(cmds, ocmCmd)
+		}
+		return m, tea.Batch(cmds...)
 
 	case pdClientInitializedMsg:
 		if msg.err != nil {
