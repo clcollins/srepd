@@ -1415,6 +1415,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewingLog = true
 		return m, nil
 
+	case renderDocsMsg:
+		if len(m.docsPages) == 0 {
+			m.viewingDocs = false
+			return m, nil
+		}
+		cmds = append(cmds, renderDocsContent(&m))
+
+	case renderedDocsMsg:
+		if msg.err != nil {
+			return m, func() tea.Msg { return errMsg{msg.err} }
+		}
+		m.docsViewer.SetContent(msg.content)
+		m.viewingDocs = true
+
 	case renderIncidentMsg:
 		if m.selectedIncident == nil {
 			m.setStatus("failed render incidents - no incidents provided")

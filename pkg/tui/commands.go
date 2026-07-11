@@ -396,6 +396,26 @@ type renderedIncidentMsg struct {
 	err     error
 }
 
+type renderDocsMsg string
+
+type renderedDocsMsg struct {
+	content string
+	err     error
+}
+
+func renderDocsContent(m *model) tea.Cmd {
+	return func() tea.Msg {
+		content := m.renderDocsTabContent()
+
+		rendered, err := renderIncidentMarkdown(m, content)
+		if err != nil {
+			return renderedDocsMsg{content, err}
+		}
+
+		return renderedDocsMsg{rendered, nil}
+	}
+}
+
 func renderIncident(m *model) tea.Cmd {
 	return func() tea.Msg {
 		t, err := m.renderTabContent()

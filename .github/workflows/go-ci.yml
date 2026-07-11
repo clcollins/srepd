@@ -44,6 +44,20 @@ jobs:
       - name: Check README update
         run: make readme-check
 
+  quickstart-check:
+    name: Quickstart Update Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-quickstart')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check quickstart update
+        run: make quickstart-check
+
   fmt:
     name: Format Check
     runs-on: ubuntu-latest

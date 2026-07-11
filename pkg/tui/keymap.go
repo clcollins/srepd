@@ -15,7 +15,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 
 	columns := [][]key.Binding{
 		// Column 1: Help at top, navigation
-		{k.Help, k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
+		{k.Help, k.ViewDocs, k.Up, k.Down, k.Top, k.Bottom, k.Enter, k.Back},
 		// Column 2: Primary incident actions
 		{k.Ack, k.Note, k.Login, k.Open, k.SOP, k.UnAck, k.Silence, k.Merge, k.Tag, k.Input},
 		// Column 3: Settings & toggles, Quit at bottom
@@ -61,6 +61,7 @@ type keymap struct {
 	Tag         key.Binding
 	TabNext     key.Binding
 	TabPrev     key.Binding
+	ViewDocs    key.Binding
 }
 
 type inputKeymap struct {
@@ -204,6 +205,10 @@ var defaultKeyMap = keymap{
 	TabPrev: key.NewBinding(
 		key.WithKeys("shift+tab", "left"),
 		key.WithHelp("shift+tab/←", "prev tab"),
+	),
+	ViewDocs: key.NewBinding(
+		key.WithKeys("ctrl+h"),
+		key.WithHelp("ctrl+h", "docs"),
 	),
 }
 

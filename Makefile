@@ -136,6 +136,50 @@ readme-check: ## Ensure README is updated when config/keys/flags change
 		echo "No config/key/flag changes detected - README check skipped"; \
 	fi
 
+.PHONY: generate-quickstart
+generate-quickstart: ## Regenerate docs/quickstart.md from keybindings
+	@echo "Generating docs/quickstart.md..."
+	go run ./cmd/gen-quickstart > docs/quickstart.md
+	@echo "docs/quickstart.md generated."
+
+.PHONY: quickstart-check
+quickstart-check: ## Ensure quickstart.md is updated when keybindings change
+	@echo "Checking if quickstart.md update is needed..."
+	@MERGE_BASE=$$(git merge-base HEAD origin/main 2>/dev/null || echo ""); \
+	if [ -z "$$MERGE_BASE" ]; then exit 0; fi; \
+	CHANGED=$$(git diff --name-only "$$MERGE_BASE"...HEAD); \
+	NEEDS_QS=false; \
+	for f in $$CHANGED; do \
+		case "$$f" in \
+			pkg/tui/keymap.go|pkg/tui/chords.go|pkg/tui/flag_commands.go|pkg/tui/quickstart_data.go) NEEDS_QS=true ;; \
+		esac; \
+	done; \
+	if [ "$$NEEDS_QS" = "true" ]; then \
+		if ! echo "$$CHANGED" | grep -q "docs/quickstart.md"; then \
+			echo "ERROR: Changes to keymap.go, chords.go, flag_commands.go, or quickstart_data.go require docs/quickstart.md update"; \
+			echo "Run: make generate-quickstart"; \
+			exit 1; \
+		fi; \
+		echo "docs/quickstart.md update found - OK"; \
+	else \
+		echo "No keybinding changes detected - quickstart check skipped"; \
+	fi
+
+.PHONY: quickstart-verify
+quickstart-verify: ## Verify docs/quickstart.md matches generated output
+	@echo "Verifying docs/quickstart.md is up to date..."
+	@TMPFILE=$$(mktemp); \
+	go run ./cmd/gen-quickstart > "$$TMPFILE"; \
+	if ! diff -q docs/quickstart.md "$$TMPFILE" > /dev/null 2>&1; then \
+		echo "ERROR: docs/quickstart.md is stale"; \
+		echo "Run: make generate-quickstart"; \
+		diff docs/quickstart.md "$$TMPFILE" || true; \
+		rm -f "$$TMPFILE"; \
+		exit 1; \
+	fi; \
+	rm -f "$$TMPFILE"; \
+	echo "docs/quickstart.md is up to date."
+
 .PHONY: test-race
 test-race: ## Run tests with race detector
 	@echo "Running tests with race detector..."
@@ -219,7 +263,7 @@ test-fixtures: ## Check that fixture data contains no real UUIDs, domains, or or
 	echo "All fixture data is properly sanitized."
 
 .PHONY: test-all
-test-all: fmt-check vet lint test test-race test-fixtures ## Run all checks
+test-all: fmt-check vet lint test test-race test-fixtures quickstart-verify ## Run all checks
 	@echo "All checks passed."
 
 .PHONY: ensure-goreleaser

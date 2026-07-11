@@ -78,6 +78,14 @@ func (m model) View() string {
 		fmt.Fprintf(&s, "  Select incident to merge %s into (Enter=select, Esc=cancel, t=toggle team):\n", m.mergeSourceIncident.ID)
 		s.WriteString(m.styles.TableContainer.Render(m.mergeTable.View()))
 
+	case m.viewingDocs:
+		tabBar := m.renderDocsTabBar()
+		s.WriteString(tabBar)
+		s.WriteString("\n")
+		tabWindowBorders := m.styles.TabWindow.GetHorizontalBorderSize()
+		tabWindowWidth := windowSize.Width - m.styles.Main.GetHorizontalBorderSize() - m.styles.Main.GetHorizontalMargins() - tabWindowBorders
+		s.WriteString(m.styles.TabWindow.Width(tabWindowWidth).Render(m.docsViewer.View()))
+
 	case m.viewingIncident:
 		tabBar := m.renderTabBar()
 		s.WriteString(tabBar)

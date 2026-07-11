@@ -76,6 +76,13 @@ func (m model) windowSizeMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mergeTable.SetHeight(m.layout.TableHeight)
 	}
 
+	m.docsViewer.Width = m.layout.IncidentViewerWidth
+	m.docsViewer.Height = m.layout.IncidentViewerHeight
+
+	if m.viewingDocs {
+		return m, func() tea.Msg { return renderDocsMsg("window resized") }
+	}
+
 	if m.viewingIncident {
 		return m, func() tea.Msg { return renderIncidentMsg("window resized") }
 	}
@@ -212,6 +219,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case m.viewingLog:
 		return switchLogFocusMode(m, msg)
+
+	case m.viewingDocs:
+		return switchDocsFocusMode(m, msg)
 
 	case m.viewingIncident:
 		return switchIncidentFocusMode(m, msg)
@@ -707,6 +717,12 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.ViewLog):
 			return m, m.readLog()
 
+		case key.Matches(msg, defaultKeyMap.ViewDocs):
+			m.viewingDocs = true
+			m.docsActiveTab = 0
+			m.docsViewer.GotoTop()
+			return m, func() tea.Msg { return renderDocsMsg("open docs") }
+
 		}
 	}
 	return m, tea.Batch(cmds...)
@@ -936,6 +952,12 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return openSOPMsg("sop") }
+
+		case key.Matches(msg, defaultKeyMap.ViewDocs):
+			m.viewingDocs = true
+			m.docsActiveTab = 0
+			m.docsViewer.GotoTop()
+			return m, func() tea.Msg { return renderDocsMsg("open docs") }
 
 		}
 	}
