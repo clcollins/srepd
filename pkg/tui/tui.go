@@ -53,7 +53,7 @@ func (m model) Init() tea.Cmd {
 		checkForUpdate(m.devMode, ""),
 	}
 
-	if m.config != nil && m.config.Client != nil && hasPlaceholderTeamsCfg(viper.GetStringSlice("teams")) {
+	if m.config != nil && m.config.Client != nil && pkgconfig.HasPlaceholderTeams(viper.GetStringSlice("teams")) {
 		initCmds = append(initCmds, fetchUserTeams(m.config.Client))
 	}
 
