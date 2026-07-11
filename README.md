@@ -45,6 +45,7 @@ go install .        # standard go install
 | `srepd --version` | Print version and git SHA |
 | `srepd --dev` | Run with fixture data (no PD connection) |
 | `srepd config` | Interactive configuration wizard |
+| `srepd config generate` | Print a complete annotated config with defaults (`--out <path>` to write a file) |
 
 ## Configuration
 
