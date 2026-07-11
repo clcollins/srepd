@@ -1369,6 +1369,13 @@ type configFormState struct {
 	// mappings) that most users should never see; defaults to No.
 	AdvancedOptions bool
 	Confirm         bool
+	// Environment step (OB-5).
+	TerminalChoice string
+	EditorInput    string
+	AgentEnabled   bool
+	// AgentOffered records whether the AI section was shown at all —
+	// hidden means "keep the existing agent setting".
+	AgentOffered bool
 	// FetchedUserName/FetchedTeamCount are set by the team OptionsFunc after
 	// a successful fetch and drive the greeting DescriptionFunc.
 	FetchedUserName  string
@@ -1410,6 +1417,9 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			viper.GetString("custom_service_escalation_policies"),
 			viper.GetStringMapString("service_escalation_policies"),
 		)
+		existing.Terminal = viper.GetString("terminal")
+		existing.Editor = viper.GetString("editor")
+		existing.AgentCLICommand = viper.GetString("agent_cli_command")
 		kd := pkgconfig.ResolveKeepDefaults(existing.Teams, existing.SilentPolicy, existing.CustomPolicies)
 
 		home, _ := os.UserHomeDir()
