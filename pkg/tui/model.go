@@ -22,6 +22,7 @@ import (
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/clcollins/srepd/pkg/docs"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
@@ -168,6 +169,13 @@ type model struct {
 
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
+
+	// Docs viewer state
+	viewingDocs     bool
+	docsViewer      viewport.Model
+	docsPages       []docs.Doc
+	docsActiveTab   int
+	docsTabsPerPage int
 
 	// Merge mode state
 	mergeMode           bool
@@ -349,6 +357,9 @@ func InitialModel(
 		cmdExecutor:           &execCommandExecutor{},
 		watcherViewport:       newWatcherViewport(),
 		watcherBuffer:         newWatcherBuffer(50),
+		docsViewer:            newDocsViewer(),
+		docsPages:             docs.EmbeddedDocs(),
+		docsTabsPerPage:       defaultDocsTabsPerPage,
 	}
 
 	mk := resolveMarkers(viper.GetBool("emoji"))
@@ -464,6 +475,9 @@ func InitialModelWithConfig(
 		cmdExecutor:           &execCommandExecutor{},
 		watcherViewport:       newWatcherViewport(),
 		watcherBuffer:         newWatcherBuffer(50),
+		docsViewer:            newDocsViewer(),
+		docsPages:             docs.EmbeddedDocs(),
+		docsTabsPerPage:       defaultDocsTabsPerPage,
 	}
 
 	mk2 := resolveMarkers(viper.GetBool("emoji"))

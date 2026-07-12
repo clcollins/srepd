@@ -22,9 +22,22 @@ THE SOFTWARE.
 package main
 
 import (
+	"embed"
+
 	"github.com/clcollins/srepd/cmd"
+	"github.com/clcollins/srepd/pkg/docs"
 )
 
+//go:embed README.md
+var readmeContent string
+
+//go:embed docs/quickstart.md
+var quickstartContent string
+
+//go:embed docs/*.md
+var docsFS embed.FS
+
 func main() {
+	docs.SetEmbeddedContent(readmeContent, quickstartContent, docsFS)
 	cmd.Execute()
 }

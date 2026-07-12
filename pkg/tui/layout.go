@@ -208,6 +208,8 @@ func (m *model) recomputeLayout() {
 	m.incidentViewer.Height = m.layout.IncidentViewerHeight
 	m.logViewer.Width = m.layout.IncidentViewerWidth
 	m.logViewer.Height = m.layout.IncidentViewerHeight
+	m.docsViewer.Width = m.layout.IncidentViewerWidth
+	m.docsViewer.Height = m.layout.IncidentViewerHeight
 
 	if m.watcherExpanded {
 		m.watcherViewport.Width = m.layout.WatcherWidth
