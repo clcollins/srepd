@@ -6,6 +6,7 @@ import (
 	"charm.land/glamour/v2/ansi"
 	glamourstyles "charm.land/glamour/v2/styles"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -44,6 +45,7 @@ type Styles struct {
 	InactiveTab      lipgloss.Style
 	TabWindow        lipgloss.Style
 	WatcherContainer lipgloss.Style
+	FormContainer    lipgloss.Style
 	GlamourStyle     ansi.StyleConfig
 }
 
@@ -129,6 +131,12 @@ func BuildStyles(theme Theme) Styles {
 		Foreground(theme.Text).
 		Padding(cellPaddingV, cellPaddingH)
 
+	formContainer := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder(), true).
+		BorderForeground(theme.Border).
+		Foreground(theme.Text).
+		Padding(0, 2)
+
 	tableCell := lipgloss.NewStyle().Padding(cellPaddingV, cellPaddingH)
 	tableHeader := lipgloss.NewStyle().
 		Padding(cellPaddingV, cellPaddingH).
@@ -159,6 +167,7 @@ func BuildStyles(theme Theme) Styles {
 			Padding(1, 3, 1, 3),
 		TableContainer:   tableContainer,
 		WatcherContainer: watcherContainer,
+		FormContainer:    formContainer,
 		Table: table.Styles{
 			Cell:     tableCell,
 			Selected: tableSelected,
@@ -169,6 +178,65 @@ func BuildStyles(theme Theme) Styles {
 		TabWindow:    tabWindow,
 		GlamourStyle: glamourStyle,
 	}
+}
+
+// SrepdHuhTheme derives a huh form theme from the app Theme so embedded forms
+// (config wizard, team picker, bulk silence) render as part of SREPD rather
+// than in huh's stock Charm palette. Both focused and blurred states are
+// styled — blurred fields dim to the muted color instead of falling back to
+// huh defaults — and because everything derives from Theme, user `colors`
+// overrides restyle the forms along with the rest of the UI.
+func SrepdHuhTheme(theme Theme) *huh.Theme {
+	t := huh.ThemeBase()
+
+	f := &t.Focused
+	f.Base = f.Base.BorderForeground(theme.Border)
+	f.Title = f.Title.Foreground(theme.Highlight).Bold(true)
+	f.NoteTitle = f.NoteTitle.Foreground(theme.Highlight).Bold(true)
+	f.Description = f.Description.Foreground(theme.Muted)
+	f.ErrorIndicator = f.ErrorIndicator.Foreground(theme.Warning)
+	f.ErrorMessage = f.ErrorMessage.Foreground(theme.Warning)
+	f.SelectSelector = f.SelectSelector.Foreground(theme.Highlight)
+	f.Option = f.Option.Foreground(theme.Text)
+	f.NextIndicator = f.NextIndicator.Foreground(theme.Highlight)
+	f.PrevIndicator = f.PrevIndicator.Foreground(theme.Highlight)
+	f.MultiSelectSelector = f.MultiSelectSelector.Foreground(theme.Text)
+	f.SelectedOption = f.SelectedOption.Foreground(theme.Highlight)
+	f.SelectedPrefix = f.SelectedPrefix.Foreground(theme.Highlight)
+	f.UnselectedOption = f.UnselectedOption.Foreground(theme.Text)
+	f.UnselectedPrefix = f.UnselectedPrefix.Foreground(theme.Muted)
+	f.FocusedButton = f.FocusedButton.Foreground(theme.Highlight).Background(theme.Selected).Bold(true)
+	f.BlurredButton = f.BlurredButton.Foreground(theme.Text)
+	f.TextInput.Cursor = f.TextInput.Cursor.Foreground(theme.Highlight)
+	f.TextInput.Placeholder = f.TextInput.Placeholder.Foreground(theme.Muted)
+	f.TextInput.Prompt = f.TextInput.Prompt.Foreground(theme.Highlight)
+	f.TextInput.Text = f.TextInput.Text.Foreground(theme.Text)
+
+	// Blurred starts from the focused styles, dimmed: titles and prompts drop
+	// to muted, entered text stays readable.
+	t.Blurred = t.Focused
+	b := &t.Blurred
+	b.Base = b.Base.BorderStyle(lipgloss.HiddenBorder())
+	b.Title = b.Title.Foreground(theme.Muted).Bold(false)
+	b.NoteTitle = b.NoteTitle.Foreground(theme.Muted).Bold(false)
+	b.Description = b.Description.Foreground(theme.Muted)
+	b.SelectedOption = b.SelectedOption.Foreground(theme.Text)
+	b.SelectedPrefix = b.SelectedPrefix.Foreground(theme.Text)
+	b.TextInput.Prompt = b.TextInput.Prompt.Foreground(theme.Muted)
+	b.TextInput.Text = b.TextInput.Text.Foreground(theme.Text)
+
+	t.Group.Title = t.Group.Title.Foreground(theme.Highlight).Bold(true)
+	t.Group.Description = t.Group.Description.Foreground(theme.Text)
+
+	t.Help.Ellipsis = t.Help.Ellipsis.Foreground(theme.Muted)
+	t.Help.ShortKey = t.Help.ShortKey.Foreground(theme.Text)
+	t.Help.ShortDesc = t.Help.ShortDesc.Foreground(theme.Muted)
+	t.Help.ShortSeparator = t.Help.ShortSeparator.Foreground(theme.Muted)
+	t.Help.FullKey = t.Help.FullKey.Foreground(theme.Text)
+	t.Help.FullDesc = t.Help.FullDesc.Foreground(theme.Muted)
+	t.Help.FullSeparator = t.Help.FullSeparator.Foreground(theme.Muted)
+
+	return t
 }
 
 func boolPtr(b bool) *bool { return &b }

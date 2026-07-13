@@ -83,13 +83,19 @@ func TestComputeLayout_TableAndIncidentViewerConsistent(t *testing.T) {
 }
 
 func TestComputeLayout_FormHeight(t *testing.T) {
-	t.Run("form heights computed from constants", func(t *testing.T) {
+	t.Run("form heights computed from constants and container frame", func(t *testing.T) {
 		ws := tea.WindowSizeMsg{Width: 80, Height: 24}
-		l := computeLayout(ws, defaultStyles(), shortHelp(), false)
+		styles := defaultStyles()
+		l := computeLayout(ws, styles, shortHelp(), false)
 
-		assert.Equal(t, 24-configFormReserved, l.FormHeight)
-		assert.Equal(t, 24, l.TeamSelectFormHeight)
-		assert.Equal(t, 80, l.FormWidth)
+		vFrame := styles.FormContainer.GetVerticalFrameSize()
+		hFrame := styles.FormContainer.GetHorizontalFrameSize()
+		mainHOverhead := styles.Main.GetHorizontalMargins() +
+			styles.Main.GetHorizontalPadding() +
+			styles.Main.GetHorizontalBorderSize()
+		assert.Equal(t, 24-configFormReserved-vFrame, l.FormHeight)
+		assert.Equal(t, 24-vFrame, l.TeamSelectFormHeight)
+		assert.Equal(t, 80-mainHOverhead-hFrame, l.FormWidth)
 	})
 }
 
@@ -196,8 +202,15 @@ func TestWindowResize_ConfigMode(t *testing.T) {
 		result, _ := m.windowSizeMsgHandler(sizeMsg)
 		updated := result.(model)
 
-		assert.Equal(t, 120, updated.layout.FormWidth)
-		assert.Equal(t, 50-configFormReserved, updated.layout.FormHeight)
+		// Form width fills the screen (main overhead + container frame
+		// subtracted), matching the table's full-width behavior.
+		mainHOverhead := updated.styles.Main.GetHorizontalMargins() +
+			updated.styles.Main.GetHorizontalPadding() +
+			updated.styles.Main.GetHorizontalBorderSize()
+		formFrame := updated.styles.FormContainer.GetHorizontalFrameSize()
+		assert.Equal(t, 120-mainHOverhead-formFrame, updated.layout.FormWidth)
+		vFrame := updated.styles.FormContainer.GetVerticalFrameSize()
+		assert.Equal(t, 50-configFormReserved-vFrame, updated.layout.FormHeight)
 	})
 }
 
@@ -215,7 +228,8 @@ func TestWindowResize_TeamSelectMode(t *testing.T) {
 		result, _ := m.windowSizeMsgHandler(sizeMsg)
 		updated := result.(model)
 
-		assert.Equal(t, 50, updated.layout.TeamSelectFormHeight)
+		vFrame := updated.styles.FormContainer.GetVerticalFrameSize()
+		assert.Equal(t, 50-vFrame, updated.layout.TeamSelectFormHeight)
 	})
 }
 

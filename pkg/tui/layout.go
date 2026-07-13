@@ -141,12 +141,13 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcher
 		incidentViewerHeight = layoutMinIncidentViewerHeight
 	}
 
-	formWidth := ws.Width
-	formHeight := ws.Height - configFormReserved
+	formFrame := styles.FormContainer.GetHorizontalFrameSize()
+	formWidth := ws.Width - mainHOverhead - formFrame
+	formHeight := ws.Height - configFormReserved - styles.FormContainer.GetVerticalFrameSize()
 	if formHeight < layoutMinFormHeight {
 		formHeight = layoutMinFormHeight
 	}
-	teamSelectFormHeight := ws.Height
+	teamSelectFormHeight := ws.Height - styles.FormContainer.GetVerticalFrameSize()
 
 	clusterIDWidth := contentWidth * 2 / 5
 	if clusterIDWidth > layoutMaxClusterIDWidth {
