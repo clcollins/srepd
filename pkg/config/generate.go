@@ -107,13 +107,17 @@ func GenerateAnnotatedConfig(env *GenerateEnvironment) []byte {
 	if env != nil && env.AgentCLI != "" {
 		sb.WriteString("# CLI agent for :agent queries (claude detected on this system).\n")
 		fmt.Fprintf(&sb, "agent_cli_command: %s\n\n", env.AgentCLI)
+		sb.WriteString("# System prompt for :agent queries — instructs the agent to stay\n")
+		sb.WriteString("# read-only and suggest commands for the SRE to review.\n")
+		fmt.Fprintf(&sb, "agent_system_prompt: %q\n\n", DefaultOptionalKeys["agent_system_prompt"])
 	} else {
 		sb.WriteString("# CLI agent for :agent queries. Empty string disables AI features.\n")
 		fmt.Fprintf(&sb, "# agent_cli_command: %s\n\n", DefaultOptionalKeys["agent_cli_command"])
+		sb.WriteString("# System prompt for :agent queries.\n")
+		fmt.Fprintf(&sb, "# agent_system_prompt: %q\n\n", DefaultOptionalKeys["agent_system_prompt"])
 	}
-	sb.WriteString("# Custom system prompts for :agent and the ambient watcher.\n")
-	sb.WriteString("# agent_system_prompt: \"\"\n")
-	sb.WriteString("# watcher_system_prompt: \"\"\n\n")
+	sb.WriteString("# System prompt for the ambient :watcher LLM analysis.\n")
+	fmt.Fprintf(&sb, "# watcher_system_prompt: %q\n\n", DefaultOptionalKeys["watcher_system_prompt"])
 	sb.WriteString("# LLM API provider for the :watcher (see docs/ai-agents.md).\n")
 	sb.WriteString("# llm_api:\n")
 	sb.WriteString("#   provider: \"\"\n")
