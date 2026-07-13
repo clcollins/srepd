@@ -87,6 +87,25 @@ func AuthenticateAsync(cfg *ocmconfig.Config) (string, error) {
 	return token, nil
 }
 
+// Connect checks OCM tokens and returns a connected client, running the
+// interactive browser authentication flow when tokens are expired. It blocks
+// until authentication completes, so callers must run it off the UI thread
+// (e.g. inside a tea.Cmd).
+func Connect(agentVersion string) (*Client, error) {
+	cfg, armed, err := CheckTokens()
+	if err != nil {
+		return nil, fmt.Errorf("OCM config check failed: %w", err)
+	}
+	if !armed {
+		token, authErr := AuthenticateAsync(cfg)
+		if authErr != nil {
+			return nil, fmt.Errorf("OCM authentication failed: %w", authErr)
+		}
+		ApplyAuthToken(cfg, token)
+	}
+	return NewClientFromConfig(cfg, agentVersion)
+}
+
 // ApplyAuthToken classifies a raw auth token and sets the appropriate
 // field on the OCM config (RefreshToken or AccessToken).
 func ApplyAuthToken(cfg *ocmconfig.Config, token string) {
