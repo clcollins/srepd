@@ -224,6 +224,12 @@ func GetAlerts(client PagerDutyClient, id string, opts pagerduty.ListIncidentAle
 	defer cancel()
 	var a []pagerduty.IncidentAlert
 
+	// A zero Limit would advance the offset by zero each page, refetching
+	// page one forever whenever the response reports more=true
+	if opts.Limit == 0 {
+		opts.Limit = defaultPageLimit
+	}
+
 	for {
 		response, err := client.ListIncidentAlertsWithContext(ctx, id, opts)
 		if err != nil {
@@ -273,11 +279,17 @@ func GetIncidents(client PagerDutyClient, opts pagerduty.ListIncidentsOptions) (
 	defer cancel()
 	var i []pagerduty.Incident
 
+	// A zero Limit would advance the offset by zero each page, refetching
+	// page one forever whenever the response reports more=true
+	if opts.Limit == 0 {
+		opts.Limit = defaultPageLimit
+	}
+
 	for {
 		response, err := client.ListIncidentsWithContext(ctx, opts)
 		if err != nil {
 			if strings.Contains(err.Error(), "414") {
-				return i, fmt.Errorf("pd.GetIncidents(): too many team members (%d) for PagerDuty API query — try selecting fewer teams: %w", len(opts.UserIDs), err)
+				return i, fmt.Errorf("pd.GetIncidents(): PagerDuty rejected the query URI as too long (HTTP 414; %d user IDs in query): %w", len(opts.UserIDs), err)
 			}
 			return i, fmt.Errorf("pd.GetIncidents(): failed to get incidents: %w", err)
 		}
@@ -328,6 +340,12 @@ func GetTeamMemberIDs(client PagerDutyClient, teams []*pagerduty.Team, opts page
 	defer cancel()
 	var allIDs []string
 	byTeam := make(map[string][]string)
+
+	// A zero Limit would advance the offset by zero each page, refetching
+	// page one forever whenever the response reports more=true
+	if opts.Limit == 0 {
+		opts.Limit = defaultPageLimit
+	}
 
 	for _, team := range teams {
 		opts.Offset = defaultOffset
@@ -399,6 +417,12 @@ func GetUserOnCalls(client PagerDutyClient, id string, opts pagerduty.ListOnCall
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
 	var o []pagerduty.OnCall
+
+	// A zero Limit would advance the offset by zero each page, refetching
+	// page one forever whenever the response reports more=true
+	if opts.Limit == 0 {
+		opts.Limit = defaultPageLimit
+	}
 
 	for {
 		response, err := client.ListOnCallsWithContext(ctx, opts)

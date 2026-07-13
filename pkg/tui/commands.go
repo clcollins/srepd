@@ -138,8 +138,16 @@ type updatedIncidentListMsg struct {
 	err       error
 }
 
+// maxUserIDsInQuery is the maximum number of user IDs to include in a single
+// PagerDuty API query. PagerDuty rejects request URIs over ~4096 bytes with
+// HTTP 414 (URI Too Long); 100 user_ids[] params plus the team, status, and
+// pagination params stay well under that limit.
+const maxUserIDsInQuery = 100
+
 // updateIncidentList returns a command that fetches the incident list from the PagerDuty API.
-// It queries per-team to avoid HTTP 414 (URI Too Long) when teams have many members.
+// It queries per-team, splitting large member lists into chunks of at most
+// maxUserIDsInQuery user IDs per query to avoid HTTP 414 (URI Too Long),
+// and deduplicates the merged results.
 func updateIncidentList(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
 		if p == nil {
@@ -153,20 +161,28 @@ func updateIncidentList(p *pd.Config) tea.Cmd {
 		for _, team := range p.Teams {
 			memberIDs := filterUserIDs(p.TeamMembersByTeam[team.ID], ignoredIDs)
 
-			opts := pagerduty.ListIncidentsOptions{
-				TeamIDs: []string{team.ID},
-				UserIDs: memberIDs,
+			chunks := chunkStrings(memberIDs, maxUserIDsInQuery)
+			if len(chunks) == 0 {
+				// No members to filter by: query the team alone, matching
+				// the API behavior when user_ids[] is omitted
+				chunks = [][]string{nil}
 			}
 
-			incidents, err := pd.GetIncidents(p.Client, opts)
-			if err != nil {
-				return updatedIncidentListMsg{err: err}
-			}
+			for _, chunk := range chunks {
+				opts := pd.NewListIncidentOptsFromDefaults()
+				opts.TeamIDs = []string{team.ID}
+				opts.UserIDs = chunk
 
-			for _, inc := range incidents {
-				if !seen[inc.ID] {
-					seen[inc.ID] = true
-					allIncidents = append(allIncidents, inc)
+				incidents, err := pd.GetIncidents(p.Client, opts)
+				if err != nil {
+					return updatedIncidentListMsg{err: err}
+				}
+
+				for _, inc := range incidents {
+					if !seen[inc.ID] {
+						seen[inc.ID] = true
+						allIncidents = append(allIncidents, inc)
+					}
 				}
 			}
 		}
@@ -191,6 +207,18 @@ func filterUserIDs(memberIDs []string, ignored []string) []string {
 		}
 	}
 	return filtered
+}
+
+func chunkStrings(items []string, size int) [][]string {
+	var chunks [][]string
+	for len(items) > size {
+		chunks = append(chunks, items[:size])
+		items = items[size:]
+	}
+	if len(items) > 0 {
+		chunks = append(chunks, items)
+	}
+	return chunks
 }
 
 // HOUSEKEEPING: The above are commands that have complete unit tests and incoming
