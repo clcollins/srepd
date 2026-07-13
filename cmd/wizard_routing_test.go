@@ -61,6 +61,17 @@ func TestClassifyStartup_StructurallyInvalidRoutesFatal(t *testing.T) {
 	assert.NotEmpty(t, reason)
 }
 
+// A salvaged token (from a YAML-broken file) with no teams still routes to
+// the wizard — the token is preserved, but teams are still needed.
+func TestClassifyStartup_SalvagedTokenNoTeamsRoutesWizard(t *testing.T) {
+	viper.Reset()
+	viper.Set("token", "u+salvaged-token")
+
+	route, reason := classifyStartup()
+	assert.Equal(t, routeWizard, route)
+	assert.Contains(t, reason, "teams")
+}
+
 // Values supplied only via SREPD_* env vars must count as configured: the
 // classifier reads viper's live accessors, not just the settings map.
 func TestClassifyStartup_EnvTokenRoutesNormal(t *testing.T) {

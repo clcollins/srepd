@@ -1420,6 +1420,10 @@ type configWizardReadyMsg struct {
 	isNewFile   bool
 	teamNames   map[string]string
 	policyNames map[string]string
+	// wizardReason explains why the wizard auto-launched (e.g. YAML parse
+	// error, missing/placeholder token). Surfaced in the token step description
+	// so the user understands what happened. Empty for explicit `srepd config`.
+	wizardReason string
 }
 
 // configSavedMsg is sent after the config has been written to disk.
@@ -1482,7 +1486,14 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			}
 		}
 
-		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames, policyNames: policyNames}
+		return configWizardReadyMsg{
+			existing:     existing,
+			kd:           kd,
+			isNewFile:    isNewFile,
+			teamNames:    teamNames,
+			policyNames:  policyNames,
+			wizardReason: viper.GetString("config_wizard_reason"),
+		}
 	}
 }
 

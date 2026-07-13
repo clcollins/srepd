@@ -302,6 +302,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.existing.Token != "" {
 			tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.\n%s", pkgconfig.MaskToken(msg.existing.Token), tokenHelp)
 		}
+		if msg.wizardReason != "" {
+			tokenDesc = fmt.Sprintf("⚠ %s\n\n%s", msg.wizardReason, tokenDesc)
+		}
 
 		var teamDisplayList []string
 		for _, id := range msg.existing.Teams {
