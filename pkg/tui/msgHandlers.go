@@ -331,6 +331,10 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			KeepTeams:           m.configState.KeepTeams,
 			KeepSilent:          m.configState.KeepSilent,
 			KeepCustom:          m.configState.KeepCustom,
+			TerminalInput:       m.configState.TerminalChoice,
+			EditorInput:         m.configState.EditorInput,
+			AgentInput:          agentInputValue(m.configState.AgentEnabled),
+			AgentTouched:        m.configState.AgentOffered,
 		})
 		if err != nil {
 			m.setStatus("config error: " + err.Error())

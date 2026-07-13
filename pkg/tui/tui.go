@@ -2,7 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -18,6 +21,7 @@ import (
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/spf13/viper"
@@ -283,6 +287,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			KeepSilent:         msg.kd.KeepSilent,
 			KeepCustom:         msg.kd.KeepCustom,
 			Confirm:            true,
+			TerminalChoice:     msg.existing.Terminal,
+			EditorInput:        resolveEditorDefault(msg.existing.Editor, os.Getenv),
+			AgentEnabled:       true,
 		}
 
 		existingTeamSet := make(map[string]bool)
@@ -2059,6 +2066,66 @@ func resolveSilentPolicyChoice(choice, manualInput string) string {
 	return choice
 }
 
+// buildTerminalOptions builds the environment step's terminal choices: the
+// current setting first (annotated, with a warning when its binary is
+// missing), then the detected terminals, deduplicated.
+func buildTerminalOptions(current string, currentFound bool, detected []launcher.DetectedTerminal) []huh.Option[string] {
+	var opts []huh.Option[string]
+	if current != "" {
+		label := fmt.Sprintf("%s (current)", current)
+		if !currentFound {
+			label = fmt.Sprintf("%s (current — not found on this system!)", current)
+		}
+		opts = append(opts, huh.NewOption(label, current))
+	}
+	currentExec := ""
+	if fields := strings.Fields(current); len(fields) > 0 {
+		currentExec = fields[0]
+	}
+	for _, dt := range detected {
+		if dt.Command == current || dt.Name == currentExec {
+			continue
+		}
+		opts = append(opts, huh.NewOption(dt.Name, dt.Command))
+	}
+	return opts
+}
+
+// resolveEditorDefault picks the editor the wizard should offer: existing
+// config → $EDITOR → $VISUAL → vim.
+func resolveEditorDefault(current string, getenv func(string) string) string {
+	if current != "" {
+		return current
+	}
+	if e := getenv("EDITOR"); e != "" {
+		return e
+	}
+	if v := getenv("VISUAL"); v != "" {
+		return v
+	}
+	return "vim"
+}
+
+// shouldOfferAgentSetup gates the AI section (#324): only when the claude
+// CLI is on PATH, and only when the user hasn't already customized the
+// agent command (a custom value means they've configured it themselves).
+func shouldOfferAgentSetup(existingCmd string, claudeOnPath bool) bool {
+	if !claudeOnPath {
+		return false
+	}
+	return existingCmd == "" || existingCmd == pkgconfig.DefaultOptionalKeys["agent_cli_command"]
+}
+
+// agentInputValue maps the AI confirm to the agent_cli_command value:
+// enabled → the default claude command, disabled → "" (persisted so the
+// decision sticks).
+func agentInputValue(enabled bool) string {
+	if enabled {
+		return pkgconfig.DefaultOptionalKeys["agent_cli_command"]
+	}
+	return ""
+}
+
 // validateTeamValues rejects an empty selection and the empty-valued
 // placeholder/error options fetchTeamOptions emits.
 func validateTeamValues(s []string) error {
@@ -2092,6 +2159,27 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 	if clientFactory == nil {
 		clientFactory = pd.NewClient
 	}
+
+	// Environment step data (OB-5): detect terminals, check the current one,
+	// and decide whether to offer the AI section (#324).
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	currentTerminal := msg.existing.Terminal
+	currentFound := true
+	if fields := strings.Fields(currentTerminal); len(fields) > 0 {
+		// Flatpak app IDs (reverse-DNS) are not in PATH; don't warn on them.
+		if strings.Count(fields[0], ".") < 2 {
+			_, lookErr := exec.LookPath(fields[0])
+			currentFound = lookErr == nil
+		}
+	}
+	terminalOpts := buildTerminalOptions(currentTerminal, currentFound, detected)
+	if len(terminalOpts) == 0 {
+		terminalOpts = []huh.Option[string]{
+			huh.NewOption(pkgconfig.DefaultOptionalKeys["terminal"]+" (default)", pkgconfig.DefaultOptionalKeys["terminal"]),
+		}
+	}
+	_, claudeErr := exec.LookPath("claude")
+	m.configState.AgentOffered = shouldOfferAgentSetup(msg.existing.AgentCLICommand, claudeErr == nil)
 
 	return huh.NewForm(
 		huh.NewGroup(
@@ -2171,6 +2259,29 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 			return m.configState.KeepSilent || m.configState.SilentPolicyChoice != policyChoiceManual
 		}),
 		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Terminal for cluster login").
+				Description(
+					"Opens cluster login sessions. Terminals detected on this\n"+
+						"system are listed; your current setting comes first.",
+				).
+				Options(terminalOpts...).
+				Value(&m.configState.TerminalChoice),
+			huh.NewInput().
+				Title("Editor for incident notes").
+				Description("Prefilled from your config or $EDITOR/$VISUAL.").
+				Value(&m.configState.EditorInput),
+		),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Enable AI agent features?").
+				Description(
+					"The claude CLI was detected on this system. :agent queries\n"+
+						"use it for read-only incident investigation.",
+				).
+				Value(&m.configState.AgentEnabled),
+		).WithHideFunc(func() bool { return !m.configState.AgentOffered }),
+		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Configure advanced options?").
 				Description(
@@ -2215,6 +2326,10 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 						KeepTeams:           m.configState.KeepTeams,
 						KeepSilent:          m.configState.KeepSilent,
 						KeepCustom:          m.configState.KeepCustom,
+						TerminalInput:       m.configState.TerminalChoice,
+						EditorInput:         m.configState.EditorInput,
+						AgentInput:          agentInputValue(m.configState.AgentEnabled),
+						AgentTouched:        m.configState.AgentOffered,
 					})
 					tmpNames := make(map[string]string)
 					for k, v := range m.configTeamNames {
