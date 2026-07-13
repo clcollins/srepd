@@ -5,13 +5,21 @@ import (
 	"strings"
 )
 
-// GenerateAnnotatedConfig renders a complete, commented srepd configuration
-// with every supported key at its default value — for users who prefer
-// reading and editing a file over the interactive wizard (#324). Required
-// keys are emitted empty so a generated file routes into the wizard (OB-1)
-// instead of failing PagerDuty auth with a placeholder. The dead flag_marker
-// key (issue #322) is deliberately absent.
-func GenerateAnnotatedConfig() []byte {
+// GenerateEnvironment holds auto-detected environment values for config
+// generation. Each field is a ranked list: the first entry becomes the
+// active value, the rest are written as commented-out alternatives.
+type GenerateEnvironment struct {
+	Terminals        []string // detected terminal commands, best first
+	Editor           string   // resolved from $EDITOR/$VISUAL/vim
+	AgentCLI         string   // "claude --print" when claude is on PATH, else ""
+	ClusterLoginCmds []string // detected cluster login commands, best first
+}
+
+// GenerateAnnotatedConfig renders a complete, commented srepd configuration.
+// When env is non-nil, detected values replace the static defaults and
+// alternatives are listed as comments. Required keys are emitted empty so a
+// generated file routes into the wizard (OB-1).
+func GenerateAnnotatedConfig(env *GenerateEnvironment) []byte {
 	var sb strings.Builder
 
 	sb.WriteString("---\n")
@@ -31,10 +39,47 @@ func GenerateAnnotatedConfig() []byte {
 	sb.WriteString("teams: []\n")
 
 	sb.WriteString("\n# --- Environment ---\n\n")
+
+	// Editor — use detected value or fall back to default.
+	editor := DefaultOptionalKeys["editor"]
+	if env != nil && env.Editor != "" {
+		editor = env.Editor
+	}
+	fmt.Fprintf(&sb, "# Editor for incident notes.\neditor: %s\n\n", editor)
+
+	// Terminal — use first detected terminal, list the rest as comments.
+	terminal := DefaultOptionalKeys["terminal"]
+	if env != nil && len(env.Terminals) > 0 {
+		terminal = env.Terminals[0]
+	}
+	sb.WriteString("# Terminal emulator for cluster login. Set only the name; the\n")
+	sb.WriteString("# argument style is detected automatically.\n")
+	fmt.Fprintf(&sb, "terminal: %s\n", terminal)
+	if env != nil && len(env.Terminals) > 1 {
+		sb.WriteString("# Also detected on this system:\n")
+		for _, alt := range env.Terminals[1:] {
+			fmt.Fprintf(&sb, "# terminal: %s\n", alt)
+		}
+	}
+	sb.WriteString("\n")
+
+	// Cluster login command — use first detected, list the rest as comments.
+	clusterLogin := DefaultOptionalKeys["cluster_login_command"]
+	if env != nil && len(env.ClusterLoginCmds) > 0 {
+		clusterLogin = env.ClusterLoginCmds[0]
+	}
+	sb.WriteString("# Command run to log into a cluster. %%CLUSTER_ID%% and\n")
+	sb.WriteString("# %%INCIDENT_ID%% are substituted at launch.\n")
+	fmt.Fprintf(&sb, "cluster_login_command: %s\n", clusterLogin)
+	if env != nil && len(env.ClusterLoginCmds) > 1 {
+		sb.WriteString("# Also available on this system:\n")
+		for _, alt := range env.ClusterLoginCmds[1:] {
+			fmt.Fprintf(&sb, "# cluster_login_command: %s\n", alt)
+		}
+	}
+	sb.WriteString("\n")
+
 	for _, entry := range []struct{ key, comment string }{
-		{"editor", "Editor for incident notes."},
-		{"terminal", "Terminal emulator for cluster login. Set only the name; the\n# argument style is detected automatically."},
-		{"cluster_login_command", "Command run to log into a cluster. %%CLUSTER_ID%% and\n# %%INCIDENT_ID%% are substituted at launch."},
 		{"toolbox_mode", "Fedora Toolbox detection: auto, true, or false."},
 		{"chord_prefix", "Prefix key for chord commands."},
 		{"rosa_boundary_command", "rosa-boundary cluster login command."},
@@ -59,8 +104,13 @@ func GenerateAnnotatedConfig() []byte {
 	sb.WriteString("#   SERVICE_ID: POLICY_ID\n")
 
 	sb.WriteString("\n# --- AI features (optional) ---\n\n")
-	sb.WriteString("# CLI agent for :agent queries. Empty string disables AI features.\n")
-	fmt.Fprintf(&sb, "# agent_cli_command: %s\n\n", DefaultOptionalKeys["agent_cli_command"])
+	if env != nil && env.AgentCLI != "" {
+		sb.WriteString("# CLI agent for :agent queries (claude detected on this system).\n")
+		fmt.Fprintf(&sb, "agent_cli_command: %s\n\n", env.AgentCLI)
+	} else {
+		sb.WriteString("# CLI agent for :agent queries. Empty string disables AI features.\n")
+		fmt.Fprintf(&sb, "# agent_cli_command: %s\n\n", DefaultOptionalKeys["agent_cli_command"])
+	}
 	sb.WriteString("# Custom system prompts for :agent and the ambient watcher.\n")
 	sb.WriteString("# agent_system_prompt: \"\"\n")
 	sb.WriteString("# watcher_system_prompt: \"\"\n\n")

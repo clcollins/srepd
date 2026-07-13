@@ -13,14 +13,14 @@ import (
 // for users who prefer editing a file over the wizard.
 
 func TestGenerateAnnotatedConfig_ValidYAML(t *testing.T) {
-	out := GenerateAnnotatedConfig()
+	out := GenerateAnnotatedConfig(nil)
 
 	var parsed map[string]any
 	assert.NoError(t, yaml.Unmarshal(out, &parsed), "generated config must be valid YAML")
 }
 
 func TestGenerateAnnotatedConfig_RequiredKeysWithHelp(t *testing.T) {
-	out := string(GenerateAnnotatedConfig())
+	out := string(GenerateAnnotatedConfig(nil))
 
 	assert.Contains(t, out, `token: ""`)
 	assert.Contains(t, out, "User Settings", "token comment must include the acquisition path")
@@ -30,7 +30,7 @@ func TestGenerateAnnotatedConfig_RequiredKeysWithHelp(t *testing.T) {
 }
 
 func TestGenerateAnnotatedConfig_OptionalDefaults(t *testing.T) {
-	out := string(GenerateAnnotatedConfig())
+	out := string(GenerateAnnotatedConfig(nil))
 
 	for _, want := range []string{
 		"editor: vim",
@@ -47,7 +47,7 @@ func TestGenerateAnnotatedConfig_OptionalDefaults(t *testing.T) {
 }
 
 func TestGenerateAnnotatedConfig_OptionalSectionsCommented(t *testing.T) {
-	out := string(GenerateAnnotatedConfig())
+	out := string(GenerateAnnotatedConfig(nil))
 
 	assert.Contains(t, out, `# default_silent_escalation_policy:`)
 	assert.Contains(t, out, `# custom_service_escalation_policies:`)
@@ -58,13 +58,13 @@ func TestGenerateAnnotatedConfig_OptionalSectionsCommented(t *testing.T) {
 
 // Issue #322: flag_marker is dead — the generator must not advertise it.
 func TestGenerateAnnotatedConfig_NoDeadKeys(t *testing.T) {
-	out := string(GenerateAnnotatedConfig())
+	out := string(GenerateAnnotatedConfig(nil))
 	assert.NotContains(t, out, "flag_marker")
 }
 
 // A generated file must route into the wizard (OB-1), never a fatal error.
 func TestGenerateAnnotatedConfig_RoutesToWizard(t *testing.T) {
-	out := GenerateAnnotatedConfig()
+	out := GenerateAnnotatedConfig(nil)
 
 	var settings map[string]any
 	assert.NoError(t, yaml.Unmarshal(out, &settings))
@@ -82,7 +82,7 @@ func TestGenerateAnnotatedConfig_RoutesToWizard(t *testing.T) {
 }
 
 func TestGenerateAnnotatedConfig_ActiveKeysMatchDefaults(t *testing.T) {
-	out := GenerateAnnotatedConfig()
+	out := GenerateAnnotatedConfig(nil)
 
 	var parsed map[string]any
 	assert.NoError(t, yaml.Unmarshal(out, &parsed))
@@ -95,4 +95,36 @@ func TestGenerateAnnotatedConfig_ActiveKeysMatchDefaults(t *testing.T) {
 		assert.Equal(t, DefaultOptionalKeys[key], val, "%s must match the code default", key)
 	}
 	assert.False(t, strings.Contains(string(out), "NAME HERE"), "no placeholder junk")
+}
+
+func TestGenerateAnnotatedConfig_WithEnvironment(t *testing.T) {
+	env := &GenerateEnvironment{
+		Terminals:        []string{"ptyxis", "gnome-terminal", "kitty"},
+		Editor:           "nano",
+		AgentCLI:         "claude --print",
+		ClusterLoginCmds: []string{"ocm backplane login %%CLUSTER_ID%%", "ocm-container --cluster-id %%CLUSTER_ID%%"},
+	}
+	out := string(GenerateAnnotatedConfig(env))
+
+	assert.Contains(t, out, "terminal: ptyxis", "first detected terminal is active")
+	assert.Contains(t, out, "# terminal: gnome-terminal", "alternatives listed as comments")
+	assert.Contains(t, out, "# terminal: kitty")
+	assert.Contains(t, out, "editor: nano", "detected editor used")
+	assert.Contains(t, out, "agent_cli_command: claude --print", "detected agent uncommented")
+	assert.NotContains(t, out, "# agent_cli_command:", "agent should not be commented when detected")
+	assert.Contains(t, out, "cluster_login_command: ocm backplane login", "first cluster login active")
+	assert.Contains(t, out, "# cluster_login_command: ocm-container", "alternative listed as comment")
+}
+
+func TestGenerateAnnotatedConfig_WithEnvironment_ValidYAML(t *testing.T) {
+	env := &GenerateEnvironment{
+		Terminals: []string{"kitty", "foot"},
+		Editor:    "emacs",
+	}
+	out := GenerateAnnotatedConfig(env)
+
+	var parsed map[string]any
+	assert.NoError(t, yaml.Unmarshal(out, &parsed), "env-aware config must still be valid YAML")
+	assert.Equal(t, "kitty", parsed["terminal"])
+	assert.Equal(t, "emacs", parsed["editor"])
 }

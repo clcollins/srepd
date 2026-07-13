@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"runtime"
 
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/spf13/cobra"
 )
 
@@ -38,8 +41,37 @@ func init() {
 
 // runConfigGenerate writes the annotated config to w, or to outPath (0600,
 // refusing to overwrite unless force) when outPath is non-empty.
+func detectEnvironment() *pkgconfig.GenerateEnvironment {
+	env := &pkgconfig.GenerateEnvironment{}
+
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	for _, dt := range detected {
+		env.Terminals = append(env.Terminals, dt.Command)
+	}
+
+	if e := os.Getenv("EDITOR"); e != "" {
+		env.Editor = e
+	} else if v := os.Getenv("VISUAL"); v != "" {
+		env.Editor = v
+	}
+
+	if _, err := exec.LookPath("claude"); err == nil {
+		env.AgentCLI = pkgconfig.DefaultOptionalKeys["agent_cli_command"]
+	}
+
+	// Cluster login: prefer ocm backplane, offer ocm-container as alternative
+	if _, err := exec.LookPath("ocm"); err == nil {
+		env.ClusterLoginCmds = append(env.ClusterLoginCmds, "ocm backplane login %%CLUSTER_ID%%")
+	}
+	if _, err := exec.LookPath("ocm-container"); err == nil {
+		env.ClusterLoginCmds = append(env.ClusterLoginCmds, "ocm-container --cluster-id %%CLUSTER_ID%%")
+	}
+
+	return env
+}
+
 func runConfigGenerate(w io.Writer, outPath string, force bool) error {
-	data := pkgconfig.GenerateAnnotatedConfig()
+	data := pkgconfig.GenerateAnnotatedConfig(detectEnvironment())
 
 	if outPath == "" {
 		_, err := w.Write(data)
