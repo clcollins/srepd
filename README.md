@@ -44,7 +44,7 @@ go install .        # standard go install
 | `srepd update` | Update to the latest release in place |
 | `srepd --version` | Print version and git SHA |
 | `srepd --dev` | Run with fixture data (no PD connection) |
-| `srepd config` | Interactive configuration wizard |
+| `srepd config` | Interactive configuration wizard (`--preset <file\|https-url>` to pre-seed from a team preset) |
 | `srepd config generate` | Print a complete annotated config with defaults (`--out <path>` to write a file) |
 
 ## Configuration
@@ -54,6 +54,8 @@ SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment varia
 If no config file exists — or the config file is incomplete or still contains placeholder values — running `srepd` automatically enters the configuration wizard. The wizard validates your token, greets you by name, auto-selects your team when you belong to exactly one, and gates advanced options (custom service-to-policy mappings) behind a default-No confirm so most users never see them. The form resizes dynamically when the terminal window changes size.
 
 **Migrating from old config format:** If your config uses the deprecated `service_escalation_policies` key, running `srepd config` will automatically migrate to the new `default_silent_escalation_policy` and `custom_service_escalation_policies` keys. The old block is commented out with a deprecation note.
+
+**Team presets:** `srepd config --preset <file|https-url>` pre-seeds the wizard from a team-published YAML fragment carrying team policy decisions — teams, `default_silent_escalation_policy`, `custom_service_escalation_policies`, `cluster_login_command`, and optionally `terminal`/`editor`. Presets can never set `token` or `llm_api` credentials, only fill values you haven't configured, and every value is still confirmed in the wizard. URL fetches are HTTPS-only and size-capped. Teams can publish one preset link in their onboarding docs to eliminate the ID scavenger hunt for new members.
 
 ### Required
 

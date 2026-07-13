@@ -70,6 +70,9 @@ type ExistingConfig struct {
 	Terminal        string
 	Editor          string
 	AgentCLICommand string
+	// ClusterLoginCommand has no wizard step; it flows from an existing
+	// config or a team preset straight through to the write path.
+	ClusterLoginCommand string
 }
 
 func ResolveExistingConfig(
@@ -166,6 +169,7 @@ type ResolvedValues struct {
 	Editor              string
 	AgentCLICommand     string
 	AgentTouched        bool
+	ClusterLoginCommand string
 }
 
 func ResolveFinalValues(existing ExistingConfig, inputs WizardInputs) (ResolvedValues, error) {
@@ -211,23 +215,25 @@ func ResolveFinalValues(existing ExistingConfig, inputs WizardInputs) (ResolvedV
 	if inputs.AgentTouched {
 		rv.AgentCLICommand = strings.TrimSpace(inputs.AgentInput)
 	}
+	rv.ClusterLoginCommand = existing.ClusterLoginCommand
 
 	return rv, nil
 }
 
 type ConfigChanges struct {
-	TokenChanged    bool
-	TeamsChanged    bool
-	SilentChanged   bool
-	CustomChanged   bool
-	TerminalChanged bool
-	EditorChanged   bool
-	AgentChanged    bool
+	TokenChanged        bool
+	TeamsChanged        bool
+	SilentChanged       bool
+	CustomChanged       bool
+	TerminalChanged     bool
+	EditorChanged       bool
+	AgentChanged        bool
+	ClusterLoginChanged bool
 }
 
 func (c ConfigChanges) AnyChanged() bool {
 	return c.TokenChanged || c.TeamsChanged || c.SilentChanged || c.CustomChanged ||
-		c.TerminalChanged || c.EditorChanged || c.AgentChanged
+		c.TerminalChanged || c.EditorChanged || c.AgentChanged || c.ClusterLoginChanged
 }
 
 func DetectChangesForNewFile(final ResolvedValues) ConfigChanges {
@@ -432,6 +438,13 @@ func MergeIntoExistingConfig(existingData []byte, final ResolvedValues, changes 
 		}
 	}
 
+	if changes.ClusterLoginChanged && final.ClusterLoginCommand != "" {
+		data, err = UpsertScalarInConfig(data, "cluster_login_command", final.ClusterLoginCommand)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update cluster login command: %w", err)
+		}
+	}
+
 	if changes.SilentChanged || changes.CustomChanged {
 		data = CommentOutOldPolicies(data)
 	}
@@ -464,12 +477,16 @@ func BuildFullConfig(final ResolvedValues, teamNames map[string]string, silentPo
 	if terminal == "" {
 		terminal = DefaultOptionalKeys["terminal"]
 	}
+	clusterLogin := final.ClusterLoginCommand
+	if clusterLogin == "" {
+		clusterLogin = DefaultOptionalKeys["cluster_login_command"]
+	}
 
 	sb.WriteString("\n# Optional settings\n")
 	for _, entry := range []struct{ key, val string }{
 		{"editor", editor},
 		{"terminal", terminal},
-		{"cluster_login_command", DefaultOptionalKeys["cluster_login_command"]},
+		{"cluster_login_command", clusterLogin},
 		{"toolbox_mode", DefaultOptionalKeys["toolbox_mode"]},
 		{"chord_prefix", DefaultOptionalKeys["chord_prefix"]},
 		{"rosa_boundary_command", DefaultOptionalKeys["rosa_boundary_command"]},

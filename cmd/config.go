@@ -57,6 +57,11 @@ func maskConfigValue(key, value string) string {
 	return "*****"
 }
 
+// configPresetRef is the --preset flag value: a file path or HTTPS URL to a
+// team-published preset that pre-seeds the wizard (teams, silent policy,
+// custom mappings, cluster login command). Never a token.
+var configPresetRef string
+
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:          "config",
@@ -64,11 +69,15 @@ var configCmd = &cobra.Command{
 	Long:         description,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if configPresetRef != "" {
+			viper.Set("config_preset", configPresetRef)
+		}
 		return runConfigWizard()
 	},
 }
 
 func init() {
+	configCmd.Flags().StringVar(&configPresetRef, "preset", "", "file path or https URL of a team preset to pre-seed the wizard")
 	rootCmd.AddCommand(configCmd)
 }
 

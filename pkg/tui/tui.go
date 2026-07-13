@@ -306,6 +306,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tokenDesc = fmt.Sprintf("⚠ %s\n\n%s", msg.wizardReason, tokenDesc)
 		}
 
+		m.configPresetApplied = msg.presetApplied
+		presetTag := func(applied bool) string {
+			if applied {
+				return fmt.Sprintf(" (from preset: %s)", msg.presetApplied.Source)
+			}
+			return ""
+		}
+
 		var teamDisplayList []string
 		for _, id := range msg.existing.Teams {
 			if name, ok := msg.teamNames[id]; ok {
@@ -314,13 +322,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				teamDisplayList = append(teamDisplayList, id)
 			}
 		}
-		keepTeamsDesc := fmt.Sprintf("Current teams: %s", strings.Join(teamDisplayList, ", "))
+		keepTeamsDesc := fmt.Sprintf("Current teams: %s%s", strings.Join(teamDisplayList, ", "), presetTag(msg.presetApplied.Teams))
 
 		silentDisplay := msg.existing.SilentPolicy
 		if name, ok := msg.policyNames[msg.existing.SilentPolicy]; ok {
 			silentDisplay = fmt.Sprintf("%s (%s)", name, msg.existing.SilentPolicy)
 		}
-		keepSilentDesc := fmt.Sprintf("Current: %s", silentDisplay)
+		keepSilentDesc := fmt.Sprintf("Current: %s%s", silentDisplay, presetTag(msg.presetApplied.Silent))
 
 		var customDisplayParts []string
 		for svcID, polID := range msg.existing.CustomPolicies {
@@ -330,7 +338,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			customDisplayParts = append(customDisplayParts, fmt.Sprintf("%s → %s", svcID, polDisplay))
 		}
-		keepCustomDesc := fmt.Sprintf("Current: %s", strings.Join(customDisplayParts, ", "))
+		keepCustomDesc := fmt.Sprintf("Current: %s%s", strings.Join(customDisplayParts, ", "), presetTag(msg.presetApplied.Custom))
 
 		m.configForm = m.buildConfigForm(msg, tokenDesc, keepTeamsDesc, keepSilentDesc, keepCustomDesc, existingTeamSet)
 		m.configMode = true
@@ -2303,6 +2311,16 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
 		huh.NewGroup(
 			huh.NewConfirm().
+				Title("Configure advanced options?").
+				Description(
+					"Custom service-to-policy silence overrides — a team-policy\n"+
+						"setting most users don't need. Skip unless your team's\n"+
+						"onboarding docs say otherwise.",
+				).
+				Value(&m.configState.AdvancedOptions),
+		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
+		huh.NewGroup(
+			huh.NewConfirm().
 				Title("Keep current custom service-to-policy mappings?").
 				Description(keepCustomDesc).
 				Value(&m.configState.KeepCustom),
@@ -2354,7 +2372,12 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 					} else {
 						tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configState.TokenInput))
 					}
-					return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames, m.configPolicyNames)
+					tmpChanges = pkgconfig.ForcePresetChanges(tmpChanges, m.configPresetApplied)
+					summary := pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames, m.configPolicyNames)
+					if m.configPresetApplied.Any() {
+						summary = fmt.Sprintf("  Preset applied: %s\n%s", m.configPresetApplied.Source, summary)
+					}
+					return summary
 				}, &m.configState.CustomInput),
 			huh.NewConfirm().
 				Title("Save changes?").
