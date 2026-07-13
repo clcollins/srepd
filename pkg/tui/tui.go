@@ -2293,6 +2293,16 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
 		huh.NewGroup(
 			huh.NewConfirm().
+				Title("Configure advanced options?").
+				Description(
+					"Custom service-to-policy silence overrides — a team-policy\n"+
+						"setting most users don't need. Skip unless your team's\n"+
+						"onboarding docs say otherwise.",
+				).
+				Value(&m.configState.AdvancedOptions),
+		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
+		huh.NewGroup(
+			huh.NewConfirm().
 				Title("Keep current custom service-to-policy mappings?").
 				Description(keepCustomDesc).
 				Value(&m.configState.KeepCustom),
