@@ -784,7 +784,7 @@ func HasPlaceholderTeams(teams []string) bool {
 	}
 	for _, team := range teams {
 		trimmed := strings.TrimSpace(team)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
+		if trimmed != "" && !isAnglePlaceholder(trimmed) {
 			return false
 		}
 	}

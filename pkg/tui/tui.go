@@ -53,7 +53,7 @@ func (m model) Init() tea.Cmd {
 		checkForUpdate(m.devMode, ""),
 	}
 
-	if m.config != nil && m.config.Client != nil && hasPlaceholderTeamsCfg(viper.GetStringSlice("teams")) {
+	if m.config != nil && m.config.Client != nil && pkgconfig.HasPlaceholderTeams(viper.GetStringSlice("teams")) {
 		initCmds = append(initCmds, fetchUserTeams(m.config.Client))
 	}
 
@@ -301,6 +301,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tokenDesc := "Your PagerDuty API OAuth token.\n" + tokenHelp
 		if msg.existing.Token != "" {
 			tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.\n%s", pkgconfig.MaskToken(msg.existing.Token), tokenHelp)
+		}
+		if msg.wizardReason != "" {
+			tokenDesc = fmt.Sprintf("⚠ %s\n\n%s", msg.wizardReason, tokenDesc)
 		}
 
 		var teamDisplayList []string

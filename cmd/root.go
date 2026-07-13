@@ -85,6 +85,28 @@ but rather a simple tool to make on-call tasks easier.`,
 			return
 		}
 
+		// A YAML parse error means viper couldn't read the file at all
+		// (e.g. a missing key name before a sequence entry). The wizard
+		// can fix it by writing a clean config (the broken file is backed
+		// up). Salvaged values are already in viper from initConfig.
+		if configParseError != "" {
+			needsWizard = true
+			viper.Set("config_wizard_reason", "config file has a YAML error: "+configParseError)
+			log.Info("Config has a YAML error — launching setup wizard", "error", configParseError)
+			return
+		}
+
+		route, reason := classifyStartup()
+		switch route {
+		case routeWizard:
+			needsWizard = true
+			viper.Set("config_wizard_reason", reason)
+			log.Info("Config incomplete — launching setup wizard", "reason", reason)
+			return
+		case routeFatal:
+			log.Fatal(fmt.Errorf("%s — fix or remove %s, or run `srepd config`", reason, configFile))
+		}
+
 		if err := validateConfig(); err != nil {
 			log.Fatal(err)
 		}
@@ -109,9 +131,48 @@ but rather a simple tool to make on-call tasks easier.`,
 			launchTUIWithConfig()
 			return
 		}
+		if needsWizard {
+			ensureViperDefaults()
+			launchTUIWithConfig()
+			return
+		}
 
 		launchTUI()
 	},
+}
+
+// needsWizard is set in PreRun when an existing config file is missing
+// required values or contains placeholders (e.g. copied from the README
+// example); Run then enters the config wizard instead of aborting.
+var needsWizard bool
+
+// startupRoute describes how Run should proceed for an existing config file.
+type startupRoute int
+
+const (
+	routeNormal startupRoute = iota
+	routeWizard
+	routeFatal
+)
+
+// classifyStartup maps the config health of the current viper state to a
+// startup route. Token and teams are read through viper's accessors so values
+// supplied via SREPD_* env vars count as configured.
+func classifyStartup() (startupRoute, string) {
+	health, reason := pkgconfig.ClassifyConfigHealth(
+		viper.GetString("token"),
+		viper.GetStringSlice("teams"),
+		viper.AllSettings(),
+	)
+
+	switch health {
+	case pkgconfig.HealthNeedsWizard:
+		return routeWizard, reason
+	case pkgconfig.HealthInvalid:
+		return routeFatal, reason
+	default:
+		return routeNormal, ""
+	}
 }
 
 // resolveConfigFilePath builds the path to the srepd config file, surfacing (rather
@@ -468,14 +529,22 @@ func runDevMode() {
 	}
 }
 
+// configParseError is set in initConfig when viper can't parse the config
+// file (e.g. malformed YAML). PreRun uses it to route to the wizard with a
+// meaningful reason instead of proceeding with empty state.
+var configParseError string
+
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	// Find home directory.
 	home, err := os.UserHomeDir()
 	cobra.CheckErr(err)
 
+	configDir := filepath.Join(home, pkgconfig.CfgFileDir)
+	configFile := filepath.Join(configDir, pkgconfig.CfgFileName)
+
 	// Search config in home directory with name ".srepd" (without extension).
-	viper.AddConfigPath(filepath.Join(home, pkgconfig.CfgFileDir))
+	viper.AddConfigPath(configDir)
 	viper.SetConfigName(pkgconfig.CfgFileName)
 	viper.SetConfigType("yaml")
 
@@ -487,7 +556,18 @@ func initConfig() {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			fmt.Fprintln(os.Stderr, "Config file not found: "+err.Error())
 		} else {
-			fmt.Fprintln(os.Stderr, "Config file error: "+err.Error())
+			// YAML parse failure: viper holds nothing, but the file may
+			// contain perfectly good values (e.g. a valid token with a
+			// missing "teams:" key). Salvage what we can so the wizard
+			// pre-fills them instead of making the user re-enter everything.
+			configParseError = err.Error()
+			log.Warn("Config file has a YAML error — salvaging readable values", "error", err)
+			data, readErr := os.ReadFile(configFile)
+			if readErr == nil {
+				for k, v := range pkgconfig.SalvageConfigValues(data) {
+					viper.Set(k, v)
+				}
+			}
 		}
 	}
 }

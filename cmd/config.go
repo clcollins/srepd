@@ -209,10 +209,16 @@ func validateConfig() error {
 	}
 
 	for k, v := range pkgconfig.RequiredKeys {
-		if _, ok := settings[k]; !ok {
-			errs = append(errs, fmt.Errorf("missing required key: %s ", k))
-			log.Error("Missing required key", "key_name", k, "key_description", v)
+		if _, ok := settings[k]; ok {
+			continue
 		}
+		// AllSettings does not include values resolved from SREPD_* env vars;
+		// consult the live accessor before declaring the key missing.
+		if viper.GetString(k) != "" {
+			continue
+		}
+		errs = append(errs, fmt.Errorf("missing required key: %s ", k))
+		log.Error("Missing required key", "key_name", k, "key_description", v)
 	}
 
 	if _, ok := settings["service_escalation_policies"]; ok {
