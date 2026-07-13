@@ -58,6 +58,10 @@ type MockPagerDutyClient struct {
 	// ListEscalationPoliciesResponses is a queue of responses for ListEscalationPoliciesWithContext.
 	ListEscalationPoliciesResponses []pagerduty.ListEscalationPoliciesResponse
 
+	// ListEscalationPoliciesErr, when non-nil, causes
+	// ListEscalationPoliciesWithContext to return this error.
+	ListEscalationPoliciesErr error
+
 	// ListIncidentsResponses is an optional response queue for
 	// ListIncidentsWithContext. When populated, successive calls pop from the
 	// front. When empty or nil, the default hardcoded response is returned.
@@ -299,6 +303,10 @@ func (m *MockPagerDutyClient) GetUserWithContext(ctx context.Context, id string,
 
 func (m *MockPagerDutyClient) ListEscalationPoliciesWithContext(ctx context.Context, opts pagerduty.ListEscalationPoliciesOptions) (*pagerduty.ListEscalationPoliciesResponse, error) {
 	m.recordCall("ListEscalationPoliciesWithContext")
+
+	if m.ListEscalationPoliciesErr != nil {
+		return nil, m.ListEscalationPoliciesErr
+	}
 
 	if len(m.ListEscalationPoliciesResponses) > 0 {
 		resp := m.ListEscalationPoliciesResponses[0]
