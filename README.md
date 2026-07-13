@@ -67,8 +67,8 @@ If no config file exists — or the config file is incomplete or still contains 
 |-----|------|---------|-------------|
 | `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. The wizard fetches your team's policies and recommends ones with no on-call schedules; you can also skip or enter an ID manually. |
 | `custom_service_escalation_policies` | `map[string]string` | (none) | Per-service silent policy overrides (service ID to policy ID) |
-| `editor` | `string` | `vim` | Editor for incident notes |
-| `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
+| `editor` | `string` | `vim` | Editor for incident notes (wizard prefills from `$EDITOR`/`$VISUAL`) |
+| `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login (wizard detects installed terminals and warns when the configured one is missing) |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
 | `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary cluster login command |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
