@@ -65,7 +65,7 @@ If no config file exists — or the config file is incomplete or still contains 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. Set via `srepd config`. |
+| `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. The wizard fetches your team's policies and recommends ones with no on-call schedules; you can also skip or enter an ID manually. |
 | `custom_service_escalation_policies` | `map[string]string` | (none) | Per-service silent policy overrides (service ID to policy ID) |
 | `editor` | `string` | `vim` | Editor for incident notes |
 | `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
