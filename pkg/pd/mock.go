@@ -63,10 +63,23 @@ type MockPagerDutyClient struct {
 	// front. When empty or nil, the default hardcoded response is returned.
 	ListIncidentsResponses []pagerduty.ListIncidentsResponse
 
+	// RecordedListIncidentsOpts records the options from every
+	// ListIncidentsWithContext call, in order, so tests can assert exactly
+	// what was sent (e.g. Limit, Statuses, Offset, and user_ids chunking).
+	RecordedListIncidentsOpts []pagerduty.ListIncidentsOptions
+
 	// ListIncidentAlertsResponses maps incident ID to a specific alerts response
 	// for ListIncidentAlertsWithContext. When non-nil and a matching key exists,
 	// that response is returned. Otherwise falls back to the default response.
 	ListIncidentAlertsResponses map[string]*pagerduty.ListAlertsResponse
+
+	// RecordedListAlertsOpts records the options from every
+	// ListIncidentAlertsWithContext call, in order.
+	RecordedListAlertsOpts []pagerduty.ListIncidentAlertsOptions
+
+	// RecordedListOnCallOpts records the options from every
+	// ListOnCallsWithContext call, in order.
+	RecordedListOnCallOpts []pagerduty.ListOnCallOptions
 }
 
 // recordCall increments the call count for the named method, lazily
@@ -98,6 +111,7 @@ func (m *MockPagerDutyClient) GetIncidentWithContext(ctx context.Context, id str
 
 func (m *MockPagerDutyClient) ListIncidentsWithContext(ctx context.Context, opts pagerduty.ListIncidentsOptions) (*pagerduty.ListIncidentsResponse, error) {
 	m.recordCall("ListIncidentsWithContext")
+	m.RecordedListIncidentsOpts = append(m.RecordedListIncidentsOpts, opts)
 	if opts.UserIDs != nil && opts.UserIDs[0] == "err" {
 		return &pagerduty.ListIncidentsResponse{}, ErrMockError
 	}
@@ -126,6 +140,7 @@ func (m *MockPagerDutyClient) ListIncidentsWithContext(ctx context.Context, opts
 
 func (m *MockPagerDutyClient) ListIncidentAlertsWithContext(ctx context.Context, id string, opts pagerduty.ListIncidentAlertsOptions) (*pagerduty.ListAlertsResponse, error) {
 	m.recordCall("ListIncidentAlertsWithContext")
+	m.RecordedListAlertsOpts = append(m.RecordedListAlertsOpts, opts)
 	if id == "err" {
 		return &pagerduty.ListAlertsResponse{}, ErrMockError
 	}
@@ -298,6 +313,7 @@ func (m *MockPagerDutyClient) ListEscalationPoliciesWithContext(ctx context.Cont
 
 func (m *MockPagerDutyClient) ListOnCallsWithContext(ctx context.Context, opts pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error) {
 	m.recordCall("ListOnCallsWithContext")
+	m.RecordedListOnCallOpts = append(m.RecordedListOnCallOpts, opts)
 
 	// If the response queue is configured, pop the first response
 	if len(m.ListOnCallsResponses) > 0 {
