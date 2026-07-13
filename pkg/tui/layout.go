@@ -40,10 +40,6 @@ const (
 
 	layoutMaxClusterIDWidth = 40
 	layoutMaxServiceWidth   = 50
-
-	// layoutMaxFormWidth caps huh forms on wide terminals — a full-bleed
-	// form with 200+ column descriptions is unreadable.
-	layoutMaxFormWidth = 90
 )
 
 type Layout struct {
@@ -146,10 +142,7 @@ func computeLayout(ws tea.WindowSizeMsg, styles Styles, helpView string, watcher
 	}
 
 	formFrame := styles.FormContainer.GetHorizontalFrameSize()
-	formWidth := ws.Width - formFrame
-	if formWidth > layoutMaxFormWidth {
-		formWidth = layoutMaxFormWidth
-	}
+	formWidth := ws.Width - mainHOverhead - formFrame
 	formHeight := ws.Height - configFormReserved - styles.FormContainer.GetVerticalFrameSize()
 	if formHeight < layoutMinFormHeight {
 		formHeight = layoutMinFormHeight

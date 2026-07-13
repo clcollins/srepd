@@ -90,9 +90,12 @@ func TestComputeLayout_FormHeight(t *testing.T) {
 
 		vFrame := styles.FormContainer.GetVerticalFrameSize()
 		hFrame := styles.FormContainer.GetHorizontalFrameSize()
+		mainHOverhead := styles.Main.GetHorizontalMargins() +
+			styles.Main.GetHorizontalPadding() +
+			styles.Main.GetHorizontalBorderSize()
 		assert.Equal(t, 24-configFormReserved-vFrame, l.FormHeight)
 		assert.Equal(t, 24-vFrame, l.TeamSelectFormHeight)
-		assert.Equal(t, 80-hFrame, l.FormWidth)
+		assert.Equal(t, 80-mainHOverhead-hFrame, l.FormWidth)
 	})
 }
 
@@ -199,9 +202,13 @@ func TestWindowResize_ConfigMode(t *testing.T) {
 		result, _ := m.windowSizeMsgHandler(sizeMsg)
 		updated := result.(model)
 
-		// Width is capped at layoutMaxFormWidth on wide terminals and the
-		// container frame is subtracted from the height.
-		assert.Equal(t, layoutMaxFormWidth, updated.layout.FormWidth)
+		// Form width fills the screen (main overhead + container frame
+		// subtracted), matching the table's full-width behavior.
+		mainHOverhead := updated.styles.Main.GetHorizontalMargins() +
+			updated.styles.Main.GetHorizontalPadding() +
+			updated.styles.Main.GetHorizontalBorderSize()
+		formFrame := updated.styles.FormContainer.GetHorizontalFrameSize()
+		assert.Equal(t, 120-mainHOverhead-formFrame, updated.layout.FormWidth)
 		vFrame := updated.styles.FormContainer.GetVerticalFrameSize()
 		assert.Equal(t, 50-configFormReserved-vFrame, updated.layout.FormHeight)
 	})

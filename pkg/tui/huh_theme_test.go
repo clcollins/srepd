@@ -77,14 +77,18 @@ func TestBuildStyles_FormContainer(t *testing.T) {
 		"form container must inset its content")
 }
 
-func TestLayout_FormWidthCapped(t *testing.T) {
+func TestLayout_FormWidthFillsScreen(t *testing.T) {
 	styles := BuildStyles(DefaultTheme())
+	mainHOverhead := styles.Main.GetHorizontalMargins() +
+		styles.Main.GetHorizontalPadding() +
+		styles.Main.GetHorizontalBorderSize()
+	formFrame := styles.FormContainer.GetHorizontalFrameSize()
 
 	narrow := computeLayout(tea.WindowSizeMsg{Width: 80, Height: 40}, styles, "", false)
-	assert.LessOrEqual(t, narrow.FormWidth, 80-styles.FormContainer.GetHorizontalFrameSize(),
-		"form width must fit inside the container on narrow terminals")
+	assert.Equal(t, 80-mainHOverhead-formFrame, narrow.FormWidth,
+		"form width must fill the screen like the main table does")
 
 	wide := computeLayout(tea.WindowSizeMsg{Width: 300, Height: 60}, styles, "", false)
-	assert.LessOrEqual(t, wide.FormWidth, layoutMaxFormWidth,
-		"form width must be capped on wide terminals — full-bleed forms are unreadable")
+	assert.Equal(t, 300-mainHOverhead-formFrame, wide.FormWidth,
+		"form width must fill wide terminals too")
 }
