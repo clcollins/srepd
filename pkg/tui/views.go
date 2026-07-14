@@ -557,7 +557,19 @@ func (m model) renderLimitedSupportTab() (string, error) {
 
 func (m model) renderClusterReportsTab() (string, error) {
 	if m.backplaneClient == nil {
-		return "\n_Backplane not enabled; ensure your ~/.config/backplane/config.json exists and is readable..._\n", nil
+		if m.backplaneConfig == nil {
+			return "\n_Backplane not enabled; ensure your ~/.config/backplane/config.json exists and is readable..._\n", nil
+		}
+		if m.ocmAuthPending {
+			return "\n_Backplane initializing — completing OCM authentication..._\n", nil
+		}
+		if m.ocmClient == nil {
+			return "\n_Backplane initializing — waiting for OCM connection..._\n", nil
+		}
+		if m.backplaneInitErr != nil {
+			return fmt.Sprintf("\n_Backplane not available — %v_\n", m.backplaneInitErr), nil
+		}
+		return "\n_Backplane not available — check logs for details_\n", nil
 	}
 
 	if len(m.clusterReportCache) == 0 {

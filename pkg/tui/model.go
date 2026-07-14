@@ -229,6 +229,7 @@ type model struct {
 	// Backplane enrichment state
 	backplaneClient    backplane.BackplaneClient
 	backplaneConfig    *backplane.Config
+	backplaneInitErr   error
 	clusterReportCache map[string][]backplane.Report
 
 	// Prior alerts state

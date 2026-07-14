@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/base64"
+	"fmt"
 	"testing"
 
 	"github.com/clcollins/srepd/pkg/backplane"
@@ -14,14 +15,70 @@ import (
 // only — no PagerDuty/OCM/backplane API calls, no host tools, no filesystem. They
 // raise coverage of a previously-untested (0%) render path and lock in its output.
 
-func TestRenderClusterReportsTab_BackplaneDisabled(t *testing.T) {
+func TestRenderClusterReportsTab_BackplaneNoConfig(t *testing.T) {
 	m := createTestModel()
 	m.backplaneClient = nil
+	m.backplaneConfig = nil
 
 	content, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Backplane not enabled")
+}
+
+func TestRenderClusterReportsTab_BackplaneOCMAuthPending(t *testing.T) {
+	m := createTestModel()
+	m.backplaneClient = nil
+	m.backplaneConfig = &backplane.Config{}
+	m.ocmAuthPending = true
+
+	content, err := m.renderClusterReportsTab()
+
+	assert.NoError(t, err)
+	assert.Contains(t, content, "Backplane initializing")
+	assert.Contains(t, content, "OCM authentication")
+}
+
+func TestRenderClusterReportsTab_BackplaneWaitingForOCM(t *testing.T) {
+	m := createTestModel()
+	m.backplaneClient = nil
+	m.backplaneConfig = &backplane.Config{}
+	m.ocmClient = nil
+	m.ocmAuthPending = false
+
+	content, err := m.renderClusterReportsTab()
+
+	assert.NoError(t, err)
+	assert.Contains(t, content, "Backplane initializing")
+	assert.Contains(t, content, "OCM connection")
+}
+
+func TestRenderClusterReportsTab_BackplaneInitError(t *testing.T) {
+	m := createTestModel()
+	m.backplaneClient = nil
+	m.backplaneConfig = &backplane.Config{}
+	m.ocmClient = createMockOCMClient()
+	m.backplaneInitErr = fmt.Errorf("no backplane URL in config or from OCM")
+
+	content, err := m.renderClusterReportsTab()
+
+	assert.NoError(t, err)
+	assert.Contains(t, content, "Backplane not available")
+	assert.Contains(t, content, "no backplane URL in config or from OCM")
+}
+
+func TestRenderClusterReportsTab_BackplaneInitNoStoredError(t *testing.T) {
+	m := createTestModel()
+	m.backplaneClient = nil
+	m.backplaneConfig = &backplane.Config{}
+	m.ocmClient = createMockOCMClient()
+	m.backplaneInitErr = nil
+
+	content, err := m.renderClusterReportsTab()
+
+	assert.NoError(t, err)
+	assert.Contains(t, content, "Backplane not available")
+	assert.Contains(t, content, "check logs")
 }
 
 func TestRenderClusterReportsTab_OCMNotConnected(t *testing.T) {
