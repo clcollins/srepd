@@ -373,6 +373,86 @@ func TestGetIncidents_Error(t *testing.T) {
 	assert.Empty(t, incidents)
 }
 
+// TestGetIncidents_DefaultsLimitAndAdvancesOffset reproduces the v1.5.0
+// startup timeout: with Limit omitted the API pages at 25 results, and
+// `opts.Offset += opts.Limit` advanced the offset by zero, so a more=true
+// response refetched page one forever until the context deadline expired.
+// GetIncidents must apply defaultPageLimit when Limit is unset and advance
+// the offset between pages.
+func TestGetIncidents_DefaultsLimitAndAdvancesOffset(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		ListIncidentsResponses: []pagerduty.ListIncidentsResponse{
+			{
+				APIListObject: pagerduty.APIListObject{More: true},
+				Incidents:     []pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "PAGE1INCIDENT"}}},
+			},
+			{
+				Incidents: []pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "PAGE2INCIDENT"}}},
+			},
+		},
+	}
+
+	incidents, err := GetIncidents(mockClient, pagerduty.ListIncidentsOptions{})
+
+	assert.NoError(t, err)
+	assert.Len(t, incidents, 2)
+	if assert.Len(t, mockClient.RecordedListIncidentsOpts, 2) {
+		assert.Equal(t, uint(defaultPageLimit), mockClient.RecordedListIncidentsOpts[0].Limit)
+		assert.Equal(t, uint(defaultPageLimit), mockClient.RecordedListIncidentsOpts[1].Offset)
+	}
+}
+
+// TestGetAlerts_DefaultsLimitWhenZero guards against the same
+// zero-Limit infinite pagination loop in GetAlerts.
+func TestGetAlerts_DefaultsLimitWhenZero(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+
+	_, err := GetAlerts(mockClient, "INCIDENT1", pagerduty.ListIncidentAlertsOptions{})
+
+	assert.NoError(t, err)
+	if assert.Len(t, mockClient.RecordedListAlertsOpts, 1) {
+		assert.Equal(t, uint(defaultPageLimit), mockClient.RecordedListAlertsOpts[0].Limit)
+	}
+}
+
+// TestGetUserOnCalls_DefaultsLimitWhenZero guards against the same
+// zero-Limit infinite pagination loop in GetUserOnCalls.
+func TestGetUserOnCalls_DefaultsLimitWhenZero(t *testing.T) {
+	mockClient := new(MockPagerDutyClient)
+
+	_, err := GetUserOnCalls(mockClient, "USER1", pagerduty.ListOnCallOptions{})
+
+	assert.NoError(t, err)
+	if assert.Len(t, mockClient.RecordedListOnCallOpts, 1) {
+		assert.Equal(t, uint(defaultPageLimit), mockClient.RecordedListOnCallOpts[0].Limit)
+	}
+}
+
+// TestGetTeamMemberIDs_DefaultsLimitWhenZero guards against the same
+// zero-Limit infinite pagination loop in GetTeamMemberIDs: with a more=true
+// first page and no explicit Limit, the second request must advance to
+// offset defaultPageLimit rather than refetching offset 0.
+func TestGetTeamMemberIDs_DefaultsLimitWhenZero(t *testing.T) {
+	mockClient := &MockPagerDutyClient{
+		ListMembersResponses: []ListMembersResponse{
+			{Response: &pagerduty.ListTeamMembersResponse{
+				APIListObject: pagerduty.APIListObject{More: true},
+				Members:       []pagerduty.Member{{User: pagerduty.APIObject{ID: "U1"}}},
+			}},
+			{Response: &pagerduty.ListTeamMembersResponse{
+				Members: []pagerduty.Member{{User: pagerduty.APIObject{ID: "U2"}}},
+			}},
+		},
+	}
+	teams := []*pagerduty.Team{{APIObject: pagerduty.APIObject{ID: "TEAM1"}}}
+
+	ids, _, err := GetTeamMemberIDs(mockClient, teams, pagerduty.ListTeamMembersOptions{})
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"U1", "U2"}, ids)
+	assert.Equal(t, []uint{0, uint(defaultPageLimit)}, mockClient.ListMembersOffsets)
+}
+
 func TestGetNotes_Success(t *testing.T) {
 	mockClient := new(MockPagerDutyClient)
 

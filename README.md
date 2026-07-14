@@ -36,6 +36,13 @@ make install        # install to $GOPATH/bin
 go install .        # standard go install
 ```
 
+## Getting Started
+
+1. **Create a PagerDuty API User Token**: PagerDuty web → My Profile → User Settings → API Access → Create New API User Token.
+2. **Run `srepd`** — the setup wizard does the rest: it validates your token, discovers your teams and escalation policies, detects your terminal and editor, and drops you straight into the live incident view when you save.
+
+That's it. Your team may also publish a preset with its policy decisions — if so, run `srepd config --preset <url>` from your team's onboarding docs instead. See [docs/presets.md](docs/presets.md) for details.
+
 ## Commands
 
 | Command | Description |
@@ -44,15 +51,20 @@ go install .        # standard go install
 | `srepd update` | Update to the latest release in place |
 | `srepd --version` | Print version and git SHA |
 | `srepd --dev` | Run with fixture data (no PD connection) |
-| `srepd config` | Interactive configuration wizard |
+| `srepd config` | Interactive configuration wizard (`--preset <file\|https-url>` to pre-seed from a team preset) |
+| `srepd config generate` | Print a complete annotated config with defaults (`--out <path>` to write a file) |
 
 ## Configuration
 
 SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Run `srepd config` to create or update your config interactively. Values from environment variables (e.g., `SREPD_TOKEN`) are pre-filled automatically.
 
-If no config file exists, running `srepd` automatically enters the configuration wizard on first launch. The wizard form resizes dynamically when the terminal window changes size.
+If no config file exists — or the config file is incomplete or still contains placeholder values — running `srepd` automatically enters the configuration wizard. The wizard validates your token, greets you by name, auto-selects your team when you belong to exactly one, and gates advanced options (custom service-to-policy mappings) behind a default-No confirm so most users never see them. New config files are written using the same annotated template as `srepd config generate` — with section headers, detected terminal alternatives as comments, and environment-aware defaults. The form resizes dynamically when the terminal window changes size.
 
 **Migrating from old config format:** If your config uses the deprecated `service_escalation_policies` key, running `srepd config` will automatically migrate to the new `default_silent_escalation_policy` and `custom_service_escalation_policies` keys. The old block is commented out with a deprecation note.
+
+**Team presets:** `srepd config --preset <file|https-url>` pre-seeds the wizard from a team-published YAML fragment carrying team policy decisions — teams, `default_silent_escalation_policy`, `custom_service_escalation_policies`, `cluster_login_command`, and optionally `terminal`/`editor`. Presets can never set `token` or `llm_api` credentials, only fill values you haven't configured, and every value is still confirmed in the wizard. URL fetches are HTTPS-only and size-capped. Teams can publish one preset link in their onboarding docs to eliminate the ID scavenger hunt for new members.
+
+Because `terminal`, `editor`, and `cluster_login_command` are commands srepd *executes*, a preset that seeds any of them triggers an extra safety gate after the final "Save changes?" confirmation: a bold red warning listing every preset-supplied command for review, followed by an explicit "Are you sure you trust the source?" confirmation showing the preset file or URL. Both default to No, and declining either discards all changes. Values you type yourself, and preset fields that are only PagerDuty IDs (teams, policies, mappings), never trigger the gate.
 
 ### Required
 
@@ -65,16 +77,15 @@ If no config file exists, running `srepd` automatically enters the configuration
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. Set via `srepd config`. |
+| `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. The wizard fetches policies from all your PagerDuty teams and marks ones with no on-call schedules as candidates ("does not page"); you can also skip or enter an ID manually. |
 | `custom_service_escalation_policies` | `map[string]string` | (none) | Per-service silent policy overrides (service ID to policy ID) |
-| `editor` | `string` | `vim` | Editor for incident notes |
-| `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login |
+| `editor` | `string` | `vim` | Editor for incident notes (wizard prefills from `$EDITOR`/`$VISUAL`) |
+| `terminal` | `string` | `gnome-terminal --` | Terminal emulator for cluster login (wizard detects installed terminals and warns when the configured one is missing) |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
 | `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary cluster login command |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
-| `flag_marker` | `string` | `🚩 ` | Prefix marker for flagged incidents (alt: `\|►`) |
-| `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries |
+| `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries (set to `""` to disable AI features) |
 | `emoji` | `bool` | `true` | Use emoji markers or text fallbacks for flags/agent/watcher |
 | `reescalate_level` | `int` | `2` | Escalation level `ctrl+e` re-escalates to, skipping lower placeholder tiers (e.g. level 1 "Nobody") |
 | `stream_responses` | `bool` | `true` | Stream `:watcher`/LLM responses token-by-token when the provider supports it; set `false` for blocking responses |
@@ -100,15 +111,23 @@ colors:
   tab: "#7D56F4"        # Reserved for future use
 ```
 
-### Example
+### Advanced: manual configuration
+
+Prefer editing a file over the wizard? Generate a complete, annotated config with every supported key and its default:
+
+```bash
+srepd config generate --out ~/.config/srepd/srepd.yaml
+```
+
+Then fill in `token` and `teams`. **Do not copy placeholder values** like `<PagerDuty API token>` into the file — srepd treats them as unconfigured and routes you into the wizard. A minimal working config looks like:
 
 ```yaml
-token: <PagerDuty API token>
+token: u+yourRealTokenHere
 teams:
-  - <team ID>
+  - PABC123
 default_silent_escalation_policy: P654321
-terminal: gnome-terminal
-cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
+terminal: gnome-terminal --
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 rosa_boundary_command: rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect
 toolbox_mode: auto
 ```
@@ -127,7 +146,7 @@ When running inside a Fedora Toolbox, terminal commands are automatically prefix
 
 ## OCM Integration
 
-SREPD enriches PagerDuty incident data with cluster details from the OpenShift Cluster Manager (OCM) API. On startup, it connects to the production OCM API using tokens from `~/.config/ocm/ocm.json`. If tokens are expired, a browser window opens for auth code login in the background — the TUI starts immediately with PagerDuty incidents visible, and OCM enrichment populates once authentication completes.
+SREPD enriches PagerDuty incident data with cluster details from the OpenShift Cluster Manager (OCM) API. On startup, it connects to the production OCM API using tokens from `~/.config/ocm/ocm.json`. If tokens are expired, a browser window opens for auth code login in the background — the TUI starts immediately with PagerDuty incidents visible, and OCM enrichment populates once authentication completes. OCM authentication is skipped while the configuration wizard is on screen (`srepd config` and first-run setup) so new users aren't interrupted before saving a token; it runs automatically as soon as the wizard completes and the live session begins.
 
 Enriched data includes:
 * **Cluster display names** replace PD service names in the incident table (e.g., `mycluster.abc1.p1.example.org` instead of `osd-mycluster.abc1.p1.example.org-hive-cluster`)

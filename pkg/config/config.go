@@ -1,5 +1,5 @@
 /*
-Copyright 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2023 Chris Collins 'collins.christopher@gmail.com'
 */
 package config
 
@@ -65,6 +65,14 @@ type ExistingConfig struct {
 	SilentPolicy      string
 	CustomPolicies    map[string]string
 	OldFormatDetected bool
+	// Environment settings surfaced by the wizard (OB-5). Populated by the
+	// caller from viper; empty means unset.
+	Terminal        string
+	Editor          string
+	AgentCLICommand string
+	// ClusterLoginCommand has no wizard step; it flows from an existing
+	// config or a team preset straight through to the write path.
+	ClusterLoginCommand string
 }
 
 func ResolveExistingConfig(
@@ -142,6 +150,14 @@ type WizardInputs struct {
 	KeepTeams           bool
 	KeepSilent          bool
 	KeepCustom          bool
+	// Environment step (OB-5). Blank Terminal/Editor inputs keep the
+	// existing values. AgentTouched distinguishes "the agent step ran"
+	// (AgentInput is authoritative, even when empty = deliberately
+	// disabled) from "the step was hidden" (keep existing).
+	TerminalInput string
+	EditorInput   string
+	AgentInput    string
+	AgentTouched  bool
 }
 
 type ResolvedValues struct {
@@ -149,6 +165,11 @@ type ResolvedValues struct {
 	Teams               []string
 	SilentPolicy        string
 	CustomMappingsInput string
+	Terminal            string
+	Editor              string
+	AgentCLICommand     string
+	AgentTouched        bool
+	ClusterLoginCommand string
 }
 
 func ResolveFinalValues(existing ExistingConfig, inputs WizardInputs) (ResolvedValues, error) {
@@ -181,35 +202,61 @@ func ResolveFinalValues(existing ExistingConfig, inputs WizardInputs) (ResolvedV
 		rv.CustomMappingsInput = strings.TrimSpace(inputs.CustomMappingsInput)
 	}
 
+	rv.Terminal = existing.Terminal
+	if trimmed := strings.TrimSpace(inputs.TerminalInput); trimmed != "" {
+		rv.Terminal = trimmed
+	}
+	rv.Editor = existing.Editor
+	if trimmed := strings.TrimSpace(inputs.EditorInput); trimmed != "" {
+		rv.Editor = trimmed
+	}
+	rv.AgentCLICommand = existing.AgentCLICommand
+	rv.AgentTouched = inputs.AgentTouched
+	if inputs.AgentTouched {
+		rv.AgentCLICommand = strings.TrimSpace(inputs.AgentInput)
+	}
+	rv.ClusterLoginCommand = existing.ClusterLoginCommand
+
 	return rv, nil
 }
 
 type ConfigChanges struct {
-	TokenChanged  bool
-	TeamsChanged  bool
-	SilentChanged bool
-	CustomChanged bool
+	TokenChanged        bool
+	TeamsChanged        bool
+	SilentChanged       bool
+	CustomChanged       bool
+	TerminalChanged     bool
+	EditorChanged       bool
+	AgentChanged        bool
+	ClusterLoginChanged bool
 }
 
 func (c ConfigChanges) AnyChanged() bool {
-	return c.TokenChanged || c.TeamsChanged || c.SilentChanged || c.CustomChanged
+	return c.TokenChanged || c.TeamsChanged || c.SilentChanged || c.CustomChanged ||
+		c.TerminalChanged || c.EditorChanged || c.AgentChanged || c.ClusterLoginChanged
 }
 
 func DetectChangesForNewFile(final ResolvedValues) ConfigChanges {
 	return ConfigChanges{
-		TokenChanged:  true,
-		TeamsChanged:  true,
-		SilentChanged: final.SilentPolicy != "",
-		CustomChanged: final.CustomMappingsInput != "",
+		TokenChanged:    true,
+		TeamsChanged:    true,
+		SilentChanged:   final.SilentPolicy != "",
+		CustomChanged:   final.CustomMappingsInput != "",
+		TerminalChanged: final.Terminal != "",
+		EditorChanged:   final.Editor != "",
+		AgentChanged:    final.AgentTouched,
 	}
 }
 
 func DetectChanges(existing ExistingConfig, final ResolvedValues, tokenInput string) ConfigChanges {
 	return ConfigChanges{
-		TokenChanged:  tokenInput != "" && tokenInput != existing.Token,
-		TeamsChanged:  !StringSlicesEqual(final.Teams, existing.Teams),
-		SilentChanged: final.SilentPolicy != existing.SilentPolicy,
-		CustomChanged: final.CustomMappingsInput != FormatCustomMappings(existing.CustomPolicies),
+		TokenChanged:    tokenInput != "" && tokenInput != existing.Token,
+		TeamsChanged:    !StringSlicesEqual(final.Teams, existing.Teams),
+		TerminalChanged: final.Terminal != existing.Terminal,
+		EditorChanged:   final.Editor != existing.Editor,
+		AgentChanged:    final.AgentTouched && final.AgentCLICommand != existing.AgentCLICommand,
+		SilentChanged:   final.SilentPolicy != existing.SilentPolicy,
+		CustomChanged:   final.CustomMappingsInput != FormatCustomMappings(existing.CustomPolicies),
 	}
 }
 
@@ -300,11 +347,20 @@ func ParseCustomMappingsStrict(raw string) (map[string]string, error) {
 	return result, nil
 }
 
-func WriteConfig(fs ConfigFS, baseDir string, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool) error {
+func WriteConfig(fs ConfigFS, baseDir string, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool, env *GenerateEnvironment) error {
 	configFile := filepath.Join(baseDir, CfgFileDir, CfgFileName)
 
 	if isNewFile {
-		data := BuildFullConfig(final, teamNames, final.SilentPolicy, customPolicies)
+		// Start from the annotated template (with detected environment,
+		// section headers, and commented alternatives) then overlay the
+		// wizard's resolved values so the first config file looks like
+		// `srepd config generate` output with real values filled in.
+		base := GenerateAnnotatedConfig(env)
+		allChanged := DetectChangesForNewFile(final)
+		data, err := MergeIntoExistingConfig(base, final, allChanged, teamNames, customPolicies)
+		if err != nil {
+			return fmt.Errorf("failed to build config from template: %w", err)
+		}
 		if err := writeSecretFile(fs, configFile, data); err != nil {
 			return fmt.Errorf("failed to write config file: %w", err)
 		}
@@ -370,6 +426,34 @@ func MergeIntoExistingConfig(existingData []byte, final ResolvedValues, changes 
 		}
 	}
 
+	if changes.TerminalChanged {
+		data, err = UpsertScalarInConfig(data, "terminal", final.Terminal)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update terminal: %w", err)
+		}
+	}
+
+	if changes.EditorChanged {
+		data, err = UpsertScalarInConfig(data, "editor", final.Editor)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update editor: %w", err)
+		}
+	}
+
+	if changes.AgentChanged {
+		data, err = UpsertScalarInConfig(data, "agent_cli_command", final.AgentCLICommand)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update agent command: %w", err)
+		}
+	}
+
+	if changes.ClusterLoginChanged && final.ClusterLoginCommand != "" {
+		data, err = UpsertScalarInConfig(data, "cluster_login_command", final.ClusterLoginCommand)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update cluster login command: %w", err)
+		}
+	}
+
 	if changes.SilentChanged || changes.CustomChanged {
 		data = CommentOutOldPolicies(data)
 	}
@@ -394,16 +478,36 @@ func BuildFullConfig(final ResolvedValues, teamNames map[string]string, silentPo
 		}
 	}
 
+	editor := final.Editor
+	if editor == "" {
+		editor = DefaultOptionalKeys["editor"]
+	}
+	terminal := final.Terminal
+	if terminal == "" {
+		terminal = DefaultOptionalKeys["terminal"]
+	}
+	clusterLogin := final.ClusterLoginCommand
+	if clusterLogin == "" {
+		clusterLogin = DefaultOptionalKeys["cluster_login_command"]
+	}
+
 	sb.WriteString("\n# Optional settings\n")
 	for _, entry := range []struct{ key, val string }{
-		{"editor", "vim"},
-		{"terminal", "gnome-terminal --"},
-		{"cluster_login_command", "ocm backplane login %%CLUSTER_ID%%"},
-		{"toolbox_mode", "auto"},
-		{"chord_prefix", "ctrl+x"},
-		{"rosa_boundary_command", "rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect"},
+		{"editor", editor},
+		{"terminal", terminal},
+		{"cluster_login_command", clusterLogin},
+		{"toolbox_mode", DefaultOptionalKeys["toolbox_mode"]},
+		{"chord_prefix", DefaultOptionalKeys["chord_prefix"]},
+		{"rosa_boundary_command", DefaultOptionalKeys["rosa_boundary_command"]},
 	} {
 		fmt.Fprintf(&sb, "%s: %s\n", entry.key, entry.val)
+	}
+
+	// Persist a deliberate agent decision when it differs from the default
+	// (including "" = AI features disabled).
+	if final.AgentTouched && final.AgentCLICommand != DefaultOptionalKeys["agent_cli_command"] {
+		sb.WriteString("\n# CLI agent for :agent queries (empty disables AI features)\n")
+		fmt.Fprintf(&sb, "agent_cli_command: %q\n", final.AgentCLICommand)
 	}
 
 	if silentPolicy != "" {
@@ -455,6 +559,20 @@ func BuildSummary(existing ExistingConfig, final ResolvedValues, changes ConfigC
 			silentDisplay = fmt.Sprintf("%s (%s)", name, final.SilentPolicy)
 		}
 		fmt.Fprintf(&sb, "  Silent policy:  %s%s\n", silentDisplay, changeLabel)
+	}
+
+	if changes.TerminalChanged && final.Terminal != "" {
+		fmt.Fprintf(&sb, "  Terminal:       %s (changed)\n", final.Terminal)
+	}
+	if changes.EditorChanged && final.Editor != "" {
+		fmt.Fprintf(&sb, "  Editor:         %s (changed)\n", final.Editor)
+	}
+	if changes.AgentChanged {
+		agentDisplay := final.AgentCLICommand
+		if agentDisplay == "" {
+			agentDisplay = "(disabled)"
+		}
+		fmt.Fprintf(&sb, "  AI agent:       %s (changed)\n", agentDisplay)
 	}
 
 	if final.CustomMappingsInput != "" {
@@ -784,7 +902,7 @@ func HasPlaceholderTeams(teams []string) bool {
 	}
 	for _, team := range teams {
 		trimmed := strings.TrimSpace(team)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
+		if trimmed != "" && !isAnglePlaceholder(trimmed) {
 			return false
 		}
 	}

@@ -6,6 +6,13 @@
 version: 2
 updates:
   - package-ecosystem: "gomod"
-    directory: "/" 
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Keeps the SHA-pinned actions fresh: dependabot bumps the commit SHA and
+  # maintains the trailing version comment.
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
       interval: "weekly"

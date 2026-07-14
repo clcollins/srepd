@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -138,8 +139,16 @@ type updatedIncidentListMsg struct {
 	err       error
 }
 
+// maxUserIDsInQuery is the maximum number of user IDs to include in a single
+// PagerDuty API query. PagerDuty rejects request URIs over ~4096 bytes with
+// HTTP 414 (URI Too Long); 100 user_ids[] params plus the team, status, and
+// pagination params stay well under that limit.
+const maxUserIDsInQuery = 100
+
 // updateIncidentList returns a command that fetches the incident list from the PagerDuty API.
-// It queries per-team to avoid HTTP 414 (URI Too Long) when teams have many members.
+// It queries per-team, splitting large member lists into chunks of at most
+// maxUserIDsInQuery user IDs per query to avoid HTTP 414 (URI Too Long),
+// and deduplicates the merged results.
 func updateIncidentList(p *pd.Config) tea.Cmd {
 	return func() tea.Msg {
 		if p == nil {
@@ -153,20 +162,28 @@ func updateIncidentList(p *pd.Config) tea.Cmd {
 		for _, team := range p.Teams {
 			memberIDs := filterUserIDs(p.TeamMembersByTeam[team.ID], ignoredIDs)
 
-			opts := pagerduty.ListIncidentsOptions{
-				TeamIDs: []string{team.ID},
-				UserIDs: memberIDs,
+			chunks := chunkStrings(memberIDs, maxUserIDsInQuery)
+			if len(chunks) == 0 {
+				// No members to filter by: query the team alone, matching
+				// the API behavior when user_ids[] is omitted
+				chunks = [][]string{nil}
 			}
 
-			incidents, err := pd.GetIncidents(p.Client, opts)
-			if err != nil {
-				return updatedIncidentListMsg{err: err}
-			}
+			for _, chunk := range chunks {
+				opts := pd.NewListIncidentOptsFromDefaults()
+				opts.TeamIDs = []string{team.ID}
+				opts.UserIDs = chunk
 
-			for _, inc := range incidents {
-				if !seen[inc.ID] {
-					seen[inc.ID] = true
-					allIncidents = append(allIncidents, inc)
+				incidents, err := pd.GetIncidents(p.Client, opts)
+				if err != nil {
+					return updatedIncidentListMsg{err: err}
+				}
+
+				for _, inc := range incidents {
+					if !seen[inc.ID] {
+						seen[inc.ID] = true
+						allIncidents = append(allIncidents, inc)
+					}
 				}
 			}
 		}
@@ -191,6 +208,18 @@ func filterUserIDs(memberIDs []string, ignored []string) []string {
 		}
 	}
 	return filtered
+}
+
+func chunkStrings(items []string, size int) [][]string {
+	var chunks [][]string
+	for len(items) > size {
+		chunks = append(chunks, items[:size])
+		items = items[size:]
+	}
+	if len(items) > 0 {
+		chunks = append(chunks, items)
+	}
+	return chunks
 }
 
 // HOUSEKEEPING: The above are commands that have complete unit tests and incoming
@@ -1253,19 +1282,6 @@ func getIDsFromIncidents(incidents []pagerduty.Incident) []string {
 	return ids
 }
 
-func hasPlaceholderTeamsCfg(teams []string) bool {
-	if len(teams) == 0 {
-		return true
-	}
-	for _, team := range teams {
-		trimmed := strings.TrimSpace(team)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "<PagerDuty Team ID") {
-			return false
-		}
-	}
-	return true
-}
-
 type fetchedTeamsMsg struct {
 	teams []pagerduty.Team
 	err   error
@@ -1389,22 +1405,51 @@ func updateTeamsInYAML(configData []byte, teamIDs []string, teamNames map[string
 type configFormState struct {
 	TokenInput    string
 	SelectedTeams []string
-	SilentPolicy  string
-	CustomInput   string
-	KeepTeams     bool
-	KeepSilent    bool
-	KeepCustom    bool
-	Confirm       bool
+	// SilentPolicyChoice is the picker selection: a policy ID,
+	// policyChoiceSkip, or policyChoiceManual (reveals the free-text input
+	// bound to SilentPolicy).
+	SilentPolicyChoice string
+	SilentPolicy       string
+	CustomInput        string
+	KeepTeams          bool
+	KeepSilent         bool
+	KeepCustom         bool
+	// AdvancedOptions gates the team-policy groups (custom service→policy
+	// mappings) that most users should never see; defaults to No.
+	AdvancedOptions bool
+	Confirm         bool
+	// Environment step (OB-5).
+	TerminalChoice string
+	EditorInput    string
+	AgentEnabled   bool
+	// AgentOffered records whether the AI section was shown at all —
+	// hidden means "keep the existing agent setting".
+	AgentOffered bool
+	// FetchedUserName/FetchedTeamCount are set by the team OptionsFunc after
+	// a successful fetch and drive the greeting DescriptionFunc.
+	FetchedUserName  string
+	FetchedTeamCount int
+	// PresetCommandsSafe/PresetSourceTrusted are the extra safety
+	// confirmations shown after "Save changes?" when a --preset seeded
+	// fields that srepd executes (terminal, editor, cluster login). Both
+	// default to false and both must be affirmed or the save is discarded.
+	PresetCommandsSafe  bool
+	PresetSourceTrusted bool
 }
 
 // configWizardReadyMsg is sent when the existing config has been resolved
 // and is ready to build the config wizard form.
 type configWizardReadyMsg struct {
-	existing    pkgconfig.ExistingConfig
-	kd          pkgconfig.KeepDefaults
-	isNewFile   bool
-	teamNames   map[string]string
-	policyNames map[string]string
+	existing      pkgconfig.ExistingConfig
+	kd            pkgconfig.KeepDefaults
+	isNewFile     bool
+	teamNames     map[string]string
+	policyNames   map[string]string
+	presetApplied pkgconfig.PresetApplied
+	// wizardReason explains why the wizard auto-launched (e.g. YAML parse
+	// error, missing/placeholder token). Surfaced in the token step description
+	// so the user understands what happened. Empty for explicit `srepd config`.
+	wizardReason string
 }
 
 // configSavedMsg is sent after the config has been written to disk.
@@ -1432,6 +1477,20 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			viper.GetString("custom_service_escalation_policies"),
 			viper.GetStringMapString("service_escalation_policies"),
 		)
+		existing.Terminal = viperConfiguredString("terminal")
+		existing.Editor = viperConfiguredString("editor")
+		existing.ClusterLoginCommand = viperConfiguredString("cluster_login_command")
+		existing.AgentCLICommand = viper.GetString("agent_cli_command")
+
+		var presetApplied pkgconfig.PresetApplied
+		if ref := viper.GetString("config_preset"); ref != "" {
+			preset, presetErr := pkgconfig.LoadPreset(ref, nil)
+			if presetErr != nil {
+				return errMsg{fmt.Errorf("failed to load preset: %w", presetErr)}
+			}
+			existing, presetApplied = pkgconfig.ApplyPreset(existing, preset)
+		}
+
 		kd := pkgconfig.ResolveKeepDefaults(existing.Teams, existing.SilentPolicy, existing.CustomPolicies)
 
 		home, _ := os.UserHomeDir()
@@ -1467,8 +1526,29 @@ func prepareConfigWizardCmd(m model) tea.Cmd {
 			}
 		}
 
-		return configWizardReadyMsg{existing: existing, kd: kd, isNewFile: isNewFile, teamNames: teamNames, policyNames: policyNames}
+		return configWizardReadyMsg{
+			existing:      existing,
+			kd:            kd,
+			isNewFile:     isNewFile,
+			teamNames:     teamNames,
+			policyNames:   policyNames,
+			presetApplied: presetApplied,
+			wizardReason:  viper.GetString("config_wizard_reason"),
+		}
 	}
+}
+
+// viperConfiguredString returns the value for key only when the user set it
+// (config file, env var, or an explicit flag) — not when it merely carries
+// an in-process default from ensureViperDefaults/validateConfig.
+func viperConfiguredString(key string) string {
+	if viper.InConfig(key) {
+		return viper.GetString(key)
+	}
+	if v := os.Getenv("SREPD_" + strings.ToUpper(key)); v != "" {
+		return v
+	}
+	return ""
 }
 
 // realFS implements pkgconfig.ConfigFS using the real filesystem.
@@ -1494,6 +1574,33 @@ func (realFS) Chmod(name string, mode os.FileMode) error {
 	return os.Chmod(name, mode)
 }
 
+// detectGenerateEnvironment probes the current system for terminals, editor,
+// agent CLI, and cluster login commands — the same detection that
+// `srepd config generate` uses — so a brand-new config file includes
+// commented alternatives and detected values.
+func detectGenerateEnvironment() *pkgconfig.GenerateEnvironment {
+	env := &pkgconfig.GenerateEnvironment{}
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	for _, dt := range detected {
+		env.Terminals = append(env.Terminals, dt.Command)
+	}
+	if e := os.Getenv("EDITOR"); e != "" {
+		env.Editor = e
+	} else if v := os.Getenv("VISUAL"); v != "" {
+		env.Editor = v
+	}
+	if _, err := exec.LookPath("claude"); err == nil {
+		env.AgentCLI = pkgconfig.DefaultOptionalKeys["agent_cli_command"]
+	}
+	if _, err := exec.LookPath("ocm"); err == nil {
+		env.ClusterLoginCmds = append(env.ClusterLoginCmds, "ocm backplane login %%CLUSTER_ID%%")
+	}
+	if _, err := exec.LookPath("ocm-container"); err == nil {
+		env.ClusterLoginCmds = append(env.ClusterLoginCmds, "ocm-container --cluster-id %%CLUSTER_ID%%")
+	}
+	return env
+}
+
 // writeConfigCmd writes the config to disk using the resolved values.
 func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool, fs pkgconfig.ConfigFS) tea.Cmd {
 	return func() tea.Msg {
@@ -1507,7 +1614,14 @@ func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChan
 		if err := fs.MkdirAll(configDir, 0700); err != nil {
 			return configSavedMsg{err: err}
 		}
-		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile); err != nil {
+		// For new files, detect the environment so the generated config
+		// includes commented alternatives (detected terminals, etc.)
+		// matching `srepd config generate` output.
+		var env *pkgconfig.GenerateEnvironment
+		if isNewFile {
+			env = detectGenerateEnvironment()
+		}
+		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile, env); err != nil {
 			return configSavedMsg{err: err}
 		}
 		// Update Viper with new values
@@ -1531,6 +1645,53 @@ func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChan
 type OCMClientReadyMsg struct {
 	Client ocm.OCMClient
 	Err    error
+}
+
+// connectOCMCmdIfNeeded returns a command that connects OCM after the config
+// wizard exits into a live session, so cluster enrichment works exactly like
+// a normal launch. OCM auth is deliberately skipped while the wizard runs
+// (OB-6); this is the follow-through that keeps the first session fully
+// functional. Returns nil when OCM is already connected or in dev mode. The
+// connection (including browser auth for expired tokens) blocks inside the
+// tea.Cmd goroutine, and the result flows through the existing
+// OCMClientReadyMsg handler (client, deferred backplane, enrichment).
+func (m model) connectOCMCmdIfNeeded() tea.Cmd {
+	if m.ocmClient != nil || m.devMode {
+		return nil
+	}
+	connect := m.ocmConnect
+	if connect == nil {
+		connect = func() (ocm.OCMClient, error) {
+			client, err := ocm.Connect(Version)
+			if err != nil {
+				return nil, err
+			}
+			return client, nil
+		}
+	}
+	return func() tea.Msg {
+		client, err := connect()
+		if err != nil || client == nil {
+			return OCMClientReadyMsg{Err: err}
+		}
+		return OCMClientReadyMsg{Client: client}
+	}
+}
+
+// ocmHandoffCmd wraps connectOCMCmdIfNeeded for the wizard-exit paths,
+// setting ocmAuthPending so the UI reflects the in-flight connection. When
+// requirePDConfig is true (discard/no-changes/abort paths), the handoff only
+// happens if a usable PD config exists — a brand-new user backing out of the
+// wizard must not get a browser-auth prompt on the way out.
+func (m *model) ocmHandoffCmd(requirePDConfig bool) tea.Cmd {
+	if requirePDConfig && (m.config == nil || m.config.Client == nil) {
+		return nil
+	}
+	cmd := m.connectOCMCmdIfNeeded()
+	if cmd != nil {
+		m.ocmAuthPending = true
+	}
+	return cmd
 }
 
 type pdClientInitializedMsg struct {

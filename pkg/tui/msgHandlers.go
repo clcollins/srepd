@@ -199,6 +199,9 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Default commands for the table view
 	switch {
+	case m.tourMode:
+		return switchTourFocusMode(m, msg)
+
 	case m.configMode:
 		return switchConfigFocusMode(m, msg)
 
@@ -316,17 +319,38 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.configState.Confirm {
 			m.setStatus("config changes discarded")
-			return m, func() tea.Msg { return updateIncidentListMsg("config discarded") }
+			cmds := []tea.Cmd{func() tea.Msg { return updateIncidentListMsg("config discarded") }}
+			if ocmCmd := m.ocmHandoffCmd(true); ocmCmd != nil {
+				cmds = append(cmds, ocmCmd)
+			}
+			return m, tea.Batch(cmds...)
+		}
+
+		// Preset safety gate: preset-seeded terminal/editor/cluster-login
+		// values are commands srepd executes, so both extra confirmations
+		// (commands reviewed, source trusted) must have been affirmed.
+		if m.configPresetApplied.ExecutableAny() &&
+			(!m.configState.PresetCommandsSafe || !m.configState.PresetSourceTrusted) {
+			m.setStatus("preset commands not confirmed — config changes discarded")
+			cmds := []tea.Cmd{func() tea.Msg { return updateIncidentListMsg("preset not confirmed") }}
+			if ocmCmd := m.ocmHandoffCmd(true); ocmCmd != nil {
+				cmds = append(cmds, ocmCmd)
+			}
+			return m, tea.Batch(cmds...)
 		}
 
 		final, err := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
 			TokenInput:          m.configState.TokenInput,
 			SelectedTeams:       m.configState.SelectedTeams,
-			SilentPolicyID:      m.configState.SilentPolicy,
+			SilentPolicyID:      resolveSilentPolicyChoice(m.configState.SilentPolicyChoice, m.configState.SilentPolicy),
 			CustomMappingsInput: m.configState.CustomInput,
 			KeepTeams:           m.configState.KeepTeams,
 			KeepSilent:          m.configState.KeepSilent,
 			KeepCustom:          m.configState.KeepCustom,
+			TerminalInput:       m.configState.TerminalChoice,
+			EditorInput:         m.configState.EditorInput,
+			AgentInput:          agentInputValue(m.configState.AgentEnabled),
+			AgentTouched:        m.configState.AgentOffered,
 		})
 		if err != nil {
 			m.setStatus("config error: " + err.Error())
@@ -339,6 +363,9 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			changes = pkgconfig.DetectChanges(m.configExisting, final, strings.TrimSpace(m.configState.TokenInput))
 		}
+		// Preset-seeded values equal the seeded "existing" state but are not
+		// in the file yet — force them into the write set.
+		changes = pkgconfig.ForcePresetChanges(changes, m.configPresetApplied)
 
 		if m.configExisting.OldFormatDetected {
 			if final.SilentPolicy != "" {
@@ -351,7 +378,11 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !changes.AnyChanged() {
 			m.setStatus("config is valid, no changes needed")
-			return m, func() tea.Msg { return updateIncidentListMsg("config unchanged") }
+			cmds := []tea.Cmd{func() tea.Msg { return updateIncidentListMsg("config unchanged") }}
+			if ocmCmd := m.ocmHandoffCmd(true); ocmCmd != nil {
+				cmds = append(cmds, ocmCmd)
+			}
+			return m, tea.Batch(cmds...)
 		}
 
 		teamNames := make(map[string]string)
@@ -385,7 +416,7 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configModeRequested = false
 		m.table.Focus()
 		m.setStatus("config cancelled")
-		return m, nil
+		return m, m.ocmHandoffCmd(true)
 	}
 	return m, cmd
 }
@@ -812,8 +843,12 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.dispatchFlagCommand(prompt)
 			}
 
+			if isTourCommand(prompt) {
+				return m.startTour()
+			}
+
 			log.Debug("switchInputFocusMode", "msg", "unknown command", "prompt", prompt)
-			m.setStatus("unknown command — try :agent, :watcher, or :flag")
+			m.setStatus("unknown command — try :agent, :watcher, :flag, or :tour")
 			return m, nil
 
 		default:

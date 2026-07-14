@@ -1,12 +1,11 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2023 Chris Collins 'collins.christopher@gmail.com'
 */
 package cmd
 
 import (
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -15,7 +14,6 @@ import (
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/deprecation"
 	"github.com/clcollins/srepd/pkg/launcher"
-	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/tui"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,7 +23,12 @@ import (
 
 const description = `The config command is used to create or validate the SREPD config file.
 The config file is located at ~/.config/srepd/srepd.yaml and is used to store
-the configuration options for the SREPD application.`
+the configuration options for the SREPD application.
+
+You will need a PagerDuty API User Token: create one at PagerDuty web →
+My Profile → User Settings → API Access → Create New API User Token.
+Everything else — teams, escalation policies, terminal, editor — is
+discovered by the wizard, or pre-seeded from a team preset via --preset.`
 
 // safeToLogConfigKeys is the allowlist of config keys whose values are safe to log
 // verbatim under --debug. Any key not in this set is masked, so secret-bearing keys
@@ -59,6 +62,11 @@ func maskConfigValue(key, value string) string {
 	return "*****"
 }
 
+// configPresetRef is the --preset flag value: a file path or HTTPS URL to a
+// team-published preset that pre-seeds the wizard (teams, silent policy,
+// custom mappings, cluster login command). Never a token.
+var configPresetRef string
+
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:          "config",
@@ -66,11 +74,15 @@ var configCmd = &cobra.Command{
 	Long:         description,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if configPresetRef != "" {
+			viper.Set("config_preset", configPresetRef)
+		}
 		return runConfigWizard()
 	},
 }
 
 func init() {
+	configCmd.Flags().StringVar(&configPresetRef, "preset", "", "file path or https URL of a team preset to pre-seed the wizard")
 	rootCmd.AddCommand(configCmd)
 }
 
@@ -102,27 +114,6 @@ func launchTUIWithConfig() {
 		log.Fatal(err)
 	}
 
-	var ocmClient ocm.OCMClient
-	var ocmAuthPending bool
-	var asyncOCMClient *ocm.Client
-
-	cfg, armed, checkErr := ocm.CheckTokens()
-	if checkErr != nil {
-		log.Warn("OCM config check failed", "error", checkErr)
-	} else if armed {
-		client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
-		if connErr != nil {
-			log.Warn("OCM connection failed", "error", connErr)
-		} else {
-			ocmClient = client
-			asyncOCMClient = client
-			log.Info("OCM connected")
-		}
-	} else {
-		ocmAuthPending = true
-		log.Info("OCM tokens not valid — will authenticate async")
-	}
-
 	m, _ := tui.InitialModel(
 		viper.GetString("token"),
 		viper.GetStringSlice("teams"),
@@ -132,40 +123,19 @@ func launchTUIWithConfig() {
 		l,
 		launcher.ClusterLauncher{}, // rosa-boundary not needed in config mode
 		viper.GetBool("debug"),
-		ocmClient,
+		nil, // ocmClient — no OCM auth in config mode (OB-6)
 		viper.GetStringMapString("colors"),
 		viper.GetString("default_silent_escalation_policy"),
 		viper.GetStringMapString("custom_service_escalation_policies"),
-		true, // configMode
-		ocmAuthPending,
-		nil, // aiProvider — not needed in config mode
-		"",  // agentCLICommand — not needed in config mode
-		nil, // backplaneClient — not needed in config mode
-		nil, // backplaneConfig — not needed in config mode
+		true,  // configMode
+		false, // ocmAuthPending — never authenticate during config mode
+		nil,   // aiProvider — not needed in config mode
+		"",    // agentCLICommand — not needed in config mode
+		nil,   // backplaneClient — not needed in config mode
+		nil,   // backplaneConfig — not needed in config mode
 	)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-
-	if ocmAuthPending {
-		go func() {
-			fmt.Fprintln(os.Stderr, "OCM tokens expired — opening browser for authentication...")
-			token, authErr := ocm.AuthenticateAsync(cfg)
-			if authErr != nil {
-				log.Debug("OCM browser auth failed", "error", authErr)
-				p.Send(tui.OCMClientReadyMsg{Err: authErr})
-				return
-			}
-			fmt.Fprintln(os.Stderr, "OCM authentication successful.")
-			ocm.ApplyAuthToken(cfg, token)
-			client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
-			if connErr != nil {
-				p.Send(tui.OCMClientReadyMsg{Err: connErr})
-				return
-			}
-			asyncOCMClient = client
-			p.Send(tui.OCMClientReadyMsg{Client: client})
-		}()
-	}
 
 	go func() {
 		for {
@@ -175,10 +145,6 @@ func launchTUIWithConfig() {
 	}()
 
 	_, err = p.Run()
-
-	if asyncOCMClient != nil {
-		asyncOCMClient.Close()
-	}
 
 	if err != nil {
 		fmt.Println(err)
@@ -209,10 +175,16 @@ func validateConfig() error {
 	}
 
 	for k, v := range pkgconfig.RequiredKeys {
-		if _, ok := settings[k]; !ok {
-			errs = append(errs, fmt.Errorf("missing required key: %s ", k))
-			log.Error("Missing required key", "key_name", k, "key_description", v)
+		if _, ok := settings[k]; ok {
+			continue
 		}
+		// AllSettings does not include values resolved from SREPD_* env vars;
+		// consult the live accessor before declaring the key missing.
+		if viper.GetString(k) != "" {
+			continue
+		}
+		errs = append(errs, fmt.Errorf("missing required key: %s ", k))
+		log.Error("Missing required key", "key_name", k, "key_description", v)
 	}
 
 	if _, ok := settings["service_escalation_policies"]; ok {

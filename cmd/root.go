@@ -35,6 +35,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	ocmconfig "github.com/openshift-online/ocm-common/pkg/ocm/config"
+
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
@@ -85,6 +87,28 @@ but rather a simple tool to make on-call tasks easier.`,
 			return
 		}
 
+		// A YAML parse error means viper couldn't read the file at all
+		// (e.g. a missing key name before a sequence entry). The wizard
+		// can fix it by writing a clean config (the broken file is backed
+		// up). Salvaged values are already in viper from initConfig.
+		if configParseError != "" {
+			needsWizard = true
+			viper.Set("config_wizard_reason", "config file has a YAML error: "+configParseError)
+			log.Info("Config has a YAML error — launching setup wizard", "error", configParseError)
+			return
+		}
+
+		route, reason := classifyStartup()
+		switch route {
+		case routeWizard:
+			needsWizard = true
+			viper.Set("config_wizard_reason", reason)
+			log.Info("Config incomplete — launching setup wizard", "reason", reason)
+			return
+		case routeFatal:
+			log.Fatal(fmt.Errorf("%s — fix or remove %s, or run `srepd config`", reason, configFile))
+		}
+
 		if err := validateConfig(); err != nil {
 			log.Fatal(err)
 		}
@@ -109,9 +133,48 @@ but rather a simple tool to make on-call tasks easier.`,
 			launchTUIWithConfig()
 			return
 		}
+		if needsWizard {
+			ensureViperDefaults()
+			launchTUIWithConfig()
+			return
+		}
 
 		launchTUI()
 	},
+}
+
+// needsWizard is set in PreRun when an existing config file is missing
+// required values or contains placeholders (e.g. copied from the README
+// example); Run then enters the config wizard instead of aborting.
+var needsWizard bool
+
+// startupRoute describes how Run should proceed for an existing config file.
+type startupRoute int
+
+const (
+	routeNormal startupRoute = iota
+	routeWizard
+	routeFatal
+)
+
+// classifyStartup maps the config health of the current viper state to a
+// startup route. Token and teams are read through viper's accessors so values
+// supplied via SREPD_* env vars count as configured.
+func classifyStartup() (startupRoute, string) {
+	health, reason := pkgconfig.ClassifyConfigHealth(
+		viper.GetString("token"),
+		viper.GetStringSlice("teams"),
+		viper.AllSettings(),
+	)
+
+	switch health {
+	case pkgconfig.HealthNeedsWizard:
+		return routeWizard, reason
+	case pkgconfig.HealthInvalid:
+		return routeFatal, reason
+	default:
+		return routeNormal, ""
+	}
 }
 
 // resolveConfigFilePath builds the path to the srepd config file, surfacing (rather
@@ -161,26 +224,7 @@ func launchTUI() {
 		log.Fatal(err)
 	}
 
-	var ocmClient ocm.OCMClient
-	var ocmAuthPending bool
-	var asyncOCMClient *ocm.Client
-
-	cfg, armed, checkErr := ocm.CheckTokens()
-	if checkErr != nil {
-		log.Warn("OCM config check failed", "error", checkErr)
-	} else if armed {
-		client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
-		if connErr != nil {
-			log.Warn("OCM connection failed", "error", connErr)
-		} else {
-			ocmClient = client
-			asyncOCMClient = client
-			log.Info("OCM connected")
-		}
-	} else {
-		ocmAuthPending = true
-		log.Info("OCM tokens not valid — will authenticate async")
-	}
+	ocmClient, asyncOCMClient, ocmAuthPending, cfg := setupOCM()
 
 	var aiProvider ai.Provider
 	llmCfg := ai.Config{
@@ -302,6 +346,37 @@ func launchTUI() {
 		fmt.Println(err)
 		log.Fatal(err)
 	}
+}
+
+// setupOCM checks OCM tokens and connects when possible. It returns the
+// client handed to the TUI, the concrete client for lifecycle cleanup,
+// whether async browser auth is still required, and the OCM config needed to
+// complete that auth. Config-wizard mode deliberately skips this (OB-6): a
+// brand-new user must not see browser-auth prompts or OCM warnings before
+// they have even saved a PagerDuty token.
+func setupOCM() (ocm.OCMClient, *ocm.Client, bool, *ocmconfig.Config) {
+	var ocmClient ocm.OCMClient
+	var concreteClient *ocm.Client
+	var authPending bool
+
+	cfg, armed, checkErr := ocm.CheckTokens()
+	if checkErr != nil {
+		log.Warn("OCM config check failed", "error", checkErr)
+	} else if armed {
+		client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
+		if connErr != nil {
+			log.Warn("OCM connection failed", "error", connErr)
+		} else {
+			ocmClient = client
+			concreteClient = client
+			log.Info("OCM connected")
+		}
+	} else {
+		authPending = true
+		log.Info("OCM tokens not valid — will authenticate async")
+	}
+
+	return ocmClient, concreteClient, authPending, cfg
 }
 
 // logWriter holds the active asyncWriter so it can be flushed on shutdown.
@@ -468,14 +543,22 @@ func runDevMode() {
 	}
 }
 
+// configParseError is set in initConfig when viper can't parse the config
+// file (e.g. malformed YAML). PreRun uses it to route to the wizard with a
+// meaningful reason instead of proceeding with empty state.
+var configParseError string
+
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	// Find home directory.
 	home, err := os.UserHomeDir()
 	cobra.CheckErr(err)
 
+	configDir := filepath.Join(home, pkgconfig.CfgFileDir)
+	configFile := filepath.Join(configDir, pkgconfig.CfgFileName)
+
 	// Search config in home directory with name ".srepd" (without extension).
-	viper.AddConfigPath(filepath.Join(home, pkgconfig.CfgFileDir))
+	viper.AddConfigPath(configDir)
 	viper.SetConfigName(pkgconfig.CfgFileName)
 	viper.SetConfigType("yaml")
 
@@ -485,9 +568,20 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Fprintln(os.Stderr, "Config file not found: "+err.Error())
+			fmt.Fprintln(os.Stderr, "Config file not found: "+err.Error()+" -- generating...")
 		} else {
-			fmt.Fprintln(os.Stderr, "Config file error: "+err.Error())
+			// YAML parse failure: viper holds nothing, but the file may
+			// contain perfectly good values (e.g. a valid token with a
+			// missing "teams:" key). Salvage what we can so the wizard
+			// pre-fills them instead of making the user re-enter everything.
+			configParseError = err.Error()
+			log.Warn("Config file has a YAML error — salvaging readable values", "error", err)
+			data, readErr := os.ReadFile(configFile)
+			if readErr == nil {
+				for k, v := range pkgconfig.SalvageConfigValues(data) {
+					viper.Set(k, v)
+				}
+			}
 		}
 	}
 }

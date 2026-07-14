@@ -205,10 +205,20 @@ type model struct {
 	configPolicyNames   map[string]string
 	configModeRequested bool
 	configWizardPending *configWizardReadyMsg
+	// configPresetApplied records which wizard values were seeded from a
+	// team preset (--preset), for tagging and change forcing.
+	configPresetApplied pkgconfig.PresetApplied
+
+	// Guided tour state (#324)
+	tourMode bool
+	tourStep int
 
 	// OCM enrichment state
-	ocmClient             ocm.OCMClient
-	ocmAuthPending        bool
+	ocmClient      ocm.OCMClient
+	ocmAuthPending bool
+	// ocmConnect overrides the post-wizard OCM connection for tests; nil
+	// means the real ocm.Connect (which may run browser auth).
+	ocmConnect            func() (ocm.OCMClient, error)
 	incidentClusterMap    map[string][]string // incident ID → cluster IDs
 	clusterEnrichInFlight map[string]bool     // cluster IDs currently being enriched
 	clusterEnrichFailed   map[string]int      // failure count per cluster ID

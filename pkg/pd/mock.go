@@ -58,15 +58,37 @@ type MockPagerDutyClient struct {
 	// ListEscalationPoliciesResponses is a queue of responses for ListEscalationPoliciesWithContext.
 	ListEscalationPoliciesResponses []pagerduty.ListEscalationPoliciesResponse
 
+	// RecordedListEscalationPoliciesOpts records the options from every
+	// ListEscalationPoliciesWithContext call, in order, so tests can assert
+	// exactly what was sent (e.g. TeamIDs scope).
+	RecordedListEscalationPoliciesOpts []pagerduty.ListEscalationPoliciesOptions
+
+	// ListEscalationPoliciesErr, when non-nil, causes
+	// ListEscalationPoliciesWithContext to return this error.
+	ListEscalationPoliciesErr error
+
 	// ListIncidentsResponses is an optional response queue for
 	// ListIncidentsWithContext. When populated, successive calls pop from the
 	// front. When empty or nil, the default hardcoded response is returned.
 	ListIncidentsResponses []pagerduty.ListIncidentsResponse
 
+	// RecordedListIncidentsOpts records the options from every
+	// ListIncidentsWithContext call, in order, so tests can assert exactly
+	// what was sent (e.g. Limit, Statuses, Offset, and user_ids chunking).
+	RecordedListIncidentsOpts []pagerduty.ListIncidentsOptions
+
 	// ListIncidentAlertsResponses maps incident ID to a specific alerts response
 	// for ListIncidentAlertsWithContext. When non-nil and a matching key exists,
 	// that response is returned. Otherwise falls back to the default response.
 	ListIncidentAlertsResponses map[string]*pagerduty.ListAlertsResponse
+
+	// RecordedListAlertsOpts records the options from every
+	// ListIncidentAlertsWithContext call, in order.
+	RecordedListAlertsOpts []pagerduty.ListIncidentAlertsOptions
+
+	// RecordedListOnCallOpts records the options from every
+	// ListOnCallsWithContext call, in order.
+	RecordedListOnCallOpts []pagerduty.ListOnCallOptions
 }
 
 // recordCall increments the call count for the named method, lazily
@@ -98,6 +120,7 @@ func (m *MockPagerDutyClient) GetIncidentWithContext(ctx context.Context, id str
 
 func (m *MockPagerDutyClient) ListIncidentsWithContext(ctx context.Context, opts pagerduty.ListIncidentsOptions) (*pagerduty.ListIncidentsResponse, error) {
 	m.recordCall("ListIncidentsWithContext")
+	m.RecordedListIncidentsOpts = append(m.RecordedListIncidentsOpts, opts)
 	if opts.UserIDs != nil && opts.UserIDs[0] == "err" {
 		return &pagerduty.ListIncidentsResponse{}, ErrMockError
 	}
@@ -126,6 +149,7 @@ func (m *MockPagerDutyClient) ListIncidentsWithContext(ctx context.Context, opts
 
 func (m *MockPagerDutyClient) ListIncidentAlertsWithContext(ctx context.Context, id string, opts pagerduty.ListIncidentAlertsOptions) (*pagerduty.ListAlertsResponse, error) {
 	m.recordCall("ListIncidentAlertsWithContext")
+	m.RecordedListAlertsOpts = append(m.RecordedListAlertsOpts, opts)
 	if id == "err" {
 		return &pagerduty.ListAlertsResponse{}, ErrMockError
 	}
@@ -242,6 +266,7 @@ func (m *MockPagerDutyClient) GetCurrentUserWithContext(ctx context.Context, opt
 	}
 	user := &pagerduty.User{
 		APIObject: pagerduty.APIObject{ID: "MOCK_USER"},
+		Name:      "Mock User",
 		Email:     "mock@example.com",
 	}
 	for _, inc := range opts.Includes {
@@ -284,6 +309,11 @@ func (m *MockPagerDutyClient) GetUserWithContext(ctx context.Context, id string,
 
 func (m *MockPagerDutyClient) ListEscalationPoliciesWithContext(ctx context.Context, opts pagerduty.ListEscalationPoliciesOptions) (*pagerduty.ListEscalationPoliciesResponse, error) {
 	m.recordCall("ListEscalationPoliciesWithContext")
+	m.RecordedListEscalationPoliciesOpts = append(m.RecordedListEscalationPoliciesOpts, opts)
+
+	if m.ListEscalationPoliciesErr != nil {
+		return nil, m.ListEscalationPoliciesErr
+	}
 
 	if len(m.ListEscalationPoliciesResponses) > 0 {
 		resp := m.ListEscalationPoliciesResponses[0]
@@ -298,6 +328,7 @@ func (m *MockPagerDutyClient) ListEscalationPoliciesWithContext(ctx context.Cont
 
 func (m *MockPagerDutyClient) ListOnCallsWithContext(ctx context.Context, opts pagerduty.ListOnCallOptions) (*pagerduty.ListOnCallsResponse, error) {
 	m.recordCall("ListOnCallsWithContext")
+	m.RecordedListOnCallOpts = append(m.RecordedListOnCallOpts, opts)
 
 	// If the response queue is configured, pop the first response
 	if len(m.ListOnCallsResponses) > 0 {

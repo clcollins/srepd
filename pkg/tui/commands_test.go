@@ -362,6 +362,28 @@ func TestFilterUserIDs(t *testing.T) {
 	})
 }
 
+func TestChunkStrings(t *testing.T) {
+	t.Run("returns nil for empty input", func(t *testing.T) {
+		assert.Nil(t, chunkStrings(nil, 3))
+		assert.Nil(t, chunkStrings([]string{}, 3))
+	})
+
+	t.Run("single chunk when under size", func(t *testing.T) {
+		chunks := chunkStrings([]string{"a", "b"}, 3)
+		assert.Equal(t, [][]string{{"a", "b"}}, chunks)
+	})
+
+	t.Run("single chunk at exactly size", func(t *testing.T) {
+		chunks := chunkStrings([]string{"a", "b", "c"}, 3)
+		assert.Equal(t, [][]string{{"a", "b", "c"}}, chunks)
+	})
+
+	t.Run("splits over size with remainder", func(t *testing.T) {
+		chunks := chunkStrings([]string{"a", "b", "c", "d"}, 3)
+		assert.Equal(t, [][]string{{"a", "b", "c"}, {"d"}}, chunks)
+	})
+}
+
 func TestUpdateIncidentList_PerTeamQuery(t *testing.T) {
 	t.Run("queries per team and deduplicates", func(t *testing.T) {
 		config := &pd.Config{
@@ -397,8 +419,9 @@ func TestUpdateIncidentList_PerTeamQuery(t *testing.T) {
 	})
 
 	t.Run("excludes ignored users from per-team queries", func(t *testing.T) {
+		mock := &pd.MockPagerDutyClient{}
 		config := &pd.Config{
-			Client: &pd.MockPagerDutyClient{},
+			Client: mock,
 			Teams: []*pagerduty.Team{
 				{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
 			},
@@ -415,6 +438,104 @@ func TestUpdateIncidentList_PerTeamQuery(t *testing.T) {
 		result, ok := msg.(updatedIncidentListMsg)
 		assert.True(t, ok)
 		assert.NoError(t, result.err)
+		if assert.Len(t, mock.RecordedListIncidentsOpts, 1) {
+			assert.Equal(t, []string{"U1"}, mock.RecordedListIncidentsOpts[0].UserIDs)
+		}
+	})
+
+	// The v1.5.0 startup timeout: queries were sent with no Limit and no
+	// Statuses, so PagerDuty paged at 25 results across all incident statuses
+	// and GetIncidents looped forever when a team had >25 incidents. Every
+	// query must carry the defaults from pd.NewListIncidentOptsFromDefaults().
+	t.Run("sends default limit and statuses on every query", func(t *testing.T) {
+		mock := &pd.MockPagerDutyClient{}
+		config := &pd.Config{
+			Client: mock,
+			Teams: []*pagerduty.Team{
+				{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
+			},
+			TeamMembersByTeam: map[string][]string{
+				"TEAM1": {"U1", "U2"},
+			},
+		}
+
+		cmd := updateIncidentList(config)
+		msg := cmd()
+		result, ok := msg.(updatedIncidentListMsg)
+		assert.True(t, ok)
+		assert.NoError(t, result.err)
+		if assert.Len(t, mock.RecordedListIncidentsOpts, 1) {
+			opts := mock.RecordedListIncidentsOpts[0]
+			assert.Equal(t, uint(100), opts.Limit)
+			assert.Equal(t, []string{"triggered", "acknowledged"}, opts.Statuses)
+			assert.Equal(t, []string{"TEAM1"}, opts.TeamIDs)
+			assert.Equal(t, []string{"U1", "U2"}, opts.UserIDs)
+		}
+	})
+
+	// PagerDuty rejects request URIs over ~4096 bytes with HTTP 414. A team
+	// of 175 members produces ~4KB of user_ids[] params, so large member
+	// lists must be split across multiple queries of at most
+	// maxUserIDsInQuery IDs each, then merged through the dedup pass.
+	t.Run("chunks large member lists across queries", func(t *testing.T) {
+		members := make([]string, 250)
+		for i := range members {
+			members[i] = fmt.Sprintf("P%06d", i)
+		}
+		mock := &pd.MockPagerDutyClient{}
+		config := &pd.Config{
+			Client: mock,
+			Teams: []*pagerduty.Team{
+				{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
+			},
+			TeamMembersByTeam: map[string][]string{
+				"TEAM1": members,
+			},
+		}
+
+		cmd := updateIncidentList(config)
+		msg := cmd()
+		result, ok := msg.(updatedIncidentListMsg)
+		assert.True(t, ok)
+		assert.NoError(t, result.err)
+
+		if assert.Len(t, mock.RecordedListIncidentsOpts, 3) {
+			var queried []string
+			for _, opts := range mock.RecordedListIncidentsOpts {
+				assert.LessOrEqual(t, len(opts.UserIDs), maxUserIDsInQuery)
+				assert.Equal(t, []string{"TEAM1"}, opts.TeamIDs)
+				assert.Equal(t, uint(100), opts.Limit)
+				assert.Equal(t, []string{"triggered", "acknowledged"}, opts.Statuses)
+				queried = append(queried, opts.UserIDs...)
+			}
+			assert.Equal(t, members, queried)
+		}
+		// The mock returns the same two incidents for every chunk, so the
+		// dedup pass must collapse them to two unique incidents.
+		assert.Len(t, result.incidents, 2)
+	})
+
+	// Parity with the single-query behavior: an empty member list omits
+	// user_ids[] entirely (team-only filtering) rather than sending no query.
+	t.Run("queries once without user_ids when team has no members", func(t *testing.T) {
+		mock := &pd.MockPagerDutyClient{}
+		config := &pd.Config{
+			Client: mock,
+			Teams: []*pagerduty.Team{
+				{APIObject: pagerduty.APIObject{ID: "TEAM1"}},
+			},
+		}
+
+		cmd := updateIncidentList(config)
+		msg := cmd()
+		result, ok := msg.(updatedIncidentListMsg)
+		assert.True(t, ok)
+		assert.NoError(t, result.err)
+		if assert.Len(t, mock.RecordedListIncidentsOpts, 1) {
+			assert.Empty(t, mock.RecordedListIncidentsOpts[0].UserIDs)
+			assert.Equal(t, []string{"TEAM1"}, mock.RecordedListIncidentsOpts[0].TeamIDs)
+		}
+		assert.Len(t, result.incidents, 2)
 	})
 
 	t.Run("propagates API error", func(t *testing.T) {

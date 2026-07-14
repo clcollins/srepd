@@ -2,8 +2,12 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"reflect"
+	"runtime"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,11 +17,13 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/spf13/viper"
@@ -53,7 +59,7 @@ func (m model) Init() tea.Cmd {
 		checkForUpdate(m.devMode, ""),
 	}
 
-	if m.config != nil && m.config.Client != nil && hasPlaceholderTeamsCfg(viper.GetStringSlice("teams")) {
+	if m.config != nil && m.config.Client != nil && pkgconfig.HasPlaceholderTeams(viper.GetStringSlice("teams")) {
 		initCmds = append(initCmds, fetchUserTeams(m.config.Client))
 	}
 
@@ -234,15 +240,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.teamSelectIDs = nil
 
-		theme := huh.ThemeCharm()
-		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
-		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
-		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
-		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
-		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
-		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+		theme := SrepdHuhTheme(m.theme)
 
 		m.teamSelectForm = huh.NewForm(
 			huh.NewGroup(
@@ -284,12 +282,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configTeamNames = msg.teamNames
 		m.configPolicyNames = msg.policyNames
 		m.configState = &configFormState{
-			SilentPolicy: msg.existing.SilentPolicy,
-			CustomInput:  pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies),
-			KeepTeams:    msg.kd.KeepTeams,
-			KeepSilent:   msg.kd.KeepSilent,
-			KeepCustom:   msg.kd.KeepCustom,
-			Confirm:      true,
+			SilentPolicyChoice: msg.existing.SilentPolicy,
+			SilentPolicy:       msg.existing.SilentPolicy,
+			CustomInput:        pkgconfig.FormatCustomMappings(msg.existing.CustomPolicies),
+			KeepTeams:          msg.kd.KeepTeams,
+			KeepSilent:         msg.kd.KeepSilent,
+			KeepCustom:         msg.kd.KeepCustom,
+			Confirm:            true,
+			TerminalChoice:     msg.existing.Terminal,
+			EditorInput:        resolveEditorDefault(msg.existing.Editor, os.Getenv),
+			AgentEnabled:       true,
 		}
 
 		existingTeamSet := make(map[string]bool)
@@ -302,6 +304,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.existing.Token != "" {
 			tokenDesc = fmt.Sprintf("Current: %s — leave blank to keep.\n%s", pkgconfig.MaskToken(msg.existing.Token), tokenHelp)
 		}
+		if msg.wizardReason != "" {
+			tokenDesc = fmt.Sprintf("⚠ %s\n\n%s", msg.wizardReason, tokenDesc)
+		}
+
+		m.configPresetApplied = msg.presetApplied
+		presetTag := func(applied bool) string {
+			if applied {
+				return fmt.Sprintf(" (from preset: %s)", msg.presetApplied.Source)
+			}
+			return ""
+		}
 
 		var teamDisplayList []string
 		for _, id := range msg.existing.Teams {
@@ -311,13 +324,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				teamDisplayList = append(teamDisplayList, id)
 			}
 		}
-		keepTeamsDesc := fmt.Sprintf("Current teams: %s", strings.Join(teamDisplayList, ", "))
+		keepTeamsDesc := fmt.Sprintf("Current teams: %s%s", strings.Join(teamDisplayList, ", "), presetTag(msg.presetApplied.Teams))
 
 		silentDisplay := msg.existing.SilentPolicy
 		if name, ok := msg.policyNames[msg.existing.SilentPolicy]; ok {
 			silentDisplay = fmt.Sprintf("%s (%s)", name, msg.existing.SilentPolicy)
 		}
-		keepSilentDesc := fmt.Sprintf("Current: %s", silentDisplay)
+		keepSilentDesc := fmt.Sprintf("Current: %s%s", silentDisplay, presetTag(msg.presetApplied.Silent))
 
 		var customDisplayParts []string
 		for svcID, polID := range msg.existing.CustomPolicies {
@@ -327,7 +340,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			customDisplayParts = append(customDisplayParts, fmt.Sprintf("%s → %s", svcID, polDisplay))
 		}
-		keepCustomDesc := fmt.Sprintf("Current: %s", strings.Join(customDisplayParts, ", "))
+		keepCustomDesc := fmt.Sprintf("Current: %s%s", strings.Join(customDisplayParts, ", "), presetTag(msg.presetApplied.Custom))
 
 		m.configForm = m.buildConfigForm(msg, tokenDesc, keepTeamsDesc, keepSilentDesc, keepCustomDesc, existingTeamSet)
 		m.configMode = true
@@ -351,7 +364,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.setStatus("config saved — initializing...")
 		m.table.Focus()
-		return m, initPDClientCmd()
+		cmds := []tea.Cmd{initPDClientCmd()}
+		if ocmCmd := m.ocmHandoffCmd(false); ocmCmd != nil {
+			cmds = append(cmds, ocmCmd)
+		}
+		return m, tea.Batch(cmds...)
 
 	case pdClientInitializedMsg:
 		if msg.err != nil {
@@ -360,7 +377,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.config = msg.config
-		m.setStatus("config saved")
+		if !viper.GetBool("tour_seen") {
+			m.setStatus("config saved — new here? type :tour for a 2-minute walkthrough")
+		} else {
+			m.setStatus("config saved")
+		}
 		return m, tea.Batch(
 			func() tea.Msg { return updateIncidentListMsg("config saved") },
 			func() tea.Msg { return tea.WindowSizeMsg{Width: windowSize.Width, Height: windowSize.Height} },
@@ -517,6 +538,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
+		// huh forms run their own spinners for async OptionsFunc fetches
+		// (the "Loading..." row); without forwarding the ticks, the form
+		// receives no messages while a fetch is in flight and the loading
+		// indicator never renders.
+		if m.configMode && m.configForm != nil {
+			form, formCmd := m.configForm.Update(msg)
+			if f, ok := form.(*huh.Form); ok {
+				m.configForm = f
+			}
+			return m, tea.Batch(cmd, formCmd)
+		}
 		return m, cmd
 
 	case TickMsg:
@@ -1632,15 +1664,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.bulkSilenceIDs = nil
 
-		theme := huh.ThemeCharm()
-		theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
-		theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
-		theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
-		theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
-		theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
-		theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
-		theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+		theme := SrepdHuhTheme(m.theme)
 
 		m.bulkSilenceForm = huh.NewForm(
 			huh.NewGroup(
@@ -1923,19 +1947,306 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 }
 
+// validateTokenInput validates the wizard token input against the live API.
+// A blank input is allowed when an existing token will be kept. API errors
+// are classified into actionable messages (OB-3).
+func validateTokenInput(clientFactory func(string) pd.PagerDutyClient, input, existingToken string) error {
+	token := strings.TrimSpace(input)
+	if token == "" {
+		if existingToken != "" {
+			return nil
+		}
+		return fmt.Errorf("a PagerDuty API token is required")
+	}
+	if _, err := pd.GetCurrentUserTeams(clientFactory(token)); err != nil {
+		return fmt.Errorf("invalid token: %s", pd.ClassifyAPIError(err))
+	}
+	return nil
+}
+
+// teamGreeting builds the team-step description: a personal confirmation
+// that the token worked, plus single-team guidance. Falls back to neutral
+// copy when no user has been resolved yet.
+func teamGreeting(userName string, teamCount int) string {
+	const guidance = "Select the team(s) whose incidents you want to monitor; most users need exactly one."
+	if userName == "" {
+		return guidance
+	}
+	noun := "teams"
+	if teamCount == 1 {
+		noun = "team"
+	}
+	return fmt.Sprintf("Hi %s — found %d %s on your PagerDuty profile. %s", userName, teamCount, noun, guidance)
+}
+
+// teamPreselection decides which team options render preselected: teams from
+// the existing config always win; otherwise a single fetched team is
+// preselected (the common SRE case answers itself); multiple teams with no
+// existing config preselect nothing.
+func teamPreselection(existingTeamSet map[string]bool, teams []pagerduty.Team) map[string]bool {
+	if len(existingTeamSet) > 0 {
+		return existingTeamSet
+	}
+	sel := make(map[string]bool)
+	if len(teams) == 1 {
+		sel[teams[0].ID] = true
+	}
+	return sel
+}
+
+// fetchTeamOptions builds the wizard team options for the current token and
+// returns the validated user's name for the greeting. Placeholder and error
+// states are returned as a single empty-valued option (rejected by
+// validateTeamValues) carrying a classified message.
+func fetchTeamOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string, existingTeamSet map[string]bool) ([]huh.Option[string], []pagerduty.Team, string) {
+	token := strings.TrimSpace(tokenInput)
+	if token == "" {
+		token = existingToken
+	}
+	if token == "" {
+		return []huh.Option[string]{huh.NewOption("(enter a token first)", "")}, nil, ""
+	}
+
+	user, err := pd.GetCurrentUserWithTeams(clientFactory(token))
+	if err != nil {
+		return []huh.Option[string]{
+			huh.NewOption("Error: "+pd.ClassifyAPIError(err), ""),
+		}, nil, ""
+	}
+
+	selected := teamPreselection(existingTeamSet, user.Teams)
+	var opts []huh.Option[string]
+	for _, team := range user.Teams {
+		opt := huh.NewOption(fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID)
+		if selected[team.ID] {
+			opt = opt.Selected(true)
+		}
+		opts = append(opts, opt)
+	}
+	return opts, user.Teams, user.Name
+}
+
+// Sentinel values for the silent-policy picker (OB-4). Skip maps to the
+// empty policy ID (silencing disabled until configured); manual reveals the
+// free-text ID input for policies the picker cannot discover. Neither
+// sentinel may be the empty string: the picker's bound value starts empty,
+// and huh's Select moves the cursor (and scrolls the viewport, unclamped)
+// to the option matching the current value when async options arrive — an
+// empty-valued option would yank the cursor off the top of the list.
+const (
+	policyChoiceSkip   = "__skip__"
+	policyChoiceManual = "__manual__"
+)
+
+// buildPolicyOptions turns fetched escalation policies into picker options:
+// SILENT-classified policies (no schedules notified — the right target for
+// silencing) lead the list with a candidate annotation so the cursor
+// starts on the best pick — those with "silent" in the name first (the
+// strongest signal of intent), then the other candidates, then the rest,
+// then the skip and manual-entry escapes.
+func buildPolicyOptions(policies []pagerduty.EscalationPolicy) []huh.Option[string] {
+	candidateOption := func(p pagerduty.EscalationPolicy) huh.Option[string] {
+		return huh.NewOption(
+			fmt.Sprintf("%s — %s (possible candidate — does not page)", p.Name, p.ID), p.ID)
+	}
+
+	var opts []huh.Option[string]
+	for _, p := range policies {
+		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent &&
+			strings.Contains(strings.ToLower(p.Name), "silent") {
+			opts = append(opts, candidateOption(p))
+		}
+	}
+	for _, p := range policies {
+		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent &&
+			!strings.Contains(strings.ToLower(p.Name), "silent") {
+			opts = append(opts, candidateOption(p))
+		}
+	}
+	for _, p := range policies {
+		if pd.ClassifyEscalationPolicy(&p) != pd.PolicyClassSilent {
+			opts = append(opts, huh.NewOption(fmt.Sprintf("%s — %s", p.Name, p.ID), p.ID))
+		}
+	}
+	opts = append(opts,
+		huh.NewOption("Skip — configure later", policyChoiceSkip),
+		huh.NewOption("Enter an ID manually…", policyChoiceManual),
+	)
+	return opts
+}
+
+// fetchPolicyOptions fetches the escalation policies for ALL of the user's
+// PagerDuty teams and builds the picker options. The fetch deliberately
+// ignores the wizard's team selection: silent policies conventionally live
+// on a companion team (e.g. "<team> - Non-actionable") that the user
+// belongs to but does not select for incident filtering, so a
+// selected-teams filter misses exactly the policies this picker exists to
+// find. Errors are classified (OB-3) and rendered as a skip-valued row so
+// selecting them is harmless; the skip and manual escapes are always
+// present.
+func fetchPolicyOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string) []huh.Option[string] {
+	token := strings.TrimSpace(tokenInput)
+	if token == "" {
+		token = existingToken
+	}
+	if token == "" {
+		return buildPolicyOptions(nil)
+	}
+
+	client := clientFactory(token)
+	teams, err := pd.GetCurrentUserTeams(client)
+	if err != nil {
+		return append(
+			[]huh.Option[string]{huh.NewOption("Error: "+pd.ClassifyAPIError(err), policyChoiceSkip)},
+			buildPolicyOptions(nil)...,
+		)
+	}
+	teamIDs := make([]string, 0, len(teams))
+	for _, t := range teams {
+		teamIDs = append(teamIDs, t.ID)
+	}
+	sort.Strings(teamIDs)
+
+	policies, err := pd.GetTeamEscalationPolicies(client, teamIDs)
+	if err != nil {
+		return append(
+			[]huh.Option[string]{huh.NewOption("Error: "+pd.ClassifyAPIError(err), policyChoiceSkip)},
+			buildPolicyOptions(nil)...,
+		)
+	}
+	return buildPolicyOptions(policies)
+}
+
+// resolveSilentPolicyChoice maps the picker choice (plus the manual free-text
+// input) to the final policy ID. Emits the same bare ID string the free-text
+// step produced, so the save format and runtime consumption are unchanged.
+// An empty choice means the picker was never touched (e.g. the step was
+// hidden or skipped before options arrived) and resolves to no policy, same
+// as skip.
+func resolveSilentPolicyChoice(choice, manualInput string) string {
+	switch choice {
+	case policyChoiceManual:
+		return strings.TrimSpace(manualInput)
+	case policyChoiceSkip, "":
+		return ""
+	}
+	return choice
+}
+
+// wizardStepTotal is the number of numbered wizard milestones visible to the
+// user: token, teams, silent policy, environment, options, summary. Keep-
+// confirm variants share their milestone's number; the welcome and
+// conditional AI/advanced/manual steps are unnumbered.
+const wizardStepTotal = 6
+
+// stepTitle renders a wizard milestone title with its step breadcrumb.
+func stepTitle(title string, n int) string {
+	return fmt.Sprintf("%s · %d/%d", title, n, wizardStepTotal)
+}
+
+// welcomeDescription builds the wizard's opening text: what srepd is, where
+// to get a token, how to bail out — and, when the wizard auto-launched over
+// a broken config (OB-1), why.
+func welcomeDescription(isNewFile bool, reason string) string {
+	var sb strings.Builder
+	sb.WriteString("srepd is a PagerDuty TUI for SRE on-call work: incidents,\n")
+	sb.WriteString("acknowledgements, silencing, notes, and cluster login.\n\n")
+	if reason != "" {
+		fmt.Fprintf(&sb, "You're here because: %s.\n\n", reason)
+	} else if !isNewFile {
+		sb.WriteString("This updates your existing configuration — current values are\nkept unless you change them.\n\n")
+	}
+	sb.WriteString("You'll need a PagerDuty API User Token. Create one at:\n")
+	sb.WriteString("PagerDuty web → My Profile → User Settings → API Access →\n")
+	sb.WriteString("Create New API User Token.\n\n")
+	sb.WriteString("Everything else is discovered for you. Press enter to begin,\n")
+	sb.WriteString("or ctrl+c to quit.")
+	return sb.String()
+}
+
+// buildTerminalOptions builds the environment step's terminal choices: the
+// current setting first (annotated, with a warning when its binary is
+// missing), then the detected terminals, deduplicated.
+func buildTerminalOptions(current string, currentFound bool, detected []launcher.DetectedTerminal) []huh.Option[string] {
+	var opts []huh.Option[string]
+	if current != "" {
+		label := fmt.Sprintf("%s (current)", current)
+		if !currentFound {
+			label = fmt.Sprintf("%s (current — not found on this system!)", current)
+		}
+		opts = append(opts, huh.NewOption(label, current))
+	}
+	currentExec := ""
+	if fields := strings.Fields(current); len(fields) > 0 {
+		currentExec = fields[0]
+	}
+	for _, dt := range detected {
+		if dt.Command == current || dt.Name == currentExec {
+			continue
+		}
+		opts = append(opts, huh.NewOption(dt.Name, dt.Command))
+	}
+	return opts
+}
+
+// resolveEditorDefault picks the editor the wizard should offer: existing
+// config → $EDITOR → $VISUAL → vim.
+func resolveEditorDefault(current string, getenv func(string) string) string {
+	if current != "" {
+		return current
+	}
+	if e := getenv("EDITOR"); e != "" {
+		return e
+	}
+	if v := getenv("VISUAL"); v != "" {
+		return v
+	}
+	return "vim"
+}
+
+// shouldOfferAgentSetup gates the AI section (#324): only when the claude
+// CLI is on PATH, and only when the user hasn't already customized the
+// agent command (a custom value means they've configured it themselves).
+func shouldOfferAgentSetup(existingCmd string, claudeOnPath bool) bool {
+	if !claudeOnPath {
+		return false
+	}
+	return existingCmd == "" || existingCmd == pkgconfig.DefaultOptionalKeys["agent_cli_command"]
+}
+
+// agentInputValue maps the AI confirm to the agent_cli_command value:
+// enabled → the default claude command, disabled → "" (persisted so the
+// decision sticks).
+func agentInputValue(enabled bool) string {
+	if enabled {
+		return pkgconfig.DefaultOptionalKeys["agent_cli_command"]
+	}
+	return ""
+}
+
+// validateTeamValues rejects an empty selection and the empty-valued
+// placeholder/error options fetchTeamOptions emits.
+func validateTeamValues(s []string) error {
+	if len(s) == 0 {
+		return fmt.Errorf("at least one team is required")
+	}
+	for _, v := range s {
+		if v == "" {
+			return fmt.Errorf("fix the token above (shift+tab to go back), then choose a team")
+		}
+	}
+	return nil
+}
+
 func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDesc, keepSilentDesc, keepCustomDesc string, existingTeamSet map[string]bool) *huh.Form {
 	var fetchedTeams []pagerduty.Team
 	submitted := false
 
-	theme := huh.ThemeCharm()
-	theme.Focused.Title = theme.Focused.Title.Foreground(m.theme.Highlight)
-	theme.Focused.Description = theme.Focused.Description.Foreground(m.theme.Muted)
-	theme.Focused.SelectedOption = theme.Focused.SelectedOption.Foreground(m.theme.Highlight)
-	theme.Focused.UnselectedOption = theme.Focused.UnselectedOption.Foreground(m.theme.Text)
-	theme.Focused.MultiSelectSelector = theme.Focused.MultiSelectSelector.Foreground(m.theme.Text)
-	theme.Focused.SelectedPrefix = theme.Focused.SelectedPrefix.Foreground(m.theme.Highlight)
-	theme.Focused.UnselectedPrefix = theme.Focused.UnselectedPrefix.Foreground(m.theme.Muted)
-	theme.Focused.Base = theme.Focused.Base.BorderForeground(m.theme.Border)
+	theme := SrepdHuhTheme(m.theme)
+
+	// Deliberately loud, theme-independent bold red for the preset command
+	// safety warnings — this must read as an alarm, not chrome.
+	presetWarnStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
 
 	km := huh.NewDefaultKeyMap()
 	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "ctrl+q"), key.WithHelp("ctrl+q/ctrl+c", "quit"))
@@ -1951,66 +2262,61 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		clientFactory = pd.NewClient
 	}
 
+	// Environment step data (OB-5): detect terminals, check the current one,
+	// and decide whether to offer the AI section (#324).
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	currentTerminal := msg.existing.Terminal
+	currentFound := true
+	if fields := strings.Fields(currentTerminal); len(fields) > 0 {
+		// Flatpak app IDs (reverse-DNS) are not in PATH; don't warn on them.
+		if strings.Count(fields[0], ".") < 2 {
+			_, lookErr := exec.LookPath(fields[0])
+			currentFound = lookErr == nil
+		}
+	}
+	terminalOpts := buildTerminalOptions(currentTerminal, currentFound, detected)
+	if len(terminalOpts) == 0 {
+		terminalOpts = []huh.Option[string]{
+			huh.NewOption(pkgconfig.DefaultOptionalKeys["terminal"]+" (default)", pkgconfig.DefaultOptionalKeys["terminal"]),
+		}
+	}
+	_, claudeErr := exec.LookPath("claude")
+	m.configState.AgentOffered = shouldOfferAgentSetup(msg.existing.AgentCLICommand, claudeErr == nil)
+
 	return huh.NewForm(
 		huh.NewGroup(
+			huh.NewNote().
+				Title("Welcome to SREPD").
+				Description(welcomeDescription(msg.isNewFile, msg.wizardReason)),
+		),
+		huh.NewGroup(
 			huh.NewInput().
-				Title("PagerDuty API token").
+				Title(stepTitle("PagerDuty API token", 1)).
 				Description(tokenDesc).
 				EchoMode(huh.EchoModePassword).
 				Value(&m.configState.TokenInput).
 				Validate(func(s string) error {
-					token := strings.TrimSpace(s)
-					if token == "" {
-						if msg.existing.Token != "" {
-							return nil
-						}
-						return fmt.Errorf("a PagerDuty API token is required")
-					}
-					client := clientFactory(token)
-					_, err := pd.GetCurrentUserTeams(client)
-					if err != nil {
-						return fmt.Errorf("invalid token: %v", err)
-					}
-					return nil
+					return validateTokenInput(clientFactory, s, msg.existing.Token)
 				}),
 		),
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Keep current teams?").
+				Title(stepTitle("Keep current teams?", 2)).
 				Description(keepTeamsDesc).
 				Value(&m.configState.KeepTeams),
 		).WithHideFunc(func() bool { return !msg.kd.HasValidTeams }),
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
-				Title("Select your PagerDuty teams").
-				Description("Select the team(s) whose incidents you want to monitor. Most users only need one.").
+				Title(stepTitle("Select your PagerDuty teams", 2)).
+				DescriptionFunc(func() string {
+					return teamGreeting(m.configState.FetchedUserName, m.configState.FetchedTeamCount)
+				}, &m.configState.FetchedUserName).
 				OptionsFunc(func() []huh.Option[string] {
-					token := strings.TrimSpace(m.configState.TokenInput)
-					if token == "" {
-						token = msg.existing.Token
-					}
-					if token == "" {
-						return []huh.Option[string]{
-							huh.NewOption("(enter a token first)", ""),
-						}
-					}
-					client := clientFactory(token)
-					teams, err := pd.GetCurrentUserTeams(client)
-					if err != nil {
-						return []huh.Option[string]{
-							huh.NewOption(fmt.Sprintf("Error: %v", err), ""),
-						}
-					}
-					fetchedTeams = teams
-					var opts []huh.Option[string]
-					for _, team := range teams {
-						opt := huh.NewOption(
-							fmt.Sprintf("%s — %s", team.Name, team.ID), team.ID,
-						)
-						if existingTeamSet[team.ID] {
-							opt = opt.Selected(true)
-						}
-						opts = append(opts, opt)
+					opts, teams, userName := fetchTeamOptions(clientFactory, m.configState.TokenInput, msg.existing.Token, existingTeamSet)
+					if teams != nil {
+						fetchedTeams = teams
+						m.configState.FetchedUserName = userName
+						m.configState.FetchedTeamCount = len(teams)
 					}
 					return opts
 				}, &m.configState.TokenInput).
@@ -2020,30 +2326,86 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 						submitted = true
 						return nil
 					}
-					if len(s) == 0 {
-						return fmt.Errorf("at least one team is required")
-					}
-					return nil
+					return validateTeamValues(s)
 				}),
 		).WithHideFunc(func() bool { return m.configState.KeepTeams }),
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Keep current silent escalation policy?").
+				Title(stepTitle("Keep current silent escalation policy?", 3)).
 				Description(keepSilentDesc).
 				Value(&m.configState.KeepSilent),
 		).WithHideFunc(func() bool { return !msg.kd.HasSilent }),
 		huh.NewGroup(
-			huh.NewInput().
-				Title("Default silent escalation policy").
+			huh.NewSelect[string]().
+				Title(stepTitle("Default silent escalation policy", 3)).
 				Description(
 					"When you silence an incident, it gets reassigned to this policy —\n"+
 						"one that routes only to bot users, not on-call humans.\n"+
-						"Find the ID at People → Escalation Policies (ID is in the URL,\n"+
-						"e.g., PXXXXXX). Look for a policy like \"Silent Test\".\n"+
+						"Policies are fetched from all your PagerDuty teams (silent\n"+
+						"policies often live on a companion non-actionable team); ones\n"+
+						"with no schedules (nobody gets paged) are candidates.",
+				).
+				OptionsFunc(func() []huh.Option[string] {
+					return fetchPolicyOptions(clientFactory, m.configState.TokenInput, msg.existing.Token)
+				}, &m.configState.TokenInput).
+				// Height(0) — after OptionsFunc, which force-defaults a zero
+				// height to 10 lines (only 4 visible under the title and
+				// description). Zero auto-sizes the field to the full list,
+				// which both shows every option the window can fit AND keeps
+				// the arrow cursor moving naturally: any explicit height
+				// routes huh v1.0.0 through an unclamped
+				// viewport.YOffset = selected on every update, pinning the
+				// selected row to the top so arrows scroll the list instead
+				// of the cursor. The group layout still clamps the field on
+				// windows too short for the list.
+				Height(0).
+				Value(&m.configState.SilentPolicyChoice),
+		).WithHideFunc(func() bool { return m.configState.KeepSilent }),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Silent escalation policy ID").
+				Description(
+					"Enter the policy ID directly. Find it at People →\n"+
+						"Escalation Policies (the ID is in the URL, e.g., PXXXXXX).\n"+
 						"Leave blank to configure later.",
 				).
 				Value(&m.configState.SilentPolicy),
-		).WithHideFunc(func() bool { return m.configState.KeepSilent }),
+		).WithHideFunc(func() bool {
+			return m.configState.KeepSilent || m.configState.SilentPolicyChoice != policyChoiceManual
+		}),
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(stepTitle("Terminal for cluster login", 4)).
+				Description(
+					"Opens cluster login sessions. Terminals detected on this\n"+
+						"system are listed; your current setting comes first.",
+				).
+				Options(terminalOpts...).
+				Value(&m.configState.TerminalChoice),
+			huh.NewInput().
+				Title("Editor for incident notes").
+				Description("Prefilled from your config or $EDITOR/$VISUAL.").
+				Value(&m.configState.EditorInput),
+		),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Enable AI agent features?").
+				Description(
+					"The claude CLI was detected on this system. :agent queries\n"+
+						"use it for read-only incident investigation.",
+				).
+				Value(&m.configState.AgentEnabled),
+		).WithHideFunc(func() bool { return !m.configState.AgentOffered }),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(stepTitle("Configure advanced options?", 5)).
+				Description(
+					"Custom service-to-policy silence overrides — a team-policy\n"+
+						"setting most users don't need. Skip unless your team's\n"+
+						"onboarding docs say otherwise.",
+				).
+				Value(&m.configState.AdvancedOptions),
+		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Keep current custom service-to-policy mappings?").
@@ -2061,19 +2423,28 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 						"Leave blank to skip.",
 				).
 				Value(&m.configState.CustomInput),
-		).WithHideFunc(func() bool { return m.configState.KeepCustom }),
+		).WithHideFunc(func() bool {
+			if msg.kd.HasCustom {
+				return m.configState.KeepCustom
+			}
+			return !m.configState.AdvancedOptions
+		}),
 		huh.NewGroup(
 			huh.NewNote().
-				Title("Configuration summary").
+				Title(stepTitle("Configuration summary", 6)).
 				DescriptionFunc(func() string {
 					tmpFinal, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
 						TokenInput:          m.configState.TokenInput,
 						SelectedTeams:       m.configState.SelectedTeams,
-						SilentPolicyID:      m.configState.SilentPolicy,
+						SilentPolicyID:      resolveSilentPolicyChoice(m.configState.SilentPolicyChoice, m.configState.SilentPolicy),
 						CustomMappingsInput: m.configState.CustomInput,
 						KeepTeams:           m.configState.KeepTeams,
 						KeepSilent:          m.configState.KeepSilent,
 						KeepCustom:          m.configState.KeepCustom,
+						TerminalInput:       m.configState.TerminalChoice,
+						EditorInput:         m.configState.EditorInput,
+						AgentInput:          agentInputValue(m.configState.AgentEnabled),
+						AgentTouched:        m.configState.AgentOffered,
 					})
 					tmpNames := make(map[string]string)
 					for k, v := range m.configTeamNames {
@@ -2088,11 +2459,65 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 					} else {
 						tmpChanges = pkgconfig.DetectChanges(m.configExisting, tmpFinal, strings.TrimSpace(m.configState.TokenInput))
 					}
-					return pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames, m.configPolicyNames)
+					tmpChanges = pkgconfig.ForcePresetChanges(tmpChanges, m.configPresetApplied)
+					summary := pkgconfig.BuildSummary(m.configExisting, tmpFinal, tmpChanges, tmpNames, m.configPolicyNames)
+					if m.configPresetApplied.Any() {
+						summary = fmt.Sprintf("  Preset applied: %s\n%s", m.configPresetApplied.Source, summary)
+					}
+					return summary
 				}, &m.configState.CustomInput),
 			huh.NewConfirm().
 				Title("Save changes?").
 				Value(&m.configState.Confirm),
 		),
+		// Preset safety gate: a --preset is remote input, and terminal,
+		// editor, and cluster login values are commands srepd EXECUTES. When
+		// a preset seeded any of them, saving requires two extra explicit
+		// confirmations after "Save changes?" — reviewing the commands, then
+		// vouching for the source. Both default to No; declining either
+		// discards the save (enforced in switchConfigFocusMode). Hidden
+		// entirely for wizard-typed or existing-config values.
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(presetWarnStyle.Render("⚠ SECURITY: this preset supplies commands srepd will run")).
+				DescriptionFunc(func() string {
+					var b strings.Builder
+					b.WriteString(presetWarnStyle.Render("These values came from the --preset source and will be"))
+					b.WriteString("\n")
+					b.WriteString(presetWarnStyle.Render("EXECUTED as commands. Validate every one is safe:"))
+					b.WriteString("\n\n")
+					if m.configPresetApplied.Terminal {
+						fmt.Fprintf(&b, "  terminal: %s\n", m.configState.TerminalChoice)
+					}
+					if m.configPresetApplied.Editor {
+						fmt.Fprintf(&b, "  editor: %s\n", m.configState.EditorInput)
+					}
+					if m.configPresetApplied.ClusterLogin {
+						fmt.Fprintf(&b, "  cluster_login_command: %s\n", m.configExisting.ClusterLoginCommand)
+					}
+					b.WriteString("\nAnswering No discards all changes.")
+					return b.String()
+				}, &m.configState).
+				Affirmative("They are safe").
+				Negative("No — discard").
+				Value(&m.configState.PresetCommandsSafe),
+		).WithHideFunc(func() bool {
+			return !m.configPresetApplied.ExecutableAny() || !m.configState.Confirm
+		}),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(presetWarnStyle.Render("Are you sure you trust the source?")).
+				Description(fmt.Sprintf(
+					"%s\n  %s\n\nOnly save if this file or URL is controlled by your team.",
+					presetWarnStyle.Render("These commands were supplied by:"),
+					m.configPresetApplied.Source,
+				)).
+				Affirmative("I trust this source").
+				Negative("No — discard").
+				Value(&m.configState.PresetSourceTrusted),
+		).WithHideFunc(func() bool {
+			return !m.configPresetApplied.ExecutableAny() || !m.configState.Confirm ||
+				!m.configState.PresetCommandsSafe
+		}),
 	).WithTheme(theme).WithKeyMap(km).WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
 }
