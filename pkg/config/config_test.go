@@ -1291,15 +1291,16 @@ func TestWriteConfig_NewFile(t *testing.T) {
 	changes := ConfigChanges{TokenChanged: true, TeamsChanged: true}
 	teamNames := map[string]string{"TEAM1": "My Team"}
 
-	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, true)
+	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, true, nil)
 
 	require.NoError(t, err)
 	output := string(m.writeData)
-	assert.Contains(t, output, "token: my-token")
+	assert.Contains(t, output, "my-token", "token value must be present")
 	assert.Contains(t, output, "- TEAM1 # My Team")
 	assert.Contains(t, output, "editor: vim")
 	assert.Contains(t, output, "terminal: gnome-terminal --")
 	assert.Contains(t, output, "cluster_login_command:")
+	assert.Contains(t, output, "# --- Required ---", "new files use the annotated template")
 }
 
 func TestWriteConfig_NewFileNoBackup(t *testing.T) {
@@ -1307,7 +1308,7 @@ func TestWriteConfig_NewFileNoBackup(t *testing.T) {
 	final := ResolvedValues{Token: "my-token", Teams: []string{"TEAM1"}}
 	changes := ConfigChanges{TokenChanged: true, TeamsChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true, nil)
 
 	require.NoError(t, err)
 	assert.Empty(t, m.backupData)
@@ -1319,7 +1320,7 @@ func TestWriteConfig_ExistingFileCreatesBackup(t *testing.T) {
 	final := ResolvedValues{Token: "new-token", Teams: []string{"TEAM1"}}
 	changes := ConfigChanges{TokenChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, string(existingData), string(m.backupData))
@@ -1332,7 +1333,7 @@ func TestWriteConfig_ExistingFilePreservesStructure(t *testing.T) {
 	final := ResolvedValues{Token: "new-token", Teams: []string{"TEAM1"}, SilentPolicy: "PCGXUDY"}
 	changes := ConfigChanges{TokenChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false, nil)
 
 	require.NoError(t, err)
 	output := string(m.writeData)
@@ -1348,7 +1349,7 @@ func TestWriteConfig_ReadError(t *testing.T) {
 	final := ResolvedValues{Token: "tok", Teams: []string{"T1"}}
 	changes := ConfigChanges{TokenChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read")
@@ -1359,7 +1360,7 @@ func TestWriteConfig_WriteError(t *testing.T) {
 	final := ResolvedValues{Token: "tok", Teams: []string{"T1"}}
 	changes := ConfigChanges{TokenChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true, nil)
 
 	require.Error(t, err)
 }
@@ -1374,7 +1375,7 @@ func TestWriteConfig_NewFile_Uses0600(t *testing.T) {
 	final := ResolvedValues{Token: "my-token", Teams: []string{"TEAM1"}}
 	changes := ConfigChanges{TokenChanged: true, TeamsChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, true, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0600), m.writePerm, "new config file must be written 0600")
@@ -1388,7 +1389,7 @@ func TestWriteConfig_ExistingFileAndBackup_Use0600(t *testing.T) {
 	final := ResolvedValues{Token: "new-token", Teams: []string{"TEAM1"}}
 	changes := ConfigChanges{TokenChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0600), m.chmodPerm, "config file must be chmod'd 0600")
@@ -1439,7 +1440,7 @@ func TestEndToEnd_NewUserAllFields(t *testing.T) {
 	teamNames := map[string]string{"PASPK4G": "Platform SRE"}
 	customPolicies := map[string]string{"P5LAB5Y": "PVBANNN"}
 
-	err := WriteConfig(m, "/fake/home", final, changes, teamNames, customPolicies, true)
+	err := WriteConfig(m, "/fake/home", final, changes, teamNames, customPolicies, true, nil)
 
 	require.NoError(t, err)
 	output := string(m.writeData)
@@ -1465,7 +1466,7 @@ func TestEndToEnd_ExistingUserChangesToken(t *testing.T) {
 	final := ResolvedValues{Token: "changed-token", Teams: []string{"TEAM1"}, SilentPolicy: "PCGXUDY"}
 	changes := ConfigChanges{TokenChanged: true}
 
-	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false)
+	err := WriteConfig(m, "/fake/home", final, changes, nil, nil, false, nil)
 
 	require.NoError(t, err)
 	output := string(m.writeData)
@@ -1482,7 +1483,7 @@ func TestEndToEnd_ExistingUserChangesTeams(t *testing.T) {
 	changes := ConfigChanges{TeamsChanged: true}
 	teamNames := map[string]string{"TEAM2": "Beta", "TEAM3": "Gamma"}
 
-	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, false)
+	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, false, nil)
 
 	require.NoError(t, err)
 	output := string(m.writeData)
@@ -1502,11 +1503,11 @@ func TestEndToEnd_EnvVarUserFirstSave(t *testing.T) {
 	changes := ConfigChanges{TokenChanged: true, TeamsChanged: true, SilentChanged: true}
 	teamNames := map[string]string{"ENV_TEAM": "Env Team"}
 
-	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, true)
+	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, true, nil)
 
 	require.NoError(t, err)
 	output := string(m.writeData)
-	assert.Contains(t, output, "token: env-token")
+	assert.Contains(t, output, "env-token", "token value must be present")
 	assert.Contains(t, output, "- ENV_TEAM # Env Team")
 	assert.Contains(t, output, "default_silent_escalation_policy: ENV_POL")
 	assert.Contains(t, output, "editor: vim")
@@ -1573,7 +1574,7 @@ func TestEndToEnd_NewFileWritesRealDefaults(t *testing.T) {
 	changes := DetectChangesForNewFile(final)
 	teamNames := map[string]string{"TEAM1": "My Team"}
 
-	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, true)
+	err := WriteConfig(m, "/fake/home", final, changes, teamNames, nil, true, nil)
 
 	require.NoError(t, err)
 

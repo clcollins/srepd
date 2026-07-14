@@ -347,11 +347,20 @@ func ParseCustomMappingsStrict(raw string) (map[string]string, error) {
 	return result, nil
 }
 
-func WriteConfig(fs ConfigFS, baseDir string, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool) error {
+func WriteConfig(fs ConfigFS, baseDir string, final ResolvedValues, changes ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool, env *GenerateEnvironment) error {
 	configFile := filepath.Join(baseDir, CfgFileDir, CfgFileName)
 
 	if isNewFile {
-		data := BuildFullConfig(final, teamNames, final.SilentPolicy, customPolicies)
+		// Start from the annotated template (with detected environment,
+		// section headers, and commented alternatives) then overlay the
+		// wizard's resolved values so the first config file looks like
+		// `srepd config generate` output with real values filled in.
+		base := GenerateAnnotatedConfig(env)
+		allChanged := DetectChangesForNewFile(final)
+		data, err := MergeIntoExistingConfig(base, final, allChanged, teamNames, customPolicies)
+		if err != nil {
+			return fmt.Errorf("failed to build config from template: %w", err)
+		}
 		if err := writeSecretFile(fs, configFile, data); err != nil {
 			return fmt.Errorf("failed to write config file: %w", err)
 		}
