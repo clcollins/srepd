@@ -167,3 +167,14 @@ func TestForcePresetChanges(t *testing.T) {
 	assert.True(t, forced.EditorChanged)
 	assert.False(t, forced.TokenChanged, "token is never preset-driven")
 }
+
+// ExecutableAny gates the wizard's bold-red preset safety confirmations:
+// only fields srepd executes count, not IDs sent to the PagerDuty API.
+func TestPresetApplied_ExecutableAny(t *testing.T) {
+	assert.False(t, PresetApplied{}.ExecutableAny())
+	assert.False(t, PresetApplied{Teams: true, Silent: true, Custom: true}.ExecutableAny(),
+		"API-only fields must not trigger the safety gate")
+	assert.True(t, PresetApplied{Terminal: true}.ExecutableAny())
+	assert.True(t, PresetApplied{Editor: true}.ExecutableAny())
+	assert.True(t, PresetApplied{ClusterLogin: true}.ExecutableAny())
+}
