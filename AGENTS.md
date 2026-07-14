@@ -84,6 +84,23 @@ Pass extra test flags via `TESTOPTS`, e.g.:
   original PR's plan) describing what went wrong and how to
   prevent it
 
+## Dependencies (supply-chain rules)
+
+- **Adding a new module to go.mod requires explicit human review** of the
+  import path and repository provenance before merge: verify the path
+  matches the intended upstream exactly (typosquats imitate well-known
+  tools — e.g. the 2026 "Operation Muck and Load" fake `dnsub` scanner),
+  check the repo's owner, history, and release cadence, and be suspicious
+  of abnormal version volume.
+- **AI agents MUST call out any dependency addition prominently in the PR
+  description** — never bury a new module in an unrelated change.
+- Prefer the standard library or an existing dependency over adding a new
+  one; the current direct deps are all org-backed, well-known modules and
+  should stay that way.
+- GitHub Actions in workflows are **pinned to full commit SHAs** with a
+  trailing `# vN` comment; keep that style for any new action (dependabot
+  maintains the pins).
+
 ## Pre-Commit Checks (MANDATORY)
 
 Run ALL of these in parallel before every commit/push:
