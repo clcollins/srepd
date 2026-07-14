@@ -452,3 +452,27 @@ func TestReplaceVars_PreservesArgBoundaries(t *testing.T) {
 		assert.Equal(t, []string{"prefix-CID-IID-suffix"}, got)
 	})
 }
+
+// TestBuildLoginCommand_RosaBoundary documents that rosa-boundary shares the
+// cluster login conventions wholesale: it launches an interactive session
+// into a protected cluster exactly like ocm-container, so its launcher
+// builds the same terminal-wrapped command and the TUI keeps running
+// (multiple concurrent sessions). There is deliberately NO rosa-boundary-
+// specific build path.
+func TestBuildLoginCommand_RosaBoundary(t *testing.T) {
+	launcher := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%", "--connect"},
+		runInToolbox:        false,
+		profile:             &GenericProfile{},
+	}
+
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-cluster-123"}
+
+	cmd := launcher.BuildLoginCommand(vars)
+
+	assert.Equal(t, "gnome-terminal", cmd[0],
+		"rosa-boundary opens in a new terminal window, same as any cluster login")
+	assert.Contains(t, cmd, "rosa-boundary")
+	assert.Contains(t, cmd, "test-cluster-123")
+}

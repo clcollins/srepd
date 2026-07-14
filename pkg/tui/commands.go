@@ -909,33 +909,6 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 	}
 }
 
-func rosaBoundaryLogin(vars map[string]string, l launcher.ClusterLauncher) tea.Cmd {
-	command := l.BuildLoginCommand(vars)
-
-	c := exec.Command(command[0], command[1:]...)
-
-	log.Debug("tui.rosaBoundaryLogin()", "command", c.String())
-
-	startCmdErr := c.Start()
-	if startCmdErr != nil {
-		log.Error("tui.rosaBoundaryLogin()", "error", startCmdErr)
-		return func() tea.Msg {
-			return loginFinishedMsg{startCmdErr}
-		}
-	}
-
-	go func() {
-		err := c.Wait()
-		if err != nil {
-			log.Debug("tui.rosaBoundaryLogin(): terminal process exited", "error", err)
-		}
-	}()
-
-	return func() tea.Msg {
-		return loginFinishedMsg{}
-	}
-}
-
 type clearSelectedIncidentsMsg string
 
 type acknowledgeIncidentsMsg struct {
