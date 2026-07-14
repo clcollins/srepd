@@ -46,9 +46,24 @@ func (p PresetApplied) Any() bool {
 	return p.Teams || p.Silent || p.Custom || p.ClusterLogin || p.Terminal || p.Editor
 }
 
+// ExecutableAny reports whether the preset seeded any field that maps to a
+// command srepd executes (terminal, editor, cluster login). These get an
+// extra bold-red safety confirmation in the wizard: a preset fetched from a
+// URL is remote input, and a malicious one could otherwise plant arbitrary
+// commands. Team/policy IDs are only ever sent to the PagerDuty API, so
+// they are excluded.
+func (p PresetApplied) ExecutableAny() bool {
+	return p.ClusterLogin || p.Terminal || p.Editor
+}
+
 // presetAllowedKeys is the strict allowlist of keys a preset may set.
 // Everything else — above all token and llm_api credentials — is rejected
 // loudly rather than silently ignored.
+//
+// SECURITY: if a key that maps to an executed binary or an agentic prompt
+// (e.g. agent_cli_command, prompt templates) is ever added here, it MUST
+// also be covered by PresetApplied.ExecutableAny so the wizard's bold-red
+// preset safety confirmation includes it.
 var presetAllowedKeys = map[string]bool{
 	"teams":                              true,
 	"default_silent_escalation_policy":   true,

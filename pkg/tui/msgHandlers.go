@@ -323,6 +323,19 @@ func switchConfigFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		// Preset safety gate: preset-seeded terminal/editor/cluster-login
+		// values are commands srepd executes, so both extra confirmations
+		// (commands reviewed, source trusted) must have been affirmed.
+		if m.configPresetApplied.ExecutableAny() &&
+			(!m.configState.PresetCommandsSafe || !m.configState.PresetSourceTrusted) {
+			m.setStatus("preset commands not confirmed — config changes discarded")
+			cmds := []tea.Cmd{func() tea.Msg { return updateIncidentListMsg("preset not confirmed") }}
+			if ocmCmd := m.ocmHandoffCmd(true); ocmCmd != nil {
+				cmds = append(cmds, ocmCmd)
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		final, err := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
 			TokenInput:          m.configState.TokenInput,
 			SelectedTeams:       m.configState.SelectedTeams,

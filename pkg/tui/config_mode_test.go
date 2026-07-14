@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,6 +71,11 @@ func createConfigTestModel() model {
 		return &pd.MockPagerDutyClient{}
 	}
 	m.configFS = &tuiMockFS{}
+	// Completing the wizard fires the OB-6 OCM handoff; without a stub the
+	// real ocm.Connect runs — attempting live auth and panicking on repeat
+	// /oauth/callback mux registrations when multiple tests complete forms
+	// in one process.
+	m.ocmConnect = func() (ocm.OCMClient, error) { return nil, nil }
 	windowSize = tea.WindowSizeMsg{Width: 120, Height: 50}
 	return m
 }

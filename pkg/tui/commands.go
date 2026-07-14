@@ -1429,6 +1429,12 @@ type configFormState struct {
 	// a successful fetch and drive the greeting DescriptionFunc.
 	FetchedUserName  string
 	FetchedTeamCount int
+	// PresetCommandsSafe/PresetSourceTrusted are the extra safety
+	// confirmations shown after "Save changes?" when a --preset seeded
+	// fields that srepd executes (terminal, editor, cluster login). Both
+	// default to false and both must be affirmed or the save is discarded.
+	PresetCommandsSafe  bool
+	PresetSourceTrusted bool
 }
 
 // configWizardReadyMsg is sent when the existing config has been resolved

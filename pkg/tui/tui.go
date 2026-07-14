@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/alert"
@@ -2239,6 +2240,10 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 
 	theme := SrepdHuhTheme(m.theme)
 
+	// Deliberately loud, theme-independent bold red for the preset command
+	// safety warnings — this must read as an alarm, not chrome.
+	presetWarnStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
+
 	km := huh.NewDefaultKeyMap()
 	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "ctrl+q"), key.WithHelp("ctrl+q/ctrl+c", "quit"))
 	km.Input.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back"))
@@ -2461,5 +2466,54 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				Title("Save changes?").
 				Value(&m.configState.Confirm),
 		),
+		// Preset safety gate: a --preset is remote input, and terminal,
+		// editor, and cluster login values are commands srepd EXECUTES. When
+		// a preset seeded any of them, saving requires two extra explicit
+		// confirmations after "Save changes?" — reviewing the commands, then
+		// vouching for the source. Both default to No; declining either
+		// discards the save (enforced in switchConfigFocusMode). Hidden
+		// entirely for wizard-typed or existing-config values.
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(presetWarnStyle.Render("⚠ SECURITY: this preset supplies commands srepd will run")).
+				DescriptionFunc(func() string {
+					var b strings.Builder
+					b.WriteString(presetWarnStyle.Render("These values came from the --preset source and will be"))
+					b.WriteString("\n")
+					b.WriteString(presetWarnStyle.Render("EXECUTED as commands. Validate every one is safe:"))
+					b.WriteString("\n\n")
+					if m.configPresetApplied.Terminal {
+						fmt.Fprintf(&b, "  terminal: %s\n", m.configState.TerminalChoice)
+					}
+					if m.configPresetApplied.Editor {
+						fmt.Fprintf(&b, "  editor: %s\n", m.configState.EditorInput)
+					}
+					if m.configPresetApplied.ClusterLogin {
+						fmt.Fprintf(&b, "  cluster_login_command: %s\n", m.configExisting.ClusterLoginCommand)
+					}
+					b.WriteString("\nAnswering No discards all changes.")
+					return b.String()
+				}, &m.configState).
+				Affirmative("They are safe").
+				Negative("No — discard").
+				Value(&m.configState.PresetCommandsSafe),
+		).WithHideFunc(func() bool {
+			return !m.configPresetApplied.ExecutableAny() || !m.configState.Confirm
+		}),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(presetWarnStyle.Render("Are you sure you trust the source?")).
+				Description(fmt.Sprintf(
+					"%s\n  %s\n\nOnly save if this file or URL is controlled by your team.",
+					presetWarnStyle.Render("These commands were supplied by:"),
+					m.configPresetApplied.Source,
+				)).
+				Affirmative("I trust this source").
+				Negative("No — discard").
+				Value(&m.configState.PresetSourceTrusted),
+		).WithHideFunc(func() bool {
+			return !m.configPresetApplied.ExecutableAny() || !m.configState.Confirm ||
+				!m.configState.PresetCommandsSafe
+		}),
 	).WithTheme(theme).WithKeyMap(km).WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
 }
