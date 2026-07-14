@@ -57,6 +57,8 @@ If no config file exists — or the config file is incomplete or still contains 
 
 **Team presets:** `srepd config --preset <file|https-url>` pre-seeds the wizard from a team-published YAML fragment carrying team policy decisions — teams, `default_silent_escalation_policy`, `custom_service_escalation_policies`, `cluster_login_command`, and optionally `terminal`/`editor`. Presets can never set `token` or `llm_api` credentials, only fill values you haven't configured, and every value is still confirmed in the wizard. URL fetches are HTTPS-only and size-capped. Teams can publish one preset link in their onboarding docs to eliminate the ID scavenger hunt for new members.
 
+Because `terminal`, `editor`, and `cluster_login_command` are commands srepd *executes*, a preset that seeds any of them triggers an extra safety gate after the final "Save changes?" confirmation: a bold red warning listing every preset-supplied command for review, followed by an explicit "Are you sure you trust the source?" confirmation showing the preset file or URL. Both default to No, and declining either discards all changes. Values you type yourself, and preset fields that are only PagerDuty IDs (teams, policies, mappings), never trigger the gate.
+
 ### Required
 
 | Key | Type | Description |
@@ -68,7 +70,7 @@ If no config file exists — or the config file is incomplete or still contains 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. The wizard fetches your team's policies and recommends ones with no on-call schedules; you can also skip or enter an ID manually. |
+| `default_silent_escalation_policy` | `string` | (none) | Silent escalation policy ID for silencing incidents. The wizard fetches policies from all your PagerDuty teams and marks ones with no on-call schedules as candidates ("does not page"); you can also skip or enter an ID manually. |
 | `custom_service_escalation_policies` | `map[string]string` | (none) | Per-service silent policy overrides (service ID to policy ID) |
 | `editor` | `string` | `vim` | Editor for incident notes (wizard prefills from `$EDITOR`/`$VISUAL`) |
 | `terminal` | `string` | `gnome-terminal` | Terminal emulator for cluster login (wizard detects installed terminals and warns when the configured one is missing) |
