@@ -51,7 +51,7 @@ go install .        # standard go install
 
 SREPD reads `~/.config/srepd/srepd.yaml` and supports `SREPD_` environment variable prefix. Run `srepd config` to create or update your config interactively. Values from environment variables (e.g., `SREPD_TOKEN`) are pre-filled automatically.
 
-If no config file exists — or the config file is incomplete or still contains placeholder values — running `srepd` automatically enters the configuration wizard. The wizard validates your token, greets you by name, auto-selects your team when you belong to exactly one, and gates advanced options (custom service-to-policy mappings) behind a default-No confirm so most users never see them. The form resizes dynamically when the terminal window changes size.
+If no config file exists — or the config file is incomplete or still contains placeholder values — running `srepd` automatically enters the configuration wizard. The wizard validates your token, greets you by name, auto-selects your team when you belong to exactly one, and gates advanced options (custom service-to-policy mappings) behind a default-No confirm so most users never see them. New config files are written using the same annotated template as `srepd config generate` — with section headers, detected terminal alternatives as comments, and environment-aware defaults. The form resizes dynamically when the terminal window changes size.
 
 **Migrating from old config format:** If your config uses the deprecated `service_escalation_policies` key, running `srepd config` will automatically migrate to the new `default_silent_escalation_policy` and `custom_service_escalation_policies` keys. The old block is commented out with a deprecation note.
 
