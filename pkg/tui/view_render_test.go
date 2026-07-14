@@ -143,3 +143,41 @@ func TestView_DownNavigationFollowsCursor(t *testing.T) {
 	assert.Equal(t, "P7654321", m.selectedIncident.ID, "selection should follow the cursor")
 	assert.NotNil(t, cmd, "navigating to an uncached incident should trigger a fetch command")
 }
+
+func TestView_ConfirmationRendersModal(t *testing.T) {
+	m := sizedTestModel(t)
+
+	m.pendingConfirmation = &confirmActionState{
+		prompt: "Silence P1234567? [y/n]",
+		action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
+	}
+
+	view := m.View()
+
+	assert.Contains(t, view, "Silence P1234567?",
+		"modal should contain the confirmation prompt text")
+	assert.Contains(t, view, "confirm",
+		"modal should contain the hint about confirming")
+}
+
+func TestView_ConfirmationNarrowTerminal(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	result, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
+	m, ok := result.(model)
+	require.True(t, ok)
+
+	m.table.SetRows([]table.Row{
+		{dot, "P1234567", "Test Alert Firing", "test-service"},
+	})
+
+	m.pendingConfirmation = &confirmActionState{
+		prompt: "Silence P1234567? [y/n]",
+		action: func() tea.Msg { return silenceSelectedIncidentMsg{} },
+	}
+
+	assert.NotPanics(t, func() {
+		view := m.View()
+		assert.Contains(t, view, "Silence P1234567?",
+			"prompt should be visible even on narrow terminal")
+	})
+}

@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	ansi "github.com/charmbracelet/x/ansi"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/backplane"
 	"github.com/clcollins/srepd/pkg/ocm"
@@ -33,7 +34,27 @@ var (
 	windowSize tea.WindowSizeMsg
 )
 
+func clampLineWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, maxWidth, "")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (m model) View() string {
+	if m.pendingConfirmation != nil {
+		return renderModal(windowSize.Width, windowSize.Height, m.styles, m.theme, Modal{
+			Title:   "Confirm",
+			Body:    m.pendingConfirmation.prompt,
+			Hint:    "y: confirm  n/esc: cancel",
+			Variant: ModalWarning,
+		})
+	}
+
 	var s strings.Builder
 
 	s.WriteString(m.renderHeader())
@@ -182,12 +203,7 @@ func (m model) renderHeader() string {
 		assignedTo = "Team"
 	}
 
-	var statusContent string
-	if m.pendingConfirmation != nil {
-		statusContent = m.styles.Warning.Render(m.pendingConfirmation.prompt)
-	} else {
-		statusContent = statusArea(m.status, m.apiInProgress, m.spinner.View(), m.theme.Text)
-	}
+	statusContent := statusArea(m.status, m.apiInProgress, m.spinner.View(), m.theme.Text)
 
 	leftWidth := windowSize.Width * 4 / 6
 	rightWidth := windowSize.Width - leftWidth
@@ -1111,7 +1127,7 @@ func (m model) renderTabBar() string {
 		tabRow = lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow, gap)
 	}
 
-	return tabRow
+	return clampLineWidth(tabRow, windowSize.Width)
 }
 
 // detailsTabTemplate renders only the incident metadata (no alerts or notes)

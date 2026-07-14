@@ -69,6 +69,40 @@ Pass extra test flags via `TESTOPTS`, e.g.:
 - TDD workflow: write failing test, implement, verify green,
   run `make test-all`
 
+### TUI View Tests
+
+View rendering is tested at three levels:
+
+1. **Unit tests** (`views_test.go`): test pure view functions
+   (`statusArea`, `renderTabBar`, `clampLineWidth`, etc.) in
+   isolation. Use `createTestModel()` and set `windowSize` directly.
+2. **Integration tests** (`view_render_test.go`): test `View()`
+   end-to-end for each focus mode. Use `sizedTestModel(t)` which
+   creates a model with a selected incident and a 120×40 window.
+   Assert on content with `assert.Contains`/`assert.NotContains`.
+3. **Golden snapshot tests** (`golden_test.go`): pixel-exact output
+   comparison for every focus mode via `charmbracelet/x/exp/golden`.
+   Snapshots live in `pkg/tui/testdata/TestGolden_*.golden`.
+   - The `init()` in `golden_test.go` sets `lipgloss.SetColorProfile(
+     termenv.Ascii)` so output is deterministic across terminals.
+   - Update snapshots with: `go test ./pkg/tui/... -run TestGolden
+     -update`
+   - **Any change to View() rendering MUST update golden snapshots**
+     — CI will fail if snapshots are stale.
+   - Use `goldenTestModel(t)` helper which provides a consistent
+     model with two incidents and a 120×40 window.
+
+### What to test when changing TUI code
+
+| Change | Required tests |
+|--------|----------------|
+| New focus mode / view branch | Golden snapshot + view_render integration test |
+| View helper (tab bar, status area, etc.) | Unit test in views_test.go |
+| Layout change (borders, padding, positioning) | Update golden snapshots (`-update`) |
+| Modal / overlay rendering | Unit test on the pure function + integration test via View() |
+| Key handling change | model_test.go Update() test with KeyMsg |
+| Message handler change | model_test.go with the specific Msg type |
+
 ## Key Invariants
 
 - Never panic in library code; return errors

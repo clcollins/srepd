@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/clcollins/srepd/pkg/docs"
 	"github.com/stretchr/testify/assert"
 )
@@ -168,4 +171,31 @@ func TestBuildDocsPageLabels(t *testing.T) {
 	labels2 := buildDocsPageLabels(pages, 8, 8)
 	assert.Len(t, labels2, 2, "second page should show remaining 2 tabs")
 	assert.Equal(t, "Extra Do...", labels2[0])
+}
+
+func TestRenderDocsTabBar_ClampedToWindowWidth(t *testing.T) {
+	t.Run("narrow terminal does not exceed width", func(t *testing.T) {
+		m := createTestModel()
+		m.docsActiveTab = 0
+		m.docsTabsPerPage = 8
+		m.docsPages = []docs.Doc{
+			{Title: "QuickStart Guide", Content: ""},
+			{Title: "SREPD", Content: ""},
+			{Title: "Configuration", Content: ""},
+			{Title: "Key Bindings", Content: ""},
+			{Title: "Troubleshooting", Content: ""},
+			{Title: "FAQ and Help", Content: ""},
+			{Title: "Release Notes", Content: ""},
+			{Title: "Contributing", Content: ""},
+		}
+		windowSize = tea.WindowSizeMsg{Width: 40, Height: 30}
+
+		result := m.renderDocsTabBar()
+		lines := strings.Split(result, "\n")
+		for i, line := range lines {
+			w := lipgloss.Width(line)
+			assert.LessOrEqual(t, w, 40,
+				"docs tab bar line %d should not exceed terminal width (got %d)", i, w)
+		}
+	})
 }
