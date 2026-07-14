@@ -1,5 +1,5 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2023 Chris Collins 'collins.christopher@gmail.com'
 */
 package cmd
 
@@ -23,7 +23,12 @@ import (
 
 const description = `The config command is used to create or validate the SREPD config file.
 The config file is located at ~/.config/srepd/srepd.yaml and is used to store
-the configuration options for the SREPD application.`
+the configuration options for the SREPD application.
+
+You will need a PagerDuty API User Token: create one at PagerDuty web →
+My Profile → User Settings → API Access → Create New API User Token.
+Everything else — teams, escalation policies, terminal, editor — is
+discovered by the wizard, or pre-seeded from a team preset via --preset.`
 
 // safeToLogConfigKeys is the allowlist of config keys whose values are safe to log
 // verbatim under --debug. Any key not in this set is masked, so secret-bearing keys
