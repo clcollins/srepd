@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -181,6 +184,15 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	}
 
 	incidentContext := buildWatcherContext(&m)
+
+	if m.streamResponses && isClaudeCLI(agentCmd) {
+		m.agentStreamPartial = ""
+		return m, tea.Batch(
+			m.spinner.Tick,
+			streamAgentCmd(agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
+		)
+	}
+
 	return m, tea.Batch(
 		m.spinner.Tick,
 		agentQuery(m.cmdExecutor, agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
@@ -233,4 +245,220 @@ func isAgentCommand(input string) bool {
 
 func parseAgentQuery(input string) string {
 	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), ":agent"))
+}
+
+// isClaudeCLI reports whether the agent CLI command invokes the Claude Code CLI.
+// It checks if any whitespace-delimited token in the command has a basename of "claude".
+func isClaudeCLI(cmd string) bool {
+	for _, field := range strings.Fields(cmd) {
+		if filepath.Base(field) == "claude" {
+			return true
+		}
+	}
+	return false
+}
+
+// cliStreamLine is the top-level JSON object in Claude CLI stream-json output.
+type cliStreamLine struct {
+	Type    string          `json:"type"`
+	Subtype string          `json:"subtype,omitempty"`
+	Event   *cliStreamEvent `json:"event,omitempty"`
+}
+
+type cliStreamEvent struct {
+	Type  string         `json:"type"`
+	Delta *cliEventDelta `json:"delta,omitempty"`
+}
+
+type cliEventDelta struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func parseCLIStreamLine(data []byte) (cliStreamLine, error) {
+	var line cliStreamLine
+	err := json.Unmarshal(data, &line)
+	return line, err
+}
+
+// buildStreamingArgs appends --output-format stream-json, --verbose, and
+// --include-partial-messages to the argument list if not already present.
+// Claude Code requires --verbose when using --output-format=stream-json
+// with --print.
+func buildStreamingArgs(args []string) []string {
+	hasOutputFormat := false
+	hasVerbose := false
+	hasPartial := false
+	for _, a := range args {
+		if a == "--output-format" {
+			hasOutputFormat = true
+		}
+		if a == "--verbose" {
+			hasVerbose = true
+		}
+		if a == "--include-partial-messages" {
+			hasPartial = true
+		}
+	}
+	if !hasOutputFormat {
+		args = append(args, "--output-format", "stream-json")
+	}
+	if !hasVerbose {
+		args = append(args, "--verbose")
+	}
+	if !hasPartial {
+		args = append(args, "--include-partial-messages")
+	}
+	return args
+}
+
+type agentStreamStartedMsg struct {
+	ch     <-chan streamEvent
+	cancel context.CancelFunc
+}
+
+type agentStreamChunkMsg struct {
+	text string
+	ch   <-chan streamEvent
+}
+
+type agentStreamDoneMsg struct {
+	err error
+}
+
+// readAgentStreamCmd drains one event from the stream channel and returns it
+// as an agent-specific message (mirrors readStreamCmd for the watcher).
+func readAgentStreamCmd(ch <-chan streamEvent) tea.Cmd {
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return agentStreamDoneMsg{}
+		}
+		if ev.done {
+			return agentStreamDoneMsg{err: ev.err}
+		}
+		return agentStreamChunkMsg{text: ev.text, ch: ch}
+	}
+}
+
+// streamAgentCmd spawns the Claude CLI with streaming flags and feeds text
+// deltas into a streamEvent channel for token-by-token rendering.
+//
+// The startup timeout (claudeTimeout) guards against the CLI hanging before
+// producing any output. Once the first text delta arrives, the timeout is
+// cleared so long responses are never truncated.
+func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
+	return func() tea.Msg {
+		// Start with a deadline for initial response; cleared on first token.
+		ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
+
+		args := strings.Fields(agentCLICommand)
+		if len(args) == 0 {
+			cancel()
+			return agentStreamDoneMsg{err: fmt.Errorf("agent_cli_command is empty")}
+		}
+
+		args = buildStreamingArgs(args)
+
+		fullPrompt := systemPrompt + "\n\n" + prompt
+		if incidentContext != "" {
+			fullPrompt += "\n\nContext:\n" + incidentContext
+		}
+
+		// Wrap the timeout context so we can remove the deadline once streaming
+		// starts, while still allowing the consumer to cancel via agentStreamCancel.
+		parentCtx, parentCancel := context.WithCancel(context.Background())
+		cmd := exec.CommandContext(parentCtx, args[0], args[1:]...)
+		cmd.Stdin = strings.NewReader(fullPrompt)
+		cmd.Env = append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
+
+		var stderrBuf strings.Builder
+		cmd.Stderr = &stderrBuf
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			cancel()
+			parentCancel()
+			return agentStreamDoneMsg{err: fmt.Errorf("agent stream pipe: %w", err)}
+		}
+
+		if err := cmd.Start(); err != nil {
+			cancel()
+			parentCancel()
+			return agentStreamDoneMsg{err: fmt.Errorf("agent stream start: %w", err)}
+		}
+
+		ch := make(chan streamEvent, 64)
+
+		go func() {
+			defer parentCancel()
+			defer cancel()
+			defer close(ch)
+
+			scanner := bufio.NewScanner(stdout)
+			scanner.Buffer(make([]byte, 256*1024), 256*1024)
+
+			receivedFirstToken := false
+
+			for scanner.Scan() {
+				// Before first token, respect the startup timeout.
+				// After first token, only the parent (cancel) can stop us.
+				if !receivedFirstToken {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
+				} else {
+					select {
+					case <-parentCtx.Done():
+						return
+					default:
+					}
+				}
+
+				line, parseErr := parseCLIStreamLine(scanner.Bytes())
+				if parseErr != nil {
+					continue
+				}
+
+				if line.Type == "stream_event" && line.Event != nil &&
+					line.Event.Type == "content_block_delta" && line.Event.Delta != nil &&
+					line.Event.Delta.Type == "text_delta" && line.Event.Delta.Text != "" {
+					if !receivedFirstToken {
+						receivedFirstToken = true
+						cancel()
+						log.Debug("agent.stream", "msg", "first token received, startup timeout cleared")
+					}
+					select {
+					case ch <- streamEvent{text: line.Event.Delta.Text}:
+					case <-parentCtx.Done():
+						return
+					}
+				}
+
+				if line.Type == "result" {
+					if line.Subtype != "success" {
+						ch <- streamEvent{done: true, err: fmt.Errorf("agent CLI result: %s", line.Subtype)}
+					} else {
+						ch <- streamEvent{done: true}
+					}
+					return
+				}
+			}
+
+			if err := cmd.Wait(); err != nil {
+				stderrStr := strings.TrimSpace(stderrBuf.String())
+				if stderrStr != "" {
+					log.Warn("agent.stream", "stderr", stderrStr)
+				}
+				ch <- streamEvent{done: true, err: fmt.Errorf("agent stream: %w", err)}
+				return
+			}
+
+			ch <- streamEvent{done: true}
+		}()
+
+		return agentStreamStartedMsg{ch: ch, cancel: parentCancel}
+	}
 }

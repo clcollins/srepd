@@ -515,6 +515,27 @@ func runDevMode() {
 		log.Warn("Dev mode: backplane fixtures not loaded", "error", bpErr)
 	}
 
+	var aiProvider ai.Provider
+	llmCfg := ai.Config{
+		Provider:  viper.GetString("llm_api.provider"),
+		APIKeyEnv: viper.GetString("llm_api.api_key_env"),
+		Model:     viper.GetString("llm_api.model"),
+		Endpoint:  viper.GetString("llm_api.endpoint"),
+	}
+	if llmCfg.Provider != "" {
+		if err := ai.ValidateConfig(llmCfg); err != nil {
+			log.Warn("LLM API config invalid, AI features disabled", "error", err)
+		} else {
+			provider, providerErr := ai.NewProvider(llmCfg)
+			if providerErr != nil {
+				log.Warn("Failed to create LLM provider, AI features disabled", "error", providerErr)
+			} else {
+				aiProvider = provider
+				log.Info("LLM provider initialized", "provider", provider.Name())
+			}
+		}
+	}
+
 	m, _ := tui.InitialModelWithConfig(
 		config,
 		viper.GetStringSlice("editor"),
@@ -522,8 +543,8 @@ func runDevMode() {
 		launcher.ClusterLauncher{}, // rosa-boundary not needed in dev mode
 		viper.GetBool("debug"),
 		ocmMock,
-		nil, // aiProvider — not used in dev mode
-		"",  // agentCLICommand — uses default in dev mode
+		aiProvider,
+		viper.GetString("agent_cli_command"),
 		bpMock,
 	)
 

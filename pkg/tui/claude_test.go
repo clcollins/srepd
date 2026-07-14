@@ -679,3 +679,220 @@ func TestInputMode_EmptyAgent_ShowsUsage(t *testing.T) {
 	assert.Nil(t, cmd, ":agent with no query must not dispatch")
 	assert.Contains(t, updated.status, "usage", "status must show usage hint")
 }
+
+func TestIsClaudeCLI(t *testing.T) {
+	tests := []struct {
+		name     string
+		cmd      string
+		expected bool
+	}{
+		{"bare claude", "claude --print", true},
+		{"absolute path", "/usr/bin/claude --print", true},
+		{"toolbox wrapper", "toolbox run -c devtools claude --print", true},
+		{"flatpak-spawn wrapper", "flatpak-spawn --host claude --print", true},
+		{"not claude", "my-agent --print", false},
+		{"empty", "", false},
+		{"claude-like prefix", "claude-wrapper --print", false},
+		{"claude in path segment", "/opt/claude-tools/agent --print", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isClaudeCLI(tt.cmd), "isClaudeCLI(%q)", tt.cmd)
+		})
+	}
+}
+
+func TestParseCLIStreamLine_TextDelta(t *testing.T) {
+	line := `{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}}`
+	parsed, err := parseCLIStreamLine([]byte(line))
+	assert.NoError(t, err)
+	assert.Equal(t, "stream_event", parsed.Type)
+	assert.NotNil(t, parsed.Event)
+	assert.Equal(t, "content_block_delta", parsed.Event.Type)
+	assert.NotNil(t, parsed.Event.Delta)
+	assert.Equal(t, "text_delta", parsed.Event.Delta.Type)
+	assert.Equal(t, "hello", parsed.Event.Delta.Text)
+}
+
+func TestParseCLIStreamLine_Result(t *testing.T) {
+	line := `{"type":"result","subtype":"success","result":"final answer"}`
+	parsed, err := parseCLIStreamLine([]byte(line))
+	assert.NoError(t, err)
+	assert.Equal(t, "result", parsed.Type)
+	assert.Equal(t, "success", parsed.Subtype)
+}
+
+func TestParseCLIStreamLine_SystemEvent(t *testing.T) {
+	line := `{"type":"system","subtype":"init","cwd":"/home/user"}`
+	parsed, err := parseCLIStreamLine([]byte(line))
+	assert.NoError(t, err)
+	assert.Equal(t, "system", parsed.Type)
+}
+
+func TestBuildStreamingArgs_AppendsFlags(t *testing.T) {
+	args := buildStreamingArgs([]string{"claude", "--print"})
+	assert.Contains(t, args, "--output-format")
+	assert.Contains(t, args, "stream-json")
+	assert.Contains(t, args, "--verbose")
+	assert.Contains(t, args, "--include-partial-messages")
+}
+
+func TestBuildStreamingArgs_DoesNotDuplicate(t *testing.T) {
+	args := buildStreamingArgs([]string{"claude", "--print", "--output-format", "stream-json", "--verbose", "--include-partial-messages"})
+	count := 0
+	for _, a := range args {
+		if a == "--include-partial-messages" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "should not duplicate --include-partial-messages")
+	verboseCount := 0
+	for _, a := range args {
+		if a == "--verbose" {
+			verboseCount++
+		}
+	}
+	assert.Equal(t, 1, verboseCount, "should not duplicate --verbose")
+}
+
+func TestReadAgentStreamCmd_TextChunk(t *testing.T) {
+	ch := make(chan streamEvent, 1)
+	ch <- streamEvent{text: "hello"}
+
+	cmd := readAgentStreamCmd(ch)
+	msg := cmd()
+	chunk, ok := msg.(agentStreamChunkMsg)
+	assert.True(t, ok, "expected agentStreamChunkMsg, got %T", msg)
+	assert.Equal(t, "hello", chunk.text)
+}
+
+func TestReadAgentStreamCmd_Done(t *testing.T) {
+	ch := make(chan streamEvent, 1)
+	ch <- streamEvent{done: true}
+
+	cmd := readAgentStreamCmd(ch)
+	msg := cmd()
+	_, ok := msg.(agentStreamDoneMsg)
+	assert.True(t, ok, "expected agentStreamDoneMsg, got %T", msg)
+}
+
+func TestReadAgentStreamCmd_ClosedChannel(t *testing.T) {
+	ch := make(chan streamEvent)
+	close(ch)
+
+	cmd := readAgentStreamCmd(ch)
+	msg := cmd()
+	_, ok := msg.(agentStreamDoneMsg)
+	assert.True(t, ok, "closed channel should produce agentStreamDoneMsg")
+}
+
+func TestHandleClaudePrompt_StreamingDispatch(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "claude --print"
+	m.streamResponses = true
+
+	msg := claudePromptMsg{prompt: "test query"}
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
+	updated := result.(model)
+
+	assert.True(t, updated.claudeQuerying)
+	assert.True(t, updated.apiInProgress)
+	assert.NotNil(t, cmd, "should dispatch streaming command")
+}
+
+func TestHandleClaudePrompt_NonClaudeCLI_NoStreaming(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "my-custom-agent --print"
+	m.streamResponses = true
+
+	msg := claudePromptMsg{prompt: "test query"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
+	updated := result.(model)
+
+	assert.True(t, updated.claudeQuerying, "non-claude CLI should still query")
+}
+
+func TestHandleClaudePrompt_StreamingDisabled_NoStreaming(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "claude --print"
+	m.streamResponses = false
+
+	msg := claudePromptMsg{prompt: "test query"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
+	updated := result.(model)
+
+	assert.True(t, updated.claudeQuerying, "should query even with streaming disabled")
+}
+
+func TestAgentStreamStartedMsg_SetsState(t *testing.T) {
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.apiInProgress = true
+
+	ch := make(chan streamEvent)
+	cancel := func() {}
+	msg := agentStreamStartedMsg{ch: ch, cancel: cancel}
+
+	result, cmd := m.Update(msg)
+	updated := result.(model)
+
+	assert.NotNil(t, updated.agentStreamCancel)
+	assert.Equal(t, "", updated.agentStreamPartial)
+	assert.True(t, updated.watcherExpanded)
+	assert.NotNil(t, cmd)
+}
+
+func TestAgentStreamChunkMsg_AppendsText(t *testing.T) {
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.agentStreamPartial = "hello "
+	m.watcherExpanded = true
+	m.watcherBuffer.Append(prefixLines(m.agentMarker, "hello "))
+
+	ch := make(chan streamEvent, 1)
+	ch <- streamEvent{text: "more"}
+	msg := agentStreamChunkMsg{text: "world", ch: ch}
+
+	result, cmd := m.Update(msg)
+	updated := result.(model)
+
+	assert.Equal(t, "hello world", updated.agentStreamPartial)
+	assert.NotNil(t, cmd, "should continue reading stream")
+}
+
+func TestAgentStreamDoneMsg_ClearsState(t *testing.T) {
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.apiInProgress = true
+	m.agentStreamCancel = func() {}
+
+	msg := agentStreamDoneMsg{}
+
+	result, _ := m.Update(msg)
+	updated := result.(model)
+
+	assert.False(t, updated.claudeQuerying)
+	assert.False(t, updated.apiInProgress)
+	assert.Nil(t, updated.agentStreamCancel)
+}
+
+func TestAgentStreamDoneMsg_WithError(t *testing.T) {
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.apiInProgress = true
+
+	msg := agentStreamDoneMsg{err: fmt.Errorf("stream failed")}
+
+	result, cmd := m.Update(msg)
+	updated := result.(model)
+
+	assert.False(t, updated.claudeQuerying)
+	assert.NotNil(t, cmd, "should flash error notification")
+}

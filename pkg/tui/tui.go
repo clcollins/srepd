@@ -1767,6 +1767,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case claudeResponseMsg:
 		return m.handleClaudeResponse(msg)
 
+	case agentStreamStartedMsg:
+		if m.agentStreamCancel != nil {
+			m.agentStreamCancel()
+		}
+		m.agentStreamCancel = msg.cancel
+		m.agentStreamPartial = ""
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		m.watcherBuffer.Append(prefixLines(m.agentMarker, ""))
+		m.updateWatcherViewport()
+		return m, readAgentStreamCmd(msg.ch)
+
+	case agentStreamChunkMsg:
+		m.agentStreamPartial += msg.text
+		m.watcherBuffer.SetLast(prefixLines(m.agentMarker, m.agentStreamPartial))
+		m.updateWatcherViewport()
+		return m, readAgentStreamCmd(msg.ch)
+
+	case agentStreamDoneMsg:
+		m.claudeQuerying = false
+		m.apiInProgress = false
+		m.agentStreamCancel = nil
+		if msg.err != nil {
+			return m, m.flashNotification(fmt.Sprintf("agent stream error: %s", msg.err))
+		}
+		m.setStatus("agent response received")
+		return m, nil
+
 	case mergeIncidentMsg:
 		if m.mergeSourceIncident == nil || m.mergeTargetID == "" {
 			m.setStatus("merge failed - missing source or target")

@@ -90,7 +90,7 @@ Because `terminal`, `editor`, and `cluster_login_command` are commands srepd *ex
 | `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries (set to `""` to disable AI features) |
 | `emoji` | `bool` | `true` | Use emoji markers or text fallbacks for flags/agent/watcher |
 | `reescalate_level` | `int` | `2` | Escalation level `ctrl+e` re-escalates to, skipping lower placeholder tiers (e.g. level 1 "Nobody") |
-| `stream_responses` | `bool` | `true` | Stream `:watcher`/LLM responses token-by-token when the provider supports it; set `false` for blocking responses |
+| `stream_responses` | `bool` | `true` | Stream `:watcher` and `:agent` responses token-by-token (`:watcher` requires a streaming-capable provider; `:agent` auto-detects Claude CLI); set `false` for blocking responses |
 | `agent_system_prompt` | `string` | (read-only investigation) | System prompt for `:agent` CLI queries |
 | `watcher_system_prompt` | `string` | (SRE assistant) | System prompt for `:watcher` LLM queries |
 | `colors` | `map[string]string` | (defaults) | Custom color scheme (hex values) |
