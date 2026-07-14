@@ -184,11 +184,12 @@ type model struct {
 	activeTab int // 0=details, 1=alerts, 2=notes
 
 	// Docs viewer state
-	viewingDocs     bool
-	docsViewer      viewport.Model
-	docsPages       []docs.Doc
-	docsActiveTab   int
-	docsTabsPerPage int
+	viewingDocs          bool
+	docsReturnToIncident bool
+	docsViewer           viewport.Model
+	docsPages            []docs.Doc
+	docsActiveTab        int
+	docsTabsPerPage      int
 
 	// Merge mode state
 	mergeMode           bool

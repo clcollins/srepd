@@ -121,17 +121,6 @@ func describeFocusModes(m model) string {
 	return strings.Join(active, ", ")
 }
 
-// knownOverlap returns true for focus mode combinations that are known bugs,
-// documented here so the property tests pass while the bugs are tracked.
-// TODO: fix these and remove the exceptions.
-func knownOverlap(m model) bool {
-	// ctrl+h (docs) from incident view doesn't clear viewingIncident
-	if m.viewingIncident && m.viewingDocs {
-		return true
-	}
-	return false
-}
-
 func checkInvariants(t *rapid.T, m model, step int, action string) {
 	view := m.View()
 	if len(view) == 0 {
@@ -139,12 +128,12 @@ func checkInvariants(t *rapid.T, m model, step int, action string) {
 	}
 
 	activeModes := countActiveFocusModes(m)
-	if activeModes > 1 && !knownOverlap(m) {
+	if activeModes > 1 {
 		t.Fatalf("step %d (%s): %d focus modes active simultaneously: %s",
 			step, action, activeModes, describeFocusModes(m))
 	}
 
-	if m.selectedIncident != nil && len(m.incidentList) > 0 && !m.viewingIncident && !m.mergeMode {
+	if m.selectedIncident != nil && len(m.incidentList) > 0 && !m.viewingIncident && !m.mergeMode && !m.viewingDocs {
 		found := false
 		for i := range m.incidentList {
 			if m.incidentList[i].ID == m.selectedIncident.ID {

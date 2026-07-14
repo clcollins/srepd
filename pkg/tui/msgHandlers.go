@@ -750,6 +750,7 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.readLog()
 
 		case key.Matches(msg, defaultKeyMap.ViewDocs):
+			m.docsReturnToIncident = false
 			m.viewingDocs = true
 			m.docsActiveTab = 0
 			m.docsViewer.GotoTop()
@@ -990,6 +991,8 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return openSOPMsg("sop") }
 
 		case key.Matches(msg, defaultKeyMap.ViewDocs):
+			m.viewingIncident = false
+			m.docsReturnToIncident = true
 			m.viewingDocs = true
 			m.docsActiveTab = 0
 			m.docsViewer.GotoTop()
