@@ -3,10 +3,13 @@ package tui
 import (
 	"bytes"
 	"html/template"
+	"strings"
 	"testing"
 
 	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1388,4 +1391,89 @@ func TestNoteTabTemplate_MultiParagraph(t *testing.T) {
 	assert.Contains(t, output, "> Second paragraph.")
 	assert.Contains(t, output, "-- testuser @ 2025-01-01", "attribution should be present")
 	assert.NotContains(t, output, "> -- testuser", "attribution should not be blockquoted")
+}
+
+func TestClampLineWidth(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxWidth int
+		check    func(t *testing.T, result string)
+	}{
+		{
+			name:     "short line unchanged",
+			input:    "hello",
+			maxWidth: 80,
+			check: func(t *testing.T, result string) {
+				assert.Equal(t, "hello", result)
+			},
+		},
+		{
+			name:     "long line truncated",
+			input:    "this is a line that exceeds the maximum width",
+			maxWidth: 10,
+			check: func(t *testing.T, result string) {
+				assert.LessOrEqual(t, len(result), 10+10, "should be truncated to roughly maxWidth")
+			},
+		},
+		{
+			name:     "multi-line truncates each independently",
+			input:    "short\nthis is a very long line indeed\nalso short",
+			maxWidth: 10,
+			check: func(t *testing.T, result string) {
+				lines := strings.Split(result, "\n")
+				assert.Len(t, lines, 3, "should preserve line count")
+				assert.Equal(t, "short", lines[0], "short lines should be unchanged")
+			},
+		},
+		{
+			name:     "zero maxWidth returns unchanged",
+			input:    "anything",
+			maxWidth: 0,
+			check: func(t *testing.T, result string) {
+				assert.Equal(t, "anything", result)
+			},
+		},
+		{
+			name:     "negative maxWidth returns unchanged",
+			input:    "anything",
+			maxWidth: -1,
+			check: func(t *testing.T, result string) {
+				assert.Equal(t, "anything", result)
+			},
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			maxWidth: 80,
+			check: func(t *testing.T, result string) {
+				assert.Equal(t, "", result)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := clampLineWidth(tt.input, tt.maxWidth)
+			tt.check(t, result)
+		})
+	}
+}
+
+func TestRenderTabBar_ClampedToWindowWidth(t *testing.T) {
+	t.Run("narrow terminal does not exceed width", func(t *testing.T) {
+		m := createTestModel()
+		m.activeTab = tabDetails
+		m.incidentAlertsLoaded = true
+		m.incidentNotesLoaded = true
+		windowSize = tea.WindowSizeMsg{Width: 40, Height: 30}
+
+		result := m.renderTabBar()
+		lines := strings.Split(result, "\n")
+		for i, line := range lines {
+			w := lipgloss.Width(line)
+			assert.LessOrEqual(t, w, 40,
+				"tab bar line %d should not exceed terminal width (got %d)", i, w)
+		}
+	})
 }

@@ -118,7 +118,7 @@ func (m model) renderDocsTabBar() string {
 		tabRow = lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow, gap)
 	}
 
-	return tabRow
+	return clampLineWidth(tabRow, windowSize.Width)
 }
 
 func (m model) renderDocsTabContent() string {

@@ -25,6 +25,7 @@ func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	log.Error("tui.errMsgHandler()", "error", msg)
 	m.setStatus(msg.(errMsg).Error())
 	m.err = msg.(errMsg)
+	m.apiInProgress = false
 	return m, nil
 }
 

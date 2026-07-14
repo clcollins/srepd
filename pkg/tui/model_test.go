@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -993,8 +994,8 @@ func TestConfirmAction_OtherKeysIgnored(t *testing.T) {
 	})
 }
 
-func TestConfirmAction_PromptRenderedInStatusArea(t *testing.T) {
-	t.Run("View renders confirmation prompt in status area", func(t *testing.T) {
+func TestConfirmAction_PromptRenderedInModal(t *testing.T) {
+	t.Run("View renders confirmation prompt in a centered modal", func(t *testing.T) {
 		m := createTestModelWithSelectedIncident()
 
 		// Need window size for View() to work
@@ -1787,4 +1788,22 @@ func TestInitialModelWithConfig_FieldInitialization(t *testing.T) {
 	assert.True(t, m.showLowUrgency, "showLowUrgency should default to true")
 	assert.False(t, m.apiInProgress, "apiInProgress should default to false")
 	assert.Empty(t, m.status, "status should default to empty")
+}
+
+func TestErrMsgHandler_ResetsApiInProgress(t *testing.T) {
+	t.Run("errMsgHandler resets apiInProgress to false", func(t *testing.T) {
+		m := createTestModel()
+		m.apiInProgress = true
+
+		result, cmd := m.Update(errMsg{errors.New("API timeout")})
+		updated, ok := result.(model)
+		require.True(t, ok)
+
+		assert.False(t, updated.apiInProgress,
+			"apiInProgress should be reset to false after errMsg")
+		assert.Nil(t, cmd, "errMsgHandler should return nil cmd")
+		assert.NotNil(t, updated.err, "err should be set")
+		assert.Contains(t, updated.status, "API timeout",
+			"status should contain the error message")
+	})
 }
