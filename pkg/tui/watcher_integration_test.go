@@ -433,3 +433,232 @@ func TestWatcherStreamChunkMsg_AccumulatesInPlace(t *testing.T) {
 	assert.Equal(t, "Hello world", m.watcherStreamPartial)
 	assert.Contains(t, m.watcherBuffer.Content(), "Hello world")
 }
+
+// --- aiHealthCheckMsg handler tests ---
+
+func TestAiHealthCheckMsg_Healthy(t *testing.T) {
+	t.Run("sets aiHealthy to true when healthy", func(t *testing.T) {
+		m := createTestModel()
+		m.aiHealthy = false
+
+		result, cmd := m.Update(aiHealthCheckMsg{healthy: true, err: nil})
+		updated := result.(model)
+
+		assert.True(t, updated.aiHealthy, "aiHealthy should be set to true")
+		assert.Nil(t, cmd, "should return nil cmd")
+	})
+}
+
+func TestAiHealthCheckMsg_Unhealthy(t *testing.T) {
+	t.Run("sets aiHealthy to false when unhealthy", func(t *testing.T) {
+		m := createTestModel()
+		m.aiHealthy = true
+
+		result, cmd := m.Update(aiHealthCheckMsg{healthy: false, err: assert.AnError})
+		updated := result.(model)
+
+		assert.False(t, updated.aiHealthy, "aiHealthy should be set to false")
+		assert.Nil(t, cmd, "should return nil cmd")
+	})
+}
+
+func TestAiHealthCheckMsg_ErrorNotInspected(t *testing.T) {
+	t.Run("err field is not inspected; only healthy field matters", func(t *testing.T) {
+		m := createTestModel()
+		m.aiHealthy = false
+
+		// healthy=true even though err is set: the handler only reads msg.healthy
+		result, cmd := m.Update(aiHealthCheckMsg{healthy: true, err: assert.AnError})
+		updated := result.(model)
+
+		assert.True(t, updated.aiHealthy, "aiHealthy should follow msg.healthy, not msg.err")
+		assert.Nil(t, cmd)
+	})
+}
+
+func TestAiHealthCheckMsg_UnhealthyWithNilError(t *testing.T) {
+	t.Run("unhealthy with nil error still sets false", func(t *testing.T) {
+		m := createTestModel()
+		m.aiHealthy = true
+
+		result, cmd := m.Update(aiHealthCheckMsg{healthy: false, err: nil})
+		updated := result.(model)
+
+		assert.False(t, updated.aiHealthy)
+		assert.Nil(t, cmd)
+	})
+}
+
+// --- watcherResponseMsg handler additional edge case tests ---
+
+func TestWatcherResponseMsg_ExpandsWatcherWhenCollapsed(t *testing.T) {
+	t.Run("expands watcher pane if not already expanded", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+		m.watcherExpanded = false
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, cmd := m.Update(watcherResponseMsg{response: "test response"})
+		updated := result.(model)
+
+		assert.True(t, updated.watcherExpanded, "watcher should be expanded on response")
+		assert.False(t, updated.watcherAnalyzing, "watcherAnalyzing should be cleared")
+		assert.False(t, updated.apiInProgress, "apiInProgress should be cleared")
+		assert.NotNil(t, cmd, "should return typewriter cmd")
+	})
+}
+
+func TestWatcherResponseMsg_KeepsExpandedWhenAlreadyExpanded(t *testing.T) {
+	t.Run("keeps watcher expanded if already expanded", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+		m.watcherExpanded = true
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, _ := m.Update(watcherResponseMsg{response: "test response"})
+		updated := result.(model)
+
+		assert.True(t, updated.watcherExpanded, "watcher should remain expanded")
+	})
+}
+
+func TestWatcherResponseMsg_AppendsEmptyLineToBuffer(t *testing.T) {
+	t.Run("appends empty line before typewriter on success", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+		m.watcherBuffer.Append("previous content")
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, _ := m.Update(watcherResponseMsg{response: "new analysis"})
+		updated := result.(model)
+
+		// Buffer should have: "previous content", "" (appended empty line)
+		assert.True(t, updated.watcherBuffer.Len() >= 2,
+			"buffer should have at least 2 entries after response")
+	})
+}
+
+func TestWatcherResponseMsg_SetsStatus(t *testing.T) {
+	t.Run("sets status to watcher response received on success", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, _ := m.Update(watcherResponseMsg{response: "result"})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "watcher response received")
+	})
+}
+
+func TestWatcherResponseMsg_ErrorFlashContainsMessage(t *testing.T) {
+	t.Run("flash notification contains the error message", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+
+		result, cmd := m.Update(watcherResponseMsg{err: assert.AnError})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "watcher query failed")
+		assert.NotNil(t, cmd, "should return flash notification cmd")
+	})
+}
+
+func TestWatcherResponseMsg_StartsTypewriter(t *testing.T) {
+	t.Run("starts typewriter with response on success", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.apiInProgress = true
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, cmd := m.Update(watcherResponseMsg{response: "multi word response text"})
+		updated := result.(model)
+
+		assert.NotNil(t, updated.typewriter, "typewriter should be started")
+		assert.NotNil(t, cmd, "should return typewriter tick cmd")
+	})
+}
+
+// --- watcherSynthesisMsg handler additional edge case tests ---
+
+func TestWatcherSynthesisMsg_ExpandsWatcherWhenCollapsed(t *testing.T) {
+	t.Run("expands watcher pane if not already expanded", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.watcherExpanded = false
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, _ := m.Update(watcherSynthesisMsg{
+			observation: "pattern detected",
+			response:    "analysis of pattern",
+		})
+		updated := result.(model)
+
+		assert.True(t, updated.watcherExpanded, "watcher should be expanded")
+		assert.False(t, updated.watcherAnalyzing, "watcherAnalyzing should be cleared")
+	})
+}
+
+func TestWatcherSynthesisMsg_ErrorAppendsObservation(t *testing.T) {
+	t.Run("appends raw observation to buffer on error", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.watcherExpanded = true
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, cmd := m.Update(watcherSynthesisMsg{
+			observation: "something unusual observed",
+			err:         assert.AnError,
+		})
+		updated := result.(model)
+
+		assert.False(t, updated.watcherAnalyzing)
+		bufContent := updated.watcherBuffer.Content()
+		assert.Contains(t, bufContent, "something unusual observed",
+			"raw observation should be in buffer on error")
+		assert.Nil(t, cmd, "should return nil cmd on error (no typewriter)")
+	})
+}
+
+func TestWatcherSynthesisMsg_SuccessStartsTypewriter(t *testing.T) {
+	t.Run("starts typewriter with response on success", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.watcherExpanded = true
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, cmd := m.Update(watcherSynthesisMsg{
+			observation: "pattern detected",
+			response:    "this looks like a cascading failure",
+		})
+		updated := result.(model)
+
+		assert.False(t, updated.watcherAnalyzing)
+		assert.NotNil(t, cmd, "should return typewriter tick cmd")
+		assert.NotNil(t, updated.typewriter, "typewriter should be started")
+	})
+}
+
+func TestWatcherSynthesisMsg_SuccessAppendsEmptyLine(t *testing.T) {
+	t.Run("appends empty line to buffer before typewriter on success", func(t *testing.T) {
+		m := createTestModel()
+		m.watcherAnalyzing = true
+		m.watcherExpanded = true
+		m.watcherBuffer.Append("prior entry")
+		windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+		result, _ := m.Update(watcherSynthesisMsg{
+			observation: "obs",
+			response:    "resp",
+		})
+		updated := result.(model)
+
+		assert.True(t, updated.watcherBuffer.Len() >= 2,
+			"buffer should have at least 2 entries (prior + empty line)")
+	})
+}

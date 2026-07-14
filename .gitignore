@@ -13,3 +13,6 @@ coverage.out
 
 # Override global gitignore to track CLAUDE.md in this repo
 !CLAUDE.md
+
+# Claude Code local settings (personal permissions, not committed)
+.claude/settings.local.json

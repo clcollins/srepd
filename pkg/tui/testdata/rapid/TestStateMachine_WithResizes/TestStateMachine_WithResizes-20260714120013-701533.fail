@@ -1,0 +1,241 @@
+# 2026/07/14 12:00:13.194478 [TestStateMachine_WithResizes] [rapid] draw steps: 30
+# 2026/07/14 12:00:13.194485 [TestStateMachine_WithResizes] [rapid] draw choice-0: 1
+# 2026/07/14 12:00:13.194488 [TestStateMachine_WithResizes] [rapid] draw key-0: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.195726 [TestStateMachine_WithResizes] [rapid] draw choice-1: 1
+# 2026/07/14 12:00:13.195739 [TestStateMachine_WithResizes] [rapid] draw key-1: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.196335 [TestStateMachine_WithResizes] [rapid] draw choice-2: 1
+# 2026/07/14 12:00:13.196336 [TestStateMachine_WithResizes] [rapid] draw key-2: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.196911 [TestStateMachine_WithResizes] [rapid] draw choice-3: 1
+# 2026/07/14 12:00:13.196913 [TestStateMachine_WithResizes] [rapid] draw key-3: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.197466 [TestStateMachine_WithResizes] [rapid] draw choice-4: 1
+# 2026/07/14 12:00:13.197467 [TestStateMachine_WithResizes] [rapid] draw key-4: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.198011 [TestStateMachine_WithResizes] [rapid] draw choice-5: 1
+# 2026/07/14 12:00:13.198012 [TestStateMachine_WithResizes] [rapid] draw key-5: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.198543 [TestStateMachine_WithResizes] [rapid] draw choice-6: 1
+# 2026/07/14 12:00:13.198543 [TestStateMachine_WithResizes] [rapid] draw key-6: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.199095 [TestStateMachine_WithResizes] [rapid] draw choice-7: 1
+# 2026/07/14 12:00:13.199096 [TestStateMachine_WithResizes] [rapid] draw key-7: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.199638 [TestStateMachine_WithResizes] [rapid] draw choice-8: 1
+# 2026/07/14 12:00:13.199639 [TestStateMachine_WithResizes] [rapid] draw key-8: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.200204 [TestStateMachine_WithResizes] [rapid] draw choice-9: 1
+# 2026/07/14 12:00:13.200205 [TestStateMachine_WithResizes] [rapid] draw key-9: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.200759 [TestStateMachine_WithResizes] [rapid] draw choice-10: 1
+# 2026/07/14 12:00:13.200760 [TestStateMachine_WithResizes] [rapid] draw key-10: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.202054 [TestStateMachine_WithResizes] [rapid] draw choice-11: 1
+# 2026/07/14 12:00:13.202057 [TestStateMachine_WithResizes] [rapid] draw key-11: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.202617 [TestStateMachine_WithResizes] [rapid] draw choice-12: 1
+# 2026/07/14 12:00:13.202617 [TestStateMachine_WithResizes] [rapid] draw key-12: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.203170 [TestStateMachine_WithResizes] [rapid] draw choice-13: 1
+# 2026/07/14 12:00:13.203172 [TestStateMachine_WithResizes] [rapid] draw key-13: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.203720 [TestStateMachine_WithResizes] [rapid] draw choice-14: 1
+# 2026/07/14 12:00:13.203720 [TestStateMachine_WithResizes] [rapid] draw key-14: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.204280 [TestStateMachine_WithResizes] [rapid] draw choice-15: 0.25
+# 2026/07/14 12:00:13.204282 [TestStateMachine_WithResizes] [rapid] draw w-15: 20
+# 2026/07/14 12:00:13.204283 [TestStateMachine_WithResizes] [rapid] draw h-15: 5
+# 2026/07/14 12:00:13.204451 [TestStateMachine_WithResizes] [rapid] draw choice-16: 1
+# 2026/07/14 12:00:13.204451 [TestStateMachine_WithResizes] [rapid] draw key-16: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:00:13.204567 [TestStateMachine_WithResizes] [rapid] draw choice-17: 0.25
+# 2026/07/14 12:00:13.204568 [TestStateMachine_WithResizes] [rapid] draw w-17: 20
+# 2026/07/14 12:00:13.204569 [TestStateMachine_WithResizes] [rapid] draw h-17: 5
+# 2026/07/14 12:00:13.204695 [TestStateMachine_WithResizes] [rapid] draw choice-18: 0.25
+# 2026/07/14 12:00:13.204695 [TestStateMachine_WithResizes] [rapid] draw w-18: 20
+# 2026/07/14 12:00:13.204696 [TestStateMachine_WithResizes] [rapid] draw h-18: 5
+# 2026/07/14 12:00:13.204830 [TestStateMachine_WithResizes] [rapid] draw choice-19: 1
+# 2026/07/14 12:00:13.204830 [TestStateMachine_WithResizes] [rapid] draw key-19: tea.KeyMsg{Type:20, Runes:[]int32(nil), Alt:false, Paste:false}
+# 
+v0.4.8#991808181174648736
+0x0
+0x1f2b5a0e61c3a6
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x3723723723724
+0x2
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x3723723723724
+0x2
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x3723723723724
+0x2
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0xc05c654ab866b
+0x1c

@@ -262,6 +262,11 @@ test-fixtures: ## Check that fixture data contains no real UUIDs, domains, or or
 	fi; \
 	echo "All fixture data is properly sanitized."
 
+.PHONY: test-fuzz
+test-fuzz: ## Run property-based state machine tests (not in test-all; slower, finds edge cases)
+	@echo "Running property-based state machine tests..."
+	go test ./pkg/tui/ -run TestStateMachine -count=1 -v $(TESTOPTS)
+
 .PHONY: test-all
 test-all: fmt-check vet lint test test-race test-fixtures quickstart-verify ## Run all checks
 	@echo "All checks passed."

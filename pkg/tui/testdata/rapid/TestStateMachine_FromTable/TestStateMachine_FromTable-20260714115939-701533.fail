@@ -1,0 +1,13 @@
+# 2026/07/14 11:59:39.488758 [TestStateMachine_FromTable] [rapid] draw steps: 5
+# 2026/07/14 11:59:39.488769 [TestStateMachine_FromTable] [rapid] draw key-0: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 11:59:39.490101 [TestStateMachine_FromTable] [rapid] draw key-1: tea.KeyMsg{Type:13, Runes:[]int32(nil), Alt:false, Paste:false}
+# 2026/07/14 11:59:39.492173 [TestStateMachine_FromTable] step 1 (key enter): selectedIncident P7654321 not in incidentList
+# 
+v0.4.8#2892177136235397417
+0x0
+0x0
+0x0
+0x0
+0x0
+0x6b74f03291620
+0x4

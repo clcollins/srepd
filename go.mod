@@ -11,7 +11,9 @@ require (
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/log v1.0.0
+	github.com/charmbracelet/x/exp/golden v0.0.0-20260713092006-0d683c34c74b
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+	github.com/muesli/termenv v0.16.0
 	github.com/openshift-online/ocm-common v0.0.44
 	github.com/openshift-online/ocm-sdk-go v0.1.505
 	github.com/spf13/cobra v1.10.1
@@ -19,6 +21,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/time v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
+	pgregory.net/rapid v1.3.0
 )
 
 require (
@@ -29,6 +32,7 @@ require (
 	github.com/alessio/shellescape v1.4.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -81,7 +85,6 @@ require (
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/openshift-online/ocm-api-model/clientapi v0.0.461 // indirect
 	github.com/openshift-online/ocm-api-model/model v0.0.461 // indirect
 	github.com/openshift-online/ocm-cli v1.0.2 // indirect
