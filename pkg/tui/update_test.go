@@ -691,3 +691,69 @@ func TestSilenceIncidentsMsg_PerServicePolicy(t *testing.T) {
 			"a selected incident not in the message should still be silenced")
 	})
 }
+
+// --- silenceSelectedIncidentMsg ---
+
+func TestSilenceSelectedIncidentMsg_SetsApiInProgress(t *testing.T) {
+	t.Run("sets apiInProgress and returns batch command", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+		m.config.Client = &pd.MockPagerDutyClient{}
+		m.apiInProgress = false
+
+		result, cmd := m.Update(silenceSelectedIncidentMsg{})
+		updated := result.(model)
+
+		assert.True(t, updated.apiInProgress, "apiInProgress should be true")
+		assert.NotNil(t, cmd, "should return batch command")
+	})
+}
+
+func TestSilenceSelectedIncidentMsg_NoSelectedIncident(t *testing.T) {
+	t.Run("sets error status when selectedIncident is nil", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+		}
+		m.selectedIncident = nil
+
+		result, cmd := m.Update(silenceSelectedIncidentMsg{})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "failed silencing")
+		assert.Nil(t, cmd, "should return nil cmd on guard failure")
+		assert.False(t, updated.apiInProgress, "apiInProgress should remain false")
+	})
+}
+
+// --- clearSelectedIncidentsMsg ---
+
+func TestClearSelectedIncidentsMsg_ClearsState(t *testing.T) {
+	t.Run("clears selectedIncident and returns nil cmd", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+		m.viewingIncident = true
+		m.activeTab = 2
+
+		result, cmd := m.Update(clearSelectedIncidentsMsg("test clear"))
+		updated := result.(model)
+
+		assert.Nil(t, updated.selectedIncident, "selectedIncident should be nil")
+		assert.False(t, updated.viewingIncident, "viewingIncident should be false")
+		assert.Equal(t, 0, updated.activeTab, "activeTab should reset to 0")
+		assert.Nil(t, cmd, "should return nil cmd")
+	})
+}
+
+func TestClearSelectedIncidentsMsg_ClearsPendingConfirmation(t *testing.T) {
+	t.Run("clears pendingConfirmation state", func(t *testing.T) {
+		m := createTestModelWithSelectedIncident()
+		m.pendingConfirmation = &confirmActionState{
+			prompt: "Silence P1234567? [y/n]",
+		}
+
+		result, _ := m.Update(clearSelectedIncidentsMsg("test"))
+		updated := result.(model)
+
+		assert.Nil(t, updated.pendingConfirmation, "pendingConfirmation should be cleared")
+	})
+}

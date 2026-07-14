@@ -1,0 +1,10 @@
+# 2026/07/14 12:05:32.124261 [TestStateMachine_FromIncidentView] [rapid] draw steps: 5
+# 2026/07/14 12:05:32.124270 [TestStateMachine_FromIncidentView] [rapid] draw key-0: tea.KeyMsg{Type:8, Runes:[]int32(nil), Alt:false, Paste:false}
+# 2026/07/14 12:05:32.125828 [TestStateMachine_FromIncidentView] step 0 (key ctrl+h): 2 focus modes active simultaneously: viewingIncident, viewingDocs
+# 
+v0.4.8#6098259941255870786
+0x0
+0x0
+0x0
+0xc05c654ab866b
+0x1d

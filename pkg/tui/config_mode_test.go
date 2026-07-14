@@ -705,3 +705,83 @@ func TestConfigModeView_PriorityOverOtherModes(t *testing.T) {
 		assert.Contains(t, view, "Config form priority", "config form should render, not team select")
 	})
 }
+
+// --- configCompletedMsg ---
+
+func TestConfigCompletedMsg_ReturnsWriteCmd(t *testing.T) {
+	t.Run("returns writeConfigCmd on completion", func(t *testing.T) {
+		m := createConfigTestModel()
+		m.configMode = true
+
+		msg := configCompletedMsg{
+			final: pkgconfig.ResolvedValues{
+				Token:        "FAKE_NEW_TOKEN",
+				Teams:        []string{"TEAM_001"},
+				SilentPolicy: "POL_001",
+			},
+			changes: pkgconfig.ConfigChanges{
+				TokenChanged:  true,
+				TeamsChanged:  true,
+				SilentChanged: true,
+			},
+			teamNames:      map[string]string{"TEAM_001": "Alpha"},
+			customPolicies: map[string]string{"SVC_001": "POL_002"},
+			isNewFile:      true,
+		}
+
+		_, cmd := m.Update(msg)
+
+		assert.NotNil(t, cmd, "should return a writeConfigCmd")
+	})
+}
+
+func TestConfigCompletedMsg_UsesModelConfigFS(t *testing.T) {
+	t.Run("uses configFS from model when set", func(t *testing.T) {
+		mockFS := &tuiMockFS{}
+		m := createConfigTestModel()
+		m.configFS = mockFS
+
+		msg := configCompletedMsg{
+			final: pkgconfig.ResolvedValues{
+				Token: "FAKE_TOKEN_XYZ",
+				Teams: []string{"TEAM_001"},
+			},
+			changes: pkgconfig.ConfigChanges{
+				TokenChanged: true,
+				TeamsChanged: true,
+			},
+			isNewFile: true,
+		}
+
+		_, cmd := m.Update(msg)
+		assert.NotNil(t, cmd, "should return a command")
+
+		// Execute the cmd to verify it uses our mockFS
+		result := cmd()
+		savedMsg, ok := result.(configSavedMsg)
+		assert.True(t, ok, "should produce configSavedMsg")
+		assert.NoError(t, savedMsg.err, "should save without error")
+		assert.NotEmpty(t, mockFS.writeData, "should write through the mock filesystem")
+	})
+}
+
+func TestConfigCompletedMsg_NoChanges(t *testing.T) {
+	t.Run("still returns writeConfigCmd even with no changes", func(t *testing.T) {
+		m := createConfigTestModel()
+
+		msg := configCompletedMsg{
+			final: pkgconfig.ResolvedValues{
+				Token: "FAKE_EXISTING_TOKEN",
+				Teams: []string{"TEAM_001"},
+			},
+			changes:   pkgconfig.ConfigChanges{},
+			isNewFile: false,
+		}
+
+		_, cmd := m.Update(msg)
+
+		// The handler always returns writeConfigCmd regardless of changes -
+		// the writeConfigCmd itself handles the no-changes case
+		assert.NotNil(t, cmd, "should return a command")
+	})
+}

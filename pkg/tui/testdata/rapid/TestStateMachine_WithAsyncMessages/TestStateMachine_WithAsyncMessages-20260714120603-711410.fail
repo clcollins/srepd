@@ -1,0 +1,29 @@
+# 2026/07/14 12:06:03.686506 [TestStateMachine_WithAsyncMessages] [rapid] draw steps: 5
+# 2026/07/14 12:06:03.686513 [TestStateMachine_WithAsyncMessages] [rapid] draw choice-0: 0.5
+# 2026/07/14 12:06:03.686519 [TestStateMachine_WithAsyncMessages] [rapid] draw key-0: tea.KeyMsg{Type:-1, Runes:[]int32{106}, Alt:false, Paste:false}
+# 2026/07/14 12:06:03.687796 [TestStateMachine_WithAsyncMessages] [rapid] draw choice-1: 0.5
+# 2026/07/14 12:06:03.687803 [TestStateMachine_WithAsyncMessages] [rapid] draw key-1: tea.KeyMsg{Type:13, Runes:[]int32(nil), Alt:false, Paste:false}
+# 2026/07/14 12:06:03.689302 [TestStateMachine_WithAsyncMessages] step 1 (key enter): selectedIncident P7654321 not in incidentList
+# 
+v0.4.8#13171493843580551556
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x1
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x1
+0x0
+0x0
+0x0
+0x6b74f03291620
+0x4

@@ -184,3 +184,88 @@ func TestMergedIncidentMsg_HandledInModel(t *testing.T) {
 		assert.NotNil(t, cmd, "should return commands for flash and refresh")
 	})
 }
+
+// --- mergeIncidentMsg (Update handler) ---
+
+func TestMergeIncidentMsg_Success(t *testing.T) {
+	t.Run("clears merge state, sets apiInProgress, returns batch", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{Email: "test@example.com"},
+		}
+		m.mergeMode = true
+		m.mergeSourceIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "Q123"},
+		}
+		m.mergeTargetID = "Q456"
+
+		result, cmd := m.Update(mergeIncidentMsg{})
+		updated := result.(model)
+
+		assert.False(t, updated.mergeMode, "mergeMode should be false")
+		assert.Nil(t, updated.mergeSourceIncident, "mergeSourceIncident should be nil")
+		assert.Empty(t, updated.mergeTargetID, "mergeTargetID should be empty")
+		assert.True(t, updated.apiInProgress, "apiInProgress should be true")
+		assert.NotNil(t, cmd, "should return batch command")
+	})
+}
+
+func TestMergeIncidentMsg_MissingSource(t *testing.T) {
+	t.Run("sets error status when mergeSourceIncident is nil", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{Email: "test@example.com"},
+		}
+		m.mergeMode = true
+		m.mergeSourceIncident = nil
+		m.mergeTargetID = "Q456"
+
+		result, cmd := m.Update(mergeIncidentMsg{})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "merge failed")
+		assert.Nil(t, cmd, "should return nil cmd on guard failure")
+	})
+}
+
+func TestMergeIncidentMsg_MissingTarget(t *testing.T) {
+	t.Run("sets error status when mergeTargetID is empty", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{Email: "test@example.com"},
+		}
+		m.mergeMode = true
+		m.mergeSourceIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "Q123"},
+		}
+		m.mergeTargetID = ""
+
+		result, cmd := m.Update(mergeIncidentMsg{})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "merge failed")
+		assert.Nil(t, cmd, "should return nil cmd on guard failure")
+	})
+}
+
+func TestMergeIncidentMsg_MissingBoth(t *testing.T) {
+	t.Run("sets error status when both source and target missing", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{Email: "test@example.com"},
+		}
+		m.mergeMode = true
+		m.mergeSourceIncident = nil
+		m.mergeTargetID = ""
+
+		result, cmd := m.Update(mergeIncidentMsg{})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "merge failed")
+		assert.Nil(t, cmd, "should return nil cmd on guard failure")
+	})
+}

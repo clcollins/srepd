@@ -152,6 +152,32 @@ Every PR must include a plan document at `docs/plans/<number>-<description>.md`.
 Use the next available number. The plan should describe the problem,
 approach, and key design decisions. See existing plans for format examples.
 
+## TUI Visual Validation (tui-mcp)
+
+An MCP server (`tui-mcp`) is configured in `.claude/settings.json` for
+agent-driven TUI validation. It launches srepd in a headless virtual
+terminal and provides screenshot/interaction tools — the terminal
+equivalent of browser DevTools for web UIs.
+
+**When to use:** Before committing UI changes, after modifying View()
+rendering, when verifying focus mode transitions.
+
+**Workflow:**
+1. Build: `make build`
+2. Launch: `launch({ command: "./dist/srepd_linux_amd64_v1/srepd --dev", cols: 120, rows: 40 })`
+3. Wait for ready: `wait_for_text({ pattern: "Incidents" })`
+4. Interact: `send_keys({ keys: "j j Enter" })`
+5. Wait for render: `wait_for_idle({ timeout: 2000 })`
+6. Screenshot: `screenshot()` — returns PNG for visual analysis
+7. Cleanup: `kill()`
+
+**Available tools:** `launch`, `screenshot` (PNG), `snapshot` (text),
+`send_keys`, `send_text`, `wait_for_text`, `wait_for_idle`,
+`read_region`, `resize`, `kill`, `list_sessions`, `status`
+
+**Requires:** Node.js (npx). Development tooling only — not a runtime
+dependency.
+
 ## Key Files
 
 | File | Purpose |
