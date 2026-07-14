@@ -310,14 +310,14 @@ func launchTUI() {
 
 	if ocmAuthPending {
 		go func() {
-			fmt.Fprintln(os.Stderr, "OCM tokens expired — opening browser for authentication...")
+			log.Info("OCM tokens expired — opening browser for authentication")
 			token, authErr := ocm.AuthenticateAsync(cfg)
 			if authErr != nil {
 				log.Debug("OCM browser auth failed", "error", authErr)
 				p.Send(tui.OCMClientReadyMsg{Err: authErr})
 				return
 			}
-			fmt.Fprintln(os.Stderr, "OCM authentication successful.")
+			log.Info("OCM authentication successful")
 			ocm.ApplyAuthToken(cfg, token)
 			client, connErr := ocm.NewClientFromConfig(cfg, tui.Version)
 			if connErr != nil {
