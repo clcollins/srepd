@@ -32,7 +32,18 @@ import (
 const (
 	watcherQueryTimeout     = 60 * time.Second
 	watcherSynthesisTimeout = 30 * time.Second
+
+	// requeueDelay is how long to wait before re-queuing a message that is
+	// waiting on data to arrive (e.g. login waiting for alerts). Without a
+	// delay the requeue becomes a hot loop that saturates the Update cycle
+	requeueDelay = 250 * time.Millisecond
 )
+
+// requeueAfterDelay re-sends msg after requeueDelay, yielding the Update
+// loop instead of spinning on an immediate requeue
+func requeueAfterDelay(msg tea.Msg) tea.Cmd {
+	return tea.Tick(requeueDelay, func(time.Time) tea.Msg { return msg })
+}
 
 // This file contains the commands that are used in the Bubble Tea update function.
 // These commands are functions that return a tea.Cmd, which performs I/O with
@@ -329,6 +340,31 @@ type PollIncidentsMsg struct{}
 
 type lazyEnrichMsg struct{}
 
+const (
+	// incidentCacheTTL is how long fully-loaded incident data stays fresh
+	// before the lazy enricher re-fetches it, so notes and alerts added
+	// since the last fetch appear without a manual refresh
+	incidentCacheTTL = 5 * time.Minute
+
+	// enrichDispatchCooldown bounds how often the lazy enricher may
+	// re-dispatch fetches for the same incident while responses are still
+	// in flight or persistently failing (failed fetches never write the
+	// cache, so the entry would otherwise be re-picked every cycle)
+	enrichDispatchCooldown = 30 * time.Second
+)
+
+// needsEnrichment reports whether an incident's cached data is missing,
+// incomplete, or older than incidentCacheTTL.
+func needsEnrichment(c *cachedIncidentData, now time.Time) bool {
+	if c == nil {
+		return true
+	}
+	if !c.dataLoaded || !c.notesLoaded || !c.alertsLoaded {
+		return true
+	}
+	return now.Sub(c.lastFetched) > incidentCacheTTL
+}
+
 func pickNextEnrichment(m *model) tea.Cmd {
 	if m.config == nil {
 		return nil
@@ -341,6 +377,7 @@ func pickNextEnrichment(m *model) tea.Cmd {
 
 	cursor := m.table.Cursor()
 	n := len(rows)
+	now := time.Now()
 
 	for offset := 0; offset < n; offset++ {
 		var indices []int
@@ -366,9 +403,16 @@ func pickNextEnrichment(m *model) tea.Cmd {
 				continue
 			}
 			incidentID := row[1]
-			if _, exists := m.incidentCache[incidentID]; exists {
+			if !needsEnrichment(m.incidentCache[incidentID], now) {
 				continue
 			}
+			if dispatched, ok := m.enrichDispatchedAt[incidentID]; ok && now.Sub(dispatched) < enrichDispatchCooldown {
+				continue
+			}
+			if m.enrichDispatchedAt == nil {
+				m.enrichDispatchedAt = make(map[string]time.Time)
+			}
+			m.enrichDispatchedAt[incidentID] = now
 			return func() tea.Msg { return getIncidentMsg(incidentID) }
 		}
 	}
@@ -519,11 +563,12 @@ func AcknowledgedByUser(i pagerduty.Incident, id string) bool {
 
 // UserIsOnCall returns true if the current time is between any of the current user's pagerduty.OnCalls in the next six hours
 func UserIsOnCall(p *pd.Config, id string) bool {
-	var timeLayout = "2006-01-02T15:04:05Z"
+	// The PagerDuty API requires ISO8601/RFC3339 timestamps for Since/Until
+	now := time.Now()
 	opts := pagerduty.ListOnCallOptions{
 		UserIDs: []string{id},
-		Since:   time.Now().String(),
-		Until:   time.Now().Add(time.Hour * 6).String(),
+		Since:   now.Format(time.RFC3339),
+		Until:   now.Add(time.Hour * 6).Format(time.RFC3339),
 	}
 
 	onCalls, err := pd.GetUserOnCalls(p.Client, id, opts)
@@ -535,18 +580,19 @@ func UserIsOnCall(p *pd.Config, id string) bool {
 	for _, o := range onCalls {
 		log.Debug("tui.UserIsOnCall()", "on-call", o)
 
-		start, err := time.Parse(timeLayout, o.Start)
+		// A malformed entry must not hide valid on-call shifts; skip it
+		start, err := time.Parse(time.RFC3339, o.Start)
 		if err != nil {
 			log.Debug("tui.UserIsOnCall()", "msg", "error parsing on-call start time", "error", err)
-			return false
+			continue
 		}
-		end, err := time.Parse(timeLayout, o.End)
+		end, err := time.Parse(time.RFC3339, o.End)
 		if err != nil {
 			log.Debug("tui.UserIsOnCall()", "msg", "error parsing on-call end time", "error", err)
-			return false
+			continue
 		}
 
-		if start.Before(time.Now()) && end.After(time.Now()) {
+		if start.Before(now) && end.After(now) {
 			return true
 		}
 	}
@@ -604,27 +650,31 @@ type openBrowserMsg string
 type openSOPMsg string
 
 func openBrowserCmd(browser []string, url string) tea.Cmd {
-	log.Debug("tui.openBrowserCmd()", "msg", "opening browser", "browser", browser, "url", url)
+	// All process work happens inside the returned command so the Update
+	// loop is never blocked by exec setup or a slow Start()
+	return func() tea.Msg {
+		log.Debug("tui.openBrowserCmd()", "msg", "opening browser", "browser", browser, "url", url)
 
-	var args []string
-	args = append(args, browser[1:]...)
-	args = append(args, url)
+		var args []string
+		args = append(args, browser[1:]...)
+		args = append(args, url)
 
-	c := exec.Command(browser[0], args...)
-	log.Debug("tui.openBrowserCmd()", "command", c.String())
+		c := exec.Command(browser[0], args...)
+		log.Debug("tui.openBrowserCmd()", "command", c.String())
 
-	err := c.Start()
-	if err != nil {
-		log.Debug("tui.openBrowserCmd()", "error", err)
-		return func() tea.Msg {
+		err := c.Start()
+		if err != nil {
+			log.Debug("tui.openBrowserCmd()", "error", err)
 			return browserFinishedMsg{err}
 		}
-	}
 
-	// Browser opened successfully - don't wait for it or check stderr
-	// Browsers write warnings/info to stderr that aren't actual errors
+		// Browser opened successfully - don't wait for it or check stderr
+		// Browsers write warnings/info to stderr that aren't actual errors
+		// Reap the child in the background to avoid zombies
+		go func() {
+			_ = c.Wait()
+		}()
 
-	return func() tea.Msg {
 		return browserFinishedMsg{}
 	}
 }
@@ -842,69 +892,71 @@ func extractEnvVarPairs(envFlags []string) []string {
 }
 
 func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
-	// The first element of Terminal is the command to be executed, followed by args, in order
-	// This handles if folks use, eg: flatpak run <some package> as a terminal.
-	command := l.BuildLoginCommand(vars)
+	// All process work happens inside the returned command so the Update
+	// loop is never blocked by command construction or a slow Start().
+	// The arguments are snapshots (map, launcher value, pointer, slices),
+	// so deferring execution is safe.
+	return func() tea.Msg {
+		// The first element of Terminal is the command to be executed, followed by args, in order
+		// This handles if folks use, eg: flatpak run <some package> as a terminal.
+		command := l.BuildLoginCommand(vars)
 
-	// Build individual PAGERDUTY_* environment variables filtered to the selected cluster
-	clusterID := vars["%%CLUSTER_ID%%"]
-	envFlags := buildPagerDutyEnvVars(incident, alerts, notes, clusterID)
+		// Build individual PAGERDUTY_* environment variables filtered to the selected cluster
+		clusterID := vars["%%CLUSTER_ID%%"]
+		envFlags := buildPagerDutyEnvVars(incident, alerts, notes, clusterID)
 
-	// Determine the correct env var passing mechanism based on the command flow:
-	// 1. ocm-container flow: use -e flags (they become podman -e flags)
-	// 2. Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
-	// 3. Non-ocm-container, not in toolbox: set on exec.Cmd.Env
+		// Determine the correct env var passing mechanism based on the command flow:
+		// 1. ocm-container flow: use -e flags (they become podman -e flags)
+		// 2. Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
+		// 3. Non-ocm-container, not in toolbox: set on exec.Cmd.Env
 
-	var finalCommand []string
-	var processEnvVars []string // Only used for the exec.Cmd.Env case
+		var finalCommand []string
+		var processEnvVars []string // Only used for the exec.Cmd.Env case
 
-	if commandContainsOCMContainer(command) {
-		// ocm-container flow: insert -e flags into the command for ocm-container
-		finalCommand = insertOCMContainerEnvFlags(command, envFlags)
-		log.Debug("tui.login(): ocm-container flow", "finalCommand", finalCommand)
-	} else if l.IsToolbox() {
-		// Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
-		// so that the host process launched via flatpak-spawn inherits them
-		toolboxFlags := l.ToolboxEnvFlags(envFlags)
-		finalCommand = launcher.InsertToolboxEnvFlags(command, toolboxFlags)
-		log.Debug("tui.login(): toolbox non-ocm-container flow", "toolboxFlags", toolboxFlags, "finalCommand", finalCommand)
-	} else {
-		// Non-ocm-container, not in toolbox: set env vars on the process directly
-		finalCommand = command
-		processEnvVars = extractEnvVarPairs(envFlags)
-		log.Debug("tui.login(): direct process env flow", "processEnvVars", processEnvVars, "finalCommand", finalCommand)
-	}
+		if commandContainsOCMContainer(command) {
+			// ocm-container flow: insert -e flags into the command for ocm-container
+			finalCommand = insertOCMContainerEnvFlags(command, envFlags)
+			log.Debug("tui.login(): ocm-container flow", "finalCommand", finalCommand)
+		} else if l.IsToolbox() {
+			// Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
+			// so that the host process launched via flatpak-spawn inherits them
+			toolboxFlags := l.ToolboxEnvFlags(envFlags)
+			finalCommand = launcher.InsertToolboxEnvFlags(command, toolboxFlags)
+			log.Debug("tui.login(): toolbox non-ocm-container flow", "toolboxFlags", toolboxFlags, "finalCommand", finalCommand)
+		} else {
+			// Non-ocm-container, not in toolbox: set env vars on the process directly
+			finalCommand = command
+			processEnvVars = extractEnvVarPairs(envFlags)
+			log.Debug("tui.login(): direct process env flow", "processEnvVars", processEnvVars, "finalCommand", finalCommand)
+		}
 
-	c := exec.Command(finalCommand[0], finalCommand[1:]...)
+		c := exec.Command(finalCommand[0], finalCommand[1:]...)
 
-	// For the non-ocm-container, non-toolbox case, set env vars on the process
-	if len(processEnvVars) > 0 {
-		c.Env = append(os.Environ(), processEnvVars...)
-	}
+		// For the non-ocm-container, non-toolbox case, set env vars on the process
+		if len(processEnvVars) > 0 {
+			c.Env = append(os.Environ(), processEnvVars...)
+		}
 
-	log.Debug("tui.login(): original command", "command", command)
-	log.Debug("tui.login(): env flags", "envFlags", envFlags)
-	log.Debug("tui.login(): final command", "finalCommand", finalCommand)
-	log.Debug("tui.login()", "command", c.String())
+		log.Debug("tui.login(): original command", "command", command)
+		log.Debug("tui.login(): env flags", "envFlags", envFlags)
+		log.Debug("tui.login(): final command", "finalCommand", finalCommand)
+		log.Debug("tui.login()", "command", c.String())
 
-	startCmdErr := c.Start()
-	if startCmdErr != nil {
-		log.Error("tui.login()", "error", startCmdErr)
-		return func() tea.Msg {
+		startCmdErr := c.Start()
+		if startCmdErr != nil {
+			log.Error("tui.login()", "error", startCmdErr)
 			return loginFinishedMsg{startCmdErr}
 		}
-	}
 
-	// Reap the child process in background to avoid zombies.
-	// Don't block — return immediately so srepd stays responsive.
-	go func() {
-		err := c.Wait()
-		if err != nil {
-			log.Debug("tui.login(): terminal process exited", "error", err)
-		}
-	}()
+		// Reap the child process in background to avoid zombies.
+		// Don't block — return immediately so srepd stays responsive.
+		go func() {
+			err := c.Wait()
+			if err != nil {
+				log.Debug("tui.login(): terminal process exited", "error", err)
+			}
+		}()
 
-	return func() tea.Msg {
 		return loginFinishedMsg{}
 	}
 }
@@ -1060,21 +1112,25 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, file *os.File
 	}
 }
 
-// removeCommentsFromBytes removes any lines beginning with any of the provided prefixes []byte and returns a string.
+// removeCommentsFromBytes removes any lines beginning with any of the provided
+// prefixes and returns the remaining lines joined with newlines.
 func removeCommentsFromBytes(b []byte, prefixes ...string) string {
-	var content strings.Builder
+	var kept []string
 
-	lines := strings.Split(string(b[:]), "\n")
-
-	for _, c := range lines {
-		for _, a := range prefixes {
-			if !strings.HasPrefix(c, a) {
-				content.WriteString(c)
+	for _, line := range strings.Split(string(b), "\n") {
+		isComment := false
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(line, prefix) {
+				isComment = true
+				break
 			}
+		}
+		if !isComment {
+			kept = append(kept, line)
 		}
 	}
 
-	return content.String()
+	return strings.TrimSpace(strings.Join(kept, "\n"))
 }
 
 // getDetailFieldFromAlert safely extracts a string field from alert body details.

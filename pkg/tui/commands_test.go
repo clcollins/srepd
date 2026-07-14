@@ -14,9 +14,11 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/clcollins/srepd/pkg/rand"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecErr_Error(t *testing.T) {
@@ -631,6 +633,105 @@ func TestOpenBrowserCmd(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOpenBrowserCmd_DoesNotStartUntilInvoked(t *testing.T) {
+	// Process work must happen inside the returned tea.Cmd, not at
+	// command-construction time (which runs inside the Update loop)
+	target := filepath.Join(t.TempDir(), "started")
+
+	cmd := openBrowserCmd([]string{"touch"}, target)
+
+	// Start() is asynchronous, so a single immediate stat would race the
+	// child process; the file must never appear until the command runs
+	require.Never(t, func() bool {
+		_, err := os.Stat(target)
+		return err == nil
+	}, 500*time.Millisecond, 25*time.Millisecond, "process must not start before the command is invoked")
+
+	msg, ok := cmd().(browserFinishedMsg)
+	require.True(t, ok)
+	require.NoError(t, msg.err)
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(target)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond, "process should run once the command is invoked")
+}
+
+func TestLogin_DoesNotStartUntilInvoked(t *testing.T) {
+	// Same contract as openBrowserCmd: the terminal process must launch
+	// when the tea.Cmd runs, not when login() constructs it inside Update
+	target := filepath.Join(t.TempDir(), "started")
+
+	l, err := launcher.NewClusterLauncherWithToolbox("touch", "%%CLUSTER_ID%%", "false", func() bool { return false })
+	require.NoError(t, err)
+
+	vars := map[string]string{"%%CLUSTER_ID%%": target}
+	cmd := login(vars, l, nil, nil, nil)
+
+	// Start() is asynchronous, so a single immediate stat would race the
+	// child process; the file must never appear until the command runs
+	require.Never(t, func() bool {
+		_, err := os.Stat(target)
+		return err == nil
+	}, 500*time.Millisecond, 25*time.Millisecond, "process must not start before the command is invoked")
+
+	msg, ok := cmd().(loginFinishedMsg)
+	require.True(t, ok)
+	require.NoError(t, msg.err)
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(target)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond, "process should run once the command is invoked")
+}
+
+func TestRequeueAfterDelay_ReturnsOriginalMessage(t *testing.T) {
+	// The helper paces requeues via tea.Tick; the actual delay is in
+	// (0, requeueDelay] because tea.Tick aligns to interval boundaries,
+	// so only the returned message is asserted, never elapsed time
+	cmd := requeueAfterDelay(loginMsg("x"))
+	require.NotNil(t, cmd)
+	assert.Equal(t, loginMsg("x"), cmd())
+}
+
+func TestLoginMsg_RequeuesWhenNoAlerts(t *testing.T) {
+	m := createTestModel()
+	m.selectedIncident = &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "Q1"}}
+	m.selectedIncidentAlerts = nil
+
+	_, cmd := m.Update(loginMsg("login"))
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, loginMsg("sender: loginMsg; requeue"), cmd())
+}
+
+func TestRosaBoundaryLoginMsg_RequeuesWhenNoAlerts(t *testing.T) {
+	m := createTestModel()
+	m.selectedIncident = &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "Q1"}}
+	m.selectedIncidentAlerts = nil
+
+	_, cmd := m.Update(rosaBoundaryLoginMsg("login"))
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, rosaBoundaryLoginMsg("requeue"), cmd())
+}
+
+func TestWaitForSelectedIncidentThenDoMsg_RequeuesWhileWaiting(t *testing.T) {
+	m := createTestModel()
+	m.selectedIncident = nil
+	// Keep the incident view open so the no-incident abort branch is not taken
+	m.viewingIncident = true
+
+	msg := waitForSelectedIncidentThenDoMsg{
+		action: func() tea.Msg { return nil },
+		msg:    "test-action",
+	}
+	_, cmd := m.Update(msg)
+
+	require.NotNil(t, cmd)
+	requeued, ok := cmd().(waitForSelectedIncidentThenDoMsg)
+	require.True(t, ok, "the same message type should be requeued")
+	assert.Equal(t, msg.msg, requeued.msg)
 }
 
 // envVarMap converts a buildPagerDutyEnvVars result slice into a map of
@@ -1641,6 +1742,54 @@ func TestUserIsOnCall_MultipleOnCalls(t *testing.T) {
 	assert.True(t, result, "user should be on-call when at least one on-call window covers current time")
 }
 
+func TestUserIsOnCall_SinceUntilAreRFC3339(t *testing.T) {
+	// The PagerDuty API requires ISO8601/RFC3339 for Since/Until. Go's
+	// time.Time.String() format is not accepted and produces queries with
+	// invalid time ranges.
+	mockClient := &pd.MockPagerDutyClient{}
+	config := &pd.Config{Client: mockClient}
+
+	UserIsOnCall(config, "USER1")
+
+	require.Len(t, mockClient.RecordedListOnCallOpts, 1)
+	opts := mockClient.RecordedListOnCallOpts[0]
+
+	since, err := time.Parse(time.RFC3339, opts.Since)
+	require.NoError(t, err, "Since must be RFC3339, got %q", opts.Since)
+	until, err := time.Parse(time.RFC3339, opts.Until)
+	require.NoError(t, err, "Until must be RFC3339, got %q", opts.Until)
+	assert.Equal(t, 6*time.Hour, until.Sub(since), "on-call window should span six hours")
+	assert.Equal(t, []string{"USER1"}, opts.UserIDs)
+}
+
+func TestUserIsOnCall_SkipsMalformedEntry(t *testing.T) {
+	// A malformed on-call entry must not hide a valid, currently-active
+	// shift that follows it.
+	now := time.Now().UTC()
+	mockClient := &pd.MockPagerDutyClient{
+		ListOnCallsResponses: []pagerduty.ListOnCallsResponse{
+			{
+				OnCalls: []pagerduty.OnCall{
+					{
+						User:  pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+						Start: "not-a-timestamp",
+						End:   "also-not-a-timestamp",
+					},
+					{
+						User:  pagerduty.User{APIObject: pagerduty.APIObject{ID: "USER1"}},
+						Start: now.Add(-1 * time.Hour).Format(time.RFC3339),
+						End:   now.Add(5 * time.Hour).Format(time.RFC3339),
+					},
+				},
+			},
+		},
+	}
+	config := &pd.Config{Client: mockClient}
+
+	result := UserIsOnCall(config, "USER1")
+	assert.True(t, result, "valid active shift after a malformed entry should still count")
+}
+
 func TestRemoveCommentsFromBytes_Basic(t *testing.T) {
 	input := []byte("line 1\n# comment\nline 2\n")
 	result := removeCommentsFromBytes(input, "#")
@@ -1671,17 +1820,19 @@ func TestRemoveCommentsFromBytes_EmptyInput(t *testing.T) {
 }
 
 func TestRemoveCommentsFromBytes_MultiplePrefixes(t *testing.T) {
-	// Note: with multiple prefixes, lines matching one prefix are still
-	// written by the inner loop iteration of the non-matching prefix.
-	// A line starting with "#" will NOT be written for the "#" prefix,
-	// but WILL be written for the "//" prefix. This is the actual behavior.
-	// Test with a single prefix to avoid this edge case, which is consistent
-	// with how the function is used in practice (always a single "#" prefix).
-	input := []byte("line 1\n# hash comment\nline 2\n")
+	// Lines matching ANY prefix are removed, and kept lines appear exactly
+	// once regardless of how many prefixes are provided
+	input := []byte("line 1\n# hash comment\n// slash comment\nline 2\n")
+	result := removeCommentsFromBytes(input, "#", "//")
+	assert.Equal(t, "line 1\nline 2", result)
+}
+
+func TestRemoveCommentsFromBytes_PreservesNewlines(t *testing.T) {
+	// Multi-line notes must keep their line breaks; a previous
+	// implementation concatenated all kept lines into one
+	input := []byte("first paragraph\n\nsecond paragraph\n# trailing comment")
 	result := removeCommentsFromBytes(input, "#")
-	assert.Contains(t, result, "line 1")
-	assert.Contains(t, result, "line 2")
-	assert.NotContains(t, result, "# hash")
+	assert.Equal(t, "first paragraph\n\nsecond paragraph", result)
 }
 
 func TestRemoveCommentsFromBytes_CommentInMiddle(t *testing.T) {
@@ -1690,6 +1841,31 @@ func TestRemoveCommentsFromBytes_CommentInMiddle(t *testing.T) {
 	result := removeCommentsFromBytes(input, "#")
 	assert.Contains(t, result, "line with # in middle")
 	assert.NotContains(t, result, "# actual comment")
+}
+
+func TestDefaultScheduledJobs_NotShared(t *testing.T) {
+	// Each model must get its own job structs: lastRun is mutated as jobs
+	// fire, and shared pointers would leak scheduling state across models
+	jobsA := defaultScheduledJobs()
+	jobsB := defaultScheduledJobs()
+
+	require.Equal(t, len(jobsA), len(jobsB))
+	for i := range jobsA {
+		assert.NotSame(t, jobsA[i], jobsB[i], "job %d must not be a shared pointer", i)
+	}
+
+	jobsA[1].lastRun = time.Now()
+	assert.True(t, jobsB[1].lastRun.IsZero(),
+		"updating one model's job lastRun must not affect another model's jobs")
+}
+
+func TestDefaultScheduledJobs_Frequencies(t *testing.T) {
+	jobs := defaultScheduledJobs()
+
+	require.Len(t, jobs, 3)
+	assert.Equal(t, 15*time.Second, jobs[0].frequency, "incident poll")
+	assert.Equal(t, 3*time.Second, jobs[1].frequency, "lazy enrichment")
+	assert.Equal(t, time.Hour, jobs[2].frequency, "update check")
 }
 
 func TestRunScheduledJobs_NoJobsDue(t *testing.T) {

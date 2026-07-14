@@ -47,19 +47,24 @@ type confirmActionState struct {
 	action tea.Cmd // Command to execute on 'y'
 }
 
-var initialScheduledJobs = []*scheduledJob{
-	{
-		jobMsg:    func() tea.Msg { return PollIncidentsMsg{} },
-		frequency: time.Second * 15,
-	},
-	{
-		jobMsg:    func() tea.Msg { return lazyEnrichMsg{} },
-		frequency: 3 * time.Second,
-	},
-	{
-		jobMsg:    checkForUpdate(false, ""),
-		frequency: time.Hour,
-	},
+// defaultScheduledJobs returns a fresh set of scheduled jobs. Each model gets
+// its own copies: the job structs are mutated (lastRun) as they fire, so
+// sharing pointers across models would leak state between instances.
+func defaultScheduledJobs() []*scheduledJob {
+	return []*scheduledJob{
+		{
+			jobMsg:    func() tea.Msg { return PollIncidentsMsg{} },
+			frequency: time.Second * 15,
+		},
+		{
+			jobMsg:    func() tea.Msg { return lazyEnrichMsg{} },
+			frequency: 3 * time.Second,
+		},
+		{
+			jobMsg:    checkForUpdate(false, ""),
+			frequency: time.Hour,
+		},
+	}
 }
 
 type model struct {
@@ -100,6 +105,11 @@ type model struct {
 
 	// Incident data cache - stores fetched data for reuse and pre-fetching
 	incidentCache map[string]*cachedIncidentData
+
+	// enrichDispatchedAt records when the lazy enricher last dispatched a
+	// fetch for each incident, preventing re-dispatch storms for slow or
+	// persistently failing fetches (whose responses never write the cache)
+	enrichDispatchedAt map[string]time.Time
 
 	scheduledJobs []*scheduledJob
 
@@ -343,7 +353,8 @@ func InitialModel(
 		apiInProgress:         false,
 		status:                "",
 		incidentCache:         make(map[string]*cachedIncidentData),
-		scheduledJobs:         append([]*scheduledJob{}, initialScheduledJobs...),
+		enrichDispatchedAt:    make(map[string]time.Time),
+		scheduledJobs:         defaultScheduledJobs(),
 		autoRefresh:           true,
 		showLowUrgency:        true,
 		ocmClient:             ocmClient,
@@ -464,7 +475,8 @@ func InitialModelWithConfig(
 		apiInProgress:         false,
 		status:                "",
 		incidentCache:         make(map[string]*cachedIncidentData),
-		scheduledJobs:         append([]*scheduledJob{}, initialScheduledJobs...),
+		enrichDispatchedAt:    make(map[string]time.Time),
+		scheduledJobs:         defaultScheduledJobs(),
 		autoRefresh:           true,
 		showLowUrgency:        true,
 		devMode:               true,

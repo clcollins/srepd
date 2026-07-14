@@ -19,6 +19,8 @@ A PagerDuty terminal user interface focused on common SRE tasks.
 * Open SOP/runbook links and incidents directly from alerts
 * Log into clusters via ocm-container or ocm backplane with multi-cluster selection
 * Add notes, auto-refresh with selection preservation, auto-acknowledge when on-call
+* Background data freshness: incident details, alerts, and notes are cached
+  and automatically re-fetched when older than five minutes
 * PagerDuty environment variables passed automatically to terminal sessions
 * [Flag conditions](docs/flag-conditions.md): mark incidents matching cluster ID or organization name patterns
 * [AI agents](docs/ai-agents.md): `:agent` CLI queries and `:watcher` LLM analysis with ambient incident pattern detection
