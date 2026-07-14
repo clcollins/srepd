@@ -2128,6 +2128,37 @@ func resolveSilentPolicyChoice(choice, manualInput string) string {
 	return choice
 }
 
+// wizardStepTotal is the number of numbered wizard milestones visible to the
+// user: token, teams, silent policy, environment, options, summary. Keep-
+// confirm variants share their milestone's number; the welcome and
+// conditional AI/advanced/manual steps are unnumbered.
+const wizardStepTotal = 6
+
+// stepTitle renders a wizard milestone title with its step breadcrumb.
+func stepTitle(title string, n int) string {
+	return fmt.Sprintf("%s · %d/%d", title, n, wizardStepTotal)
+}
+
+// welcomeDescription builds the wizard's opening text: what srepd is, where
+// to get a token, how to bail out — and, when the wizard auto-launched over
+// a broken config (OB-1), why.
+func welcomeDescription(isNewFile bool, reason string) string {
+	var sb strings.Builder
+	sb.WriteString("srepd is a PagerDuty TUI for SRE on-call work: incidents,\n")
+	sb.WriteString("acknowledgements, silencing, notes, and cluster login.\n\n")
+	if reason != "" {
+		fmt.Fprintf(&sb, "You're here because: %s.\n\n", reason)
+	} else if !isNewFile {
+		sb.WriteString("This updates your existing configuration — current values are\nkept unless you change them.\n\n")
+	}
+	sb.WriteString("You'll need a PagerDuty API User Token. Create one at:\n")
+	sb.WriteString("PagerDuty web → My Profile → User Settings → API Access →\n")
+	sb.WriteString("Create New API User Token.\n\n")
+	sb.WriteString("Everything else is discovered for you. Press enter to begin,\n")
+	sb.WriteString("or ctrl+c to quit.")
+	return sb.String()
+}
+
 // buildTerminalOptions builds the environment step's terminal choices: the
 // current setting first (annotated, with a warning when its binary is
 // missing), then the detected terminals, deduplicated.
@@ -2245,8 +2276,13 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 
 	return huh.NewForm(
 		huh.NewGroup(
+			huh.NewNote().
+				Title("Welcome to SREPD").
+				Description(welcomeDescription(msg.isNewFile, msg.wizardReason)),
+		),
+		huh.NewGroup(
 			huh.NewInput().
-				Title("PagerDuty API token").
+				Title(stepTitle("PagerDuty API token", 1)).
 				Description(tokenDesc).
 				EchoMode(huh.EchoModePassword).
 				Value(&m.configState.TokenInput).
@@ -2256,13 +2292,13 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		),
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Keep current teams?").
+				Title(stepTitle("Keep current teams?", 2)).
 				Description(keepTeamsDesc).
 				Value(&m.configState.KeepTeams),
 		).WithHideFunc(func() bool { return !msg.kd.HasValidTeams }),
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
-				Title("Select your PagerDuty teams").
+				Title(stepTitle("Select your PagerDuty teams", 2)).
 				DescriptionFunc(func() string {
 					return teamGreeting(m.configState.FetchedUserName, m.configState.FetchedTeamCount)
 				}, &m.configState.FetchedUserName).
@@ -2286,13 +2322,13 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		).WithHideFunc(func() bool { return m.configState.KeepTeams }),
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Keep current silent escalation policy?").
+				Title(stepTitle("Keep current silent escalation policy?", 3)).
 				Description(keepSilentDesc).
 				Value(&m.configState.KeepSilent),
 		).WithHideFunc(func() bool { return !msg.kd.HasSilent }),
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Default silent escalation policy").
+				Title(stepTitle("Default silent escalation policy", 3)).
 				Description(
 					"When you silence an incident, it gets reassigned to this policy —\n"+
 						"one that routes only to bot users, not on-call humans.\n"+
@@ -2330,7 +2366,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		}),
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Terminal for cluster login").
+				Title(stepTitle("Terminal for cluster login", 4)).
 				Description(
 					"Opens cluster login sessions. Terminals detected on this\n"+
 						"system are listed; your current setting comes first.",
@@ -2353,7 +2389,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		).WithHideFunc(func() bool { return !m.configState.AgentOffered }),
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Configure advanced options?").
+				Title(stepTitle("Configure advanced options?", 5)).
 				Description(
 					"Custom service-to-policy silence overrides — a team-policy\n"+
 						"setting most users don't need. Skip unless your team's\n"+
@@ -2386,7 +2422,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		}),
 		huh.NewGroup(
 			huh.NewNote().
-				Title("Configuration summary").
+				Title(stepTitle("Configuration summary", 6)).
 				DescriptionFunc(func() string {
 					tmpFinal, _ := pkgconfig.ResolveFinalValues(m.configExisting, pkgconfig.WizardInputs{
 						TokenInput:          m.configState.TokenInput,

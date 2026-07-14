@@ -220,6 +220,9 @@ func TestConfigWizardPolicyPickerRendersFetchedPolicies(t *testing.T) {
 	p.send(tea.WindowSizeMsg{Width: 120, Height: 50})
 	p.send(newConfigWizardReadyMsg(pkgconfig.ExistingConfig{}, pkgconfig.KeepDefaults{}, true))
 
+	// Welcome step: advance past it.
+	p.send(keyEnter())
+
 	// Token step: type a token and advance. Validation hits the mock.
 	p.send(keyRunes("mock-token"))
 	p.send(keyEnter())
@@ -286,6 +289,9 @@ func TestConfigWizardAdvancedOptionsConfirmAdvancesInOneEnter(t *testing.T) {
 	p := &wizardPump{t: t, m: m}
 	p.send(tea.WindowSizeMsg{Width: 120, Height: 50})
 	p.send(newConfigWizardReadyMsg(pkgconfig.ExistingConfig{}, pkgconfig.KeepDefaults{}, true))
+
+	// Welcome step: advance past it.
+	p.send(keyEnter())
 
 	// Token and teams steps, as in the main walk.
 	p.send(keyRunes("mock-token"))
