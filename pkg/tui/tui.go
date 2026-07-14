@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -532,6 +533,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
+		// huh forms run their own spinners for async OptionsFunc fetches
+		// (the "Loading..." row); without forwarding the ticks, the form
+		// receives no messages while a fetch is in flight and the loading
+		// indicator never renders.
+		if m.configMode && m.configForm != nil {
+			form, formCmd := m.configForm.Update(msg)
+			if f, ok := form.(*huh.Form); ok {
+				m.configForm = f
+			}
+			return m, tea.Batch(cmd, formCmd)
+		}
 		return m, cmd
 
 	case TickMsg:
@@ -2011,22 +2023,39 @@ func fetchTeamOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput,
 
 // Sentinel values for the silent-policy picker (OB-4). Skip maps to the
 // empty policy ID (silencing disabled until configured); manual reveals the
-// free-text ID input for policies the picker cannot discover.
+// free-text ID input for policies the picker cannot discover. Neither
+// sentinel may be the empty string: the picker's bound value starts empty,
+// and huh's Select moves the cursor (and scrolls the viewport, unclamped)
+// to the option matching the current value when async options arrive — an
+// empty-valued option would yank the cursor off the top of the list.
 const (
-	policyChoiceSkip   = ""
+	policyChoiceSkip   = "__skip__"
 	policyChoiceManual = "__manual__"
 )
 
 // buildPolicyOptions turns fetched escalation policies into picker options:
 // SILENT-classified policies (no schedules notified — the right target for
-// silencing) lead the list with a recommendation annotation, then the rest,
+// silencing) lead the list with a candidate annotation so the cursor
+// starts on the best pick — those with "silent" in the name first (the
+// strongest signal of intent), then the other candidates, then the rest,
 // then the skip and manual-entry escapes.
 func buildPolicyOptions(policies []pagerduty.EscalationPolicy) []huh.Option[string] {
+	candidateOption := func(p pagerduty.EscalationPolicy) huh.Option[string] {
+		return huh.NewOption(
+			fmt.Sprintf("%s — %s (possible candidate — does not page)", p.Name, p.ID), p.ID)
+	}
+
 	var opts []huh.Option[string]
 	for _, p := range policies {
-		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent {
-			opts = append(opts, huh.NewOption(
-				fmt.Sprintf("%s — %s (recommended — no schedules notified)", p.Name, p.ID), p.ID))
+		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent &&
+			strings.Contains(strings.ToLower(p.Name), "silent") {
+			opts = append(opts, candidateOption(p))
+		}
+	}
+	for _, p := range policies {
+		if pd.ClassifyEscalationPolicy(&p) == pd.PolicyClassSilent &&
+			!strings.Contains(strings.ToLower(p.Name), "silent") {
+			opts = append(opts, candidateOption(p))
 		}
 	}
 	for _, p := range policies {
@@ -2041,20 +2070,39 @@ func buildPolicyOptions(policies []pagerduty.EscalationPolicy) []huh.Option[stri
 	return opts
 }
 
-// fetchPolicyOptions fetches the escalation policies for the selected teams
-// and builds the picker options. Errors are classified (OB-3) and rendered
-// as a skip-valued row so selecting them is harmless; the skip and manual
-// escapes are always present.
-func fetchPolicyOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string, teams []string) []huh.Option[string] {
+// fetchPolicyOptions fetches the escalation policies for ALL of the user's
+// PagerDuty teams and builds the picker options. The fetch deliberately
+// ignores the wizard's team selection: silent policies conventionally live
+// on a companion team (e.g. "<team> - Non-actionable") that the user
+// belongs to but does not select for incident filtering, so a
+// selected-teams filter misses exactly the policies this picker exists to
+// find. Errors are classified (OB-3) and rendered as a skip-valued row so
+// selecting them is harmless; the skip and manual escapes are always
+// present.
+func fetchPolicyOptions(clientFactory func(string) pd.PagerDutyClient, tokenInput, existingToken string) []huh.Option[string] {
 	token := strings.TrimSpace(tokenInput)
 	if token == "" {
 		token = existingToken
 	}
-	if token == "" || len(teams) == 0 {
+	if token == "" {
 		return buildPolicyOptions(nil)
 	}
 
-	policies, err := pd.GetTeamEscalationPolicies(clientFactory(token), teams)
+	client := clientFactory(token)
+	teams, err := pd.GetCurrentUserTeams(client)
+	if err != nil {
+		return append(
+			[]huh.Option[string]{huh.NewOption("Error: "+pd.ClassifyAPIError(err), policyChoiceSkip)},
+			buildPolicyOptions(nil)...,
+		)
+	}
+	teamIDs := make([]string, 0, len(teams))
+	for _, t := range teams {
+		teamIDs = append(teamIDs, t.ID)
+	}
+	sort.Strings(teamIDs)
+
+	policies, err := pd.GetTeamEscalationPolicies(client, teamIDs)
 	if err != nil {
 		return append(
 			[]huh.Option[string]{huh.NewOption("Error: "+pd.ClassifyAPIError(err), policyChoiceSkip)},
@@ -2067,9 +2115,15 @@ func fetchPolicyOptions(clientFactory func(string) pd.PagerDutyClient, tokenInpu
 // resolveSilentPolicyChoice maps the picker choice (plus the manual free-text
 // input) to the final policy ID. Emits the same bare ID string the free-text
 // step produced, so the save format and runtime consumption are unchanged.
+// An empty choice means the picker was never touched (e.g. the step was
+// hidden or skipped before options arrived) and resolves to no policy, same
+// as skip.
 func resolveSilentPolicyChoice(choice, manualInput string) string {
-	if choice == policyChoiceManual {
+	switch choice {
+	case policyChoiceManual:
 		return strings.TrimSpace(manualInput)
+	case policyChoiceSkip, "":
+		return ""
 	}
 	return choice
 }
@@ -2242,16 +2296,24 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				Description(
 					"When you silence an incident, it gets reassigned to this policy —\n"+
 						"one that routes only to bot users, not on-call humans.\n"+
-						"Policies are fetched from your selected teams; ones with no\n"+
-						"schedules (nobody gets paged) are recommended.",
+						"Policies are fetched from all your PagerDuty teams (silent\n"+
+						"policies often live on a companion non-actionable team); ones\n"+
+						"with no schedules (nobody gets paged) are candidates.",
 				).
 				OptionsFunc(func() []huh.Option[string] {
-					teams := m.configState.SelectedTeams
-					if m.configState.KeepTeams || len(teams) == 0 {
-						teams = msg.existing.Teams
-					}
-					return fetchPolicyOptions(clientFactory, m.configState.TokenInput, msg.existing.Token, teams)
-				}, &m.configState.SelectedTeams).
+					return fetchPolicyOptions(clientFactory, m.configState.TokenInput, msg.existing.Token)
+				}, &m.configState.TokenInput).
+				// Height(0) — after OptionsFunc, which force-defaults a zero
+				// height to 10 lines (only 4 visible under the title and
+				// description). Zero auto-sizes the field to the full list,
+				// which both shows every option the window can fit AND keeps
+				// the arrow cursor moving naturally: any explicit height
+				// routes huh v1.0.0 through an unclamped
+				// viewport.YOffset = selected on every update, pinning the
+				// selected row to the top so arrows scroll the list instead
+				// of the cursor. The group layout still clamps the field on
+				// windows too short for the list.
+				Height(0).
 				Value(&m.configState.SilentPolicyChoice),
 		).WithHideFunc(func() bool { return m.configState.KeepSilent }),
 		huh.NewGroup(
@@ -2289,26 +2351,6 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				).
 				Value(&m.configState.AgentEnabled),
 		).WithHideFunc(func() bool { return !m.configState.AgentOffered }),
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Configure advanced options?").
-				Description(
-					"Custom service-to-policy silence overrides — a team-policy\n"+
-						"setting most users don't need. Skip unless your team's\n"+
-						"onboarding docs say otherwise.",
-				).
-				Value(&m.configState.AdvancedOptions),
-		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Configure advanced options?").
-				Description(
-					"Custom service-to-policy silence overrides — a team-policy\n"+
-						"setting most users don't need. Skip unless your team's\n"+
-						"onboarding docs say otherwise.",
-				).
-				Value(&m.configState.AdvancedOptions),
-		).WithHideFunc(func() bool { return msg.kd.HasCustom }),
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Configure advanced options?").

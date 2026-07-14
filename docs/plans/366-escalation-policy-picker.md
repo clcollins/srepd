@@ -47,3 +47,18 @@ exists to eliminate. The plumbing to do better already existed:
   only; API error → classified, skip-valued row + escapes
 - `resolveSilentPolicyChoice`: picker wins / skip empty / manual trimmed /
   manual blank
+
+## Post-mortem (fixed by plan 378)
+
+Placing the skip/manual escapes *after* the policies broke the picker in
+production: the bound value starts as the skip sentinel (`""`), and huh
+v1.0.0's `Select.selectOption()` scrolls the viewport to the matching
+option unclamped (`viewport.YOffset = s.selected`) when async options
+arrive. The cursor jumped to "Skip" below the policies and the viewport
+scrolled every fetched policy out of view — the picker looked like the
+fetch never landed. Four binding-hash fix attempts chased the wrong
+mechanism. Lesson: when a widget "doesn't show" async data, verify
+whether the data was rejected or merely rendered off-screen (assert on
+the rendered view in a pump test) before touching the plumbing; and be
+suspicious of sentinel values that equal a field's zero value when a
+library selects-by-value.

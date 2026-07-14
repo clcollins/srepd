@@ -568,7 +568,7 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Fprintln(os.Stderr, "Config file not found: "+err.Error())
+			fmt.Fprintln(os.Stderr, "Config file not found: "+err.Error()+" -- generating...")
 		} else {
 			// YAML parse failure: viper holds nothing, but the file may
 			// contain perfectly good values (e.g. a valid token with a
