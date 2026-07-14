@@ -34,3 +34,15 @@ partial (and its placeholders created OB-1's broken-config trap), and
   `HealthNeedsWizard`.
 - `cmd/generate_test.go`: stdout write; `--out` file with 0600 perms;
   refuses overwrite without `--force`; `--force` overwrites.
+
+## Post-mortem (duplicate group, fixed alongside plan 378)
+
+This PR's merge re-added the "Configure advanced options?" confirm group
+to `buildConfigForm` while resolving conflicts with the #368 gating work,
+leaving two identical copies bound to the same value (PR #371's merge
+added a third). Users had to answer the same prompt repeatedly before
+reaching the summary. Lesson: when resolving conflicts in the wizard's
+group list, diff the *count* of groups against both parents — identical
+adjacent groups are silent in review diffs and every test passed because
+each copy individually behaved correctly. A walk-the-wizard regression
+test now asserts one enter dismisses the prompt.

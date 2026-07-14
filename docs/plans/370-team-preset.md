@@ -49,3 +49,14 @@ unknown/invalid YAML), apply (existing wins, empty fills, applied flags, nil
 no-op), file load, HTTPS-only, TLS fetch via httptest, size cap, non-200,
 change forcing. README documents the feature (config.go changed →
 readme-check).
+
+## Post-mortem (duplicate group, fixed alongside plan 378)
+
+This PR's merge re-added the "Configure advanced options?" confirm group
+to `buildConfigForm` during conflict resolution — the third identical
+copy (see plan 369's post-mortem for the second). Users answered the
+same prompt three times before the summary. Lesson: conflict resolutions
+that re-apply a hunk "to be safe" duplicate silently when the hunk is an
+element in a list literal; check group counts against both parents. A
+walk-the-wizard regression test now asserts one enter dismisses the
+prompt.

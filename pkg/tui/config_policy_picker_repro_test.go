@@ -154,6 +154,22 @@ func (p *wizardPump) logState(label string) {
 
 func keyEnter() tea.Msg { return tea.KeyMsg{Type: tea.KeyEnter} }
 
+// enterUntil presses enter (releasing held async fetches between presses)
+// until the rendered view contains substr, failing after max presses. It
+// lets walk-the-wizard tests tolerate environment-dependent groups (e.g.
+// the agent confirm only appears when the claude CLI is detected).
+func (p *wizardPump) enterUntil(t *testing.T, substr string, max int) {
+	t.Helper()
+	for i := 0; i < max; i++ {
+		if strings.Contains(p.view(), substr) {
+			return
+		}
+		p.send(keyEnter())
+		p.releaseHeld()
+	}
+	t.Fatalf("never reached %q after %d enters; last view:\n%s", substr, max, p.view())
+}
+
 func keyRunes(s string) tea.Msg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
@@ -256,4 +272,33 @@ func TestConfigWizardPolicyPickerRendersFetchedPolicies(t *testing.T) {
 		"two downs must land on the third option")
 	assert.Contains(t, view, "CAD Silent Test",
 		"moving the cursor down must not scroll the top of the list out of view")
+}
+
+// Regression: three identical "Configure advanced options?" confirm groups
+// shipped on main (one duplicate re-added per merge in PRs #370 and #371),
+// forcing users to answer the same prompt three times. Exactly one enter
+// must dismiss it.
+func TestConfigWizardAdvancedOptionsConfirmAdvancesInOneEnter(t *testing.T) {
+	m := createConfigTestModel()
+	mock := policyPickerMockClient()
+	m.pdClientFactory = func(_ string) pd.PagerDutyClient { return mock }
+
+	p := &wizardPump{t: t, m: m}
+	p.send(tea.WindowSizeMsg{Width: 120, Height: 50})
+	p.send(newConfigWizardReadyMsg(pkgconfig.ExistingConfig{}, pkgconfig.KeepDefaults{}, true))
+
+	// Token and teams steps, as in the main walk.
+	p.send(keyRunes("mock-token"))
+	p.send(keyEnter())
+	p.releaseHeld() // teams fetch returns
+	p.send(keyRunes("x"))
+	p.send(keyEnter())
+	p.releaseHeld() // policy fetch returns
+
+	p.enterUntil(t, "Configure advanced options?", 12)
+	p.send(keyEnter()) // answer the confirm (default: No)
+	p.releaseHeld()
+
+	assert.NotContains(t, p.view(), "Configure advanced options?",
+		"one enter must dismiss the advanced-options confirm — the group must exist exactly once")
 }
