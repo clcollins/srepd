@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -1567,6 +1568,33 @@ func (realFS) Chmod(name string, mode os.FileMode) error {
 	return os.Chmod(name, mode)
 }
 
+// detectGenerateEnvironment probes the current system for terminals, editor,
+// agent CLI, and cluster login commands — the same detection that
+// `srepd config generate` uses — so a brand-new config file includes
+// commented alternatives and detected values.
+func detectGenerateEnvironment() *pkgconfig.GenerateEnvironment {
+	env := &pkgconfig.GenerateEnvironment{}
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	for _, dt := range detected {
+		env.Terminals = append(env.Terminals, dt.Command)
+	}
+	if e := os.Getenv("EDITOR"); e != "" {
+		env.Editor = e
+	} else if v := os.Getenv("VISUAL"); v != "" {
+		env.Editor = v
+	}
+	if _, err := exec.LookPath("claude"); err == nil {
+		env.AgentCLI = pkgconfig.DefaultOptionalKeys["agent_cli_command"]
+	}
+	if _, err := exec.LookPath("ocm"); err == nil {
+		env.ClusterLoginCmds = append(env.ClusterLoginCmds, "ocm backplane login %%CLUSTER_ID%%")
+	}
+	if _, err := exec.LookPath("ocm-container"); err == nil {
+		env.ClusterLoginCmds = append(env.ClusterLoginCmds, "ocm-container --cluster-id %%CLUSTER_ID%%")
+	}
+	return env
+}
+
 // writeConfigCmd writes the config to disk using the resolved values.
 func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChanges, teamNames map[string]string, customPolicies map[string]string, isNewFile bool, fs pkgconfig.ConfigFS) tea.Cmd {
 	return func() tea.Msg {
@@ -1580,7 +1608,14 @@ func writeConfigCmd(final pkgconfig.ResolvedValues, changes pkgconfig.ConfigChan
 		if err := fs.MkdirAll(configDir, 0700); err != nil {
 			return configSavedMsg{err: err}
 		}
-		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile); err != nil {
+		// For new files, detect the environment so the generated config
+		// includes commented alternatives (detected terminals, etc.)
+		// matching `srepd config generate` output.
+		var env *pkgconfig.GenerateEnvironment
+		if isNewFile {
+			env = detectGenerateEnvironment()
+		}
+		if err := pkgconfig.WriteConfig(fs, home, final, changes, teamNames, customPolicies, isNewFile, env); err != nil {
 			return configSavedMsg{err: err}
 		}
 		// Update Viper with new values
