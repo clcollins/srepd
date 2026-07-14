@@ -910,7 +910,12 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 }
 
 func rosaBoundaryLogin(vars map[string]string, l launcher.ClusterLauncher) tea.Cmd {
-	command := l.BuildLoginCommand(vars)
+	// rosa-boundary is a standalone CLI that manages its own interactive session
+	// via session-manager-plugin. It should be executed directly without wrapping
+	// in a terminal emulator (unlike ocm-container which needs a new terminal).
+	// We build the command manually from the launcher's template instead of using
+	// BuildLoginCommand which adds the terminal wrapper.
+	command := l.BuildRosaBoundaryCommand(vars)
 
 	c := exec.Command(command[0], command[1:]...)
 
@@ -927,7 +932,7 @@ func rosaBoundaryLogin(vars map[string]string, l launcher.ClusterLauncher) tea.C
 	go func() {
 		err := c.Wait()
 		if err != nil {
-			log.Debug("tui.rosaBoundaryLogin(): terminal process exited", "error", err)
+			log.Debug("tui.rosaBoundaryLogin(): command process exited", "error", err)
 		}
 	}()
 

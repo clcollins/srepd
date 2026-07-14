@@ -264,6 +264,19 @@ func (l *ClusterLauncher) logCommand(command []string) {
 	}
 }
 
+// BuildRosaBoundaryCommand builds the rosa-boundary command directly without
+// wrapping it in a terminal emulator. rosa-boundary is a standalone CLI that
+// manages its own interactive session via session-manager-plugin, so it should
+// be executed directly in the current terminal context.
+func (l *ClusterLauncher) BuildRosaBoundaryCommand(vars map[string]string) []string {
+	log.Debug("launcher.ClusterLauncher(): building rosa-boundary command (direct execution)", "command", l.clusterLoginCommand[0])
+
+	command := replaceVars(l.clusterLoginCommand, vars)
+
+	l.logCommand(command)
+	return command
+}
+
 // replaceVars substitutes template variables (e.g. %%CLUSTER_ID%%) in each arg,
 // operating per-arg so a substituted value never crosses argv boundaries. The
 // previous implementation joined all args on spaces, substituted, then split back
