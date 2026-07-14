@@ -453,86 +453,26 @@ func TestReplaceVars_PreservesArgBoundaries(t *testing.T) {
 	})
 }
 
-// TestBuildRosaBoundaryCommand verifies that rosa-boundary commands are built
-// without terminal wrapping, since rosa-boundary manages its own interactive
-// session via session-manager-plugin.
-func TestBuildRosaBoundaryCommand_DirectExecution(t *testing.T) {
-	t.Run("basic rosa-boundary command without terminal wrapper", func(t *testing.T) {
-		launcher := ClusterLauncher{
-			terminal:            []string{"gnome-terminal", "--"},
-			clusterLoginCommand: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%", "--connect"},
-			runInToolbox:        false,
-		}
+// TestBuildLoginCommand_RosaBoundary documents that rosa-boundary shares the
+// cluster login conventions wholesale: it launches an interactive session
+// into a protected cluster exactly like ocm-container, so its launcher
+// builds the same terminal-wrapped command and the TUI keeps running
+// (multiple concurrent sessions). There is deliberately NO rosa-boundary-
+// specific build path.
+func TestBuildLoginCommand_RosaBoundary(t *testing.T) {
+	launcher := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%", "--connect"},
+		runInToolbox:        false,
+		profile:             &GenericProfile{},
+	}
 
-		vars := map[string]string{
-			"%%CLUSTER_ID%%": "test-cluster-123",
-		}
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-cluster-123"}
 
-		cmd := launcher.BuildRosaBoundaryCommand(vars)
-		expected := []string{"rosa-boundary", "start-task", "--cluster-id", "test-cluster-123", "--connect"}
+	cmd := launcher.BuildLoginCommand(vars)
 
-		assert.Equal(t, expected, cmd, "rosa-boundary command should execute directly without terminal wrapper")
-	})
-
-	t.Run("rosa-boundary with toolbox mode adds flatpak-spawn like BuildLoginCommand", func(t *testing.T) {
-		// rosa-boundary is a peer of cluster_login_command (and its eventual
-		// replacement), so it follows the same toolbox convention: srepd in
-		// a toolbox runs the command on the host via flatpak-spawn --host.
-		launcher := ClusterLauncher{
-			terminal:            []string{"gnome-terminal", "--"},
-			clusterLoginCommand: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%", "--connect"},
-			runInToolbox:        true,
-		}
-
-		vars := map[string]string{
-			"%%CLUSTER_ID%%": "test-cluster-456",
-		}
-
-		cmd := launcher.BuildRosaBoundaryCommand(vars)
-		expected := []string{"flatpak-spawn", "--host", "rosa-boundary", "start-task", "--cluster-id", "test-cluster-456", "--connect"}
-
-		assert.Equal(t, expected, cmd, "toolbox mode must wrap rosa-boundary with flatpak-spawn --host, same as the cluster login path")
-	})
-
-	t.Run("rosa-boundary with multiple variable replacements", func(t *testing.T) {
-		launcher := ClusterLauncher{
-			terminal:            []string{"gnome-terminal", "--"},
-			clusterLoginCommand: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%", "--incident", "%%INCIDENT_ID%%", "--connect"},
-			runInToolbox:        false,
-		}
-
-		vars := map[string]string{
-			"%%CLUSTER_ID%%":  "my-cluster",
-			"%%INCIDENT_ID%%": "PD789",
-		}
-
-		cmd := launcher.BuildRosaBoundaryCommand(vars)
-		expected := []string{"rosa-boundary", "start-task", "--cluster-id", "my-cluster", "--incident", "PD789", "--connect"}
-
-		assert.Equal(t, expected, cmd, "rosa-boundary command should replace all variables correctly")
-	})
-
-	t.Run("comparison: BuildLoginCommand adds terminal wrapper", func(t *testing.T) {
-		launcher := ClusterLauncher{
-			terminal:            []string{"gnome-terminal", "--"},
-			clusterLoginCommand: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%", "--connect"},
-			runInToolbox:        false,
-			profile:             &GenericProfile{},
-		}
-
-		vars := map[string]string{
-			"%%CLUSTER_ID%%": "test-cluster-789",
-		}
-
-		loginCmd := launcher.BuildLoginCommand(vars)
-		rbCmd := launcher.BuildRosaBoundaryCommand(vars)
-
-		// BuildLoginCommand wraps with terminal
-		assert.Contains(t, loginCmd, "gnome-terminal", "BuildLoginCommand should include terminal wrapper")
-		assert.Contains(t, loginCmd, "--", "BuildLoginCommand should include terminal separator")
-
-		// BuildRosaBoundaryCommand does not
-		assert.NotContains(t, rbCmd, "gnome-terminal", "BuildRosaBoundaryCommand should not include terminal wrapper")
-		assert.Equal(t, "rosa-boundary", rbCmd[0], "BuildRosaBoundaryCommand should start with rosa-boundary command")
-	})
+	assert.Equal(t, "gnome-terminal", cmd[0],
+		"rosa-boundary opens in a new terminal window, same as any cluster login")
+	assert.Contains(t, cmd, "rosa-boundary")
+	assert.Contains(t, cmd, "test-cluster-123")
 }

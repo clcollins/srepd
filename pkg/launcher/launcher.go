@@ -264,27 +264,6 @@ func (l *ClusterLauncher) logCommand(command []string) {
 	}
 }
 
-// BuildRosaBoundaryCommand builds the rosa-boundary command directly without
-// wrapping it in a terminal emulator. rosa-boundary is a standalone CLI that
-// manages its own interactive session via session-manager-plugin, so it is
-// executed in the current terminal (the TUI suspends for the session) rather
-// than in a new window. rosa-boundary is a peer of cluster_login_command and
-// follows the same toolbox convention as BuildLoginCommand: inside a Fedora
-// Toolbox the command runs on the host via flatpak-spawn --host.
-func (l *ClusterLauncher) BuildRosaBoundaryCommand(vars map[string]string) []string {
-	log.Debug("launcher.ClusterLauncher(): building rosa-boundary command (direct execution)", "command", l.clusterLoginCommand[0])
-
-	command := replaceVars(l.clusterLoginCommand, vars)
-
-	if l.runInToolbox {
-		log.Debug("launcher.ClusterLauncher(): prepending flatpak-spawn --host for toolbox")
-		command = append([]string{"flatpak-spawn", "--host"}, command...)
-	}
-
-	l.logCommand(command)
-	return command
-}
-
 // replaceVars substitutes template variables (e.g. %%CLUSTER_ID%%) in each arg,
 // operating per-arg so a substituted value never crosses argv boundaries. The
 // previous implementation joined all args on spaces, substituted, then split back

@@ -37,7 +37,7 @@ SREPD reads configuration from `~/.config/srepd/srepd.yaml` and supports the `SR
 | `editor` | `string` | `vim` | Editor for incident notes |
 | `terminal` | `string` | `gnome-terminal --` | Terminal emulator for cluster login |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command. Supports `%%CLUSTER_ID%%` and `%%INCIDENT_ID%%` placeholders. |
-| `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary login command (`ctrl+x b`). Peer of `cluster_login_command`; same placeholders and `PAGERDUTY_*` env vars, but runs directly in the current terminal (SREPD suspends for the session) instead of opening a terminal window. |
+| `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary login command (`ctrl+x b`). Peer of `cluster_login_command` with identical behavior: same placeholders and `PAGERDUTY_*` env vars, opens in a new terminal window, multiple concurrent sessions supported. |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 | `emoji` | `bool` | `true` | Use emoji markers (🚩 🤖 📡) or text fallbacks (\|► ☻ ☺) |

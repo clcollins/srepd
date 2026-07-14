@@ -82,7 +82,7 @@ Because `terminal`, `editor`, and `cluster_login_command` are commands srepd *ex
 | `editor` | `string` | `vim` | Editor for incident notes (wizard prefills from `$EDITOR`/`$VISUAL`) |
 | `terminal` | `string` | `gnome-terminal --` | Terminal emulator for cluster login (wizard detects installed terminals and warns when the configured one is missing) |
 | `cluster_login_command` | `string` | `ocm backplane login %%CLUSTER_ID%%` | Cluster login command |
-| `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary cluster login command (runs directly in the current terminal — no terminal wrapper) |
+| `rosa_boundary_command` | `string` | `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect` | rosa-boundary cluster login command (opens in a new terminal window, like `cluster_login_command`) |
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 | `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries (set to `""` to disable AI features) |
@@ -226,13 +226,14 @@ for the selected incident's cluster. The default command is
 `rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect`. Override via the
 `rosa_boundary_command` config key or `SREPD_ROSA_BOUNDARY_COMMAND` environment variable.
 
-Unlike `cluster_login_command` (which opens a new terminal window), rosa-boundary
-manages its own interactive session and runs **directly in the current terminal**:
-SREPD suspends for the duration of the session and resumes when it exits. The same
-PagerDuty context passed to ocm-container sessions (the `PAGERDUTY_*` environment
-variables below) is passed to the rosa-boundary session; unsupported variables are
-simply ignored. In toolbox mode the command runs on the host via
-`flatpak-spawn --host`, the same convention as the cluster login path.
+rosa-boundary launches an interactive session into a protected cluster exactly
+like ocm-container, and behaves identically to `cluster_login_command`: the
+session opens in a **new terminal window**, SREPD keeps running, and multiple
+concurrent sessions are supported. The same PagerDuty context passed to
+ocm-container sessions (the `PAGERDUTY_*` environment variables below) is passed
+to rosa-boundary sessions; unsupported variables are simply ignored. In toolbox
+mode the terminal launches on the host via `flatpak-spawn --host`, the same
+convention as the cluster login path.
 
 ## Environment Variables
 

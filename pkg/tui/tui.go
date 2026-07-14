@@ -1331,7 +1331,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"cluster_id", cluster,
 			"reason", m.selectedIncident.HTMLURL,
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
-		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
+		// rosa-boundary launches an interactive session into a protected
+		// cluster exactly like ocm-container, so it shares login()'s path:
+		// a new terminal window, PAGERDUTY_* context in the environment, and
+		// srepd keeps running (multiple concurrent sessions supported).
+		cmds = append(cmds, login(vars, m.rosaBoundaryLauncher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case rosaBoundaryClusterSelectedMsg:
 		if m.selectedIncident == nil {
@@ -1352,7 +1356,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"cluster_id", cluster,
 			"reason", m.selectedIncident.HTMLURL,
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
-		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
+		// rosa-boundary launches an interactive session into a protected
+		// cluster exactly like ocm-container, so it shares login()'s path:
+		// a new terminal window, PAGERDUTY_* context in the environment, and
+		// srepd keeps running (multiple concurrent sessions supported).
+		cmds = append(cmds, login(vars, m.rosaBoundaryLauncher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case loginFinishedMsg:
 		if msg.err != nil {

@@ -909,52 +909,6 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 	}
 }
 
-// buildRosaBoundaryExec builds the rosa-boundary process. rosa-boundary is a
-// peer of cluster_login_command (and its eventual replacement) and follows
-// the same conventions as login(): PAGERDUTY_* context from
-// buildPagerDutyEnvVars, passed via flatpak-spawn --env= flags in toolbox
-// mode or directly on the process env otherwise. The ocm-container branch of
-// login() does not apply — rosa-boundary is never an ocm-container command.
-func buildRosaBoundaryExec(vars map[string]string, l launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) *exec.Cmd {
-	command := l.BuildRosaBoundaryCommand(vars)
-
-	clusterID := vars["%%CLUSTER_ID%%"]
-	envFlags := buildPagerDutyEnvVars(incident, alerts, notes, clusterID)
-
-	var finalCommand []string
-	var processEnvVars []string
-	if l.IsToolbox() {
-		toolboxFlags := l.ToolboxEnvFlags(envFlags)
-		finalCommand = launcher.InsertToolboxEnvFlags(command, toolboxFlags)
-		log.Debug("tui.buildRosaBoundaryExec(): toolbox flow", "toolboxFlags", toolboxFlags, "finalCommand", finalCommand)
-	} else {
-		finalCommand = command
-		processEnvVars = extractEnvVarPairs(envFlags)
-		log.Debug("tui.buildRosaBoundaryExec(): direct process env flow", "processEnvVars", processEnvVars, "finalCommand", finalCommand)
-	}
-
-	c := exec.Command(finalCommand[0], finalCommand[1:]...)
-	if len(processEnvVars) > 0 {
-		c.Env = append(os.Environ(), processEnvVars...)
-	}
-	return c
-}
-
-func rosaBoundaryLogin(vars map[string]string, l launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
-	// rosa-boundary is a standalone CLI that manages its own interactive
-	// session via session-manager-plugin, so it runs in the CURRENT terminal:
-	// tea.ExecProcess suspends the TUI, hands the child the real TTY, and
-	// resumes with loginFinishedMsg when the session ends (unlike login(),
-	// which fire-and-forgets a new terminal window and keeps the TUI live).
-	c := buildRosaBoundaryExec(vars, l, incident, alerts, notes)
-
-	log.Debug("tui.rosaBoundaryLogin()", "command", c.String())
-
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return loginFinishedMsg{err}
-	})
-}
-
 type clearSelectedIncidentsMsg string
 
 type acknowledgeIncidentsMsg struct {

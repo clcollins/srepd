@@ -1,90 +1,83 @@
-# 383: Fix rosa-boundary Direct Execution
+# 383: Unify rosa-boundary with the cluster login path
 
 Branch: `srepd/fix-rosa-boundary-direct-execution` (PR #386)
 
 ## Problem
 
-SREPD's rosa-boundary launcher wrapped the command in a terminal emulator
-(`gnome-terminal -- rosa-boundary start-task --cluster-id <id> --connect`),
-opening a new terminal window unnecessarily. rosa-boundary is a standalone
-CLI that manages its own interactive session via `session-manager-plugin`,
-unlike `ocm-container`/`ocm backplane login` which need a new terminal so
-the TUI can keep running.
+rosa-boundary (github.com/openshift-online/rosa-boundary) launches an
+interactive session into a protected cluster **exactly like ocm-container**
+— it is deliberately importing ocm-container's learnings and will
+eventually replace `cluster_login_command`. Its srepd behavior must
+therefore be identical to the cluster login: session in a new terminal
+window, srepd keeps running, multiple concurrent sessions.
 
-rosa-boundary is a **peer of `cluster_login_command`** — and its eventual
-replacement — so it must follow the same conventions and code paths as
-`login()` wherever the intent doesn't force a difference.
+The pre-existing `rosaBoundaryLogin()` got the window behavior right but
+was a hand-rolled copy of `login()`'s mechanics with one real bug: it
+never passed the `PAGERDUTY_*` environment context that ocm-container
+sessions receive.
 
-## Root Cause(s)
+## History (how this PR got here)
 
-1. `rosaBoundaryLogin()` (`pkg/tui/commands.go`) built its command with
-   `BuildLoginCommand()`, which adds the terminal wrapper.
-2. The original execution mechanics — `exec.Command` → `c.Start()` with no
-   stdio, `Wait()` in a goroutine — only worked *because* the child was a
-   GUI terminal bringing its own TTY. Removing the wrapper without changing
-   the mechanics would spawn the interactive session headless while the
-   bubbletea TUI kept the terminal: the session had nowhere to exist, and
-   errors were only debug-logged.
+This PR went through three designs; the record matters because the first
+two came from misunderstandings:
+
+1. **Original draft** (agent-authored): claimed the new terminal window
+   was "unnecessary" and made rosa-boundary execute directly — but kept
+   fire-and-forget `Start()` mechanics, which cannot host an interactive
+   session while the TUI owns the terminal. The premise was wrong: the
+   agent review misunderstood what rosa-boundary is.
+2. **First fix**: made direct execution actually work via
+   `tea.ExecProcess` (TUI suspends). Mechanically correct, but the wrong
+   model — it serializes the SRE to one session at a time, the opposite
+   of the ocm-container workflow rosa-boundary is built to match.
+3. **Final design (this)**: no rosa-boundary-specific execution path at
+   all.
+
+**Lesson**: before "fixing" launch behavior for an external tool, verify
+what the tool actually is; the launch model (new window vs current
+terminal vs suspend) follows from the tool's interaction model, not from
+aesthetics. An agent-review claim like "this window is unnecessary" needs
+the same adversarial verification as any other bug report.
 
 ## Solution
 
-1. **New method** `BuildRosaBoundaryCommand()` (`pkg/launcher/launcher.go`):
-   variable substitution only — no terminal wrapper. In toolbox mode it
-   prepends `flatpak-spawn --host`, the **same convention as
-   `BuildLoginCommand`** (peer parity: srepd in a toolbox runs the command
-   on the host).
-2. **Execution via `tea.ExecProcess`** (`pkg/tui/commands.go`), mirroring
-   the notes editor (`openEditorCmd`): the TUI suspends, the child gets the
-   real TTY, and the callback returns `loginFinishedMsg{err}` on exit — so
-   session errors surface through the existing handler (status + error
-   view) instead of being silently dropped.
-3. **Env parity with `login()`**: `buildRosaBoundaryExec()` builds
-   `PAGERDUTY_*` context via the shared `buildPagerDutyEnvVars`, passed as
-   `flatpak-spawn --env=` flags in toolbox mode or directly on the process
-   env otherwise — the same two mechanisms `login()` uses (the
-   ocm-container `-e` branch does not apply). rosa-boundary ignores
-   variables it does not support. Both call sites (single-cluster and
-   multi-cluster select) now pass the selected incident, alerts, and notes.
+Delete the special path; share `login()` wholesale:
 
-## Design Decisions
-
-- **Separate method, not a flag on `BuildLoginCommand`** — keeps the
-  distinction explicit: terminal-wrapped (login) vs direct (rosa-boundary).
-- **Extracted `buildRosaBoundaryExec` helper** — mirrors `login()`'s body
-  shape and keeps the `tea.ExecProcess` line trivial glue, so tests can
-  assert argv and env on the built `*exec.Cmd`.
-- **Toolbox parity (changed from the first draft of this PR)**: the initial
-  draft skipped `flatpak-spawn` in toolbox mode; as a peer (and future
-  replacement) of `cluster_login_command`, rosa-boundary now follows the
-  identical toolbox convention.
-- **Known quirk, documented not fixed**: `NewClusterLauncher` still
-  requires `terminal` to be set even though direct execution ignores it;
-  in practice viper's default (`gnome-terminal`) means it is never empty.
+- Both rosa-boundary call sites (single-cluster and multi-cluster select
+  in `pkg/tui/tui.go`) call
+  `login(vars, m.rosaBoundaryLauncher, incident, alerts, notes)` — the
+  same function as `cluster_login_command`.
+- `rosaBoundaryLogin()` and the rosa-specific launcher method are
+  removed. rosa-boundary automatically inherits: the terminal wrapper and
+  profiles, toolbox `flatpak-spawn --host` handling, `PAGERDUTY_*` env
+  injection (all three mechanisms), fire-and-forget launch with
+  `loginFinishedMsg`, and any future improvement to `login()`.
+- "Eventually replaces cluster_login_command" becomes trivially true:
+  it is already the same code path, differing only in which config key
+  supplies the command template.
 
 ## Tests
 
-- `pkg/launcher/launcher_test.go` — argv-level: direct execution without
-  wrapper; toolbox adds `flatpak-spawn --host` (parity with
-  `BuildLoginCommand`); multi-variable substitution; comparison against
-  `BuildLoginCommand`.
-- `pkg/tui/commands_test.go` — `buildRosaBoundaryExec`: direct case sets
-  `PAGERDUTY_*` on `c.Env`; toolbox case passes `--env=` flags and leaves
-  `c.Env` empty; `rosaBoundaryLogin` returns a `tea.ExecProcess` command
-  (not the fire-and-forget immediate `loginFinishedMsg`).
+- `pkg/launcher/launcher_test.go` — `TestBuildLoginCommand_RosaBoundary`
+  documents that a rosa-boundary command template goes through the
+  standard terminal-wrapped build; there is deliberately no
+  rosa-specific build path to test.
+- Env behavior is covered by the existing `buildPagerDutyEnvVars` and
+  login-path tests — shared code, shared coverage.
 
 ## Docs
 
-- README "rosa-boundary Support" section and config table row: direct
-  in-terminal execution, TUI suspend/resume, `PAGERDUTY_*` env vars,
-  toolbox convention.
+- README "rosa-boundary Support" section and config table row: identical
+  behavior to `cluster_login_command` (new terminal window, concurrent
+  sessions, `PAGERDUTY_*` env).
 - `docs/configuration.md`: added the previously undocumented
   `rosa_boundary_command` row.
 
 ## Manual Verification (post-merge)
 
-1. From an incident with a cluster, `ctrl+x b` → TUI suspends,
-   rosa-boundary runs in the same terminal, TUI resumes on session exit.
-2. Point `rosa_boundary_command` at a script that prints `env` → verify
-   `PAGERDUTY_*` variables are present.
-3. Point it at a nonexistent binary → visible "failed to login: …" status.
-4. Repeat inside a toolbox (command must exist on the host).
+1. From an incident with a cluster, `ctrl+x b` → session opens in a new
+   terminal window; srepd keeps running; a second `ctrl+x b` (or a
+   cluster login) works concurrently.
+2. Point `rosa_boundary_command` at a script that prints
+   `env | grep PAGERDUTY` → context variables present in the session.
+3. Repeat in toolbox mode (terminal launches on the host).

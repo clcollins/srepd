@@ -14,11 +14,9 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/clcollins/srepd/pkg/rand"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestExecErr_Error(t *testing.T) {
@@ -2999,78 +2997,4 @@ func TestUpdatedIncidentList_AutoAck_DispatchesFreshOnCallCheck(t *testing.T) {
 	assert.True(t, foundAck, "fresh on-call check should acknowledge the assigned+unacked incident")
 	assert.GreaterOrEqual(t, mockClient.CallCounts["ListOnCallsWithContext"], 1,
 		"on-call status must be checked live (ListOnCalls called), never cached")
-}
-
-// rosa-boundary is a peer of cluster_login_command (and its eventual
-// replacement): it follows the same conventions — PAGERDUTY_* env vars via
-// buildPagerDutyEnvVars, direct c.Env outside toolbox, flatpak-spawn
-// --env= flags inside toolbox — but executes in the current terminal via
-// tea.ExecProcess instead of launching a terminal emulator.
-func TestBuildRosaBoundaryExec_DirectEnv(t *testing.T) {
-	l, err := launcher.NewClusterLauncher(
-		"gnome-terminal --",
-		"rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect",
-		"false",
-	)
-	require.NoError(t, err)
-
-	incident := &pagerduty.Incident{
-		APIObject: pagerduty.APIObject{ID: "PD123", HTMLURL: "https://pagerduty.example.test/PD123"},
-		Title:     "Test Incident",
-		Urgency:   "high",
-		Status:    "triggered",
-	}
-	vars := map[string]string{"%%CLUSTER_ID%%": "cluster-abc", "%%INCIDENT_ID%%": "PD123"}
-
-	c := buildRosaBoundaryExec(vars, l, incident, nil, nil)
-
-	assert.Equal(t, []string{"rosa-boundary", "start-task", "--cluster-id", "cluster-abc", "--connect"}, c.Args,
-		"direct execution: no terminal wrapper in argv")
-	assert.Contains(t, c.Env, "PAGERDUTY_INCIDENT_ID=PD123",
-		"PAGERDUTY_* context must be set on the process env, same as the cluster login path")
-	assert.Contains(t, c.Env, "PAGERDUTY_CLUSTER_ID=cluster-abc")
-}
-
-func TestBuildRosaBoundaryExec_ToolboxEnvFlags(t *testing.T) {
-	l, err := launcher.NewClusterLauncherWithToolbox(
-		"gnome-terminal --",
-		"rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect",
-		"true",
-		func() bool { return true },
-	)
-	require.NoError(t, err)
-
-	incident := &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "PD456"}}
-	vars := map[string]string{"%%CLUSTER_ID%%": "cluster-xyz"}
-
-	c := buildRosaBoundaryExec(vars, l, incident, nil, nil)
-
-	assert.Equal(t, "flatpak-spawn", c.Args[0],
-		"toolbox mode must run rosa-boundary on the host via flatpak-spawn, same as the cluster login path")
-	assert.Equal(t, "--host", c.Args[1])
-	assert.Contains(t, c.Args, "--env=PAGERDUTY_INCIDENT_ID=PD456",
-		"toolbox mode must pass PAGERDUTY_* via flatpak-spawn --env= flags")
-	assert.Contains(t, c.Args, "rosa-boundary")
-	assert.Empty(t, c.Env, "toolbox mode passes env via flags, not process env")
-}
-
-// rosaBoundaryLogin must hand the terminal to the child (tea.ExecProcess),
-// not fire-and-forget: the session is interactive.
-func TestRosaBoundaryLogin_ReturnsExecProcessCmd(t *testing.T) {
-	l, err := launcher.NewClusterLauncher(
-		"gnome-terminal --",
-		"true --cluster-id %%CLUSTER_ID%%",
-		"false",
-	)
-	require.NoError(t, err)
-
-	cmd := rosaBoundaryLogin(map[string]string{"%%CLUSTER_ID%%": "c1"}, l, nil, nil, nil)
-	require.NotNil(t, cmd)
-
-	// tea.ExecProcess commands yield an internal tea exec message, NOT the
-	// terminal fire-and-forget path's immediate loginFinishedMsg{nil}.
-	msg := cmd()
-	_, isLoginFinished := msg.(loginFinishedMsg)
-	assert.False(t, isLoginFinished,
-		"rosaBoundaryLogin must return a tea.ExecProcess command (TUI suspends for the session), not an immediate loginFinishedMsg")
 }
