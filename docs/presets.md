@@ -75,6 +75,15 @@ never accepted: presets carry team policy, not credentials.
 - **No credentials** — `token` and `llm_api` keys are always rejected
 - **No redirects to insecure hosts** — Go's `http.Client` follows redirects
   but the initial URL must be HTTPS
+- **Executable values are gated.** `terminal`, `editor`, and
+  `cluster_login_command` are commands srepd *executes*. A preset that
+  seeds any of them triggers an extra safety gate after the final
+  "Save changes?" confirmation: a bold red warning listing every
+  preset-supplied command for review, then an explicit "Are you sure you
+  trust the source?" confirmation showing the preset file or URL. Both
+  default to No; declining either discards all changes. Preset fields
+  that are only PagerDuty IDs (teams, policies, mappings) never trigger
+  the gate.
 
 ## Publishing a preset for your team
 
