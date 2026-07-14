@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/docs"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
@@ -282,4 +283,61 @@ func TestRenderedIncidentMsg_TableDriven(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Focus mode overlap fix: ctrl+h from incident view
+// ---------------------------------------------------------------------------
+
+func TestCtrlH_FromIncidentView_ClearsViewingIncident(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.config.Client = &pd.MockPagerDutyClient{}
+	m.viewingIncident = true
+
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = result.(model)
+
+	assert.True(t, m.viewingDocs, "viewingDocs should be true")
+	assert.False(t, m.viewingIncident, "viewingIncident should be cleared")
+	assert.True(t, m.docsReturnToIncident, "docsReturnToIncident should be set")
+	assert.NotNil(t, cmd, "should return renderDocsMsg command")
+}
+
+func TestEscape_FromDocs_ReturnsToIncidentView(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.config.Client = &pd.MockPagerDutyClient{}
+	m.viewingDocs = true
+	m.docsReturnToIncident = true
+
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = result.(model)
+
+	assert.False(t, m.viewingDocs, "viewingDocs should be cleared")
+	assert.True(t, m.viewingIncident, "viewingIncident should be restored")
+	assert.False(t, m.docsReturnToIncident, "docsReturnToIncident should be cleared")
+}
+
+func TestEscape_FromDocs_ReturnsToTable(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.config.Client = &pd.MockPagerDutyClient{}
+	m.viewingDocs = true
+	m.docsReturnToIncident = false
+
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = result.(model)
+
+	assert.False(t, m.viewingDocs, "viewingDocs should be cleared")
+	assert.False(t, m.viewingIncident, "viewingIncident should remain false")
+}
+
+func TestCtrlH_FromTable_DoesNotSetReturnFlag(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.config.Client = &pd.MockPagerDutyClient{}
+	m.viewingIncident = false
+
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = result.(model)
+
+	assert.True(t, m.viewingDocs, "viewingDocs should be true")
+	assert.False(t, m.docsReturnToIncident, "docsReturnToIncident should be false from table")
 }

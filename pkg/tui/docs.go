@@ -69,6 +69,10 @@ func buildDocsPageLabels(pages []docs.Doc, activeTab, tabsPerPage int) []string 
 func (m *model) clearDocsView() {
 	m.viewingDocs = false
 	m.docsActiveTab = 0
+	if m.docsReturnToIncident {
+		m.docsReturnToIncident = false
+		m.viewingIncident = true
+	}
 }
 
 func (m model) renderDocsTabBar() string {
