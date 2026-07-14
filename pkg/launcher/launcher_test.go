@@ -474,7 +474,10 @@ func TestBuildRosaBoundaryCommand_DirectExecution(t *testing.T) {
 		assert.Equal(t, expected, cmd, "rosa-boundary command should execute directly without terminal wrapper")
 	})
 
-	t.Run("rosa-boundary with toolbox mode does not add flatpak-spawn", func(t *testing.T) {
+	t.Run("rosa-boundary with toolbox mode adds flatpak-spawn like BuildLoginCommand", func(t *testing.T) {
+		// rosa-boundary is a peer of cluster_login_command (and its eventual
+		// replacement), so it follows the same toolbox convention: srepd in
+		// a toolbox runs the command on the host via flatpak-spawn --host.
 		launcher := ClusterLauncher{
 			terminal:            []string{"gnome-terminal", "--"},
 			clusterLoginCommand: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%", "--connect"},
@@ -486,9 +489,9 @@ func TestBuildRosaBoundaryCommand_DirectExecution(t *testing.T) {
 		}
 
 		cmd := launcher.BuildRosaBoundaryCommand(vars)
-		expected := []string{"rosa-boundary", "start-task", "--cluster-id", "test-cluster-456", "--connect"}
+		expected := []string{"flatpak-spawn", "--host", "rosa-boundary", "start-task", "--cluster-id", "test-cluster-456", "--connect"}
 
-		assert.Equal(t, expected, cmd, "rosa-boundary should not be wrapped with flatpak-spawn even in toolbox mode")
+		assert.Equal(t, expected, cmd, "toolbox mode must wrap rosa-boundary with flatpak-spawn --host, same as the cluster login path")
 	})
 
 	t.Run("rosa-boundary with multiple variable replacements", func(t *testing.T) {

@@ -1331,7 +1331,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"cluster_id", cluster,
 			"reason", m.selectedIncident.HTMLURL,
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
-		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher))
+		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case rosaBoundaryClusterSelectedMsg:
 		if m.selectedIncident == nil {
@@ -1352,7 +1352,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			"cluster_id", cluster,
 			"reason", m.selectedIncident.HTMLURL,
 			"alert", alert.ExtractAlertName(m.selectedIncident.Title))
-		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher))
+		cmds = append(cmds, rosaBoundaryLogin(vars, m.rosaBoundaryLauncher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case loginFinishedMsg:
 		if msg.err != nil {
