@@ -177,6 +177,9 @@ type model struct {
 	watcherStreamPartial string
 	watcherStreamCancel  context.CancelFunc
 
+	agentStreamPartial string
+	agentStreamCancel  context.CancelFunc
+
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
 
