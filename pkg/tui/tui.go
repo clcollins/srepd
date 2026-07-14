@@ -405,6 +405,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				resolvedURL, urlErr := msg.Client.GetBackplaneURL()
 				if urlErr != nil {
 					log.Warn("Backplane URL resolution from OCM failed (deferred)", "error", urlErr)
+					m.backplaneInitErr = fmt.Errorf("URL resolution from OCM failed: %w", urlErr)
 				} else {
 					m.backplaneConfig.URL = resolvedURL
 					log.Info("Backplane URL resolved from OCM (deferred)", "url", resolvedURL)
@@ -412,8 +413,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.backplaneConfig.URL != "" {
 				m.backplaneClient = backplane.NewClient(m.backplaneConfig, msg.Client.GetAccessToken)
+				m.backplaneInitErr = nil
 				log.Info("Backplane client initialized (deferred)")
-			} else {
+			} else if m.backplaneInitErr == nil {
+				m.backplaneInitErr = fmt.Errorf("no backplane URL in config or from OCM")
 				log.Warn("Backplane client not created (deferred): no URL available")
 			}
 		}
