@@ -58,6 +58,9 @@ func (m model) View() string {
 	case m.viewingLog:
 		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))
 
+	case m.tourMode:
+		s.WriteString(m.renderTourPanel())
+
 	case m.configMode:
 		s.WriteString(m.styles.FormContainer.Render(m.configForm.View()))
 

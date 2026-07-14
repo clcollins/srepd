@@ -209,6 +209,10 @@ type model struct {
 	// team preset (--preset), for tagging and change forcing.
 	configPresetApplied pkgconfig.PresetApplied
 
+	// Guided tour state (#324)
+	tourMode bool
+	tourStep int
+
 	// OCM enrichment state
 	ocmClient      ocm.OCMClient
 	ocmAuthPending bool
