@@ -9,13 +9,205 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 )
+
+// captureLog redirects the global logger to a buffer for the duration of the
+// test and restores the previous output and level afterwards. Tests using it
+// must not run in parallel — the logger is a shared global.
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	origLevel := log.GetLevel()
+	log.SetOutput(&buf)
+	t.Cleanup(func() {
+		log.SetOutput(os.Stderr)
+		log.SetLevel(origLevel)
+	})
+	return &buf
+}
+
+func TestUpdatedIncidentListCacheInvalidation(t *testing.T) {
+	newListModel := func() model {
+		m := createTestModel()
+		m.config = &pd.Config{
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U123"}},
+		}
+		return m
+	}
+
+	t.Run("removes cache entries for incidents no longer in the list", func(t *testing.T) {
+		m := newListModel()
+		m.incidentCache["GONE"] = &cachedIncidentData{
+			incident: &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "GONE"}},
+		}
+
+		result, _ := m.Update(updatedIncidentListMsg{
+			incidents: []pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "Q123"}}},
+		})
+		m = result.(model)
+
+		assert.NotContains(t, m.incidentCache, "GONE")
+	})
+
+	t.Run("invalidates cache entries whose incident changed", func(t *testing.T) {
+		m := newListModel()
+		m.incidentCache["Q123"] = &cachedIncidentData{
+			incident: &pagerduty.Incident{
+				APIObject:          pagerduty.APIObject{ID: "Q123"},
+				LastStatusChangeAt: "2024-01-01T00:00:00Z",
+			},
+		}
+
+		result, _ := m.Update(updatedIncidentListMsg{
+			incidents: []pagerduty.Incident{{
+				APIObject:          pagerduty.APIObject{ID: "Q123"},
+				LastStatusChangeAt: "2024-06-01T00:00:00Z",
+			}},
+		})
+		m = result.(model)
+
+		assert.NotContains(t, m.incidentCache, "Q123",
+			"a changed LastStatusChangeAt must invalidate the cached entry")
+	})
+
+	t.Run("keeps cache entries for unchanged incidents", func(t *testing.T) {
+		m := newListModel()
+		m.incidentCache["Q123"] = &cachedIncidentData{
+			incident: &pagerduty.Incident{
+				APIObject:          pagerduty.APIObject{ID: "Q123"},
+				LastStatusChangeAt: "2024-01-01T00:00:00Z",
+			},
+		}
+
+		result, _ := m.Update(updatedIncidentListMsg{
+			incidents: []pagerduty.Incident{{
+				APIObject:          pagerduty.APIObject{ID: "Q123"},
+				LastStatusChangeAt: "2024-01-01T00:00:00Z",
+			}},
+		})
+		m = result.(model)
+
+		assert.Contains(t, m.incidentCache, "Q123")
+	})
+
+	t.Run("keeps partial cache entries without incident details", func(t *testing.T) {
+		m := newListModel()
+		// An alerts/notes-only entry has no incident and cannot be compared
+		m.incidentCache["Q123"] = &cachedIncidentData{notesLoaded: true}
+
+		result, _ := m.Update(updatedIncidentListMsg{
+			incidents: []pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "Q123"}}},
+		})
+		m = result.(model)
+
+		assert.Contains(t, m.incidentCache, "Q123")
+	})
+
+	t.Run("prunes enrichment dispatch records for departed incidents", func(t *testing.T) {
+		m := newListModel()
+		m.enrichDispatchedAt = map[string]time.Time{
+			"GONE": time.Now(),
+			"Q123": time.Now(),
+		}
+
+		result, _ := m.Update(updatedIncidentListMsg{
+			incidents: []pagerduty.Incident{{APIObject: pagerduty.APIObject{ID: "Q123"}}},
+		})
+		m = result.(model)
+
+		assert.NotContains(t, m.enrichDispatchedAt, "GONE")
+		assert.Contains(t, m.enrichDispatchedAt, "Q123")
+	})
+}
+
+func TestGotIncidentNotesMsg_SetsLastFetched(t *testing.T) {
+	t.Run("new cache entry records fetch time", func(t *testing.T) {
+		m := createTestModel()
+
+		result, _ := m.Update(gotIncidentNotesMsg{incidentID: "Q123", notes: []pagerduty.IncidentNote{}})
+		m = result.(model)
+
+		assert.False(t, m.incidentCache["Q123"].lastFetched.IsZero(),
+			"a notes-first cache entry must record when its data was fetched")
+	})
+
+	t.Run("existing cache entry fetch time advances", func(t *testing.T) {
+		m := createTestModel()
+		stale := time.Now().Add(-time.Hour)
+		m.incidentCache["Q123"] = &cachedIncidentData{lastFetched: stale}
+
+		result, _ := m.Update(gotIncidentNotesMsg{incidentID: "Q123", notes: []pagerduty.IncidentNote{}})
+		m = result.(model)
+
+		assert.True(t, m.incidentCache["Q123"].lastFetched.After(stale),
+			"refreshing notes must advance the entry's fetch time")
+	})
+}
+
+func TestGotIncidentAlertsMsg_SetsLastFetched(t *testing.T) {
+	t.Run("new cache entry records fetch time", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}}}
+
+		result, _ := m.Update(gotIncidentAlertsMsg{incidentID: "Q123", alerts: []pagerduty.IncidentAlert{}})
+		m = result.(model)
+
+		assert.False(t, m.incidentCache["Q123"].lastFetched.IsZero(),
+			"an alerts-first cache entry must record when its data was fetched")
+	})
+
+	t.Run("existing cache entry fetch time advances", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}}}
+		stale := time.Now().Add(-time.Hour)
+		m.incidentCache["Q123"] = &cachedIncidentData{lastFetched: stale}
+
+		result, _ := m.Update(gotIncidentAlertsMsg{incidentID: "Q123", alerts: []pagerduty.IncidentAlert{}})
+		m = result.(model)
+
+		assert.True(t, m.incidentCache["Q123"].lastFetched.After(stale),
+			"refreshing alerts must advance the entry's fetch time")
+	})
+}
+
+func TestUpdateDebugPreamble_LogsAtDebugLevel(t *testing.T) {
+	buf := captureLog(t)
+	log.SetLevel(log.DebugLevel)
+
+	m := createTestModel()
+	m.Update(updateIncidentListMsg("test"))
+
+	assert.Contains(t, buf.String(), "Update", "message flow should be logged at debug level")
+}
+
+func TestUpdateDebugPreamble_SilentAtInfoLevel(t *testing.T) {
+	buf := captureLog(t)
+	log.SetLevel(log.InfoLevel)
+
+	m := createTestModel()
+	m.Update(updateIncidentListMsg("test"))
+
+	assert.NotContains(t, buf.String(), "Update", "no per-message debug output above debug level")
+}
+
+func TestUpdateDebugPreamble_SkipsFrequentMessages(t *testing.T) {
+	buf := captureLog(t)
+	log.SetLevel(log.DebugLevel)
+
+	m := createTestModel()
+	m.Update(TickMsg{})
+
+	assert.NotContains(t, buf.String(), "Update", "high-frequency messages must not be logged")
+}
 
 func createTestTarGz(t *testing.T, filename string, content []byte) []byte {
 	t.Helper()
@@ -449,5 +641,53 @@ func TestSilenceIncidentsMsg_PerServicePolicy(t *testing.T) {
 		updated := result.(model)
 
 		assert.Contains(t, updated.status, "failed silencing")
+	})
+
+	t.Run("silenceIncidentsMsg does not silence the selected incident twice", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+			EscalationPolicies: map[string]*pagerduty.EscalationPolicy{
+				"SILENT_DEFAULT": {APIObject: pagerduty.APIObject{ID: "POL_DEFAULT"}, Name: "Default Silent"},
+			},
+		}
+
+		incidents := []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Service: pagerduty.APIObject{ID: "SVC1"}},
+		}
+		m.selectedIncident = &incidents[0]
+
+		result, _ := m.Update(silenceIncidentsMsg{incidents: incidents})
+		updated := result.(model)
+
+		assert.Equal(t, 1, strings.Count(updated.status, "Q123"),
+			"an incident already in the message must be silenced only once")
+	})
+
+	t.Run("silenceIncidentsMsg still includes selected incident when absent", func(t *testing.T) {
+		m := createTestModel()
+		m.config = &pd.Config{
+			Client:      &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{APIObject: pagerduty.APIObject{ID: "U1"}},
+			EscalationPolicies: map[string]*pagerduty.EscalationPolicy{
+				"SILENT_DEFAULT": {APIObject: pagerduty.APIObject{ID: "POL_DEFAULT"}, Name: "Default Silent"},
+			},
+		}
+
+		incidents := []pagerduty.Incident{
+			{APIObject: pagerduty.APIObject{ID: "Q123"}, Service: pagerduty.APIObject{ID: "SVC1"}},
+		}
+		m.selectedIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "Q456"},
+			Service:   pagerduty.APIObject{ID: "SVC1"},
+		}
+
+		result, _ := m.Update(silenceIncidentsMsg{incidents: incidents})
+		updated := result.(model)
+
+		assert.Contains(t, updated.status, "Q123")
+		assert.Contains(t, updated.status, "Q456",
+			"a selected incident not in the message should still be silenced")
 	})
 }

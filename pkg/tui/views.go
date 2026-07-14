@@ -36,9 +36,6 @@ var (
 func (m model) View() string {
 	var s strings.Builder
 
-	// errHelpView := helpStyle.Render(help.New().View(errorViewKeyMap))
-	errHelpView := help.New().View(errorViewKeyMap)
-
 	s.WriteString(m.renderHeader())
 
 	switch {
@@ -51,7 +48,9 @@ func (m model) View() string {
 		s.WriteString("\n\n")
 		s.WriteString(m.err.Error())
 		s.WriteString("\n")
-		s.WriteString(errHelpView)
+		// Only built on the error path — constructing a help model on every
+		// render is wasted work for the common case
+		s.WriteString(help.New().View(errorViewKeyMap))
 
 		return m.styles.Error.Render(s.String())
 

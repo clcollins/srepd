@@ -145,32 +145,33 @@ func filterMsgContent(msg tea.Msg) tea.Msg {
 // eg, bad:
 // return m, func() tea.Msg { getIncident(m.config, msg.incident.ID) }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	msgType := reflect.TypeOf(msg)
-	// Reduce logging for high-frequency messages to prevent I/O overhead
-	shouldLog := true
+	// Reduce logging for high-frequency messages to prevent I/O overhead.
+	// Skip the reflection and message-formatting work entirely when debug
+	// logging is disabled — this runs on every message through the loop
+	if log.GetLevel() <= log.DebugLevel {
+		shouldLog := true
 
-	// Skip logging for very frequent messages
-	switch msgType {
-	case reflect.TypeOf(TickMsg{}),
-		reflect.TypeOf(spinner.TickMsg{}),
-		reflect.TypeOf(tea.MouseMsg{}),
-		reflect.TypeOf(ocmServiceLogsMsg{}),
-		reflect.TypeOf(limitedSupportMsg{}),
-		reflect.TypeOf(clusterReportsMsg{}),
-		reflect.TypeOf(priorAlertsMsg{}),
-		reflect.TypeOf(lazyEnrichMsg{}):
-		shouldLog = false
-	}
-
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && shouldLog {
-		// Skip logging for arrow keys and other navigation used in scrolling
-		if keyMsg.Type == tea.KeyUp || keyMsg.Type == tea.KeyDown {
+		// Skip logging for very frequent messages
+		switch v := msg.(type) {
+		case TickMsg,
+			spinner.TickMsg,
+			tea.MouseMsg,
+			ocmServiceLogsMsg,
+			limitedSupportMsg,
+			clusterReportsMsg,
+			priorAlertsMsg,
+			lazyEnrichMsg:
 			shouldLog = false
+		case tea.KeyMsg:
+			// Skip logging for arrow keys and other navigation used in scrolling
+			if v.Type == tea.KeyUp || v.Type == tea.KeyDown {
+				shouldLog = false
+			}
 		}
-	}
 
-	if shouldLog {
-		log.Debug("Update", msgType, filterMsgContent(msg))
+		if shouldLog {
+			log.Debug("Update", reflect.TypeOf(msg), filterMsgContent(msg))
+		}
 	}
 
 	// PRIORITY HANDLING: Process user input keys immediately, before any queued messages
@@ -778,11 +779,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			log.Debug("Update", "gotIncidentNotesMsg", "refreshing cached notes", "incident", msg.incidentID, "count", len(msg.notes))
 			cached.notes = msg.notes
 			cached.notesLoaded = true
+			cached.lastFetched = time.Now()
 		} else {
 			log.Debug("Update", "gotIncidentNotesMsg", "caching new notes", "incident", msg.incidentID, "count", len(msg.notes))
 			m.incidentCache[msg.incidentID] = &cachedIncidentData{
 				notes:       msg.notes,
 				notesLoaded: true,
+				lastFetched: time.Now(),
 			}
 		}
 
@@ -821,11 +824,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			log.Debug("Update", "gotIncidentAlertsMsg", "refreshing cached alerts", "incident", msg.incidentID, "count", len(msg.alerts))
 			cached.alerts = msg.alerts
 			cached.alertsLoaded = true
+			cached.lastFetched = time.Now()
 		} else {
 			log.Debug("Update", "gotIncidentAlertsMsg", "caching new alerts", "incident", msg.incidentID, "count", len(msg.alerts))
 			m.incidentCache[msg.incidentID] = &cachedIncidentData{
 				alerts:       msg.alerts,
 				alertsLoaded: true,
+				lastFetched:  time.Now(),
 			}
 		}
 
@@ -1026,33 +1031,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Clean up cache - remove entries for incidents no longer in the list
-		incidentIDs := make(map[string]bool)
-		for _, i := range m.incidentList {
-			incidentIDs[i.ID] = true
+		// and invalidate entries whose incident changed since it was cached
+		incidentsByID := make(map[string]*pagerduty.Incident, len(m.incidentList))
+		for i := range m.incidentList {
+			incidentsByID[m.incidentList[i].ID] = &m.incidentList[i]
 		}
-		for id := range m.incidentCache {
-			if incidentIDs[id] {
-				// Incident still exists - mark cache as potentially stale
-				// Find incident in new list and check if LastStatusChangeAt differs
-				for _, newIncident := range m.incidentList {
-					if newIncident.ID == id {
-						if cached, exists := m.incidentCache[id]; exists {
-							// Compare timestamps to detect changes
-							if cached.incident != nil &&
-								cached.incident.LastStatusChangeAt != newIncident.LastStatusChangeAt {
-								// Incident changed - invalidate cached details
-								log.Debug("Update", "updatedIncidentListMsg", "invalidating cache for updated incident", "id", id)
-								delete(m.incidentCache, id)
-							}
-						}
-						break
-					}
-				}
-			} else {
+		for id, cached := range m.incidentCache {
+			newIncident, exists := incidentsByID[id]
+			if !exists {
 				// Incident no longer in list - remove from cache and OCM data
 				delete(m.incidentCache, id)
 				m.clearOCMCacheForIncident(id)
 				log.Debug("Update", "updatedIncidentListMsg", "removing cached data for incident no longer in list", "incident", id)
+				continue
+			}
+			if cached.incident != nil &&
+				cached.incident.LastStatusChangeAt != newIncident.LastStatusChangeAt {
+				// Incident changed - invalidate cached details
+				log.Debug("Update", "updatedIncidentListMsg", "invalidating cache for updated incident", "id", id)
+				delete(m.incidentCache, id)
+			}
+		}
+
+		// Drop lazy-enrichment dispatch records for departed incidents.
+		// Swept separately from the cache: a persistently failing fetch has
+		// a dispatch record but never gets a cache entry
+		for id := range m.enrichDispatchedAt {
+			if _, exists := incidentsByID[id]; !exists {
+				delete(m.enrichDispatchedAt, id)
 			}
 		}
 
@@ -1219,7 +1225,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if len(m.selectedIncidentAlerts) == 0 {
 			log.Debug("tui.Update()", "msg_type", reflect.TypeOf(msg), "msg", "no alerts found for incident - requeuing", "incident", m.selectedIncident.ID)
-			return m, func() tea.Msg { return loginMsg("sender: loginMsg; requeue") }
+			return m, requeueAfterDelay(loginMsg("sender: loginMsg; requeue"))
 		}
 
 		clusters := getUniqueClusters(m.selectedIncidentAlerts)
@@ -1293,7 +1299,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if len(m.selectedIncidentAlerts) == 0 {
 			log.Debug("tui.Update()", "msg_type", reflect.TypeOf(msg), "msg", "no alerts found for incident - requeuing")
-			return m, func() tea.Msg { return rosaBoundaryLoginMsg("requeue") }
+			return m, requeueAfterDelay(rosaBoundaryLoginMsg("requeue"))
 		}
 
 		clusters := getUniqueClusters(m.selectedIncidentAlerts)
@@ -1442,10 +1448,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Re-queue the message if the selected incident is not yet available
+		// Re-queue the message if the selected incident is not yet available.
+		// The delay yields the Update loop instead of spinning on a hot requeue
 		if m.selectedIncident == nil {
 			m.setStatus("waiting for incident info...")
-			return m, func() tea.Msg { return msg }
+			return m, requeueAfterDelay(msg)
 		}
 
 		// Perform the action once the selected incident is available
@@ -1718,8 +1725,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		incidents := msg.incidents
-		if m.selectedIncident != nil {
-			incidents = append(msg.incidents, *m.selectedIncident)
+		// Only add the selected incident if it isn't already in the list,
+		// otherwise it would be silenced twice
+		if m.selectedIncident != nil && !slices.ContainsFunc(incidents, func(i pagerduty.Incident) bool {
+			return i.ID == m.selectedIncident.ID
+		}) {
+			incidents = append(incidents, *m.selectedIncident)
 		}
 
 		var cmds []tea.Cmd
