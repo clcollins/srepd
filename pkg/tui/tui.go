@@ -860,19 +860,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.incidentClusterMap[msg.incidentID] = clusterIDs
 			}
+			// Only mark clusters in-flight when an OCM client exists to
+			// dispatch the enrichment: enrichClusters no-ops on a nil client,
+			// and an in-flight flag with no clusterInfoMsg coming is never
+			// cleared, so the OCMClientReadyMsg post-auth sweep would skip
+			// the cluster forever and the OCM tabs would spin indefinitely.
+			// Pre-auth clusters stay unmarked in incidentClusterMap and are
+			// picked up by that sweep once auth completes.
 			var uncachedClusters []string
-			for _, id := range clusterIDs {
-				if _, cached := m.clusterCache[id]; cached {
-					continue
+			if m.ocmClient != nil {
+				for _, id := range clusterIDs {
+					if _, cached := m.clusterCache[id]; cached {
+						continue
+					}
+					if m.clusterEnrichInFlight[id] {
+						continue
+					}
+					if m.clusterEnrichFailed[id] >= 3 {
+						continue
+					}
+					uncachedClusters = append(uncachedClusters, id)
+					m.clusterEnrichInFlight[id] = true
 				}
-				if m.clusterEnrichInFlight[id] {
-					continue
-				}
-				if m.clusterEnrichFailed[id] >= 3 {
-					continue
-				}
-				uncachedClusters = append(uncachedClusters, id)
-				m.clusterEnrichInFlight[id] = true
 			}
 			enrichCmds := enrichClusters(m.ocmClient, uncachedClusters, m.devMode)
 			if len(enrichCmds) > 0 {

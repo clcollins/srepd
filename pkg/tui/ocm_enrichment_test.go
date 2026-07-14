@@ -3,8 +3,10 @@ package tui
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
@@ -715,5 +717,117 @@ func TestCacheCleanup_RemovedFromList(t *testing.T) {
 		// INC002 preserved
 		assert.Contains(t, m.clusterCache, c2)
 		assert.Contains(t, m.incidentClusterMap, "INC002")
+	})
+}
+
+// alertsForCluster builds a single-alert slice carrying the given cluster ID,
+// matching the PagerDuty alert body shape getUniqueClusters parses.
+func alertsForCluster(clusterID string) []pagerduty.IncidentAlert {
+	return []pagerduty.IncidentAlert{
+		{
+			APIObject: pagerduty.APIObject{ID: "A1"},
+			Body: map[string]interface{}{
+				"details": map[string]interface{}{
+					"cluster_id": clusterID,
+				},
+			},
+		},
+	}
+}
+
+// collectCmdMsgs executes cmd, flattening nested tea.Batch commands, running
+// each leaf command concurrently and collecting the messages produced before
+// the timeout. Slow commands (e.g. 4s flash-notification tea.Tick timers)
+// simply don't make the cut and are ignored.
+func collectCmdMsgs(t *testing.T, cmd tea.Cmd, timeout time.Duration) []tea.Msg {
+	t.Helper()
+	if cmd == nil {
+		return nil
+	}
+	results := make(chan tea.Msg, 64)
+	var run func(c tea.Cmd)
+	run = func(c tea.Cmd) {
+		if c == nil {
+			return
+		}
+		msg := c()
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, sub := range batch {
+				go run(sub)
+			}
+			return
+		}
+		results <- msg
+	}
+	go run(cmd)
+
+	var msgs []tea.Msg
+	deadline := time.After(timeout)
+	for {
+		select {
+		case msg := <-results:
+			msgs = append(msgs, msg)
+		case <-deadline:
+			return msgs
+		}
+	}
+}
+
+func TestGotIncidentAlertsMsg_NilOCMClient_NoInFlightLeak(t *testing.T) {
+	t.Run("pre-auth alerts do not mark clusters in-flight", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.incidentClusterMap = make(map[string][]string)
+		m.clusterEnrichInFlight = make(map[string]bool)
+		m.selectedIncident = &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "INC001"}}
+
+		result, _ := m.Update(gotIncidentAlertsMsg{
+			incidentID: "INC001",
+			alerts:     alertsForCluster(testClusterID),
+		})
+		updated := result.(model)
+
+		assert.False(t, updated.clusterEnrichInFlight[testClusterID],
+			"no enrichment can be dispatched without an OCM client, so the cluster must not be marked in-flight")
+		assert.Equal(t, []string{testClusterID}, updated.incidentClusterMap["INC001"],
+			"cluster must still be mapped so the post-auth sweep can enrich it")
+	})
+}
+
+func TestOCMClientReadyMsg_EnrichesClusterViewedPreAuth(t *testing.T) {
+	t.Run("cluster from incident opened pre-auth is enriched once OCM connects", func(t *testing.T) {
+		m := createTestModel()
+		m.ocmClient = nil
+		m.ocmAuthPending = true
+		m.incidentClusterMap = make(map[string][]string)
+		m.clusterCache = make(map[string]*ocm.ClusterInfo)
+		m.clusterEnrichInFlight = make(map[string]bool)
+		m.clusterEnrichFailed = make(map[string]int)
+		m.selectedIncident = &pagerduty.Incident{APIObject: pagerduty.APIObject{ID: "INC001"}}
+
+		// Alerts arrive for the open incident while OCM is still authenticating.
+		result, _ := m.Update(gotIncidentAlertsMsg{
+			incidentID: "INC001",
+			alerts:     alertsForCluster(testClusterID),
+		})
+		m = result.(model)
+		assert.False(t, m.clusterEnrichInFlight[testClusterID],
+			"no OCM client yet — cluster must not be marked in-flight")
+
+		// OCM auth completes.
+		result, cmd := m.Update(OCMClientReadyMsg{Client: createMockOCMClient(), Err: nil})
+		updated := result.(model)
+
+		assert.True(t, updated.clusterEnrichInFlight[testClusterID],
+			"post-auth sweep must mark the pre-auth cluster in-flight when dispatching")
+
+		var enriched bool
+		for _, msg := range collectCmdMsgs(t, cmd, 500*time.Millisecond) {
+			if info, ok := msg.(clusterInfoMsg); ok && info.clusterID == testClusterID {
+				enriched = true
+			}
+		}
+		assert.True(t, enriched,
+			"OCMClientReadyMsg must dispatch phase-1 enrichment (clusterInfoMsg) for the cluster viewed pre-auth")
 	})
 }
