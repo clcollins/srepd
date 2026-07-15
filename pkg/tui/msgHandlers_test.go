@@ -809,6 +809,25 @@ func TestErrorMode_EscapeClearsError(t *testing.T) {
 	})
 }
 
+func TestErrorMode_HelpTogglesFullHelp(t *testing.T) {
+	t.Run("h key in error mode toggles full help", func(t *testing.T) {
+		m := createTestModel()
+		m.err = fmt.Errorf("test error")
+		assert.False(t, m.help.ShowAll, "help should start compact")
+
+		helpMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
+		result, _ := m.Update(helpMsg)
+		updatedModel := result.(model)
+
+		assert.True(t, updatedModel.help.ShowAll, "h should expand help in error mode")
+		assert.NotNil(t, updatedModel.err, "toggling help must not clear the error")
+
+		result, _ = updatedModel.Update(helpMsg)
+		updatedModel = result.(model)
+		assert.False(t, updatedModel.help.ShowAll, "h should collapse help again")
+	})
+}
+
 func TestRecalculateTableHeight_CompactHelp(t *testing.T) {
 	t.Run("24-line terminal with compact help shows usable table height", func(t *testing.T) {
 		m := createTestModel()
