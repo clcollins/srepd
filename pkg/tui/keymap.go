@@ -213,12 +213,19 @@ var defaultKeyMap = keymap{
 }
 
 var errorViewKeyMap = keymap{
-	Quit: key.NewBinding(
-		key.WithKeys("q", "ctrl+c"),
-		key.WithHelp("q/ctrl+c", "quit"),
+	Help: key.NewBinding(
+		key.WithKeys("h"),
+		key.WithHelp("h", "help"),
 	),
 	Back: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "back"),
+	),
+	// Quit in error mode is handled by the global quit matcher in
+	// keyMsgHandler, which listens for ctrl+q/ctrl+c — mirror those keys
+	// here so the help text matches what actually quits
+	Quit: key.NewBinding(
+		key.WithKeys("ctrl+q", "ctrl+c"),
+		key.WithHelp("ctrl+q/ctrl+c", "quit"),
 	),
 }
