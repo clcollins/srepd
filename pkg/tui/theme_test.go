@@ -110,7 +110,6 @@ func TestBuildStyles(t *testing.T) {
 		assert.NotNil(t, styles.Main)
 		assert.NotNil(t, styles.Table)
 		assert.NotNil(t, styles.TableContainer)
-		assert.NotNil(t, styles.Error)
 		assert.NotNil(t, styles.Warning)
 		assert.NotNil(t, styles.Muted)
 		assert.NotNil(t, styles.Padded)

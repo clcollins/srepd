@@ -62,17 +62,12 @@ func (m model) View() string {
 	case m.err != nil:
 		// No logging here: View runs on every render tick (~13/s), and the
 		// error is already logged once by errMsgHandler at ERROR level.
-		s.WriteString(dot)
-		s.WriteString("ERROR")
-		s.WriteString(dot)
-		s.WriteString("\n\n")
-		s.WriteString(m.err.Error())
-		s.WriteString("\n")
-		// Only built on the error path — constructing a help model on every
-		// render is wasted work for the common case
-		s.WriteString(help.New().View(errorViewKeyMap))
-
-		return m.styles.Error.Render(s.String())
+		return renderModal(windowSize.Width, windowSize.Height, m.styles, m.theme, Modal{
+			Title:   "Error",
+			Body:    m.err.Error(),
+			Hint:    "esc: back  q/ctrl+c: quit",
+			Variant: ModalError,
+		})
 
 	case m.viewingLog:
 		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))

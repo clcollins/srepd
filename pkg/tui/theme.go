@@ -38,7 +38,6 @@ type Styles struct {
 	Padded           lipgloss.Style
 	Muted            lipgloss.Style
 	Warning          lipgloss.Style
-	Error            lipgloss.Style
 	TableContainer   lipgloss.Style
 	Table            table.Styles
 	ActiveTab        lipgloss.Style
@@ -153,18 +152,10 @@ func BuildStyles(theme Theme) Styles {
 	glamourStyle := buildGlamourStyle(theme)
 
 	return Styles{
-		Main:    main,
-		Padded:  padded,
-		Muted:   lipgloss.NewStyle().Foreground(theme.Muted),
-		Warning: lipgloss.NewStyle().Foreground(theme.Highlight).Background(theme.Warning),
-		Error: lipgloss.NewStyle().
-			Bold(true).
-			Width(64).
-			Border(lipgloss.RoundedBorder()).
-			Foreground(theme.Highlight).
-			Background(theme.Error).
-			BorderForeground(theme.Border).
-			Padding(1, 3, 1, 3),
+		Main:             main,
+		Padded:           padded,
+		Muted:            lipgloss.NewStyle().Foreground(theme.Muted),
+		Warning:          lipgloss.NewStyle().Foreground(theme.Highlight).Background(theme.Warning),
 		TableContainer:   tableContainer,
 		WatcherContainer: watcherContainer,
 		FormContainer:    formContainer,
