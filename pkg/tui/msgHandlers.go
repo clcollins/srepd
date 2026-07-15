@@ -23,7 +23,9 @@ func (m model) setStatusMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 // errMsgHandler is the message handler for the errMsg message
 func (m model) errMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	log.Error("tui.errMsgHandler()", "error", msg)
-	m.setStatus(msg.(errMsg).Error())
+	// The error renders via the full-screen error view (m.err), not the
+	// transient status line — background polls overwrite the status within
+	// seconds, so an error copied there is lost almost immediately.
 	m.err = msg.(errMsg)
 	m.apiInProgress = false
 	return m, nil

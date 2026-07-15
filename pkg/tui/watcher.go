@@ -206,7 +206,10 @@ func (m *model) runDetectors() []tea.Cmd {
 
 		log.Debug("watcher.runDetectors", "observation", obs.Summary)
 
-		if m.aiProvider != nil && m.aiHealthy && !m.watcherAnalyzing {
+		// Ambient synthesis runs unless the provider is in a known-error
+		// state — unverified providers get their first health signal from
+		// this very query.
+		if m.aiProvider != nil && m.aiHealth != aiHealthError && !m.watcherAnalyzing {
 			m.watcherAnalyzing = true
 			m.watcherQueryStart = time.Now()
 			m.watcherQueryTimeout = watcherSynthesisTimeout

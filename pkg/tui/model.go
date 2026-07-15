@@ -154,8 +154,10 @@ type model struct {
 
 	// aiProvider is the configured LLM API provider, or nil when unconfigured
 	aiProvider ai.Provider
-	// aiHealthy tracks whether the last LLM provider health check succeeded
-	aiHealthy bool
+	// aiHealth tracks provider health: from periodic probes for providers
+	// that implement ai.HealthChecker, and from observed query outcomes for
+	// providers that don't (the anthropic family has no probe endpoint).
+	aiHealth aiHealthState
 
 	// watcherExpanded is true when the AI watcher pane is visible below the table
 	watcherExpanded     bool
@@ -398,7 +400,10 @@ func InitialModel(
 	m.reescalateLevel = resolveReescalateLevel()
 	m.streamResponses = resolveStreamResponses()
 
-	if aiProvider != nil {
+	// Schedule the periodic probe only for providers that can actually be
+	// probed; probe-less providers (anthropic family) stay "unverified" until
+	// a real query outcome is observed.
+	if ai.SupportsHealthCheck(aiProvider) {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
 			jobMsg:    aiHealthCheckCmd(aiProvider),
 			frequency: 60 * time.Second,
@@ -517,7 +522,10 @@ func InitialModelWithConfig(
 	m.reescalateLevel = resolveReescalateLevel()
 	m.streamResponses = resolveStreamResponses()
 
-	if aiProvider != nil {
+	// Schedule the periodic probe only for providers that can actually be
+	// probed; probe-less providers (anthropic family) stay "unverified" until
+	// a real query outcome is observed.
+	if ai.SupportsHealthCheck(aiProvider) {
 		m.scheduledJobs = append(m.scheduledJobs, &scheduledJob{
 			jobMsg:    aiHealthCheckCmd(aiProvider),
 			frequency: 60 * time.Second,

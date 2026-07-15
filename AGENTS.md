@@ -45,6 +45,11 @@ Pass extra test flags via `TESTOPTS`, e.g.:
 - The update banner triggers when `isNewerVersion(current, latest)` returns
   true. For snapshot builds (no dot in version string), it always returns true.
 - Config: `.goreleaser.yaml` ldflags section
+- **Test binaries**: Always use `make build` then copy
+  `dist/srepd_linux_amd64_v1/srepd` to `/tmp/srepd`. Never use bare
+  `go build -C ... -o /tmp/srepd` — the `-C` flag produces an archive,
+  not an executable. Never use `make install` for test binaries — that
+  overwrites the user's `$GOPATH/bin/srepd`.
 
 ## Architecture
 

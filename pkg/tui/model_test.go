@@ -1803,7 +1803,10 @@ func TestErrMsgHandler_ResetsApiInProgress(t *testing.T) {
 			"apiInProgress should be reset to false after errMsg")
 		assert.Nil(t, cmd, "errMsgHandler should return nil cmd")
 		assert.NotNil(t, updated.err, "err should be set")
-		assert.Contains(t, updated.status, "API timeout",
-			"status should contain the error message")
+		// The error renders via the full-screen error view (m.err), not the
+		// transient status line — background polls overwrite the status
+		// within seconds, so an error copied there is lost almost immediately.
+		assert.NotContains(t, updated.status, "API timeout",
+			"error must not be copied into the transient status line")
 	})
 }

@@ -55,10 +55,24 @@ func SupportsStreaming(p Provider) bool {
 	return ok && sp.SupportsStreaming()
 }
 
+// SupportsHealthCheck reports whether p can be actively probed for
+// connectivity via HealthChecker. Providers without a probe endpoint (the
+// anthropic family) return false — their health can only be observed from
+// real query outcomes.
+func SupportsHealthCheck(p Provider) bool {
+	if p == nil {
+		return false
+	}
+	_, ok := p.(HealthChecker)
+	return ok
+}
+
 // Config holds the configuration for an LLM API provider.
 type Config struct {
 	Provider  string `mapstructure:"provider"`
 	APIKeyEnv string `mapstructure:"api_key_env"`
 	Model     string `mapstructure:"model"`
 	Endpoint  string `mapstructure:"endpoint"`
+	Region    string `mapstructure:"region"`
+	ProjectID string `mapstructure:"project_id"`
 }

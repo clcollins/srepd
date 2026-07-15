@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -562,14 +564,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.advanceTypewriter()
 
 	case aiHealthCheckMsg:
-		m.aiHealthy = msg.healthy
+		m.aiHealth = msg.state
 		return m, nil
 
 	case watcherPromptMsg:
 		if m.aiProvider == nil {
 			return m, m.flashNotification("LLM provider not configured — add llm_api section to config")
 		}
-		if !m.aiHealthy {
+		// Block only when a probe-capable provider is verified down. Probe-less
+		// providers (anthropic family) must always allow queries: a successful
+		// query is the only signal that can flip them back to healthy.
+		if m.aiHealth == aiHealthError && ai.SupportsHealthCheck(m.aiProvider) {
 			return m, m.flashNotification("LLM provider offline")
 		}
 
@@ -593,7 +598,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.watcherStreamPartial = ""
 			return m, tea.Batch(
 				m.spinner.Tick,
-				streamWatcherCmd(m.aiProvider, m.watcherSystemPrompt, msg.prompt, incidentContext),
+				streamWatcherCmd(m.aiProvider, m.watcherSystemPrompt, msg.prompt, incidentContext, watcherQueryTimeout),
 			)
 		}
 
@@ -619,6 +624,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, readStreamCmd(msg.ch)
 
 	case watcherStreamChunkMsg:
+		// The first token is proof the provider answered — mark it healthy
+		// now, not at end of stream (idempotent for subsequent chunks).
+		m.aiHealth = aiHealthOK
 		m.watcherStreamPartial += msg.text
 		m.watcherBuffer.SetLast(prefixLines(m.watcherMarker, m.watcherStreamPartial))
 		m.updateWatcherViewport()
@@ -629,9 +637,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiInProgress = false
 		m.watcherStreamCancel = nil
 		if msg.err != nil {
-			// Keep whatever partial text streamed; surface the error via flash.
-			return m, m.flashNotification(fmt.Sprintf("watcher stream error: %s", msg.err))
+			// A newer query superseding this stream cancels it; that is not
+			// an error worth surfacing, and not a health signal.
+			if errors.Is(msg.err, context.Canceled) {
+				return m, nil
+			}
+			m.aiHealth = aiHealthError
+			// Keep whatever partial text streamed; surface the classified
+			// error in the full-screen error view.
+			classified := ai.ClassifyProviderError(msg.err)
+			return m, func() tea.Msg {
+				return errMsg{fmt.Errorf("watcher query failed: %s", classified)}
+			}
 		}
+		m.aiHealth = aiHealthOK
 		m.setStatus("watcher response received")
 		return m, nil
 
@@ -640,8 +659,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiInProgress = false
 
 		if msg.err != nil {
-			return m, m.flashNotification(fmt.Sprintf("watcher query failed: %s", msg.err))
+			m.aiHealth = aiHealthError
+			classified := ai.ClassifyProviderError(msg.err)
+			return m, func() tea.Msg {
+				return errMsg{fmt.Errorf("watcher query failed: %s", classified)}
+			}
 		}
+		m.aiHealth = aiHealthOK
 
 		if !m.watcherExpanded {
 			m.watcherExpanded = true
@@ -658,10 +682,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.recomputeLayout()
 		}
 		if msg.err != nil {
+			m.aiHealth = aiHealthError
 			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
 			m.updateWatcherViewport()
 			return m, nil
 		}
+		m.aiHealth = aiHealthOK
 		m.watcherBuffer.Append("")
 		return m, m.startTypewriter(m.watcherMarker, msg.response)
 
@@ -1792,7 +1818,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiInProgress = false
 		m.agentStreamCancel = nil
 		if msg.err != nil {
-			return m, m.flashNotification(fmt.Sprintf("agent stream error: %s", msg.err))
+			// A newer query superseding this stream cancels it; that is not
+			// an error worth surfacing.
+			if errors.Is(msg.err, context.Canceled) {
+				return m, nil
+			}
+			classified := ai.ClassifyProviderError(msg.err)
+			return m, func() tea.Msg {
+				return errMsg{fmt.Errorf("agent query failed: %s", classified)}
+			}
 		}
 		m.setStatus("agent response received")
 		return m, nil

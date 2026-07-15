@@ -172,6 +172,16 @@ func TestNewProvider_EmptyProvider(t *testing.T) {
 	assert.Contains(t, err.Error(), "provider name is required")
 }
 
+func TestValidateConfig_VertexValid(t *testing.T) {
+	err := ValidateConfig(Config{Provider: "anthropic-vertex"})
+	assert.NoError(t, err)
+}
+
+func TestValidateConfig_BedrockValid(t *testing.T) {
+	err := ValidateConfig(Config{Provider: "anthropic-bedrock"})
+	assert.NoError(t, err)
+}
+
 func TestValidateConfig_Valid(t *testing.T) {
 	tests := []struct {
 		name string
@@ -184,6 +194,14 @@ func TestValidateConfig_Valid(t *testing.T) {
 		{
 			name: "anthropic without key",
 			cfg:  Config{Provider: "anthropic"},
+		},
+		{
+			name: "anthropic-vertex",
+			cfg:  Config{Provider: "anthropic-vertex"},
+		},
+		{
+			name: "anthropic-bedrock",
+			cfg:  Config{Provider: "anthropic-bedrock"},
 		},
 		{
 			name: "ollama minimal",
@@ -246,6 +264,18 @@ func TestProviderRegistry_Defaults(t *testing.T) {
 			provider:        "anthropic",
 			defaultEndpoint: "",
 			defaultModel:    "claude-sonnet-4-6",
+		},
+		{
+			name:            "anthropic-vertex defaults",
+			provider:        "anthropic-vertex",
+			defaultEndpoint: "",
+			defaultModel:    "claude-sonnet-4-6",
+		},
+		{
+			name:            "anthropic-bedrock defaults",
+			provider:        "anthropic-bedrock",
+			defaultEndpoint: "",
+			defaultModel:    "anthropic.claude-sonnet-4-6-20250514-v1:0",
 		},
 		{
 			name:            "ollama defaults",
