@@ -53,10 +53,40 @@ func TestView_ErrorModeRendersError(t *testing.T) {
 
 	view := m.View()
 
-	assert.Contains(t, view, "Error", "error mode should show the error modal title")
+	assert.Contains(t, view, "Error", "error header should replace the standard header")
+	assert.GreaterOrEqual(t, strings.Count(view, "Error"), 2,
+		"an Error title should render both at the top of the screen and above the message")
 	assert.Contains(t, view, "something went sideways", "error text should be rendered")
-	assert.Contains(t, view, "esc", "dismiss hint should be rendered")
-	assert.NotContains(t, view, "Showing assigned to", "modal replaces the full screen; header must not leak into the error view")
+
+	// The message block is vertically centered: the message line should sit
+	// past the first third of the rendered view, not at the top of the box
+	lines := strings.Split(view, "\n")
+	msgLine := -1
+	for i, line := range lines {
+		if strings.Contains(line, "something went sideways") {
+			msgLine = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, msgLine, "error message must be present")
+	assert.Greater(t, msgLine, len(lines)/3, "error message should be vertically centered, not top-aligned")
+	assert.Contains(t, view, "h help", "help binding should be in the footer")
+	assert.Contains(t, view, "esc back", "back binding should be in the footer")
+	assert.Contains(t, view, "ctrl+q/ctrl+c quit", "quit binding should be in the footer")
+	assert.Contains(t, view, "╭", "error content should be framed by the main window border")
+	assert.NotContains(t, view, "Showing assigned to", "standard header must not leak into the error view")
+	assert.NotContains(t, view, "An update is available", "update banner must not render without an available update")
+}
+
+func TestView_ErrorModeShowsUpdateBanner(t *testing.T) {
+	m := sizedTestModel(t)
+	m.err = errors.New("something went sideways")
+	m.updateAvailable = true
+	m.updateVersion = "v1.6.2"
+
+	view := m.View()
+
+	assert.Contains(t, view, "An update is available: v1.6.2", "update banner should render below the error view")
 }
 
 func TestView_ErrorModeNarrowTerminal(t *testing.T) {

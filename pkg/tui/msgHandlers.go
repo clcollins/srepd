@@ -1048,6 +1048,8 @@ func switchErrorFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, defaultKeyMap.Back):
 			m.err = nil
+		case key.Matches(msg, defaultKeyMap.Help):
+			m.toggleHelp()
 		}
 	}
 	return m, nil

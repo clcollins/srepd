@@ -56,18 +56,17 @@ func (m model) View() string {
 
 	var s strings.Builder
 
-	s.WriteString(m.renderHeader())
+	if m.err != nil {
+		s.WriteString(m.renderErrorHeader())
+	} else {
+		s.WriteString(m.renderHeader())
+	}
 
 	switch {
 	case m.err != nil:
 		// No logging here: View runs on every render tick (~13/s), and the
 		// error is already logged once by errMsgHandler at ERROR level.
-		return renderModal(windowSize.Width, windowSize.Height, m.styles, m.theme, Modal{
-			Title:   "Error",
-			Body:    m.err.Error(),
-			Hint:    "esc: back  q/ctrl+c: quit",
-			Variant: ModalError,
-		})
+		s.WriteString(m.renderErrorContent(strings.Count(s.String(), "\n")))
 
 	case m.viewingLog:
 		s.WriteString(m.styles.TableContainer.Render(m.logViewer.View()))
@@ -131,7 +130,9 @@ func (m model) View() string {
 		helpView = ""
 	} else {
 		var helpKeyMap help.KeyMap
-		if m.chordHelpActive {
+		if m.err != nil {
+			helpKeyMap = errorViewKeyMap
+		} else if m.chordHelpActive {
 			helpKeyMap = chordKeymap{prefix: m.chordPrefix}
 		} else if m.input.Focused() {
 			helpKeyMap = inputModeKeyMap
@@ -185,6 +186,70 @@ func (m model) renderFooter() string {
 		m.styles.Padded.Width(leftWidth).Render(left),
 		renderedRight,
 	)
+}
+
+// renderErrorHeader replaces the standard status header when the app is in
+// error mode: a bold "Error" title centered where the status line normally
+// sits.
+func (m model) renderErrorHeader() string {
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.Highlight).
+		Render("Error")
+	return m.styles.Padded.Width(windowSize.Width).Align(lipgloss.Center).Render(title) + "\n"
+}
+
+// renderErrorContent renders the error text inside a full-page bordered
+// container occupying the space the incident table uses when the watcher
+// pane is collapsed. The standard help line and bottom status render below
+// it via the shared View() tail, so the error looks like the page content
+// was replaced rather than a separate screen. usedLines is the number of
+// completed lines already written to the view (the header).
+func (m model) renderErrorContent(usedLines int) string {
+	// Mirror the View() tail's help rendering so the container height
+	// leaves exactly enough room for the help line(s) and bottom status
+	helpView := m.styles.Padded.Width(windowSize.Width).Render(m.help.View(errorViewKeyMap))
+	helpLines := strings.Count(helpView, "\n") + 1
+
+	innerWidth := windowSize.Width -
+		m.styles.Main.GetHorizontalFrameSize() -
+		m.styles.TableContainer.GetHorizontalBorderSize()
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+
+	// The extra -1 leaves one filler line for the View() tail, which
+	// separates this container from the help line with a newline
+	innerHeight := windowSize.Height - usedLines - helpLines - layoutBottomStatusLines - 1 -
+		m.styles.Main.GetVerticalFrameSize() -
+		m.styles.TableContainer.GetVerticalBorderSize()
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+
+	box := m.styles.TableContainer.
+		Padding(1, 3).
+		Width(innerWidth).
+		Height(innerHeight).
+		AlignVertical(lipgloss.Center)
+
+	contentWidth := innerWidth - box.GetHorizontalPadding()
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.Highlight).
+		Width(contentWidth).
+		Align(lipgloss.Center).
+		Render("Error")
+	body := lipgloss.NewStyle().
+		Foreground(m.theme.Highlight).
+		Width(contentWidth).
+		Render(m.err.Error())
+
+	return box.Render(title + "\n\n" + body)
 }
 
 func (m model) renderHeader() string {
