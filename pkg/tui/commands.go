@@ -247,9 +247,24 @@ type waitForSelectedIncidentThenDoMsg struct {
 type TickMsg struct {
 }
 
+// aiHealthState is the observed health of the LLM provider. Providers that
+// implement ai.HealthChecker are actively probed; providers without a probe
+// endpoint (the anthropic family) start unverified and are updated from real
+// query outcomes — the status line never claims "healthy" without evidence.
+type aiHealthState int
+
+const (
+	// aiHealthUnverified: no probe support and no query has completed yet.
+	aiHealthUnverified aiHealthState = iota
+	// aiHealthOK: a probe passed or the last query succeeded.
+	aiHealthOK
+	// aiHealthError: a probe failed or the last query failed.
+	aiHealthError
+)
+
 type aiHealthCheckMsg struct {
-	healthy bool
-	err     error
+	state aiHealthState
+	err   error
 }
 
 type watcherResponseMsg struct {
@@ -271,7 +286,10 @@ func watcherQueryCmd(provider ai.Provider, systemPrompt string, userPrompt strin
 
 		response, err := provider.Query(ctx, systemPrompt, fullPrompt)
 		if err != nil {
-			log.Warn("watcher.query", "error", err)
+			// Debug, not Warn: the raw error carries the full API response
+			// body; the classified version is logged at ERROR by
+			// errMsgHandler when it reaches the UI.
+			log.Debug("watcher.query", "error", err)
 			return watcherResponseMsg{err: err}
 		}
 
@@ -286,18 +304,21 @@ func aiHealthCheckCmd(provider ai.Provider) tea.Cmd {
 
 		checker, ok := provider.(ai.HealthChecker)
 		if !ok {
+			// No probe endpoint — nothing was verified, so report unverified
+			// rather than a fabricated "healthy". (The periodic check job is
+			// not scheduled for these providers; this is a defensive path.)
 			log.Debug("ai.HealthCheck", "msg", "provider does not support health checks", "provider", provider.Name())
-			return aiHealthCheckMsg{healthy: true}
+			return aiHealthCheckMsg{state: aiHealthUnverified}
 		}
 
 		err := checker.Healthy(ctx)
 		if err != nil {
 			log.Warn("ai.HealthCheck", "provider", provider.Name(), "status", "unhealthy", "error", err)
-			return aiHealthCheckMsg{healthy: false, err: err}
+			return aiHealthCheckMsg{state: aiHealthError, err: err}
 		}
 
 		log.Debug("ai.HealthCheck", "provider", provider.Name(), "status", "healthy")
-		return aiHealthCheckMsg{healthy: true}
+		return aiHealthCheckMsg{state: aiHealthOK}
 	}
 }
 

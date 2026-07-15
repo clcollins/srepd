@@ -44,6 +44,27 @@ func TestSupportsStreaming(t *testing.T) {
 	})
 }
 
+func TestSupportsHealthCheck(t *testing.T) {
+	t.Run("provider without HealthChecker cannot be health-checked", func(t *testing.T) {
+		assert.False(t, SupportsHealthCheck(nonStreamingProvider{}))
+	})
+
+	t.Run("provider with HealthChecker can be health-checked", func(t *testing.T) {
+		assert.True(t, SupportsHealthCheck(NewMockProvider("mock")))
+	})
+
+	t.Run("nil provider cannot be health-checked", func(t *testing.T) {
+		assert.False(t, SupportsHealthCheck(nil))
+	})
+
+	t.Run("anthropic-family providers have no probe endpoint", func(t *testing.T) {
+		p, err := newAnthropicProvider(Config{}, "test-key")
+		assert.NoError(t, err)
+		assert.False(t, SupportsHealthCheck(p),
+			"anthropic providers must not pretend to support health checks")
+	})
+}
+
 func TestRealProviders_SupportStreaming(t *testing.T) {
 	// All shipped providers implement real streaming; they must advertise it so the
 	// TUI turns streaming on for them.

@@ -2,6 +2,9 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"sync/atomic"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
@@ -42,11 +45,18 @@ type watcherStreamDoneMsg struct {
 // Update loop then drains it with readStreamCmd. All provider I/O happens in the
 // goroutine — the Bubble Tea Update loop is never blocked.
 //
+// startupTimeout guards only the wait for the FIRST token: once the provider
+// starts responding, the watchdog is disarmed and the stream runs to
+// completion no matter how long it takes. Whole-stream deadlines would
+// truncate long responses mid-token.
+//
 // Callers must only use this when ai.SupportsStreaming(provider) is true and
 // streaming is enabled in config; otherwise use the blocking watcherQueryCmd.
-func streamWatcherCmd(provider ai.Provider, systemPrompt, userPrompt, incidentContext string) tea.Cmd {
+func streamWatcherCmd(provider ai.Provider, systemPrompt, userPrompt, incidentContext string, startupTimeout time.Duration) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), watcherQueryTimeout)
+		// Cancelable only — the startup watchdog below provides the deadline
+		// until the first token; after that only the consumer can cancel.
+		ctx, cancel := context.WithCancel(context.Background())
 
 		fullPrompt := userPrompt
 		if incidentContext != "" {
@@ -66,7 +76,21 @@ func streamWatcherCmd(provider ai.Provider, systemPrompt, userPrompt, incidentCo
 				errCh <- provider.StreamQuery(ctx, systemPrompt, fullPrompt, tokens)
 			}()
 
+			// Startup watchdog: cancel the request if the provider produces
+			// nothing before the deadline. Disarmed by the first token.
+			var timedOut atomic.Bool
+			watchdog := time.AfterFunc(startupTimeout, func() {
+				timedOut.Store(true)
+				cancel()
+			})
+			defer watchdog.Stop()
+
+			first := true
 			for tok := range tokens {
+				if first {
+					first = false
+					watchdog.Stop()
+				}
 				select {
 				case ch <- streamEvent{text: tok}:
 				case <-ctx.Done():
@@ -81,8 +105,17 @@ func streamWatcherCmd(provider ai.Provider, systemPrompt, userPrompt, incidentCo
 			}
 
 			err := <-errCh
+			if timedOut.Load() {
+				// The watchdog cancellation surfaces from StreamQuery as
+				// context.Canceled, which the Update loop swallows as the
+				// superseded-stream case — replace it with a real timeout error.
+				err = fmt.Errorf("no response from provider after %s", startupTimeout)
+			}
 			if err != nil {
-				log.Warn("watcher.stream", "provider", provider.Name(), "error", err)
+				// Debug, not Warn: the raw error carries the full API response
+				// body (a multi-line JSON dump); the classified version is
+				// logged at ERROR by errMsgHandler when it reaches the UI.
+				log.Debug("watcher.stream", "provider", provider.Name(), "error", err)
 			}
 			ch <- streamEvent{done: true, err: err}
 			close(ch)

@@ -17,6 +17,14 @@ var providerRegistry = map[string]providerMeta{
 		defaultEndpoint: "",
 		defaultModel:    "claude-sonnet-4-6",
 	},
+	"anthropic-vertex": {
+		defaultEndpoint: "",
+		defaultModel:    "claude-sonnet-4-6",
+	},
+	"anthropic-bedrock": {
+		defaultEndpoint: "",
+		defaultModel:    "anthropic.claude-sonnet-4-6-20250514-v1:0",
+	},
 	"ollama": {
 		defaultEndpoint: "http://localhost:11434",
 		defaultModel:    "llama3.1:8b",
@@ -64,6 +72,10 @@ func NewProvider(cfg Config) (Provider, error) {
 	switch cfg.Provider {
 	case "anthropic":
 		return newAnthropicProvider(cfg, apiKey)
+	case "anthropic-vertex":
+		return newVertexProvider(cfg)
+	case "anthropic-bedrock":
+		return newBedrockProvider(cfg)
 	case "ollama":
 		return newOllamaProvider(cfg)
 	case "openai":

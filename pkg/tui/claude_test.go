@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
@@ -166,7 +168,14 @@ func TestClaudeResponse_Error(t *testing.T) {
 
 	assert.False(t, updatedModel.claudeQuerying, "claudeQuerying should be false after error")
 	assert.False(t, updatedModel.apiInProgress, "apiInProgress should be false after error")
-	assert.NotNil(t, cmd, "should return flash notification for error")
+	assert.NotNil(t, cmd, "should return a command carrying the error")
+
+	// The error must route through errMsg so the full-screen error view is
+	// shown, not just a transient status flash.
+	produced := cmd()
+	errM, ok := produced.(errMsg)
+	assert.True(t, ok, "expected errMsg, got %T", produced)
+	assert.Contains(t, errM.Error(), "agent query failed")
 }
 
 func TestClaudeResponse_EmptyResponse(t *testing.T) {
@@ -894,5 +903,97 @@ func TestAgentStreamDoneMsg_WithError(t *testing.T) {
 	updated := result.(model)
 
 	assert.False(t, updated.claudeQuerying)
-	assert.NotNil(t, cmd, "should flash error notification")
+	assert.NotNil(t, cmd, "should return a command carrying the error")
+
+	// The error must route through errMsg so the full-screen error view is
+	// shown, not just a transient status flash.
+	produced := cmd()
+	errM, ok := produced.(errMsg)
+	assert.True(t, ok, "expected errMsg, got %T", produced)
+	assert.Contains(t, errM.Error(), "agent query failed")
+}
+
+// drainAgentStream runs streamAgentCmd end-to-end, collecting chunk text until
+// the terminal done event. Returns the concatenated text and terminal error.
+func drainAgentStream(t *testing.T, command string, timeout time.Duration) (string, error) {
+	t.Helper()
+
+	startMsg := streamAgentCmd(command, "sys", "prompt", "", nil, nil, timeout)()
+	started, ok := startMsg.(agentStreamStartedMsg)
+	if !ok {
+		done, isDone := startMsg.(agentStreamDoneMsg)
+		if isDone {
+			return "", done.err
+		}
+		t.Fatalf("expected agentStreamStartedMsg, got %T", startMsg)
+	}
+
+	var got string
+	ch := started.ch
+	for {
+		msg := readAgentStreamCmd(ch)()
+		switch m := msg.(type) {
+		case agentStreamChunkMsg:
+			got += m.text
+			ch = m.ch
+		case agentStreamDoneMsg:
+			return got, m.err
+		default:
+			t.Fatalf("unexpected msg type %T", msg)
+		}
+	}
+}
+
+func TestStreamAgentCmd_StartupWatchdogKillsSilentCLI(t *testing.T) {
+	// A CLI that produces NO output cannot be caught by the between-lines
+	// context check (the scanner blocks forever) — the watchdog must kill the
+	// process and surface a timeout error. The script ignores the streaming
+	// flags buildStreamingArgs appends.
+	dir := t.TempDir()
+	script := dir + "/silent-agent.sh"
+	assert.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nsleep 5\n"), 0o755))
+
+	got, err := drainAgentStream(t, script, 100*time.Millisecond)
+
+	assert.Empty(t, got)
+	assert.Error(t, err, "a silent CLI must be killed by the startup watchdog")
+	assert.Contains(t, err.Error(), "no response", "error should say the CLI never responded")
+}
+
+func TestStreamAgentCmd_TimeoutClearedAfterFirstToken(t *testing.T) {
+	// Once the CLI produces its first text delta, the startup watchdog is
+	// disarmed and the stream runs to completion no matter how long it takes.
+	// streamAgentCmd splits the command on whitespace, so exercise the
+	// slow-but-responding CLI via a temp script rather than sh -c quoting.
+	dir := t.TempDir()
+	script := dir + "/slow-agent.sh"
+	content := "#!/bin/sh\n" +
+		`printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"hi"}}}'` + "\n" +
+		"sleep 0.3\n" +
+		`printf '%s\n' '{"type":"result","subtype":"success"}'` + "\n"
+	assert.NoError(t, os.WriteFile(script, []byte(content), 0o755))
+
+	got, err := drainAgentStream(t, script, 100*time.Millisecond)
+
+	assert.NoError(t, err, "a CLI that started responding must never be killed by the startup watchdog")
+	assert.Equal(t, "hi", got)
+}
+
+func TestAgentStreamDoneMsg_CanceledIsSilent(t *testing.T) {
+	// A superseded stream ends with context.Canceled; that must not surface
+	// as an error to the user.
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.apiInProgress = true
+	m.agentStreamCancel = func() {}
+
+	msg := agentStreamDoneMsg{err: context.Canceled}
+
+	result, cmd := m.Update(msg)
+	updated := result.(model)
+
+	assert.False(t, updated.claudeQuerying)
+	assert.Nil(t, updated.agentStreamCancel)
+	assert.Nil(t, cmd, "canceled stream must not produce an error command")
+	assert.Nil(t, updated.err, "canceled stream must not set the error view")
 }

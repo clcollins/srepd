@@ -18,6 +18,7 @@ const (
 type anthropicProvider struct {
 	client anthropic.Client
 	model  string
+	name   string
 }
 
 func newAnthropicProvider(cfg Config, apiKey string) (*anthropicProvider, error) {
@@ -41,11 +42,12 @@ func newAnthropicProvider(cfg Config, apiKey string) (*anthropicProvider, error)
 	return &anthropicProvider{
 		client: client,
 		model:  model,
+		name:   "anthropic",
 	}, nil
 }
 
 func (p *anthropicProvider) Name() string {
-	return "anthropic"
+	return p.name
 }
 
 // SupportsStreaming reports that this provider streams tokens via StreamQuery.

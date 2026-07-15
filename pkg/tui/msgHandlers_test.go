@@ -678,19 +678,16 @@ func TestSetStatusMsgHandler(t *testing.T) {
 
 func TestErrMsgHandler(t *testing.T) {
 	tests := []struct {
-		name           string
-		err            error
-		expectedStatus string
+		name string
+		err  error
 	}{
 		{
-			name:           "sets error and status from error message",
-			err:            fmt.Errorf("test error occurred"),
-			expectedStatus: "test error occurred",
+			name: "sets error from error message",
+			err:  fmt.Errorf("test error occurred"),
 		},
 		{
-			name:           "handles wrapped error",
-			err:            fmt.Errorf("outer: %w", fmt.Errorf("inner error")),
-			expectedStatus: "outer: inner error",
+			name: "handles wrapped error",
+			err:  fmt.Errorf("outer: %w", fmt.Errorf("inner error")),
 		},
 	}
 
@@ -704,8 +701,12 @@ func TestErrMsgHandler(t *testing.T) {
 			result, cmd := m.errMsgHandler(msg)
 			updatedModel := result.(model)
 
-			assert.Equal(t, tt.expectedStatus, updatedModel.status,
-				"status should be set to error message")
+			// The error is displayed via the full-screen error view (m.err),
+			// NOT the transient status line — background polls overwrite the
+			// status within seconds, so an error copied there is lost almost
+			// immediately.
+			assert.Equal(t, "previous status", updatedModel.status,
+				"status must not be overwritten with the error text")
 			assert.NotNil(t, updatedModel.err, "err should be set on model")
 			assert.Equal(t, msg, updatedModel.err, "err should match the errMsg")
 			assert.Nil(t, cmd, "errMsgHandler should not return a command")

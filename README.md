@@ -184,7 +184,9 @@ llm_api:
 | Provider | Endpoint Default | Description |
 |----------|-----------------|-------------|
 | `ollama` | `http://localhost:11434` | Local Ollama daemon (or [ollama-container](https://github.com/clcollins/ollama-container)) |
-| `anthropic` | SDK default | Anthropic Messages API |
+| `anthropic` | SDK default | Anthropic Messages API (direct API key) |
+| `anthropic-vertex` | auto | Anthropic via Google Cloud Vertex AI (uses Application Default Credentials) |
+| `anthropic-bedrock` | auto | Anthropic via AWS Bedrock (uses AWS default credential chain) |
 | `openai` | (user must specify) | Any OpenAI-compatible endpoint (vLLM, TGI, internal models) |
 | `ramalama` | `http://localhost:8080` | Red Hat RamaLama server |
 
@@ -192,10 +194,12 @@ llm_api:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `llm_api.provider` | `string` | Provider name: `ollama`, `anthropic`, `openai`, `ramalama` |
+| `llm_api.provider` | `string` | Provider name: `ollama`, `anthropic`, `anthropic-vertex`, `anthropic-bedrock`, `openai`, `ramalama` |
 | `llm_api.endpoint` | `string` | API endpoint URL (provider-specific default used if omitted) |
 | `llm_api.model` | `string` | Model identifier (provider-specific default used if omitted) |
 | `llm_api.api_key_env` | `string` | Name of env var containing API key (optional for all providers) |
+| `llm_api.region` | `string` | Cloud region for `anthropic-vertex` (auto-detected from `CLOUD_ML_REGION` or `VERTEXAI_LOCATION`) |
+| `llm_api.project_id` | `string` | GCP project for `anthropic-vertex` (auto-detected from `ANTHROPIC_VERTEX_PROJECT_ID`, `VERTEXAI_PROJECT`, or `GOOGLE_CLOUD_PROJECT`) |
 
 ## Key Bindings
 

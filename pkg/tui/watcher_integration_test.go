@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
@@ -40,9 +42,11 @@ func TestWatcherPromptMsg_NoProvider(t *testing.T) {
 }
 
 func TestWatcherPromptMsg_ProviderOffline(t *testing.T) {
+	// MockProvider implements HealthChecker, so a failed check blocks queries
+	// (no point hammering a probe-verified-down local daemon).
 	m := createTestModel()
 	m.aiProvider = ai.NewMockProvider("test")
-	m.aiHealthy = false
+	m.aiHealth = aiHealthError
 	m.table.Focus()
 
 	result, cmd := m.Update(watcherPromptMsg{prompt: "test"})
@@ -52,10 +56,54 @@ func TestWatcherPromptMsg_ProviderOffline(t *testing.T) {
 	assert.NotNil(t, cmd, "should return flash notification")
 }
 
+// unverifiableProvider is a Provider without HealthChecker support, standing in
+// for the anthropic/vertex/bedrock providers whose APIs have no probe endpoint.
+type unverifiableProvider struct{}
+
+func (p *unverifiableProvider) Query(_ context.Context, _ string, _ string) (string, error) {
+	return "ok", nil
+}
+func (p *unverifiableProvider) StreamQuery(_ context.Context, _ string, _ string, ch chan<- string) error {
+	close(ch)
+	return nil
+}
+func (p *unverifiableProvider) Name() string { return "unverifiable" }
+
+func TestWatcherPromptMsg_UnverifiedProviderAllowed(t *testing.T) {
+	// A provider with no health-check support starts unverified; queries must
+	// be allowed — the first query outcome is what establishes health.
+	m := createTestModel()
+	m.aiProvider = &unverifiableProvider{}
+	m.aiHealth = aiHealthUnverified
+	m.table.Focus()
+	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+	result, _ := m.Update(watcherPromptMsg{prompt: "test"})
+	updated := result.(model)
+
+	assert.True(t, updated.watcherAnalyzing, "unverified provider must not block queries")
+}
+
+func TestWatcherPromptMsg_ReactiveErrorAllowsRetry(t *testing.T) {
+	// A probe-less provider in error state must still allow queries: only a
+	// successful query can ever flip it back to healthy, so blocking here
+	// would brick the watcher until restart.
+	m := createTestModel()
+	m.aiProvider = &unverifiableProvider{}
+	m.aiHealth = aiHealthError
+	m.table.Focus()
+	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+
+	result, _ := m.Update(watcherPromptMsg{prompt: "retry"})
+	updated := result.(model)
+
+	assert.True(t, updated.watcherAnalyzing, "probe-less provider in error state must allow retries")
+}
+
 func TestWatcherPromptMsg_Success(t *testing.T) {
 	m := createTestModel()
 	m.aiProvider = ai.NewMockProvider("test")
-	m.aiHealthy = true
+	m.aiHealth = aiHealthOK
 	m.table.Focus()
 	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
 
@@ -94,7 +142,99 @@ func TestWatcherResponseMsg_Error(t *testing.T) {
 
 	assert.False(t, updated.watcherAnalyzing)
 	assert.False(t, updated.apiInProgress)
-	assert.NotNil(t, cmd, "should return flash notification")
+	assert.NotNil(t, cmd, "should return a command carrying the error")
+
+	// The error must route through errMsg so the full-screen error view is
+	// shown, not just a transient status flash.
+	msg := cmd()
+	errM, ok := msg.(errMsg)
+	assert.True(t, ok, "expected errMsg, got %T", msg)
+	assert.Contains(t, errM.Error(), "watcher query failed")
+}
+
+func TestWatcherStreamDoneMsg_ErrorShowsErrorView(t *testing.T) {
+	m := createTestModel()
+	m.watcherAnalyzing = true
+	m.apiInProgress = true
+	m.watcherStreamCancel = func() {}
+
+	result, cmd := m.Update(watcherStreamDoneMsg{err: assert.AnError})
+	updated := result.(model)
+
+	assert.False(t, updated.watcherAnalyzing)
+	assert.Nil(t, updated.watcherStreamCancel)
+	assert.Equal(t, aiHealthError, updated.aiHealth, "a failed query must mark the provider errored")
+	assert.NotNil(t, cmd, "should return a command carrying the error")
+
+	msg := cmd()
+	errM, ok := msg.(errMsg)
+	assert.True(t, ok, "expected errMsg, got %T", msg)
+	assert.Contains(t, errM.Error(), "watcher query failed")
+}
+
+func TestWatcherStreamDoneMsg_CanceledIsSilent(t *testing.T) {
+	// A superseded stream ends with context.Canceled; that must not surface
+	// as an error to the user, and must not change observed health.
+	m := createTestModel()
+	m.watcherAnalyzing = true
+	m.aiHealth = aiHealthOK
+	m.watcherStreamCancel = func() {}
+
+	result, cmd := m.Update(watcherStreamDoneMsg{err: context.Canceled})
+	updated := result.(model)
+
+	assert.False(t, updated.watcherAnalyzing)
+	assert.Nil(t, cmd, "canceled stream must not produce an error command")
+	assert.Nil(t, updated.err, "canceled stream must not set the error view")
+	assert.Equal(t, aiHealthOK, updated.aiHealth, "cancellation is not a health signal")
+}
+
+func TestWatcherStreamDoneMsg_SuccessSetsHealthOK(t *testing.T) {
+	// A completed query is the strongest health evidence there is — it must
+	// flip an unverified or errored provider to healthy.
+	m := createTestModel()
+	m.watcherAnalyzing = true
+	m.aiHealth = aiHealthUnverified
+	m.watcherStreamCancel = func() {}
+
+	result, _ := m.Update(watcherStreamDoneMsg{})
+	updated := result.(model)
+
+	assert.Equal(t, aiHealthOK, updated.aiHealth, "a successful query must mark the provider healthy")
+}
+
+func TestWatcherResponseMsg_SuccessSetsHealthOK(t *testing.T) {
+	m := createTestModel()
+	m.watcherAnalyzing = true
+	m.aiHealth = aiHealthError
+
+	result, _ := m.Update(watcherResponseMsg{response: "all good"})
+	updated := result.(model)
+
+	assert.Equal(t, aiHealthOK, updated.aiHealth, "a successful query must recover an errored provider")
+}
+
+func TestWatcherResponseMsg_ErrorSetsHealthError(t *testing.T) {
+	m := createTestModel()
+	m.watcherAnalyzing = true
+	m.aiHealth = aiHealthOK
+
+	result, _ := m.Update(watcherResponseMsg{err: assert.AnError})
+	updated := result.(model)
+
+	assert.Equal(t, aiHealthError, updated.aiHealth, "a failed query must mark the provider errored")
+}
+
+func TestAIHealthCheckCmd_UnsupportedProviderIsUnverified(t *testing.T) {
+	// A provider without HealthChecker support must never be reported
+	// healthy by the periodic check — nothing was verified.
+	cmd := aiHealthCheckCmd(&unverifiableProvider{})
+	msg := cmd()
+
+	checkMsg, ok := msg.(aiHealthCheckMsg)
+	assert.True(t, ok, "expected aiHealthCheckMsg, got %T", msg)
+	assert.Equal(t, aiHealthUnverified, checkMsg.state,
+		"an unprobeable provider is unverified, not healthy")
 }
 
 func TestWatcherSynthesisMsg_Success(t *testing.T) {
@@ -235,20 +375,80 @@ func TestRenderWatcherStatus_NoProvider(t *testing.T) {
 func TestRenderWatcherStatus_Healthy(t *testing.T) {
 	m := createTestModel()
 	m.aiProvider = ai.NewMockProvider("ollama")
-	m.aiHealthy = true
+	m.aiHealth = aiHealthOK
 
 	status := m.renderWatcherStatus()
 	assert.Contains(t, status, "ollama")
 	assert.Contains(t, status, "healthy")
 }
 
-func TestRenderWatcherStatus_Offline(t *testing.T) {
+func TestRenderWatcherStatus_Error(t *testing.T) {
 	m := createTestModel()
 	m.aiProvider = ai.NewMockProvider("ollama")
-	m.aiHealthy = false
+	m.aiHealth = aiHealthError
 
 	status := m.renderWatcherStatus()
-	assert.Contains(t, status, "offline")
+	assert.Contains(t, status, "error")
+	assert.NotContains(t, status, "healthy", "a failing provider must never read healthy")
+}
+
+func TestRenderWatcherStatus_StreamingHidesCountdown(t *testing.T) {
+	// The countdown reflects the startup watchdog, which is disarmed by the
+	// first token — once tokens are flowing the countdown is meaningless and
+	// must be replaced by a streaming indicator immediately, not at zero.
+	m := createTestModel()
+	m.aiProvider = ai.NewMockProvider("test")
+	m.aiHealth = aiHealthOK
+	m.watcherAnalyzing = true
+	m.watcherQueryStart = time.Now()
+	m.watcherQueryTimeout = time.Minute
+	m.watcherStreamPartial = "tokens are flowing"
+
+	status := m.renderWatcherStatus()
+	assert.Contains(t, status, "streaming")
+	assert.NotContains(t, status, "analyzing", "countdown must be replaced once the stream is responding")
+}
+
+func TestRenderWatcherStatus_AgentStreamingHidesCountdown(t *testing.T) {
+	m := createTestModel()
+	m.aiProvider = ai.NewMockProvider("test")
+	m.aiHealth = aiHealthOK
+	m.claudeQuerying = true
+	m.watcherQueryStart = time.Now()
+	m.watcherQueryTimeout = time.Minute
+	m.agentStreamPartial = "agent tokens flowing"
+
+	status := m.renderWatcherStatus()
+	assert.Contains(t, status, "streaming")
+	assert.NotContains(t, status, "analyzing", "countdown must be replaced once the agent stream is responding")
+}
+
+func TestRenderWatcherStatus_LongStreamHidesDeadCountdown(t *testing.T) {
+	// Streams have no whole-request deadline once responding; when the
+	// nominal window has elapsed, showing "analyzing... 0s" reads like a
+	// hung timer. Drop the countdown at zero.
+	m := createTestModel()
+	m.aiProvider = ai.NewMockProvider("test")
+	m.aiHealth = aiHealthOK
+	m.watcherAnalyzing = true
+	m.watcherQueryStart = time.Now().Add(-2 * time.Minute)
+	m.watcherQueryTimeout = time.Minute
+
+	status := m.renderWatcherStatus()
+	assert.Contains(t, status, "analyzing")
+	assert.NotContains(t, status, "analyzing... 0s", "elapsed countdown must be hidden, not shown as 0s")
+}
+
+func TestRenderWatcherStatus_Unverified(t *testing.T) {
+	// A provider that cannot be probed and has not completed a query yet must
+	// not claim to be healthy — it is unverified.
+	m := createTestModel()
+	m.aiProvider = &unverifiableProvider{}
+	m.aiHealth = aiHealthUnverified
+
+	status := m.renderWatcherStatus()
+	assert.Contains(t, status, "unverified")
+	assert.NotContains(t, status, "healthy", "an unprobed provider must never read healthy")
 }
 
 func TestRenderFooter_WatcherCollapsed(t *testing.T) {
@@ -264,7 +464,7 @@ func TestRenderFooter_WatcherExpanded(t *testing.T) {
 	m := createTestModel()
 	m.watcherExpanded = true
 	m.aiProvider = ai.NewMockProvider("ollama")
-	m.aiHealthy = true
+	m.aiHealth = aiHealthOK
 	windowSize = tea.WindowSizeMsg{Width: 120, Height: 60}
 
 	footer := m.renderFooter()
@@ -362,7 +562,7 @@ func TestWatcherPromptMsg_StreamingProvider_UsesStreamPath(t *testing.T) {
 	provider.Streaming = true
 	provider.StreamTokens = []string{"a", "b", "c"}
 	m.aiProvider = provider
-	m.aiHealthy = true
+	m.aiHealth = aiHealthOK
 	m.streamResponses = true
 	m.table.Focus()
 	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
@@ -406,7 +606,7 @@ func TestWatcherPromptMsg_StreamingDisabled_FallsBackToBlocking(t *testing.T) {
 	provider := ai.NewMockProvider("test")
 	provider.Streaming = true // provider supports it...
 	m.aiProvider = provider
-	m.aiHealthy = true
+	m.aiHealth = aiHealthOK
 	m.streamResponses = false // ...but the user disabled streaming
 	m.table.Focus()
 	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
@@ -437,54 +637,54 @@ func TestWatcherStreamChunkMsg_AccumulatesInPlace(t *testing.T) {
 // --- aiHealthCheckMsg handler tests ---
 
 func TestAiHealthCheckMsg_Healthy(t *testing.T) {
-	t.Run("sets aiHealthy to true when healthy", func(t *testing.T) {
+	t.Run("sets aiHealth to OK when the probe passes", func(t *testing.T) {
 		m := createTestModel()
-		m.aiHealthy = false
+		m.aiHealth = aiHealthError
 
-		result, cmd := m.Update(aiHealthCheckMsg{healthy: true, err: nil})
+		result, cmd := m.Update(aiHealthCheckMsg{state: aiHealthOK, err: nil})
 		updated := result.(model)
 
-		assert.True(t, updated.aiHealthy, "aiHealthy should be set to true")
+		assert.Equal(t, aiHealthOK, updated.aiHealth, "aiHealth should be set to OK")
 		assert.Nil(t, cmd, "should return nil cmd")
 	})
 }
 
 func TestAiHealthCheckMsg_Unhealthy(t *testing.T) {
-	t.Run("sets aiHealthy to false when unhealthy", func(t *testing.T) {
+	t.Run("sets aiHealth to error when the probe fails", func(t *testing.T) {
 		m := createTestModel()
-		m.aiHealthy = true
+		m.aiHealth = aiHealthOK
 
-		result, cmd := m.Update(aiHealthCheckMsg{healthy: false, err: assert.AnError})
+		result, cmd := m.Update(aiHealthCheckMsg{state: aiHealthError, err: assert.AnError})
 		updated := result.(model)
 
-		assert.False(t, updated.aiHealthy, "aiHealthy should be set to false")
+		assert.Equal(t, aiHealthError, updated.aiHealth, "aiHealth should be set to error")
 		assert.Nil(t, cmd, "should return nil cmd")
 	})
 }
 
 func TestAiHealthCheckMsg_ErrorNotInspected(t *testing.T) {
-	t.Run("err field is not inspected; only healthy field matters", func(t *testing.T) {
+	t.Run("err field is not inspected; only the state field matters", func(t *testing.T) {
 		m := createTestModel()
-		m.aiHealthy = false
+		m.aiHealth = aiHealthError
 
-		// healthy=true even though err is set: the handler only reads msg.healthy
-		result, cmd := m.Update(aiHealthCheckMsg{healthy: true, err: assert.AnError})
+		// state=OK even though err is set: the handler only reads msg.state
+		result, cmd := m.Update(aiHealthCheckMsg{state: aiHealthOK, err: assert.AnError})
 		updated := result.(model)
 
-		assert.True(t, updated.aiHealthy, "aiHealthy should follow msg.healthy, not msg.err")
+		assert.Equal(t, aiHealthOK, updated.aiHealth, "aiHealth should follow msg.state, not msg.err")
 		assert.Nil(t, cmd)
 	})
 }
 
 func TestAiHealthCheckMsg_UnhealthyWithNilError(t *testing.T) {
-	t.Run("unhealthy with nil error still sets false", func(t *testing.T) {
+	t.Run("error state with nil error still sets error", func(t *testing.T) {
 		m := createTestModel()
-		m.aiHealthy = true
+		m.aiHealth = aiHealthOK
 
-		result, cmd := m.Update(aiHealthCheckMsg{healthy: false, err: nil})
+		result, cmd := m.Update(aiHealthCheckMsg{state: aiHealthError, err: nil})
 		updated := result.(model)
 
-		assert.False(t, updated.aiHealthy)
+		assert.Equal(t, aiHealthError, updated.aiHealth)
 		assert.Nil(t, cmd)
 	})
 }
@@ -555,17 +755,21 @@ func TestWatcherResponseMsg_SetsStatus(t *testing.T) {
 	})
 }
 
-func TestWatcherResponseMsg_ErrorFlashContainsMessage(t *testing.T) {
-	t.Run("flash notification contains the error message", func(t *testing.T) {
+func TestWatcherResponseMsg_ErrorCarriesMessage(t *testing.T) {
+	t.Run("the error view message contains the underlying error", func(t *testing.T) {
 		m := createTestModel()
 		m.watcherAnalyzing = true
 		m.apiInProgress = true
 
-		result, cmd := m.Update(watcherResponseMsg{err: assert.AnError})
-		updated := result.(model)
+		_, cmd := m.Update(watcherResponseMsg{err: assert.AnError})
 
-		assert.Contains(t, updated.status, "watcher query failed")
-		assert.NotNil(t, cmd, "should return flash notification cmd")
+		assert.NotNil(t, cmd, "should return a command carrying the error")
+		produced := cmd()
+		errM, ok := produced.(errMsg)
+		assert.True(t, ok, "expected errMsg, got %T", produced)
+		assert.Contains(t, errM.Error(), "watcher query failed")
+		assert.Contains(t, errM.Error(), assert.AnError.Error(),
+			"the classified message must preserve the underlying error text")
 	})
 }
 
@@ -661,4 +865,21 @@ func TestWatcherSynthesisMsg_SuccessAppendsEmptyLine(t *testing.T) {
 		assert.True(t, updated.watcherBuffer.Len() >= 2,
 			"buffer should have at least 2 entries (prior + empty line)")
 	})
+}
+
+func TestWatcherStreamChunkMsg_FirstTokenSetsHealthOK(t *testing.T) {
+	// The first streamed token is proof the provider answered — health flips
+	// to OK immediately, not at end of stream (mirrors the streaming timeout,
+	// which also stops once the provider starts responding).
+	m := createTestModel()
+	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
+	m.aiHealth = aiHealthUnverified
+	m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
+
+	ch := make(chan streamEvent)
+	result, _ := m.Update(watcherStreamChunkMsg{text: "Hello", ch: ch})
+	updated := result.(model)
+
+	assert.Equal(t, aiHealthOK, updated.aiHealth,
+		"first streamed token must mark the provider healthy")
 }

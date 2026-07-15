@@ -10,11 +10,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/ai"
 )
 
 // CommandExecutor abstracts command execution so tests can inject a mock
@@ -189,7 +191,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 		m.agentStreamPartial = ""
 		return m, tea.Batch(
 			m.spinner.Tick,
-			streamAgentCmd(agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
+			streamAgentCmd(agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts, claudeTimeout),
 		)
 	}
 
@@ -206,7 +208,10 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 	m.apiInProgress = false
 
 	if msg.err != nil {
-		return m, m.flashNotification(fmt.Sprintf("agent query failed: %s", msg.err))
+		classified := ai.ClassifyProviderError(msg.err)
+		return m, func() tea.Msg {
+			return errMsg{fmt.Errorf("agent query failed: %s", classified)}
+		}
 	}
 
 	if msg.response == "" {
@@ -344,17 +349,13 @@ func readAgentStreamCmd(ch <-chan streamEvent) tea.Cmd {
 // streamAgentCmd spawns the Claude CLI with streaming flags and feeds text
 // deltas into a streamEvent channel for token-by-token rendering.
 //
-// The startup timeout (claudeTimeout) guards against the CLI hanging before
-// producing any output. Once the first text delta arrives, the timeout is
-// cleared so long responses are never truncated.
-func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert) tea.Cmd {
+// startupTimeout guards against the CLI hanging before producing any output.
+// Once the first text delta arrives, the watchdog is disarmed and the stream
+// runs to completion no matter how long it takes.
+func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, startupTimeout time.Duration) tea.Cmd {
 	return func() tea.Msg {
-		// Start with a deadline for initial response; cleared on first token.
-		ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
-
 		args := strings.Fields(agentCLICommand)
 		if len(args) == 0 {
-			cancel()
 			return agentStreamDoneMsg{err: fmt.Errorf("agent_cli_command is empty")}
 		}
 
@@ -365,10 +366,14 @@ func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, 
 			fullPrompt += "\n\nContext:\n" + incidentContext
 		}
 
-		// Wrap the timeout context so we can remove the deadline once streaming
-		// starts, while still allowing the consumer to cancel via agentStreamCancel.
-		parentCtx, parentCancel := context.WithCancel(context.Background())
-		cmd := exec.CommandContext(parentCtx, args[0], args[1:]...)
+		// Cancelable only — the startup watchdog below kills a CLI that never
+		// responds; after the first token only the consumer can cancel.
+		ctx, cancel := context.WithCancel(context.Background())
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		// Grandchildren can inherit the stdout pipe and keep the scanner
+		// blocked after the direct child is killed; force-close the pipes
+		// shortly after cancellation so the stream terminates promptly.
+		cmd.WaitDelay = 2 * time.Second
 		cmd.Stdin = strings.NewReader(fullPrompt)
 		cmd.Env = append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
 
@@ -378,22 +383,35 @@ func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			cancel()
-			parentCancel()
 			return agentStreamDoneMsg{err: fmt.Errorf("agent stream pipe: %w", err)}
 		}
 
 		if err := cmd.Start(); err != nil {
 			cancel()
-			parentCancel()
 			return agentStreamDoneMsg{err: fmt.Errorf("agent stream start: %w", err)}
 		}
 
 		ch := make(chan streamEvent, 64)
 
 		go func() {
-			defer parentCancel()
+			// Deferred order (LIFO): close the channel for the consumer, kill
+			// the process via cancel, then Wait to reap it — early returns in
+			// the scan loop would otherwise leak a zombie. The extra Wait after
+			// the explicit one below returns an error that is safely ignored.
+			defer func() { _ = cmd.Wait() }()
 			defer cancel()
 			defer close(ch)
+
+			// Startup watchdog: kill the CLI if it produces no text before the
+			// deadline — a silent process blocks the scanner forever, so a
+			// between-lines context check can never fire. Disarmed by the
+			// first token.
+			var timedOut atomic.Bool
+			watchdog := time.AfterFunc(startupTimeout, func() {
+				timedOut.Store(true)
+				cancel()
+			})
+			defer watchdog.Stop()
 
 			scanner := bufio.NewScanner(stdout)
 			scanner.Buffer(make([]byte, 256*1024), 256*1024)
@@ -401,20 +419,10 @@ func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, 
 			receivedFirstToken := false
 
 			for scanner.Scan() {
-				// Before first token, respect the startup timeout.
-				// After first token, only the parent (cancel) can stop us.
-				if !receivedFirstToken {
-					select {
-					case <-ctx.Done():
-						return
-					default:
-					}
-				} else {
-					select {
-					case <-parentCtx.Done():
-						return
-					default:
-					}
+				select {
+				case <-ctx.Done():
+					return
+				default:
 				}
 
 				line, parseErr := parseCLIStreamLine(scanner.Bytes())
@@ -427,12 +435,12 @@ func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, 
 					line.Event.Delta.Type == "text_delta" && line.Event.Delta.Text != "" {
 					if !receivedFirstToken {
 						receivedFirstToken = true
-						cancel()
-						log.Debug("agent.stream", "msg", "first token received, startup timeout cleared")
+						watchdog.Stop()
+						log.Debug("agent.stream", "msg", "first token received, startup watchdog disarmed")
 					}
 					select {
 					case ch <- streamEvent{text: line.Event.Delta.Text}:
-					case <-parentCtx.Done():
+					case <-ctx.Done():
 						return
 					}
 				}
@@ -448,6 +456,10 @@ func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, 
 			}
 
 			if err := cmd.Wait(); err != nil {
+				if timedOut.Load() {
+					ch <- streamEvent{done: true, err: fmt.Errorf("no response from agent CLI after %s", startupTimeout)}
+					return
+				}
 				stderrStr := strings.TrimSpace(stderrBuf.String())
 				if stderrStr != "" {
 					log.Warn("agent.stream", "stderr", stderrStr)
@@ -459,6 +471,6 @@ func streamAgentCmd(agentCLICommand string, systemPrompt string, prompt string, 
 			ch <- streamEvent{done: true}
 		}()
 
-		return agentStreamStartedMsg{ch: ch, cancel: parentCancel}
+		return agentStreamStartedMsg{ch: ch, cancel: cancel}
 	}
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/log"
 	ansi "github.com/charmbracelet/x/ansi"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/backplane"
@@ -61,8 +60,8 @@ func (m model) View() string {
 
 	switch {
 	case m.err != nil:
-		log.Debug("View", "error", m.err)
-
+		// No logging here: View runs on every render tick (~13/s), and the
+		// error is already logged once by errMsgHandler at ERROR level.
 		s.WriteString(dot)
 		s.WriteString("ERROR")
 		s.WriteString(dot)
@@ -1210,20 +1209,34 @@ func (m model) renderWatcherStatus() string {
 
 	if m.aiProvider != nil {
 		parts = append(parts, m.aiProvider.Name())
-		if m.aiHealthy {
+		switch m.aiHealth {
+		case aiHealthOK:
 			parts = append(parts, "healthy")
-		} else {
-			parts = append(parts, "offline")
+		case aiHealthError:
+			parts = append(parts, "error")
+		default:
+			// No probe endpoint and no completed query yet — claiming
+			// "healthy" here would be unverified advertising.
+			parts = append(parts, "unverified")
 		}
 	}
 
 	if m.claudeQuerying || m.watcherAnalyzing {
-		remaining := m.watcherQueryTimeout - time.Since(m.watcherQueryStart).Truncate(time.Second)
-		if remaining < 0 {
-			remaining = 0
-		}
 		highlight := lipgloss.NewStyle().Foreground(m.theme.Highlight)
-		parts = append(parts, m.spinner.View()+" "+highlight.Render(fmt.Sprintf("analyzing... %s", remaining)))
+		var label string
+		switch {
+		case m.watcherStreamPartial != "" || m.agentStreamPartial != "":
+			// Tokens are flowing: the startup watchdog is disarmed and there
+			// is no deadline, so a countdown would be meaningless.
+			label = "streaming..."
+		case m.watcherQueryTimeout-time.Since(m.watcherQueryStart).Truncate(time.Second) > 0:
+			label = fmt.Sprintf("analyzing... %s", m.watcherQueryTimeout-time.Since(m.watcherQueryStart).Truncate(time.Second))
+		default:
+			// The nominal window elapsed with no deadline in force; showing
+			// "0s" would read like a hung timer.
+			label = "analyzing..."
+		}
+		parts = append(parts, m.spinner.View()+" "+highlight.Render(label))
 	} else {
 		parts = append(parts, "idle")
 	}

@@ -232,6 +232,8 @@ func launchTUI() {
 		APIKeyEnv: viper.GetString("llm_api.api_key_env"),
 		Model:     viper.GetString("llm_api.model"),
 		Endpoint:  viper.GetString("llm_api.endpoint"),
+		Region:    viper.GetString("llm_api.region"),
+		ProjectID: viper.GetString("llm_api.project_id"),
 	}
 	if llmCfg.Provider != "" {
 		if err := ai.ValidateConfig(llmCfg); err != nil {
@@ -521,6 +523,8 @@ func runDevMode() {
 		APIKeyEnv: viper.GetString("llm_api.api_key_env"),
 		Model:     viper.GetString("llm_api.model"),
 		Endpoint:  viper.GetString("llm_api.endpoint"),
+		Region:    viper.GetString("llm_api.region"),
+		ProjectID: viper.GetString("llm_api.project_id"),
 	}
 	if llmCfg.Provider != "" {
 		if err := ai.ValidateConfig(llmCfg); err != nil {
