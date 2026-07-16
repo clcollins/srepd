@@ -10,7 +10,11 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-const bedrockDefaultModel = "anthropic.claude-sonnet-4-6-20250514-v1:0"
+// bedrockDefaultModel is a US cross-region inference profile ID, not a bare
+// foundation-model ID. Current Anthropic Claude models on Bedrock are
+// inference-profile-only (no ON_DEMAND throughput), so the bare
+// foundation-model ID cannot be invoked directly. See docs/llm-providers.md.
+const bedrockDefaultModel = "us.anthropic.claude-sonnet-4-6"
 
 func newBedrockProvider(cfg Config) (p *anthropicProvider, err error) {
 	defer func() {

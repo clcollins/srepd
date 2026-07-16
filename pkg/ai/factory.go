@@ -23,7 +23,7 @@ var providerRegistry = map[string]providerMeta{
 	},
 	"anthropic-bedrock": {
 		defaultEndpoint: "",
-		defaultModel:    "anthropic.claude-sonnet-4-6-20250514-v1:0",
+		defaultModel:    "us.anthropic.claude-sonnet-4-6",
 	},
 	"ollama": {
 		defaultEndpoint: "http://localhost:11434",
