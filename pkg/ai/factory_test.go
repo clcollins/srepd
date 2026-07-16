@@ -275,7 +275,7 @@ func TestProviderRegistry_Defaults(t *testing.T) {
 			name:            "anthropic-bedrock defaults",
 			provider:        "anthropic-bedrock",
 			defaultEndpoint: "",
-			defaultModel:    "anthropic.claude-sonnet-4-6-20250514-v1:0",
+			defaultModel:    "us.anthropic.claude-sonnet-4-6",
 		},
 		{
 			name:            "ollama defaults",

@@ -71,10 +71,19 @@ See [AI Agents](ai-agents.md) for usage.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `llm_api.provider` | `string` | (none) | LLM provider: `ollama`, `anthropic`, `openai`, `ramalama` |
+| `llm_api.provider` | `string` | (none) | LLM provider: `ollama`, `anthropic`, `anthropic-vertex`, `anthropic-bedrock`, `openai`, `ramalama` |
 | `llm_api.endpoint` | `string` | (provider default) | API endpoint URL |
-| `llm_api.model` | `string` | (provider default) | Model identifier |
-| `llm_api.api_key_env` | `string` | (none) | Name of env var containing API key (optional for all providers) |
+| `llm_api.model` | `string` | (provider default) | Model identifier. For `anthropic-bedrock`, use an inference-profile ID (e.g. `us.anthropic.claude-sonnet-4-6`), not a bare model ID |
+| `llm_api.api_key_env` | `string` | (none) | Name of env var containing API key (optional; ignored by `anthropic-vertex` / `anthropic-bedrock`) |
+| `llm_api.region` | `string` | (none) | Cloud region — `anthropic-vertex` only. Bedrock's region comes from the AWS SDK environment, not this field |
+| `llm_api.project_id` | `string` | (none) | Google Cloud project ID — `anthropic-vertex` only |
+
+For AWS Bedrock, credentials and region are supplied via the AWS SDK
+environment (e.g. `export AWS_PROFILE=... AWS_REGION=...`), not the SREPD
+config. You can alternatively authenticate with a Bedrock API key by exporting
+`AWS_BEARER_TOKEN_BEDROCK` instead of IAM credentials. See
+[LLM Providers](llm-providers.md#anthropic-bedrock) for the full setup,
+including API keys, one-time model enablement, and inference-profile IDs.
 
 See [LLM Providers](llm-providers.md) for provider-specific setup.
 

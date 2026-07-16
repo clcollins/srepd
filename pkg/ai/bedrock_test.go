@@ -17,5 +17,5 @@ func TestNewBedrockProvider_AuthPanicRecovery(t *testing.T) {
 }
 
 func TestNewBedrockProvider_DefaultModel(t *testing.T) {
-	assert.Equal(t, "anthropic.claude-sonnet-4-6-20250514-v1:0", bedrockDefaultModel)
+	assert.Equal(t, "us.anthropic.claude-sonnet-4-6", bedrockDefaultModel)
 }
