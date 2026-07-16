@@ -80,8 +80,10 @@ See [AI Agents](ai-agents.md) for usage.
 
 For AWS Bedrock, credentials and region are supplied via the AWS SDK
 environment (e.g. `export AWS_PROFILE=... AWS_REGION=...`), not the SREPD
-config. See [LLM Providers](llm-providers.md#anthropic-bedrock) for the full
-setup, including one-time model enablement and inference-profile IDs.
+config. You can alternatively authenticate with a Bedrock API key by exporting
+`AWS_BEARER_TOKEN_BEDROCK` instead of IAM credentials. See
+[LLM Providers](llm-providers.md#anthropic-bedrock) for the full setup,
+including API keys, one-time model enablement, and inference-profile IDs.
 
 See [LLM Providers](llm-providers.md) for provider-specific setup.
 

@@ -145,6 +145,53 @@ Verify your credentials and region work before configuring SREPD:
 aws bedrock list-foundation-models --query 'modelSummaries[0].modelId'
 ```
 
+**Alternative: Bedrock API key (bearer token).** Instead of AWS IAM
+credentials, you can authenticate with a **Bedrock API key** — a bearer token
+scoped to Bedrock that is sent as `Authorization: Bearer <key>` and replaces
+SigV4 signing. The AWS SDK (and therefore SREPD, with no extra config) picks
+it up automatically from the `AWS_BEARER_TOKEN_BEDROCK` environment variable:
+
+```bash
+export AWS_BEARER_TOKEN_BEDROCK=<your-bedrock-api-key>
+export AWS_REGION=us-east-2        # still required — see note below
+srepd
+```
+
+When `AWS_BEARER_TOKEN_BEDROCK` is set, it takes precedence over the IAM
+credential chain, so you do **not** need `AWS_PROFILE` or `~/.aws` credentials
+for Bedrock. The SREPD config is unchanged — just `provider: anthropic-bedrock`
+(plus an optional inference-profile `model`).
+
+**Region is still required and not embedded in the key.** Set `AWS_REGION`
+(or `AWS_DEFAULT_REGION`). For a **short-term** key this region *must match*
+the region the key was generated in, or calls fail.
+
+Two kinds of key:
+
+- **Short-term key** — valid for at most 12 hours (and no longer than the
+  generating session), inherits your current permissions, and is pinned to the
+  Region it was created in. AWS **recommends short-term keys** for anything
+  beyond initial exploration. Generate one from the Bedrock console
+  ("API keys" → short-term), or via the `aws-bedrock-token-generator` helper
+  (Python/JS/Java only — there is no Go helper).
+- **Long-term key** — a static IAM *service-specific credential* with an
+  expiration you choose at creation. Generate from the console (long-term
+  tab), or via the CLI:
+
+  ```bash
+  aws iam create-service-specific-credential \
+    --user-name your-bedrock-user \
+    --service-name bedrock.amazonaws.com \
+    --credential-age-days 30
+  ```
+
+  Because it is a long-lived static secret, treat a long-term key like any
+  other credential. AWS's own guidance: prefer short-term keys, and reserve
+  long-term keys for cases where short-term rotation isn't practical.
+
+Model enablement (below) and inference-profile model IDs apply the same way
+whether you authenticate with a key or IAM credentials.
+
 **One-time model enablement.** Before Anthropic models can be invoked in a
 given AWS account, you must enable them once. Sign in to the AWS Console,
 open the Bedrock model catalog for Anthropic —

@@ -59,6 +59,34 @@ different model set `model:` to their own profile ID.
 - `README.md`: add a short Bedrock callout under the config reference table
   linking to the detailed doc.
 
+### Bedrock API-key (bearer-token) auth — docs only
+
+A follow-up within this PR documents authenticating to Bedrock with a
+**Bedrock API key** (bearer token) as an alternative to exported AWS IAM
+credentials. **No code was needed:** the pinned `anthropic-sdk-go` v1.57.0
+bedrock package already honors the `AWS_BEARER_TOKEN_BEDROCK` environment
+variable — `bedrock.WithLoadDefaultConfig` (which the provider already calls)
+delegates to `bedrock.WithConfig`, which reads that env var at
+`bedrock/bedrock.go:221` and, when set, sends `Authorization: Bearer <key>`
+in place of SigV4. Verified against the installed SDK source.
+
+The docs (`docs/llm-providers.md`, README callout, `configuration.md` note)
+now cover: setting `AWS_BEARER_TOKEN_BEDROCK`; that it takes precedence over
+the IAM chain; that `AWS_REGION` is still required and (for short-term keys)
+must match the key's origin region; and the short-term (≤12h, region-pinned,
+AWS-recommended) vs long-term (static IAM service-specific credential) key
+distinction with generation commands.
+
+**Deferred (not in this PR):** letting the SREPD config *name* the token env
+var (e.g. via `api_key_env` or a dedicated `bedrock_api_key_env` key) by
+injecting `bedrock.NewStaticBearerTokenProvider` through `bedrock.WithConfig`.
+That would add a direct `aws-sdk-go-v2/config` dependency to `pkg/ai` and
+touch the client-construction path, for an ergonomic gain over simply
+exporting one environment variable — judged not worth it for now. Note for any
+future implementer: the correct wiring is the bedrock package's
+`BearerAuthTokenProvider`, **not** `option.WithAPIKey` (which sets the
+Anthropic `X-Api-Key` header that Bedrock rejects).
+
 ## Notes / lessons
 
 - **Vertex reads `region`/`project_id` from config; Bedrock does not.** This
