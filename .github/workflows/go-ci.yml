@@ -19,7 +19,7 @@ jobs:
   plan-doc:
     name: Plan Document
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-plan')
 
     steps:
       - name: Checkout repository
@@ -33,7 +33,7 @@ jobs:
   readme-check:
     name: README Update Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-readme')
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-readme')
 
     steps:
       - name: Checkout repository
@@ -47,7 +47,7 @@ jobs:
   quickstart-check:
     name: Quickstart Update Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-quickstart')
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'skip-quickstart')
 
     steps:
       - name: Checkout repository
