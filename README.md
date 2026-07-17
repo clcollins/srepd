@@ -198,8 +198,17 @@ llm_api:
 | `llm_api.endpoint` | `string` | API endpoint URL (provider-specific default used if omitted) |
 | `llm_api.model` | `string` | Model identifier (provider-specific default used if omitted) |
 | `llm_api.api_key_env` | `string` | Name of env var containing API key (optional for all providers) |
-| `llm_api.region` | `string` | Cloud region for `anthropic-vertex` (auto-detected from `CLOUD_ML_REGION` or `VERTEXAI_LOCATION`) |
+| `llm_api.region` | `string` | Cloud region for `anthropic-vertex` (auto-detected from `CLOUD_ML_REGION` or `VERTEXAI_LOCATION`). Not used for `anthropic-bedrock` — its region comes from the AWS SDK environment |
 | `llm_api.project_id` | `string` | GCP project for `anthropic-vertex` (auto-detected from `ANTHROPIC_VERTEX_PROJECT_ID`, `VERTEXAI_PROJECT`, or `GOOGLE_CLOUD_PROJECT`) |
+
+> **AWS Bedrock:** export your AWS credentials and region in the environment
+> (`AWS_PROFILE` / `AWS_REGION`) — none go in the config. Or authenticate with
+> a Bedrock API key by exporting `AWS_BEARER_TOKEN_BEDROCK` (plus `AWS_REGION`)
+> instead of IAM credentials. Enable Anthropic models once in the
+> [AWS Bedrock console](https://console.aws.amazon.com/bedrock/home#/model-catalog?providerName=anthropic),
+> and set `model` to an inference-profile ID such as `us.anthropic.claude-sonnet-4-6`
+> (bare foundation-model IDs are not on-demand invocable). See
+> [LLM Providers](docs/llm-providers.md#anthropic-bedrock) for full setup.
 
 ## Key Bindings
 
