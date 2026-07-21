@@ -20,7 +20,7 @@ func TestRenderClusterReportsTab_BackplaneNoConfig(t *testing.T) {
 	m.backplaneClient = nil
 	m.backplaneConfig = nil
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Backplane not enabled")
@@ -32,7 +32,7 @@ func TestRenderClusterReportsTab_BackplaneOCMAuthPending(t *testing.T) {
 	m.backplaneConfig = &backplane.Config{}
 	m.ocmAuthPending = true
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Backplane initializing")
@@ -46,7 +46,7 @@ func TestRenderClusterReportsTab_BackplaneWaitingForOCM(t *testing.T) {
 	m.ocmClient = nil
 	m.ocmAuthPending = false
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Backplane initializing")
@@ -60,7 +60,7 @@ func TestRenderClusterReportsTab_BackplaneInitError(t *testing.T) {
 	m.ocmClient = createMockOCMClient()
 	m.backplaneInitErr = fmt.Errorf("no backplane URL in config or from OCM")
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Backplane not available")
@@ -74,7 +74,7 @@ func TestRenderClusterReportsTab_BackplaneInitNoStoredError(t *testing.T) {
 	m.ocmClient = createMockOCMClient()
 	m.backplaneInitErr = nil
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Backplane not available")
@@ -88,7 +88,7 @@ func TestRenderClusterReportsTab_OCMNotConnected(t *testing.T) {
 	m.ocmClient = nil
 	m.ocmAuthPending = false
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "OCM not connected")
@@ -101,7 +101,7 @@ func TestRenderClusterReportsTab_OCMAuthPending(t *testing.T) {
 	m.ocmClient = nil
 	m.ocmAuthPending = true
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "OCM authenticating")
@@ -113,7 +113,7 @@ func TestRenderClusterReportsTab_Loading(t *testing.T) {
 	m.clusterReportCache = map[string][]backplane.Report{}
 	m.ocmClient = createMockOCMClient()
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Loading cluster reports")
@@ -127,7 +127,7 @@ func TestRenderClusterReportsTab_EmptyReports(t *testing.T) {
 		"fake-cluster-123": {},
 	}
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "No cluster reports")
@@ -146,7 +146,7 @@ func TestRenderClusterReportsTab_WithData(t *testing.T) {
 		},
 	}
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	assert.Contains(t, content, "Report 1/2")
@@ -171,11 +171,49 @@ func TestRenderClusterReportsTab_InvalidBase64FallsBackToRaw(t *testing.T) {
 		},
 	}
 
-	content, err := m.renderClusterReportsTab()
+	content, _, err := m.renderClusterReportsTab()
 
 	assert.NoError(t, err)
 	// On decode failure the raw Data is written verbatim.
 	assert.Contains(t, content, "not-valid-base64!!!")
+}
+
+func TestRenderClusterReportsTab_FetchError(t *testing.T) {
+	m := createTestModel()
+	m.backplaneClient = backplane.NewMockClient()
+	m.ocmClient = createMockOCMClient()
+	setupModelWithCluster(&m)
+	m.clusterReportCache = map[string][]backplane.Report{}
+	m.clusterReportErrors = map[string]error{
+		testClusterID: fmt.Errorf("unexpected status 403: user not allowed"),
+	}
+
+	content, preRendered, err := m.renderClusterReportsTab()
+
+	assert.NoError(t, err)
+	assert.True(t, preRendered, "error content should be pre-rendered to bypass glamour")
+	assert.Contains(t, content, "Failed to load cluster reports")
+	assert.Contains(t, content, "see logs for details")
+}
+
+func TestRenderClusterReportsTab_FetchErrorWithData(t *testing.T) {
+	m := createTestModel()
+	m.backplaneClient = backplane.NewMockClient()
+	m.ocmClient = createMockOCMClient()
+	setupModelWithCluster(&m)
+	m.clusterCache = map[string]*ocm.ClusterInfo{testClusterID: {ID: testClusterID}}
+	m.clusterReportCache = map[string][]backplane.Report{
+		testClusterID: {{ReportID: "r1", Summary: "good report", CreatedAt: "2026-06-01T00:00:00Z"}},
+	}
+	m.clusterReportErrors = map[string]error{
+		"other-cluster-id-fake-9999999999": fmt.Errorf("access denied"),
+	}
+
+	content, preRendered, err := m.renderClusterReportsTab()
+
+	assert.NoError(t, err)
+	assert.False(t, preRendered, "data content should go through glamour")
+	assert.Contains(t, content, "good report")
 }
 
 // indexOf is a small helper returning the index of sub in s, or -1.

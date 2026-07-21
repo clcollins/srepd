@@ -364,7 +364,7 @@ func refreshArea(autoRefresh bool, autoAck bool, showLowUrgency bool) string {
 	return fstring
 }
 
-func (m model) renderTabContent() (string, error) {
+func (m model) renderTabContent() (string, bool, error) {
 	var alerts []pagerduty.IncidentAlert
 	var notes []pagerduty.IncidentNote
 
@@ -379,15 +379,17 @@ func (m model) renderTabContent() (string, error) {
 	summary.AlertsLoading = !m.incidentAlertsLoaded
 	summary.NotesLoading = !m.incidentNotesLoaded
 
+	var content string
+	var err error
 	switch m.activeTab {
 	case tabDetails:
-		return m.renderDetailsTab(summary)
+		content, err = m.renderDetailsTab(summary)
 	case tabAlerts:
-		return m.renderAlertsTab(summary)
+		content, err = m.renderAlertsTab(summary)
 	case tabNotes:
-		return m.renderNotesTab(summary)
+		content, err = m.renderNotesTab(summary)
 	case tabCluster:
-		return m.renderClusterTab()
+		content, err = m.renderClusterTab()
 	case tabServiceLogs:
 		return m.renderServiceLogsTab()
 	case tabLimitedSupport:
@@ -395,9 +397,9 @@ func (m model) renderTabContent() (string, error) {
 	case tabReports:
 		return m.renderClusterReportsTab()
 	case tabPDHistory:
-		return m.renderPDHistoryTab()
+		content, err = m.renderPDHistoryTab()
 	}
-	return "", nil
+	return content, false, err
 }
 
 func (m model) renderDetailsTab(summary incidentSummary) (string, error) {
@@ -542,15 +544,31 @@ func (m model) renderClusterTab() (string, error) {
 	return content.String(), nil
 }
 
-func (m model) renderServiceLogsTab() (string, error) {
+func (m model) renderEnrichmentError(section string, errs map[string]error) string {
+	var msgs []string
+	for _, err := range errs {
+		msgs = append(msgs, err.Error())
+	}
+	summary := strings.Join(msgs, "; ")
+	if len(summary) > 120 {
+		summary = summary[:120] + "..."
+	}
+	text := fmt.Sprintf("\nFailed to load %s: %s — see logs for details\n", section, summary)
+	return m.styles.InlineError.Render(text)
+}
+
+func (m model) renderServiceLogsTab() (string, bool, error) {
 	if len(m.serviceLogCache) == 0 {
+		if len(m.serviceLogErrors) > 0 {
+			return m.renderEnrichmentError("service logs", m.serviceLogErrors), true, nil
+		}
 		if m.ocmClient == nil {
 			if m.ocmAuthPending {
-				return "\n_OCM authenticating — complete login in browser..._\n", nil
+				return "\n_OCM authenticating — complete login in browser..._\n", false, nil
 			}
-			return "\n_OCM not connected_\n", nil
+			return "\n_OCM not connected_\n", false, nil
 		}
-		return "\n_Loading service logs..._\n", nil
+		return "\n_Loading service logs..._\n", false, nil
 	}
 
 	var allLogs []ocm.ServiceLog
@@ -567,7 +585,7 @@ func (m model) renderServiceLogsTab() (string, error) {
 	})
 
 	if len(allLogs) == 0 {
-		return "\n_No service logs (info-severity filtered)_\n", nil
+		return "\n_No service logs (info-severity filtered)_\n", false, nil
 	}
 
 	total := len(allLogs)
@@ -585,18 +603,21 @@ func (m model) renderServiceLogsTab() (string, error) {
 			content.WriteString("\n---\n")
 		}
 	}
-	return content.String(), nil
+	return content.String(), false, nil
 }
 
-func (m model) renderLimitedSupportTab() (string, error) {
+func (m model) renderLimitedSupportTab() (string, bool, error) {
 	if len(m.limitedSupportCache) == 0 {
+		if len(m.limitedSupportErrors) > 0 {
+			return m.renderEnrichmentError("limited support", m.limitedSupportErrors), true, nil
+		}
 		if m.ocmClient == nil {
 			if m.ocmAuthPending {
-				return "\n_OCM authenticating — complete login in browser..._\n", nil
+				return "\n_OCM authenticating — complete login in browser..._\n", false, nil
 			}
-			return "\n_OCM not connected_\n", nil
+			return "\n_OCM not connected_\n", false, nil
 		}
-		return "\n_No limited support history_\n", nil
+		return "\n_No limited support history_\n", false, nil
 	}
 
 	var allReasons []ocm.LimitedSupportReason
@@ -605,7 +626,7 @@ func (m model) renderLimitedSupportTab() (string, error) {
 	}
 
 	if len(allReasons) == 0 {
-		return "\n_No limited support history_\n", nil
+		return "\n_No limited support history_\n", false, nil
 	}
 
 	slices.SortFunc(allReasons, func(a, b ocm.LimitedSupportReason) int {
@@ -626,34 +647,38 @@ func (m model) renderLimitedSupportTab() (string, error) {
 			content.WriteString("\n---\n")
 		}
 	}
-	return content.String(), nil
+	return content.String(), false, nil
 }
 
-func (m model) renderClusterReportsTab() (string, error) {
+func (m model) renderClusterReportsTab() (string, bool, error) {
 	if m.backplaneClient == nil {
 		if m.backplaneConfig == nil {
-			return "\n_Backplane not enabled; ensure your ~/.config/backplane/config.json exists and is readable..._\n", nil
+			return "\n_Backplane not enabled; ensure your ~/.config/backplane/config.json exists and is readable..._\n", false, nil
 		}
 		if m.ocmAuthPending {
-			return "\n_Backplane initializing — completing OCM authentication..._\n", nil
+			return "\n_Backplane initializing — completing OCM authentication..._\n", false, nil
 		}
 		if m.ocmClient == nil {
-			return "\n_Backplane initializing — waiting for OCM connection..._\n", nil
+			return "\n_Backplane initializing — waiting for OCM connection..._\n", false, nil
 		}
 		if m.backplaneInitErr != nil {
-			return fmt.Sprintf("\n_Backplane not available — %v_\n", m.backplaneInitErr), nil
+			return fmt.Sprintf("\n_Backplane not available — %v_\n", m.backplaneInitErr), false, nil
 		}
-		return "\n_Backplane not available — check logs for details_\n", nil
+		return "\n_Backplane not available — check logs for details_\n", false, nil
+	}
+
+	if len(m.clusterReportErrors) > 0 && len(m.clusterReportCache) == 0 {
+		return m.renderEnrichmentError("cluster reports", m.clusterReportErrors), true, nil
 	}
 
 	if len(m.clusterReportCache) == 0 {
 		if m.ocmClient == nil {
 			if m.ocmAuthPending {
-				return "\n_OCM authenticating — complete login in browser..._\n", nil
+				return "\n_OCM authenticating — complete login in browser..._\n", false, nil
 			}
-			return "\n_OCM not connected_\n", nil
+			return "\n_OCM not connected_\n", false, nil
 		}
-		return "\n_Loading cluster reports..._\n", nil
+		return "\n_Loading cluster reports..._\n", false, nil
 	}
 
 	var allReports []backplane.Report
@@ -662,7 +687,7 @@ func (m model) renderClusterReportsTab() (string, error) {
 	}
 
 	if len(allReports) == 0 {
-		return "\n_No cluster reports_\n", nil
+		return "\n_No cluster reports_\n", false, nil
 	}
 
 	slices.SortFunc(allReports, func(a, b backplane.Report) int {
@@ -688,7 +713,7 @@ func (m model) renderClusterReportsTab() (string, error) {
 			content.WriteString("\n---\n")
 		}
 	}
-	return content.String(), nil
+	return content.String(), false, nil
 }
 
 func (m model) renderPDHistoryTab() (string, error) {

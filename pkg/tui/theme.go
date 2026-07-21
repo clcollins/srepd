@@ -38,6 +38,7 @@ type Styles struct {
 	Padded           lipgloss.Style
 	Muted            lipgloss.Style
 	Warning          lipgloss.Style
+	InlineError      lipgloss.Style
 	TableContainer   lipgloss.Style
 	Table            table.Styles
 	ActiveTab        lipgloss.Style
@@ -156,6 +157,7 @@ func BuildStyles(theme Theme) Styles {
 		Padded:           padded,
 		Muted:            lipgloss.NewStyle().Foreground(theme.Muted),
 		Warning:          lipgloss.NewStyle().Foreground(theme.Highlight).Background(theme.Warning),
+		InlineError:      lipgloss.NewStyle().Foreground(theme.Warning),
 		TableContainer:   tableContainer,
 		WatcherContainer: watcherContainer,
 		FormContainer:    formContainer,

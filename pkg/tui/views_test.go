@@ -1086,7 +1086,7 @@ func TestRenderTabContent_DetailsTab(t *testing.T) {
 			incidentCache:        make(map[string]*cachedIncidentData),
 		}
 
-		content, err := m.renderTabContent()
+		content, _, err := m.renderTabContent()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "Q999")
 		assert.Contains(t, content, "Tab Test Incident")
@@ -1120,7 +1120,7 @@ func TestRenderTabContent_AlertsTab(t *testing.T) {
 			},
 		}
 
-		content, err := m.renderTabContent()
+		content, _, err := m.renderTabContent()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "**A1**")
 		assert.Contains(t, content, "**A2**")
