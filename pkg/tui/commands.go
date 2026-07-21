@@ -512,9 +512,13 @@ func renderDocsContent(m *model) tea.Cmd {
 
 func renderIncident(m *model) tea.Cmd {
 	return func() tea.Msg {
-		t, err := m.renderTabContent()
+		t, preRendered, err := m.renderTabContent()
 		if err != nil {
 			return errMsg{err}
+		}
+
+		if preRendered {
+			return renderedIncidentMsg{t, nil}
 		}
 
 		content, err := renderIncidentMarkdown(m, t)

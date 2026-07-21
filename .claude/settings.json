@@ -1,8 +1,1 @@
-{
-  "mcpServers": {
-    "tui-mcp": {
-      "command": "npx",
-      "args": ["tui-mcp"]
-    }
-  }
-}
+{}

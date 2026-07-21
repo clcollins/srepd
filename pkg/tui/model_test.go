@@ -507,7 +507,7 @@ func TestProgressiveRendering(t *testing.T) {
 				incidentCache:        make(map[string]*cachedIncidentData),
 			}
 
-			content, err := m.renderTabContent()
+			content, _, err := m.renderTabContent()
 			assert.NoError(t, err, "renderTabContent should render without error")
 
 			for _, expected := range tt.expectedContains {

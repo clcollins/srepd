@@ -26,12 +26,12 @@ func TestOcmServiceLogsMsg_InitializesNilCache(t *testing.T) {
 
 		assert.NotNil(t, updated.serviceLogCache, "should initialize nil map")
 		assert.Len(t, updated.serviceLogCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
-		assert.Nil(t, cmd, "should return nil cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd")
 	})
 }
 
-func TestOcmServiceLogsMsg_ErrorReturnsNilCmd(t *testing.T) {
-	t.Run("error returns model and nil cmd without modifying cache", func(t *testing.T) {
+func TestOcmServiceLogsMsg_ErrorStoresError(t *testing.T) {
+	t.Run("error stores in error map and returns re-render cmd", func(t *testing.T) {
 		m := createTestModel()
 		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
 
@@ -44,7 +44,9 @@ func TestOcmServiceLogsMsg_ErrorReturnsNilCmd(t *testing.T) {
 		updated := result.(model)
 
 		assert.Empty(t, updated.serviceLogCache, "cache should remain empty on error")
-		assert.Nil(t, cmd, "should return nil cmd on error")
+		assert.Contains(t, updated.serviceLogErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.EqualError(t, updated.serviceLogErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "service log fetch failed")
+		assert.NotNil(t, cmd, "should return re-render cmd on error")
 	})
 }
 
@@ -63,7 +65,7 @@ func TestOcmServiceLogsMsg_StoresEmptySlice(t *testing.T) {
 
 		assert.Contains(t, updated.serviceLogCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.Empty(t, updated.serviceLogCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"])
-		assert.Nil(t, cmd, "should return nil cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd")
 	})
 }
 
@@ -84,12 +86,12 @@ func TestLimitedSupportMsg_InitializesNilCache(t *testing.T) {
 
 		assert.NotNil(t, updated.limitedSupportCache, "should initialize nil map")
 		assert.Len(t, updated.limitedSupportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
-		assert.Nil(t, cmd, "should return nil cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd")
 	})
 }
 
-func TestLimitedSupportMsg_ErrorReturnsNilCmd(t *testing.T) {
-	t.Run("error returns model and nil cmd without modifying cache", func(t *testing.T) {
+func TestLimitedSupportMsg_ErrorStoresError(t *testing.T) {
+	t.Run("error stores in error map and returns re-render cmd", func(t *testing.T) {
 		m := createTestModel()
 		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
 
@@ -102,7 +104,9 @@ func TestLimitedSupportMsg_ErrorReturnsNilCmd(t *testing.T) {
 		updated := result.(model)
 
 		assert.Empty(t, updated.limitedSupportCache, "cache should remain empty on error")
-		assert.Nil(t, cmd, "should return nil cmd on error")
+		assert.Contains(t, updated.limitedSupportErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.EqualError(t, updated.limitedSupportErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "limited support fetch failed")
+		assert.NotNil(t, cmd, "should return re-render cmd on error")
 	})
 }
 
@@ -126,12 +130,12 @@ func TestClusterReportsMsg_StoresInCache(t *testing.T) {
 
 		assert.Contains(t, updated.clusterReportCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.Len(t, updated.clusterReportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 2)
-		assert.Nil(t, cmd, "should return nil cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd")
 	})
 }
 
 func TestClusterReportsMsg_ErrorDoesNotPopulateCache(t *testing.T) {
-	t.Run("error does not populate cache", func(t *testing.T) {
+	t.Run("error does not populate cache but stores in error map", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterReportCache = make(map[string][]backplane.Report)
 
@@ -144,7 +148,9 @@ func TestClusterReportsMsg_ErrorDoesNotPopulateCache(t *testing.T) {
 		updated := result.(model)
 
 		assert.Empty(t, updated.clusterReportCache, "cache should remain empty on error")
-		assert.Nil(t, cmd, "should return nil cmd on error")
+		assert.Contains(t, updated.clusterReportErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.EqualError(t, updated.clusterReportErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "backplane reports fetch failed")
+		assert.NotNil(t, cmd, "should return re-render cmd on error")
 	})
 }
 
@@ -163,7 +169,7 @@ func TestClusterReportsMsg_InitializesNilCache(t *testing.T) {
 
 		assert.NotNil(t, updated.clusterReportCache, "should initialize nil map")
 		assert.Len(t, updated.clusterReportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
-		assert.Nil(t, cmd, "should return nil cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd")
 	})
 }
 
@@ -182,6 +188,6 @@ func TestClusterReportsMsg_StoresEmptySlice(t *testing.T) {
 
 		assert.Contains(t, updated.clusterReportCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.Empty(t, updated.clusterReportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"])
-		assert.Nil(t, cmd, "should return nil cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd")
 	})
 }

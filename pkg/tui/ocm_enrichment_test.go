@@ -170,6 +170,22 @@ func TestServiceLogsMsg_UpdatesCache(t *testing.T) {
 
 		assert.Empty(t, updated.serviceLogCache)
 	})
+
+	t.Run("ocmServiceLogsMsg with error stores error in serviceLogErrors", func(t *testing.T) {
+		m := createTestModel()
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+
+		msg := ocmServiceLogsMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			err:       fmt.Errorf("fetch failed"),
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.Contains(t, updated.serviceLogErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.EqualError(t, updated.serviceLogErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "fetch failed")
+	})
 }
 
 func TestLimitedSupportMsg_UpdatesCache(t *testing.T) {
@@ -202,6 +218,22 @@ func TestLimitedSupportMsg_UpdatesCache(t *testing.T) {
 		updated := result.(model)
 
 		assert.Empty(t, updated.limitedSupportCache)
+	})
+
+	t.Run("limitedSupportMsg with error stores error in limitedSupportErrors", func(t *testing.T) {
+		m := createTestModel()
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+
+		msg := limitedSupportMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			err:       fmt.Errorf("fetch failed"),
+		}
+
+		result, _ := m.Update(msg)
+		updated := result.(model)
+
+		assert.Contains(t, updated.limitedSupportErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
+		assert.EqualError(t, updated.limitedSupportErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "fetch failed")
 	})
 }
 
@@ -361,7 +393,7 @@ func TestRenderServiceLogsTab_WithData(t *testing.T) {
 			},
 		}
 
-		content, err := m.renderServiceLogsTab()
+		content, _, err := m.renderServiceLogsTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "Cluster entered limited support due to unsupported configuration")
 		assert.Contains(t, content, "Warning")
@@ -382,7 +414,7 @@ func TestRenderLimitedSupportTab_WithData(t *testing.T) {
 			},
 		}
 
-		content, err := m.renderLimitedSupportTab()
+		content, _, err := m.renderLimitedSupportTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "Customer modification")
 		assert.Contains(t, content, "manual")
@@ -395,7 +427,7 @@ func TestRenderServiceLogsTab_NoOCM(t *testing.T) {
 		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
 		m.ocmClient = nil
 
-		content, err := m.renderServiceLogsTab()
+		content, _, err := m.renderServiceLogsTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "OCM not connected")
 	})
@@ -407,7 +439,7 @@ func TestRenderLimitedSupportTab_NoOCM(t *testing.T) {
 		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
 		m.ocmClient = nil
 
-		content, err := m.renderLimitedSupportTab()
+		content, _, err := m.renderLimitedSupportTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "OCM not connected")
 	})
@@ -425,13 +457,49 @@ func TestRenderClusterTab_Loading(t *testing.T) {
 	})
 }
 
+func TestRenderServiceLogsTab_FetchError(t *testing.T) {
+	t.Run("shows error message when fetch failed", func(t *testing.T) {
+		m := createTestModel()
+		setupModelWithCluster(&m)
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		m.ocmClient = createMockOCMClient()
+		m.serviceLogErrors = map[string]error{
+			testClusterID: fmt.Errorf("unexpected status 403"),
+		}
+
+		content, preRendered, err := m.renderServiceLogsTab()
+		assert.NoError(t, err)
+		assert.True(t, preRendered, "error content should be pre-rendered")
+		assert.Contains(t, content, "Failed to load service logs")
+		assert.Contains(t, content, "see logs for details")
+	})
+}
+
+func TestRenderLimitedSupportTab_FetchError(t *testing.T) {
+	t.Run("shows error message when fetch failed", func(t *testing.T) {
+		m := createTestModel()
+		setupModelWithCluster(&m)
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		m.ocmClient = createMockOCMClient()
+		m.limitedSupportErrors = map[string]error{
+			testClusterID: fmt.Errorf("unexpected status 403"),
+		}
+
+		content, preRendered, err := m.renderLimitedSupportTab()
+		assert.NoError(t, err)
+		assert.True(t, preRendered, "error content should be pre-rendered")
+		assert.Contains(t, content, "Failed to load limited support")
+		assert.Contains(t, content, "see logs for details")
+	})
+}
+
 func TestRenderServiceLogsTab_Loading(t *testing.T) {
 	t.Run("shows loading message when client connected but no data", func(t *testing.T) {
 		m := createTestModel()
 		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
 		m.ocmClient = createMockOCMClient()
 
-		content, err := m.renderServiceLogsTab()
+		content, _, err := m.renderServiceLogsTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "Loading service logs")
 	})
@@ -443,7 +511,7 @@ func TestRenderLimitedSupportTab_Empty(t *testing.T) {
 		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
 		m.ocmClient = createMockOCMClient()
 
-		content, err := m.renderLimitedSupportTab()
+		content, _, err := m.renderLimitedSupportTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "No limited support history")
 	})
@@ -665,7 +733,7 @@ func TestRenderServiceLogsTab_AuthPending(t *testing.T) {
 		m.ocmClient = nil
 		m.ocmAuthPending = true
 
-		content, err := m.renderServiceLogsTab()
+		content, _, err := m.renderServiceLogsTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "authenticating")
 		assert.NotContains(t, content, "OCM not connected")
@@ -679,7 +747,7 @@ func TestRenderLimitedSupportTab_AuthPending(t *testing.T) {
 		m.ocmClient = nil
 		m.ocmAuthPending = true
 
-		content, err := m.renderLimitedSupportTab()
+		content, _, err := m.renderLimitedSupportTab()
 		assert.NoError(t, err)
 		assert.Contains(t, content, "authenticating")
 		assert.NotContains(t, content, "OCM not connected")

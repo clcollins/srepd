@@ -241,12 +241,15 @@ type model struct {
 	clusterCache          map[string]*ocm.ClusterInfo
 	serviceLogCache       map[string][]ocm.ServiceLog
 	limitedSupportCache   map[string][]ocm.LimitedSupportReason
+	serviceLogErrors      map[string]error
+	limitedSupportErrors  map[string]error
 
 	// Backplane enrichment state
-	backplaneClient    backplane.BackplaneClient
-	backplaneConfig    *backplane.Config
-	backplaneInitErr   error
-	clusterReportCache map[string][]backplane.Report
+	backplaneClient     backplane.BackplaneClient
+	backplaneConfig     *backplane.Config
+	backplaneInitErr    error
+	clusterReportCache  map[string][]backplane.Report
+	clusterReportErrors map[string]error
 
 	// Prior alerts state
 	priorAlertCache   map[string]*PriorAlertData
