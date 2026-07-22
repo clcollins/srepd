@@ -65,6 +65,10 @@ func (m model) Init() tea.Cmd {
 		initCmds = append(initCmds, fetchUserTeams(m.config.Client))
 	}
 
+	if m.ocmAuthPending {
+		initCmds = append(initCmds, m.startAuthBannerTick())
+	}
+
 	if m.configModeRequested {
 		initCmds = append(initCmds, prepareConfigWizardCmd(m))
 	}
@@ -392,6 +396,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case OCMClientReadyMsg:
 		m.ocmAuthPending = false
+		m.authBannerPhase = 0
 		if msg.Err != nil {
 			log.Warn("OCM authentication failed", "error", msg.Err)
 			return m, m.flashNotification("OCM auth failed — cluster enrichment disabled")
@@ -559,6 +564,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case TickMsg:
 		return m, tea.Batch(runScheduledJobs(&m)...)
+
+	case authBannerTickMsg:
+		if !m.ocmAuthPending {
+			m.authBannerPhase = 0
+			return m, nil
+		}
+		m.authBannerPhase = (m.authBannerPhase + 1) % 6
+		return m, m.startAuthBannerTick()
 
 	case typewriterTickMsg:
 		return m, m.advanceTypewriter()
@@ -1253,6 +1266,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, func() tea.Msg { return getIncidentMsg(m.selectedIncident.ID) })
 
 	case loginMsg:
+		if m.ocmAuthPending {
+			return m, m.flashNotification("Login blocked — complete OCM browser auth first")
+		}
 		if m.selectedIncident == nil {
 			m.setStatus("unable to login - no selected incident")
 			return m, nil
@@ -1327,6 +1343,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, login(vars, m.launcher, m.selectedIncident, m.selectedIncidentAlerts, m.selectedIncidentNotes))
 
 	case rosaBoundaryLoginMsg:
+		if m.ocmAuthPending {
+			return m, m.flashNotification("Login blocked — complete OCM browser auth first")
+		}
 		if m.selectedIncident == nil {
 			m.setStatus("unable to login via rosa-boundary - no selected incident")
 			return m, nil

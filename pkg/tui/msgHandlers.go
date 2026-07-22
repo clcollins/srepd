@@ -693,9 +693,9 @@ func switchTableFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Login):
-			// Login uses doIfIncidentSelected() instead of the standard sync pattern
-			// because it needs to fetch full incident details + alerts from the API
-			// before proceeding (via getIncidentMsg + waitForSelectedIncidentThenDoMsg).
+			if m.ocmAuthPending {
+				return m, m.flashNotification("Login blocked — complete OCM browser auth first")
+			}
 			return m, doIfIncidentSelected(&m, func() tea.Msg {
 				return waitForSelectedIncidentThenDoMsg{action: func() tea.Msg { return loginMsg("login") }, msg: "wait"}
 			})
@@ -957,11 +957,13 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return parseTemplateForNoteMsg("add note") }
 
 		case key.Matches(msg, defaultKeyMap.Login):
+			if m.ocmAuthPending {
+				return m, m.flashNotification("Login blocked — complete OCM browser auth first")
+			}
 			if m.selectedIncident == nil {
 				m.setStatus("no incident selected")
 				return m, nil
 			}
-			// Login requires alerts to extract cluster_id
 			if !m.incidentAlertsLoaded {
 				m.setStatus("Loading incident alerts, please wait...")
 				return m, nil

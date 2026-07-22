@@ -123,6 +123,9 @@ func chordHelpText(prefix string) string {
 }
 
 func chordRosaBoundaryLogin(m model) (tea.Model, tea.Cmd) {
+	if m.ocmAuthPending {
+		return m, m.flashNotification("Login blocked — complete OCM browser auth first")
+	}
 	if !m.rosaBoundaryLauncher.Enabled {
 		m.setStatus("rosa-boundary not configured")
 		return m, nil
