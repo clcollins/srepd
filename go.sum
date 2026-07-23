@@ -393,8 +393,8 @@ github.com/openshift-online/ocm-cli v1.0.2 h1:8xz1/kqwGI5mE/pYRGkHy5MgUEZa4Bwshx
 github.com/openshift-online/ocm-cli v1.0.2/go.mod h1:/JxCCvDl/LbtDc9kJdIMleHbjNufztY5f/rzlayxBVQ=
 github.com/openshift-online/ocm-common v0.0.44 h1:MwXBQt+LJPqmix0wkLi7YqQVh3XY2LHpGCrPwWH60q4=
 github.com/openshift-online/ocm-common v0.0.44/go.mod h1:8+czO01A9gb1KDOwGmgEhZOZ/iTImuLQVo6l54jJc0I=
-github.com/openshift-online/ocm-sdk-go v0.1.505 h1:Ne3TH43YTkd2zD73b//23EXJav7z/dhStD3L/UmpOyM=
-github.com/openshift-online/ocm-sdk-go v0.1.505/go.mod h1:6HRHFFcP71rXkTvcexoikR/kZUk4MYCl505THEIuZkI=
+github.com/openshift-online/ocm-sdk-go v0.1.507 h1:3sv+blhiIRlgJVpGGnFeFQ1aQNZ2HIMSiTfOo8Chmug=
+github.com/openshift-online/ocm-sdk-go v0.1.507/go.mod h1:6HRHFFcP71rXkTvcexoikR/kZUk4MYCl505THEIuZkI=
 github.com/pb33f/ordered-map/v2 v2.3.1 h1:5319HDO0aw4DA4gzi+zv4FXU9UlSs3xGZ40wcP1nBjY=
 github.com/pb33f/ordered-map/v2 v2.3.1/go.mod h1:qxFQgd0PkVUtOMCkTapqotNgzRhMPL7VvaHKbd1HnmQ=
 github.com/pelletier/go-toml/v2 v2.3.1 h1:MYEvvGnQjeNkRF1qUuGolNtNExTDwct51yp7olPtrEc=
