@@ -15,6 +15,7 @@ func TestOcmServiceLogsMsg_InitializesNilCache(t *testing.T) {
 	t.Run("initializes serviceLogCache map when nil", func(t *testing.T) {
 		m := createTestModel()
 		m.serviceLogCache = nil
+		m.viewingIncident = true
 
 		msg := ocmServiceLogsMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -26,7 +27,7 @@ func TestOcmServiceLogsMsg_InitializesNilCache(t *testing.T) {
 
 		assert.NotNil(t, updated.serviceLogCache, "should initialize nil map")
 		assert.Len(t, updated.serviceLogCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
-		assert.NotNil(t, cmd, "should return re-render cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd when viewing incident")
 	})
 }
 
@@ -34,6 +35,7 @@ func TestOcmServiceLogsMsg_ErrorStoresError(t *testing.T) {
 	t.Run("error stores in error map and returns re-render cmd", func(t *testing.T) {
 		m := createTestModel()
 		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		m.viewingIncident = true
 
 		msg := ocmServiceLogsMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -46,7 +48,7 @@ func TestOcmServiceLogsMsg_ErrorStoresError(t *testing.T) {
 		assert.Empty(t, updated.serviceLogCache, "cache should remain empty on error")
 		assert.Contains(t, updated.serviceLogErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.EqualError(t, updated.serviceLogErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "service log fetch failed")
-		assert.NotNil(t, cmd, "should return re-render cmd on error")
+		assert.NotNil(t, cmd, "should return re-render cmd on error when viewing incident")
 	})
 }
 
@@ -54,6 +56,7 @@ func TestOcmServiceLogsMsg_StoresEmptySlice(t *testing.T) {
 	t.Run("stores empty slice in cache when no logs found", func(t *testing.T) {
 		m := createTestModel()
 		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		m.viewingIncident = true
 
 		msg := ocmServiceLogsMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -65,7 +68,26 @@ func TestOcmServiceLogsMsg_StoresEmptySlice(t *testing.T) {
 
 		assert.Contains(t, updated.serviceLogCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.Empty(t, updated.serviceLogCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"])
-		assert.NotNil(t, cmd, "should return re-render cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd when viewing incident")
+	})
+}
+
+func TestOcmServiceLogsMsg_NoRerenderWhenNotViewing(t *testing.T) {
+	t.Run("caches data but skips re-render when not viewing incident", func(t *testing.T) {
+		m := createTestModel()
+		m.serviceLogCache = make(map[string][]ocm.ServiceLog)
+		m.viewingIncident = false
+
+		msg := ocmServiceLogsMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			logs:      []ocm.ServiceLog{{Summary: "log"}},
+		}
+
+		result, cmd := m.Update(msg)
+		updated := result.(model)
+
+		assert.Len(t, updated.serviceLogCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1, "data should still be cached")
+		assert.Nil(t, cmd, "should not re-render when not viewing incident")
 	})
 }
 
@@ -75,6 +97,7 @@ func TestLimitedSupportMsg_InitializesNilCache(t *testing.T) {
 	t.Run("initializes limitedSupportCache map when nil", func(t *testing.T) {
 		m := createTestModel()
 		m.limitedSupportCache = nil
+		m.viewingIncident = true
 
 		msg := limitedSupportMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -86,7 +109,7 @@ func TestLimitedSupportMsg_InitializesNilCache(t *testing.T) {
 
 		assert.NotNil(t, updated.limitedSupportCache, "should initialize nil map")
 		assert.Len(t, updated.limitedSupportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
-		assert.NotNil(t, cmd, "should return re-render cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd when viewing incident")
 	})
 }
 
@@ -94,6 +117,7 @@ func TestLimitedSupportMsg_ErrorStoresError(t *testing.T) {
 	t.Run("error stores in error map and returns re-render cmd", func(t *testing.T) {
 		m := createTestModel()
 		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		m.viewingIncident = true
 
 		msg := limitedSupportMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -106,7 +130,26 @@ func TestLimitedSupportMsg_ErrorStoresError(t *testing.T) {
 		assert.Empty(t, updated.limitedSupportCache, "cache should remain empty on error")
 		assert.Contains(t, updated.limitedSupportErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.EqualError(t, updated.limitedSupportErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "limited support fetch failed")
-		assert.NotNil(t, cmd, "should return re-render cmd on error")
+		assert.NotNil(t, cmd, "should return re-render cmd on error when viewing incident")
+	})
+}
+
+func TestLimitedSupportMsg_NoRerenderWhenNotViewing(t *testing.T) {
+	t.Run("caches data but skips re-render when not viewing incident", func(t *testing.T) {
+		m := createTestModel()
+		m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
+		m.viewingIncident = false
+
+		msg := limitedSupportMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			reasons:   []ocm.LimitedSupportReason{{Summary: "reason"}},
+		}
+
+		result, cmd := m.Update(msg)
+		updated := result.(model)
+
+		assert.Len(t, updated.limitedSupportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1, "data should still be cached")
+		assert.Nil(t, cmd, "should not re-render when not viewing incident")
 	})
 }
 
@@ -116,6 +159,7 @@ func TestClusterReportsMsg_StoresInCache(t *testing.T) {
 	t.Run("stores reports in clusterReportCache", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterReportCache = make(map[string][]backplane.Report)
+		m.viewingIncident = true
 
 		msg := clusterReportsMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -130,7 +174,7 @@ func TestClusterReportsMsg_StoresInCache(t *testing.T) {
 
 		assert.Contains(t, updated.clusterReportCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.Len(t, updated.clusterReportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 2)
-		assert.NotNil(t, cmd, "should return re-render cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd when viewing incident")
 	})
 }
 
@@ -138,6 +182,7 @@ func TestClusterReportsMsg_ErrorDoesNotPopulateCache(t *testing.T) {
 	t.Run("error does not populate cache but stores in error map", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterReportCache = make(map[string][]backplane.Report)
+		m.viewingIncident = true
 
 		msg := clusterReportsMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -150,7 +195,7 @@ func TestClusterReportsMsg_ErrorDoesNotPopulateCache(t *testing.T) {
 		assert.Empty(t, updated.clusterReportCache, "cache should remain empty on error")
 		assert.Contains(t, updated.clusterReportErrors, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.EqualError(t, updated.clusterReportErrors["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], "backplane reports fetch failed")
-		assert.NotNil(t, cmd, "should return re-render cmd on error")
+		assert.NotNil(t, cmd, "should return re-render cmd on error when viewing incident")
 	})
 }
 
@@ -158,6 +203,7 @@ func TestClusterReportsMsg_InitializesNilCache(t *testing.T) {
 	t.Run("initializes clusterReportCache map when nil", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterReportCache = nil
+		m.viewingIncident = true
 
 		msg := clusterReportsMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -169,7 +215,7 @@ func TestClusterReportsMsg_InitializesNilCache(t *testing.T) {
 
 		assert.NotNil(t, updated.clusterReportCache, "should initialize nil map")
 		assert.Len(t, updated.clusterReportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1)
-		assert.NotNil(t, cmd, "should return re-render cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd when viewing incident")
 	})
 }
 
@@ -177,6 +223,7 @@ func TestClusterReportsMsg_StoresEmptySlice(t *testing.T) {
 	t.Run("stores empty slice when no reports found", func(t *testing.T) {
 		m := createTestModel()
 		m.clusterReportCache = make(map[string][]backplane.Report)
+		m.viewingIncident = true
 
 		msg := clusterReportsMsg{
 			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
@@ -188,6 +235,25 @@ func TestClusterReportsMsg_StoresEmptySlice(t *testing.T) {
 
 		assert.Contains(t, updated.clusterReportCache, "1q2w3e4rfakeidtest9o0p1a2s3d4f5g")
 		assert.Empty(t, updated.clusterReportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"])
-		assert.NotNil(t, cmd, "should return re-render cmd")
+		assert.NotNil(t, cmd, "should return re-render cmd when viewing incident")
+	})
+}
+
+func TestClusterReportsMsg_NoRerenderWhenNotViewing(t *testing.T) {
+	t.Run("caches data but skips re-render when not viewing incident", func(t *testing.T) {
+		m := createTestModel()
+		m.clusterReportCache = make(map[string][]backplane.Report)
+		m.viewingIncident = false
+
+		msg := clusterReportsMsg{
+			clusterID: "1q2w3e4rfakeidtest9o0p1a2s3d4f5g",
+			reports:   []backplane.Report{{ReportID: "R001", Summary: "report"}},
+		}
+
+		result, cmd := m.Update(msg)
+		updated := result.(model)
+
+		assert.Len(t, updated.clusterReportCache["1q2w3e4rfakeidtest9o0p1a2s3d4f5g"], 1, "data should still be cached")
+		assert.Nil(t, cmd, "should not re-render when not viewing incident")
 	})
 }

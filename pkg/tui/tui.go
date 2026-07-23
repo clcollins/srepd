@@ -1927,14 +1927,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.serviceLogErrors = make(map[string]error)
 			}
 			m.serviceLogErrors[msg.clusterID] = msg.err
-			return m, func() tea.Msg { return renderIncidentMsg("service logs error") }
+			if m.viewingIncident {
+				return m, func() tea.Msg { return renderIncidentMsg("service logs error") }
+			}
+			return m, nil
 		}
 		if m.serviceLogCache == nil {
 			m.serviceLogCache = make(map[string][]ocm.ServiceLog)
 		}
 		m.serviceLogCache[msg.clusterID] = msg.logs
 		log.Info("service logs fetched", "cluster_id", msg.clusterID, "count", len(msg.logs))
-		return m, func() tea.Msg { return renderIncidentMsg("service logs arrived") }
+		if m.viewingIncident {
+			return m, func() tea.Msg { return renderIncidentMsg("service logs arrived") }
+		}
+		return m, nil
 
 	case limitedSupportMsg:
 		if msg.err != nil {
@@ -1943,14 +1949,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.limitedSupportErrors = make(map[string]error)
 			}
 			m.limitedSupportErrors[msg.clusterID] = msg.err
-			return m, func() tea.Msg { return renderIncidentMsg("limited support error") }
+			if m.viewingIncident {
+				return m, func() tea.Msg { return renderIncidentMsg("limited support error") }
+			}
+			return m, nil
 		}
 		if m.limitedSupportCache == nil {
 			m.limitedSupportCache = make(map[string][]ocm.LimitedSupportReason)
 		}
 		m.limitedSupportCache[msg.clusterID] = msg.reasons
 		log.Info("limited support fetched", "cluster_id", msg.clusterID, "count", len(msg.reasons))
-		return m, func() tea.Msg { return renderIncidentMsg("limited support arrived") }
+		if m.viewingIncident {
+			return m, func() tea.Msg { return renderIncidentMsg("limited support arrived") }
+		}
+		return m, nil
 
 	case clusterReportsMsg:
 		if msg.err != nil {
@@ -1959,14 +1971,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.clusterReportErrors = make(map[string]error)
 			}
 			m.clusterReportErrors[msg.clusterID] = msg.err
-			return m, func() tea.Msg { return renderIncidentMsg("reports error") }
+			if m.viewingIncident {
+				return m, func() tea.Msg { return renderIncidentMsg("reports error") }
+			}
+			return m, nil
 		}
 		if m.clusterReportCache == nil {
 			m.clusterReportCache = make(map[string][]backplane.Report)
 		}
 		m.clusterReportCache[msg.clusterID] = msg.reports
 		log.Info("cluster reports fetched", "cluster_id", msg.clusterID, "count", len(msg.reports))
-		return m, func() tea.Msg { return renderIncidentMsg("reports arrived") }
+		if m.viewingIncident {
+			return m, func() tea.Msg { return renderIncidentMsg("reports arrived") }
+		}
+		return m, nil
 
 	case priorAlertsMsg:
 		if m.priorAlertPending[msg.clusterID] > 0 {
