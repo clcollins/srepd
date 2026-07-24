@@ -357,6 +357,16 @@ type clearFlashMsg struct {
 	message string
 }
 
+type authBannerTickMsg struct{}
+
+const authBannerFlashInterval = 500 * time.Millisecond
+
+func (m *model) startAuthBannerTick() tea.Cmd {
+	return tea.Tick(authBannerFlashInterval, func(time.Time) tea.Msg {
+		return authBannerTickMsg{}
+	})
+}
+
 type PollIncidentsMsg struct{}
 
 type lazyEnrichMsg struct{}
@@ -1744,6 +1754,7 @@ func (m *model) ocmHandoffCmd(requirePDConfig bool) tea.Cmd {
 	cmd := m.connectOCMCmdIfNeeded()
 	if cmd != nil {
 		m.ocmAuthPending = true
+		return tea.Batch(cmd, m.startAuthBannerTick())
 	}
 	return cmd
 }

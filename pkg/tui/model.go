@@ -230,8 +230,9 @@ type model struct {
 	tourStep int
 
 	// OCM enrichment state
-	ocmClient      ocm.OCMClient
-	ocmAuthPending bool
+	ocmClient       ocm.OCMClient
+	ocmAuthPending  bool
+	authBannerPhase int
 	// ocmConnect overrides the post-wizard OCM connection for tests; nil
 	// means the real ocm.Connect (which may run browser auth).
 	ocmConnect            func() (ocm.OCMClient, error)

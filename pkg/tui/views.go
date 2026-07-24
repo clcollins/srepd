@@ -279,6 +279,15 @@ func (m model) renderHeader() string {
 	return s.String()
 }
 
+var authBannerColors = []string{
+	"#a4133c",
+	"#800f2f",
+	"#590d22",
+	"#800f2f",
+	"#a4133c",
+	"#c9184a",
+}
+
 func (m model) renderBottomStatus() string {
 	var s strings.Builder
 	var selectedID string
@@ -287,7 +296,31 @@ func (m model) renderBottomStatus() string {
 		selectedID = m.selectedIncident.ID
 	}
 
-	if m.updateAvailable {
+	if m.ocmAuthPending {
+		authNotice := ">>> Please complete OCM browser auth <<<"
+		bgColor := authBannerColors[m.authBannerPhase%len(authBannerColors)]
+		authStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(m.theme.Highlight).
+			Background(lipgloss.Color(bgColor)).
+			Padding(0, 1).
+			Align(lipgloss.Center)
+
+		leftWidth := windowSize.Width / 6
+		rightWidth := windowSize.Width / 4
+		centerWidth := windowSize.Width - leftWidth - rightWidth
+
+		versionDisplay := versionString()
+
+		s.WriteString(
+			lipgloss.JoinHorizontal(
+				0.2,
+				m.styles.Muted.Width(leftWidth).Padding(0, 0, 0, 1).Render(selectedID),
+				authStyle.Width(centerWidth).Render(authNotice),
+				m.styles.Muted.Width(rightWidth).Padding(0, 1, 0, 0).Align(lipgloss.Right).Render(versionDisplay),
+			),
+		)
+	} else if m.updateAvailable {
 		versionDisplay := updateString(Version, m.updateVersion)
 
 		updateNotice := fmt.Sprintf("An update is available: %s", m.updateVersion)
