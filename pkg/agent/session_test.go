@@ -129,7 +129,7 @@ func TestSession_SendAfterClose(t *testing.T) {
 	exec := newMockStreamExecutor("")
 	cfg := Config{CLICommand: "claude", SessionEnabled: true}
 	s := NewSession(cfg, "INC-001", exec, nil)
-	s.Close()
+	require.NoError(t, s.Close())
 
 	err := s.Send(context.Background(), "hello")
 	assert.Error(t, err, "Send after Close should return error")

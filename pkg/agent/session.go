@@ -37,12 +37,12 @@ func (e *execStreamExecutor) Start(ctx context.Context, name string, args []stri
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		stdin.Close()
+		_ = stdin.Close()
 		return nil, nil, nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		stdin.Close()
-		stdout.Close()
+		_ = stdin.Close()
+		_ = stdout.Close()
 		return nil, nil, nil, fmt.Errorf("start: %w", err)
 	}
 	return stdin, stdout, cmd.Wait, nil
@@ -222,7 +222,7 @@ func (s *Session) Close() error {
 		s.cancel()
 	}
 	if s.stdin != nil {
-		s.stdin.Close()
+		_ = s.stdin.Close()
 	}
 	return nil
 }
@@ -282,7 +282,7 @@ func (m *SessionManager) GetOrCreate(incidentID string, env []string) *Session {
 		oldest := m.order[0]
 		m.order = m.order[1:]
 		if s, ok := m.sessions[oldest]; ok {
-			s.Close()
+			_ = s.Close()
 			s.MarkResumable()
 		}
 	}
@@ -309,6 +309,6 @@ func (m *SessionManager) CloseAll() {
 	defer m.mu.Unlock()
 
 	for _, s := range m.sessions {
-		s.Close()
+		_ = s.Close()
 	}
 }
