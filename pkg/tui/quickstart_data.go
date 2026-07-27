@@ -74,8 +74,18 @@ func ChordEntries() []ChordEntry {
 	return entries
 }
 
+func ChatModeEntries() []KeyBindingEntry {
+	km := chatModeKeyMap
+	return []KeyBindingEntry{
+		{Keys: km.Back.Help().Key, Help: km.Back.Help().Desc},
+		{Keys: km.Enter.Help().Key, Help: km.Enter.Help().Desc},
+		{Keys: km.Quit.Help().Key, Help: km.Quit.Help().Desc},
+	}
+}
+
 func InputCommandEntries() []InputCommandEntry {
 	return []InputCommandEntry{
+		{Command: ":agent", Description: "open chat mode"},
 		{Command: ":agent <query>", Description: "ask Claude AI"},
 		{Command: ":watcher <query>", Description: "query AI watcher"},
 		{Command: ":flag cluster <id>", Description: "flag incidents by cluster ID"},
@@ -88,7 +98,7 @@ func InputCommandEntries() []InputCommandEntry {
 	}
 }
 
-func GenerateQuickstartMarkdown(keys []KeyBindingEntry, chords []ChordEntry, inputs []InputCommandEntry) string {
+func GenerateQuickstartMarkdown(keys []KeyBindingEntry, chords []ChordEntry, inputs []InputCommandEntry, chatMode []KeyBindingEntry) string {
 	var b strings.Builder
 
 	b.WriteString("# Quickstart\n\n")
@@ -112,6 +122,13 @@ func GenerateQuickstartMarkdown(keys []KeyBindingEntry, chords []ChordEntry, inp
 	b.WriteString("|---------|--------|\n")
 	for _, e := range inputs {
 		fmt.Fprintf(&b, "| %s | %s |\n", e.Command, e.Description)
+	}
+
+	b.WriteString("\n## Chat Mode (`:agent`)\n\n")
+	b.WriteString("| Key | Action |\n")
+	b.WriteString("|-----|--------|\n")
+	for _, e := range chatMode {
+		fmt.Fprintf(&b, "| %s | %s |\n", e.Keys, e.Help)
 	}
 
 	return b.String()

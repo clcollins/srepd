@@ -1341,11 +1341,7 @@ func (m model) renderChatPane() string {
 		chatHeight = 3
 	}
 	m.watcherViewport.Height = chatHeight
-	m.watcherViewport.Width = windowSize.Width -
-		m.styles.Main.GetHorizontalMargins() -
-		m.styles.Main.GetHorizontalPadding() -
-		m.styles.Main.GetHorizontalBorderSize() -
-		m.styles.WatcherContainer.GetHorizontalBorderSize()
+	m.watcherViewport.Width = m.layout.WatcherWidth
 
 	s := header + "\n"
 	s += m.styles.WatcherContainer.Render(m.watcherViewport.View()) + "\n"
