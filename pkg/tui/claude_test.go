@@ -678,15 +678,15 @@ func TestInputMode_BareText_ShowsError(t *testing.T) {
 	assert.Contains(t, updated.status, "unknown command", "status must show error for bare text")
 }
 
-func TestInputMode_EmptyAgent_ShowsUsage(t *testing.T) {
+func TestInputMode_EmptyAgent_EntersChatMode(t *testing.T) {
 	m := createInputFocusedModel(":agent")
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := m.keyMsgHandler(keyMsg)
 	updated := result.(model)
 
-	assert.Nil(t, cmd, ":agent with no query must not dispatch")
-	assert.Contains(t, updated.status, "usage", "status must show usage hint")
+	assert.Nil(t, cmd, "bare :agent must not dispatch a command")
+	assert.True(t, updated.chatMode, "bare :agent must enter chat mode")
 }
 
 func TestIsClaudeCLI(t *testing.T) {

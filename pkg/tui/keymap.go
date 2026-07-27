@@ -81,6 +81,22 @@ func (k inputKeymap) FullHelp() [][]key.Binding {
 	}
 }
 
+// chatModeKeyMap contains only the keys that work in chat mode
+var chatModeKeyMap = inputKeymap{
+	Quit: key.NewBinding(
+		key.WithKeys("ctrl+c", "ctrl+q"),
+		key.WithHelp("ctrl+q/ctrl+c", "quit"),
+	),
+	Back: key.NewBinding(
+		key.WithKeys("esc"),
+		key.WithHelp("esc", "back to queue"),
+	),
+	Enter: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "send message"),
+	),
+}
+
 // inputModeKeyMap contains only the keys that work in input mode
 var inputModeKeyMap = inputKeymap{
 	Quit: key.NewBinding(

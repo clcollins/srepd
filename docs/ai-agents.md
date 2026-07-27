@@ -57,7 +57,7 @@ Non-Claude CLIs fall back to the one-shot blocking path automatically.
 
 ## Commands
 
-### `:agent <query>`
+### `:agent <query>` / `:agent` (chat mode)
 
 Dispatches a query to the configured CLI agent subprocess. The agent command is configurable via `agent_cli_command` (default: `claude --print`).
 
@@ -66,6 +66,14 @@ Dispatches a query to the configured CLI agent subprocess. The agent command is 
 :agent suggest investigation steps for this alert
 :agent what oc commands should I run?
 ```
+
+Bare `:agent` (no query) opens **chat mode**: a focused pane for interactive
+conversation with the agent. Type messages and press `Enter` to send; `Esc`
+returns to the incident queue. `:agent <query>` is a shortcut that opens chat
+mode and sends the query in one step.
+
+When a background session produces output while you are not in chat mode, the
+status bar shows `[agent has new output]`. Entering chat mode clears the badge.
 
 The query, system prompt, and full incident context are piped to the subprocess via stdin. PagerDuty environment variables are also set on the process.
 

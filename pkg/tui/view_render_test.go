@@ -8,6 +8,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/clcollins/srepd/pkg/agent"
@@ -291,4 +292,45 @@ func TestView_AgentSessionTextDeltaRendersInWatcher(t *testing.T) {
 
 	view := m.View()
 	assert.Contains(t, view, "Checking cluster health", "text delta should appear in watcher pane")
+}
+
+func TestView_ChatModeRendersExpectedContent(t *testing.T) {
+	m := sizedTestModel(t)
+	m.chatMode = true
+	m.watcherExpanded = true
+	m.chatInput = textinput.New()
+	m.chatInput.Prompt = " > "
+	m.chatInput.Focus()
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.watcherBuffer.Append(prefixLines(m.agentMarker, "Agent response text"))
+	m.updateWatcherViewport()
+
+	view := m.View()
+	assert.Contains(t, view, "Agent Chat", "chat header should be visible")
+	assert.Contains(t, view, "P1234567", "incident ID should appear in chat header")
+	assert.Contains(t, view, "Agent response text", "agent response should be visible in chat pane")
+	assert.Contains(t, view, ">", "input prompt should be visible")
+	assert.NotContains(t, view, "Test Alert Firing", "table should not be visible in chat mode")
+}
+
+func TestView_ChatModeBackgroundBadge(t *testing.T) {
+	m := sizedTestModel(t)
+	m.chatHasBackground = true
+	m.chatMode = false
+
+	view := m.View()
+	assert.Contains(t, view, "agent has new output", "background badge should show when not in chat mode")
+}
+
+func TestView_ChatModeNoBadgeWhenFocused(t *testing.T) {
+	m := sizedTestModel(t)
+	m.chatHasBackground = true
+	m.chatMode = true
+	m.watcherExpanded = true
+	m.chatInput = textinput.New()
+	m.chatInput.Prompt = " > "
+	m.chatInput.Focus()
+
+	view := m.View()
+	assert.NotContains(t, view, "agent has new output", "badge should not show when in chat mode")
 }

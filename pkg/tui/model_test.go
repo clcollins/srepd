@@ -1810,3 +1810,75 @@ func TestErrMsgHandler_ResetsApiInProgress(t *testing.T) {
 			"error must not be copied into the transient status line")
 	})
 }
+
+func TestChatMode_BareAgentEntersChatMode(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	// Simulate input mode with ":agent" typed
+	m.input = newTextInput()
+	m.input.SetValue(":agent")
+
+	// Directly call switchInputFocusMode with Enter key
+	result, _ := switchInputFocusMode(m, tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, "bare :agent should enter chat mode")
+}
+
+func TestChatMode_AgentWithQueryEntersChatMode(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.input = newTextInput()
+	m.input.SetValue(":agent hello")
+
+	result, cmd := switchInputFocusMode(m, tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, ":agent with query should enter chat mode")
+	assert.NotNil(t, cmd, "should dispatch a claudePromptMsg command")
+}
+
+func TestChatMode_EscReturnToQueue(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatInput = newTextInput()
+	m.chatInput.Focus()
+	m.watcherExpanded = true
+
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.False(t, updated.chatMode, "Esc should exit chat mode")
+}
+
+func TestChatMode_EnterSendsMessage(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatInput = newTextInput()
+	m.chatInput.Focus()
+	m.chatInput.SetValue("hello agent")
+
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, "should stay in chat mode after sending")
+	assert.NotNil(t, cmd, "should dispatch a command")
+	assert.Equal(t, "", updated.chatInput.Value(), "input should be cleared after send")
+}
+
+func TestChatMode_EmptyEnterDoesNothing(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatInput = newTextInput()
+	m.chatInput.Focus()
+	m.chatInput.SetValue("")
+
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, "should remain in chat mode")
+	assert.Nil(t, cmd, "should not dispatch any command for empty input")
+}

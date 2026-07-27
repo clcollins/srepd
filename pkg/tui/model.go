@@ -189,6 +189,11 @@ type model struct {
 	agentSessionMgr       *agent.SessionManager
 	agentSessionSentFirst map[string]bool // tracks first message per incident for context injection
 
+	// Chat mode: focused pane for interactive agent conversation
+	chatMode          bool
+	chatInput         textinput.Model
+	chatHasBackground bool // badge: a non-focused session produced output
+
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
 

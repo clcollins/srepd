@@ -225,6 +225,10 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea.Cmd) {
 	ev := msg.event
 
+	if !m.chatMode && ev.Kind != agent.Init {
+		m.chatHasBackground = true
+	}
+
 	if !m.watcherExpanded {
 		m.watcherExpanded = true
 		m.recomputeLayout()

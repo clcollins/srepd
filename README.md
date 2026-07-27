@@ -171,7 +171,7 @@ The Reports tab requires `~/.config/backplane/config.json` (standard backplane-c
 
 SREPD supports configurable LLM providers for AI-assisted incident analysis and an ambient watcher that detects cross-incident patterns. Configuration is entirely optional — AI features are disabled when unconfigured. See [docs/ai-agents.md](docs/ai-agents.md) for usage and [docs/llm-providers.md](docs/llm-providers.md) for provider setup.
 
-Use `:agent <query>` for CLI agent queries and `:watcher <query>` for LLM analysis. Press `w` to toggle the watcher pane.
+Use `:agent <query>` for CLI agent queries and `:watcher <query>` for LLM analysis. Press `w` to toggle the watcher pane. Bare `:agent` (no query) opens **chat mode** — a focused pane for interactive conversation with the agent; press `Esc` to return to the incident queue.
 
 ### Quick Start
 
