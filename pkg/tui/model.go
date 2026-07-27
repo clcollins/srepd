@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"charm.land/glamour/v2"
@@ -19,6 +20,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
@@ -182,6 +184,11 @@ type model struct {
 	agentStreamPartial string
 	agentStreamCancel  context.CancelFunc
 
+	// Session-based agent state (Phase 1 AI rearchitecture)
+	agentSessionEnabled   bool
+	agentSessionMgr       *agent.SessionManager
+	agentSessionSentFirst map[string]bool // tracks first message per incident for context injection
+
 	// Incident viewer tab state
 	activeTab int // 0=details, 1=alerts, 2=notes
 
@@ -302,6 +309,33 @@ func resolveStreamResponses() bool {
 	return viper.GetBool("stream_responses")
 }
 
+func resolveAgentSessionEnabled() bool {
+	if !viper.IsSet("agent_session_enabled") {
+		return true
+	}
+	return viper.GetBool("agent_session_enabled")
+}
+
+func resolveAgentMaxSessions() int {
+	n := viper.GetInt("agent_max_sessions")
+	if n <= 0 {
+		return 3
+	}
+	return n
+}
+
+func resolveAgentAllowedTools() []string {
+	raw := viper.GetStringSlice("agent_allowed_tools")
+	var result []string
+	for _, t := range raw {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
 func InitialModel(
 	token string,
 	teams []string,
@@ -403,6 +437,19 @@ func InitialModel(
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 	m.reescalateLevel = resolveReescalateLevel()
 	m.streamResponses = resolveStreamResponses()
+	m.agentSessionEnabled = resolveAgentSessionEnabled()
+	m.agentSessionSentFirst = make(map[string]bool)
+
+	if m.agentSessionEnabled && isClaudeCLI(m.agentCLICommand) {
+		cfg := agent.Config{
+			CLICommand:     m.agentCLICommand,
+			SessionEnabled: true,
+			MaxSessions:    resolveAgentMaxSessions(),
+			AllowedTools:   resolveAgentAllowedTools(),
+			PermissionMode: viper.GetString("agent_permission_mode"),
+		}
+		m.agentSessionMgr = agent.NewSessionManager(cfg, nil)
+	}
 
 	// Schedule the periodic probe only for providers that can actually be
 	// probed; probe-less providers (anthropic family) stay "unverified" until
@@ -525,6 +572,19 @@ func InitialModelWithConfig(
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 	m.reescalateLevel = resolveReescalateLevel()
 	m.streamResponses = resolveStreamResponses()
+	m.agentSessionEnabled = resolveAgentSessionEnabled()
+	m.agentSessionSentFirst = make(map[string]bool)
+
+	if m.agentSessionEnabled && isClaudeCLI(m.agentCLICommand) {
+		agentCfg := agent.Config{
+			CLICommand:     m.agentCLICommand,
+			SessionEnabled: true,
+			MaxSessions:    resolveAgentMaxSessions(),
+			AllowedTools:   resolveAgentAllowedTools(),
+			PermissionMode: viper.GetString("agent_permission_mode"),
+		}
+		m.agentSessionMgr = agent.NewSessionManager(agentCfg, nil)
+	}
 
 	// Schedule the periodic probe only for providers that can actually be
 	// probed; probe-less providers (anthropic family) stay "unverified" until

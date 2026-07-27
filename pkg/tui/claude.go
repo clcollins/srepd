@@ -16,6 +16,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/ai"
 )
 
@@ -187,6 +188,21 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 
 	incidentContext := buildWatcherContext(&m)
 
+	// Session path: persistent per-incident sessions via stream-json
+	if m.agentSessionEnabled && isClaudeCLI(agentCmd) && m.agentSessionMgr != nil {
+		m.agentStreamPartial = ""
+		isFirst := m.agentSessionMgr != nil && !m.agentSessionSentFirst[incidentID]
+		if m.agentSessionSentFirst == nil {
+			m.agentSessionSentFirst = make(map[string]bool)
+		}
+		m.agentSessionSentFirst[incidentID] = true
+		return m, tea.Batch(
+			m.spinner.Tick,
+			startAgentSession(m.agentSessionMgr, incidentID, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts, isFirst),
+		)
+	}
+
+	// Legacy streaming path (one-shot, no session continuity)
 	if m.streamResponses && isClaudeCLI(agentCmd) {
 		m.agentStreamPartial = ""
 		return m, tea.Batch(
@@ -195,10 +211,77 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 		)
 	}
 
+	// Blocking fallback for non-Claude CLIs
 	return m, tea.Batch(
 		m.spinner.Tick,
 		agentQuery(m.cmdExecutor, agentCmd, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts),
 	)
+}
+
+// handleAgentSessionEvent processes events from a persistent agent session.
+// Tool-use events render as dim "⚙ <tool> <input-summary>" lines; text
+// deltas stream into the watcher buffer; the final Result text gets
+// glamour markdown rendering.
+func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea.Cmd) {
+	ev := msg.event
+
+	if !m.watcherExpanded {
+		m.watcherExpanded = true
+		m.recomputeLayout()
+	}
+
+	switch ev.Kind {
+	case agent.Init:
+		m.agentStreamPartial = ""
+		m.watcherBuffer.Append(prefixLines(m.agentMarker, ""))
+		m.updateWatcherViewport()
+		return m, readAgentSessionCmd(msg.session)
+
+	case agent.TextDelta:
+		m.agentStreamPartial += ev.Text
+		m.watcherBuffer.SetLast(prefixLines(m.agentMarker, m.agentStreamPartial))
+		m.updateWatcherViewport()
+		return m, readAgentSessionCmd(msg.session)
+
+	case agent.ToolUse:
+		toolLine := fmt.Sprintf("⚙ %s %s", ev.Tool, ev.ToolInput)
+		m.watcherBuffer.Append(prefixLines(m.agentMarker, toolLine))
+		m.updateWatcherViewport()
+		return m, readAgentSessionCmd(msg.session)
+
+	case agent.ToolResult:
+		return m, readAgentSessionCmd(msg.session)
+
+	case agent.Result:
+		m.claudeQuerying = false
+		m.apiInProgress = false
+		if ev.IsError {
+			return m, func() tea.Msg {
+				return errMsg{fmt.Errorf("agent error: %s", ev.Text)}
+			}
+		}
+		// Render final result through glamour if available
+		if ev.Text != "" && m.markdownRenderer != nil {
+			rendered, err := m.markdownRenderer.Render(ev.Text)
+			if err == nil {
+				m.watcherBuffer.SetLast(prefixLines(m.agentMarker, strings.TrimSpace(rendered)))
+			} else {
+				m.watcherBuffer.SetLast(prefixLines(m.agentMarker, ev.Text))
+			}
+		} else if ev.Text != "" {
+			m.watcherBuffer.SetLast(prefixLines(m.agentMarker, ev.Text))
+		}
+		m.updateWatcherViewport()
+		m.setStatus("agent response received")
+		return m, nil
+
+	case agent.PermissionAsk:
+		m.setStatus("⚠ Agent needs permission — check terminal")
+		return m, readAgentSessionCmd(msg.session)
+
+	default:
+		return m, readAgentSessionCmd(msg.session)
+	}
 }
 
 // handleClaudeResponse processes a claudeResponseMsg, rendering the response
@@ -315,6 +398,57 @@ func buildStreamingArgs(args []string) []string {
 		args = append(args, "--include-partial-messages")
 	}
 	return args
+}
+
+// agentSessionEventMsg carries a parsed agent.Event from a session.
+type agentSessionEventMsg struct {
+	event   agent.Event
+	session *agent.Session
+}
+
+// agentSessionDoneMsg signals the session's reader goroutine exited.
+type agentSessionDoneMsg struct {
+	err error
+}
+
+// readAgentSessionCmd drains events from a session and returns them
+// as Bubble Tea messages.
+func readAgentSessionCmd(s *agent.Session) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case ev, ok := <-s.Events():
+			if !ok {
+				return agentSessionDoneMsg{}
+			}
+			if ev.Kind == agent.Error {
+				return agentSessionDoneMsg{err: ev.Err}
+			}
+			return agentSessionEventMsg{event: ev, session: s}
+		case <-s.Done():
+			return agentSessionDoneMsg{}
+		}
+	}
+}
+
+// startAgentSession spawns or resumes a session and sends the prompt.
+func startAgentSession(mgr *agent.SessionManager, incidentID string, systemPrompt string, prompt string, incidentContext string, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, isFirstMessage bool) tea.Cmd {
+	return func() tea.Msg {
+		env := append(os.Environ(), buildClaudeEnvVars(incident, alerts)...)
+		s := mgr.GetOrCreate(incidentID, env)
+
+		fullPrompt := prompt
+		if isFirstMessage && systemPrompt != "" {
+			fullPrompt = systemPrompt + "\n\n" + prompt
+		}
+		if isFirstMessage && incidentContext != "" {
+			fullPrompt += "\n\nContext:\n" + incidentContext
+		}
+
+		if err := s.Send(context.Background(), fullPrompt); err != nil {
+			return agentSessionDoneMsg{err: err}
+		}
+		return agentSessionEventMsg{event: agent.Event{Kind: agent.Init}, session: s}
+	}
 }
 
 type agentStreamStartedMsg struct {

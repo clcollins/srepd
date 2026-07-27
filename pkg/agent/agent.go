@@ -64,18 +64,18 @@ type streamMessage struct {
 }
 
 type streamContentBlock struct {
-	Type       string          `json:"type"`
-	Text       string          `json:"text,omitempty"`
-	Name       string          `json:"name,omitempty"`
-	Input      json.RawMessage `json:"input,omitempty"`
-	Content    string          `json:"content,omitempty"`
-	IsError    bool            `json:"is_error,omitempty"`
-	ToolUseID  string          `json:"tool_use_id,omitempty"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	Content   string          `json:"content,omitempty"`
+	IsError   bool            `json:"is_error,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
 }
 
 type streamEventObj struct {
-	Type  string           `json:"type"`
-	Delta *streamDeltaObj  `json:"delta,omitempty"`
+	Type  string          `json:"type"`
+	Delta *streamDeltaObj `json:"delta,omitempty"`
 }
 
 type streamDeltaObj struct {
@@ -171,8 +171,8 @@ type userTurn struct {
 }
 
 type userTurnMessage struct {
-	Role    string              `json:"role"`
-	Content []userTurnContent   `json:"content"`
+	Role    string            `json:"role"`
+	Content []userTurnContent `json:"content"`
 }
 
 type userTurnContent struct {

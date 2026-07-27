@@ -88,6 +88,10 @@ Because `terminal`, `editor`, and `cluster_login_command` are commands srepd *ex
 | `toolbox_mode` | `string` | `auto` | Toolbox detection: `auto`, `true`, or `false` |
 | `chord_prefix` | `string` | `ctrl+x` | Prefix key for chord commands |
 | `agent_cli_command` | `string` | `claude --print` | CLI agent command for `:agent` queries (set to `""` to disable AI features) |
+| `agent_session_enabled` | `bool` | `true` | Use persistent per-incident Claude Code sessions (conversational context across queries) |
+| `agent_max_sessions` | `int` | `3` | Max live agent sessions before LRU eviction |
+| `agent_allowed_tools` | `[]string` | (empty) | Claude Code tool allowlist (e.g. `Bash,Read`) |
+| `agent_permission_mode` | `string` | (empty) | Claude Code `--permission-mode` value |
 | `emoji` | `bool` | `true` | Use emoji markers or text fallbacks for flags/agent/watcher |
 | `reescalate_level` | `int` | `2` | Escalation level `ctrl+e` re-escalates to, skipping lower placeholder tiers (e.g. level 1 "Nobody") |
 | `stream_responses` | `bool` | `true` | Stream `:watcher` and `:agent` responses token-by-token (`:watcher` requires a streaming-capable provider; `:agent` auto-detects Claude CLI); set `false` for blocking responses |

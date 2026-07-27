@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -258,4 +259,36 @@ func TestView_ConfirmationNarrowTerminal(t *testing.T) {
 		assert.Contains(t, view, "Silence P1234567?",
 			"prompt should be visible even on narrow terminal")
 	})
+}
+
+func TestView_AgentSessionToolUseRendersInWatcher(t *testing.T) {
+	m := sizedTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.claudeQuerying = true
+
+	result, _ := m.Update(agentSessionEventMsg{
+		event: agent.Event{Kind: agent.ToolUse, Tool: "Bash", ToolInput: "ls -la"},
+	})
+	m, ok := result.(model)
+	require.True(t, ok)
+
+	view := m.View()
+	assert.Contains(t, view, "Bash", "tool name should appear in watcher pane")
+}
+
+func TestView_AgentSessionTextDeltaRendersInWatcher(t *testing.T) {
+	m := sizedTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.claudeQuerying = true
+
+	result, _ := m.Update(agentSessionEventMsg{
+		event: agent.Event{Kind: agent.TextDelta, Text: "Checking cluster health"},
+	})
+	m, ok := result.(model)
+	require.True(t, ok)
+
+	view := m.View()
+	assert.Contains(t, view, "Checking cluster health", "text delta should appear in watcher pane")
 }

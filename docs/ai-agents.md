@@ -38,6 +38,23 @@ SREPD provides two distinct AI surfaces:
 
 Both surfaces share the same incident context via `buildWatcherContext` and display responses in the watcher pane with source-specific markers.
 
+### Persistent sessions (Claude Code)
+
+When `agent_session_enabled: true` (the default) and the configured
+`agent_cli_command` resolves to `claude`, `:agent` uses a persistent
+per-incident session instead of one-shot subprocess invocation. This means:
+
+- **Conversational context** carries across `:agent` queries for the same
+  incident. The agent remembers what you asked before.
+- **Tool activity is visible** during execution. Lines like `⚙ Bash ls -la`
+  and `⚙ Read /var/log/...` appear in the watcher pane as the agent works.
+- **LRU process management** keeps at most `agent_max_sessions` (default 3)
+  Claude Code processes alive. When you switch incidents, the oldest session
+  is suspended and resumed transparently via `--resume` on next access.
+- **Markdown rendering** via glamour is applied to the final agent response.
+
+Non-Claude CLIs fall back to the one-shot blocking path automatically.
+
 ## Commands
 
 ### `:agent <query>`
@@ -116,7 +133,24 @@ Both `:agent` and `:watcher` receive the same incident context:
 
 Context is pulled from the incident cache (populated by the OCM enrichment pipeline), not from the manually-loaded selected incident data.
 
-## System Prompts
+## Configuration
+
+### Agent session keys
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `agent_session_enabled` | `true` | Use persistent per-incident sessions (Claude Code only) |
+| `agent_max_sessions` | `3` | Max live Claude Code processes before LRU eviction |
+| `agent_allowed_tools` | (empty) | Comma-separated Claude Code tool allowlist (e.g. `Bash,Read`) |
+| `agent_permission_mode` | (empty) | Passed as `--permission-mode` to Claude Code |
+
+To disable persistent sessions and use one-shot mode:
+
+```yaml
+agent_session_enabled: false
+```
+
+### System Prompts
 
 Both agents have configurable system prompts:
 
@@ -165,5 +199,10 @@ A countdown timer is shown in the footer during active queries.
 ## Privacy
 
 When using a remote provider (`anthropic`, `openai` pointed at a cloud endpoint), incident data including titles, service names, alert names, and cluster IDs is sent over the network. Use a local provider (`ollama`, `ramalama`) to keep all data on your machine.
+
+With persistent sessions enabled, Claude Code maintains session state in its
+own storage (`~/.claude/`). Session transcripts may contain incident context
+from prior queries. This data is local to your machine but persists across
+srepd restarts. Claude Code sessions are tied to your Anthropic account.
 
 See [LLM Providers](llm-providers.md) for provider setup details.

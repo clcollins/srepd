@@ -1812,6 +1812,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case claudeResponseMsg:
 		return m.handleClaudeResponse(msg)
 
+	case agentSessionEventMsg:
+		return m.handleAgentSessionEvent(msg)
+
+	case agentSessionDoneMsg:
+		m.claudeQuerying = false
+		m.apiInProgress = false
+		if msg.err != nil {
+			if errors.Is(msg.err, context.Canceled) {
+				return m, nil
+			}
+			classified := ai.ClassifyProviderError(msg.err)
+			return m, func() tea.Msg {
+				return errMsg{fmt.Errorf("agent session error: %s", classified)}
+			}
+		}
+		m.setStatus("agent response received")
+		return m, nil
+
 	case agentStreamStartedMsg:
 		if m.agentStreamCancel != nil {
 			m.agentStreamCancel()
