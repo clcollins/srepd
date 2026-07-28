@@ -768,6 +768,89 @@ func TestRevertCheck_StubIndexWrite(t *testing.T) {
 			"use --resume, got: %v", argv[1].Args)
 }
 
+// TestIndex_NoDuplicateOnReEstablish verifies that establishing a session
+// for the same incident twice does not append a second line to index.jsonl.
+// The restart-resume flow must still work afterwards.
+func TestIndex_NoDuplicateOnReEstablish(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "log.jsonl")
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+	sessionDir := filepath.Join(tmpDir, "config", "sessions")
+
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+		SessionDir:     sessionDir,
+	}
+
+	env := []string{
+		"FAKECLAUDE_LOG=" + logFile,
+		"FAKECLAUDE_STATE=" + stateDir,
+	}
+
+	// Phase 1: establish session for INC-001 (writes index)
+	mgr1 := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr1.CloseAll() })
+	s1 := mgr1.GetOrCreate("INC-001", env)
+	require.NoError(t, s1.Send(context.Background(), "hello"))
+	drainUntilResultOrDone(t, s1)
+	_ = s1.Close()
+
+	indexPath := filepath.Join(sessionDir, "index.jsonl")
+	data1, err := os.ReadFile(indexPath)
+	require.NoError(t, err)
+	lines1 := countNonEmptyLines(string(data1))
+	require.Equal(t, 1, lines1, "first establishment must produce exactly 1 line")
+
+	// Phase 2: new manager, same config dir — re-establish same incident
+	mgr2 := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr2.CloseAll() })
+	s2 := mgr2.GetOrCreate("INC-001", env)
+	require.NoError(t, s2.Send(context.Background(), "world"))
+	drainUntilResultOrDone(t, s2)
+	_ = s2.Close()
+
+	data2, err := os.ReadFile(indexPath)
+	require.NoError(t, err)
+	lines2 := countNonEmptyLines(string(data2))
+	assert.Equal(t, 1, lines2,
+		"re-establishing same incident must NOT add a second line; got %d lines", lines2)
+
+	// Phase 3: restart-resume must still work (new manager picks up the one-line index)
+	logFile3 := filepath.Join(tmpDir, "log3.jsonl")
+	env3 := []string{
+		"FAKECLAUDE_LOG=" + logFile3,
+		"FAKECLAUDE_STATE=" + stateDir,
+	}
+	mgr3 := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr3.CloseAll() })
+	s3 := mgr3.GetOrCreate("INC-001", env3)
+	require.NoError(t, s3.Send(context.Background(), "after restart"))
+	time.Sleep(500 * time.Millisecond)
+
+	entries := readFakeLog(t, logFile3)
+	argv := filterArgvEntries(entries)
+	require.GreaterOrEqual(t, len(argv), 1)
+	assert.True(t, hasFlag(argv[0].Args, "--resume"),
+		"restart after bounded index must still use --resume, got: %v", argv[0].Args)
+}
+
+func countNonEmptyLines(s string) int {
+	count := 0
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
+}
+
 func flagValue(args []string, flag string) string {
 	for i, a := range args {
 		if a == flag && i+1 < len(args) {
