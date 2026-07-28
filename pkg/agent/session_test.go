@@ -342,6 +342,7 @@ func TestSessionManager_LRUEviction(t *testing.T) {
 			},
 			sessions: sessions,
 		},
+		index: newSessionIndex(""),
 	}
 
 	s1 := mgr.GetOrCreate("INC-001", nil)
@@ -393,6 +394,7 @@ func TestSessionManager_EvictionNoRace(t *testing.T) {
 			},
 			sessions: make(map[string]*mockStreamExecutor),
 		},
+		index: newSessionIndex(""),
 	}
 
 	// Create and send on INC-001

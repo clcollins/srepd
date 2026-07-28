@@ -327,9 +327,12 @@ type SessionManager struct {
 	maxLive  int
 	cfg      Config
 	exec     StreamCommandExecutor
+	index    *sessionIndex
 }
 
 // NewSessionManager creates a SessionManager with the given config.
+// If cfg.SessionDir is non-empty, the manager loads the session index
+// from disk and persists new session establishments to it.
 func NewSessionManager(cfg Config, executor StreamCommandExecutor) *SessionManager {
 	if executor == nil {
 		executor = &execStreamExecutor{}
@@ -344,6 +347,7 @@ func NewSessionManager(cfg Config, executor StreamCommandExecutor) *SessionManag
 		maxLive:  max,
 		cfg:      cfg,
 		exec:     executor,
+		index:    newSessionIndex(cfg.SessionDir),
 	}
 }
 
@@ -387,9 +391,16 @@ func (m *SessionManager) GetOrCreate(incidentID string, env []string) *Session {
 	}
 
 	s := NewSession(m.cfg, incidentID, m.exec, env)
-	if m.evicted[incidentID] {
+	if m.evicted[incidentID] || m.index.has(incidentID) {
 		s.resumed = true
 	}
+
+	idx := m.index
+	sid := s.id
+	s.onEstablished = func() {
+		idx.record(incidentID, sid)
+	}
+
 	m.sessions[incidentID] = s
 	m.order = append(m.order, incidentID)
 	return s
