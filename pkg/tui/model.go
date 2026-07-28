@@ -188,6 +188,7 @@ type model struct {
 	agentSessionEnabled   bool
 	agentSessionMgr       *agent.SessionManager
 	agentSessionSentFirst map[string]bool // tracks first message per incident for context injection
+	agentSessionInitSeen  bool              // suppresses duplicate Init marker from subprocess
 
 	// Chat mode: focused pane for interactive agent conversation
 	chatMode          bool

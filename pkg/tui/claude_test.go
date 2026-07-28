@@ -1111,3 +1111,34 @@ func TestHandleClaudePrompt_ContextInjectionNotLostOnFailedFirstSend(t *testing.
 	assert.True(t, afterSuccess.agentSessionSentFirst["INC-TEST"],
 		"flag must be set after a successful first send")
 }
+
+// TestHandleAgentSessionEvent_InitOnce verifies that two Init events
+// (the synthetic one from startAgentSession and the real one from the
+// subprocess) produce only one marker line in the watcher buffer.
+func TestHandleAgentSessionEvent_InitOnce(t *testing.T) {
+	m := sizedTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.claudeQuerying = true
+	m.agentSessionInitSeen = false
+
+	// First Init (synthetic, from startAgentSession return)
+	result1, _ := m.handleAgentSessionEvent(agentSessionEventMsg{
+		event:      agent.Event{Kind: agent.Init},
+		incidentID: "INC-001",
+	})
+	m1 := result1.(model)
+	assert.Equal(t, 1, m1.watcherBuffer.Len(),
+		"first Init must produce exactly one marker line")
+	assert.True(t, m1.agentSessionInitSeen,
+		"agentSessionInitSeen must be set after first Init")
+
+	// Second Init (real, from subprocess via readAgentSessionCmd)
+	result2, _ := m1.handleAgentSessionEvent(agentSessionEventMsg{
+		event:      agent.Event{Kind: agent.Init},
+		incidentID: "INC-001",
+	})
+	m2 := result2.(model)
+	assert.Equal(t, 1, m2.watcherBuffer.Len(),
+		"second Init must NOT add another marker line — would cause cosmetic double blank")
+}
