@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1881,4 +1882,32 @@ func TestChatMode_EmptyEnterDoesNothing(t *testing.T) {
 
 	assert.True(t, updated.chatMode, "should remain in chat mode")
 	assert.Nil(t, cmd, "should not dispatch any command for empty input")
+}
+
+func TestResolveAgentSessionEnabled_DefaultFalse(t *testing.T) {
+	// B3: when the key is unset, the resolver must return false
+	// (session persistence is not yet implemented).
+	viper.Reset()
+	defer viper.Reset()
+
+	result := resolveAgentSessionEnabled()
+	assert.False(t, result, "unset agent_session_enabled must default to false")
+}
+
+func TestResolveAgentSessionEnabled_ExplicitTrue(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	viper.Set("agent_session_enabled", true)
+	result := resolveAgentSessionEnabled()
+	assert.True(t, result, "explicitly set true must return true")
+}
+
+func TestResolveAgentSessionEnabled_ExplicitFalse(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	viper.Set("agent_session_enabled", false)
+	result := resolveAgentSessionEnabled()
+	assert.False(t, result, "explicitly set false must return false")
 }

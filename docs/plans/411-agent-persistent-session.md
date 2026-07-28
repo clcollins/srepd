@@ -74,15 +74,17 @@ Session events flow through the Bubble Tea Update loop:
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `agent_session_enabled` | `true` | Use persistent sessions |
+| `agent_session_enabled` | `false` | Use persistent sessions (defaults false — session persistence deferred to PR ii per 410a) |
 | `agent_max_sessions` | `3` | Max live processes before LRU eviction |
 | `agent_allowed_tools` | (empty) | Comma-separated tool allowlist |
 | `agent_permission_mode` | (empty) | Claude Code `--permission-mode` value |
 
-### Session persistence
+### Session persistence (deferred to PR ii)
 
-Session index stored as JSONL at `~/.config/srepd/sessions/index.jsonl`.
-Tolerates corrupt trailing lines (partial writes on crash).
+Session index at `~/.config/srepd/sessions/index.jsonl` is deferred to a
+follow-up PR per 410a. The persistence code was removed in this salvage PR
+because it was dead code (called by nothing). The `agent_session_enabled`
+default is `false` until that implementation lands.
 
 ## Files modified
 

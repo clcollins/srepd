@@ -393,3 +393,216 @@ func TestSessionManager_CloseAll(t *testing.T) {
 	// Should not panic on double close
 	mgr.CloseAll()
 }
+
+// B1: Test that spawn() rejects denied flags injected via agent_cli_command.
+// This exercises the REAL argv that spawn() assembles, not just BuildSpawnArgs.
+func TestSpawn_RejectsDeniedFlags(t *testing.T) {
+	tests := []struct {
+		name       string
+		cliCommand string
+		wantErr    string
+	}{
+		{"--bare flag", "claude --bare", "--bare"},
+		{"--bare=true flag", "claude --bare=true", "--bare"},
+		{"--dangerously-skip-permissions", "claude --dangerously-skip-permissions", "--dangerously-skip-permissions"},
+		{"--permission-mode override", "claude --permission-mode bypassPermissions", "--permission-mode"},
+		{"--allowedTools override", "claude --allowedTools Bash", "--allowedTools"},
+		{"--disallowedTools override", "claude --disallowedTools Read", "--disallowedTools"},
+		{"--session-id override", "claude --session-id abc", "--session-id"},
+		{"--resume override", "claude --resume abc", "--resume"},
+		{"--input-format override", "claude --input-format text", "--input-format"},
+		{"--output-format override", "claude --output-format text", "--output-format"},
+		{"--bare=value form", "claude --bare=1", "--bare"},
+		{"denied flag mid-args", "claude --model opus --bare --verbose", "--bare"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedArgs []string
+			exec := &argCapturingExecutor{
+				output:   `{"type":"system","subtype":"init","session_id":"test"}` + "\n",
+				captured: &capturedArgs,
+			}
+			cfg := Config{CLICommand: tt.cliCommand, SessionEnabled: true}
+			s := NewSession(cfg, "INC-001", exec, nil)
+
+			err := s.Send(context.Background(), "hi")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Contains(t, err.Error(), "denied flag")
+
+			// Verify the process was never started
+			assert.Empty(t, capturedArgs, "denied flag must prevent process spawn")
+		})
+	}
+}
+
+// B1: Test that spawn() allows legitimate user flags.
+func TestSpawn_AllowsLegitimateFlags(t *testing.T) {
+	output := `{"type":"system","subtype":"init","session_id":"test"}
+{"type":"result","subtype":"success","session_id":"test","result":"ok","is_error":false}
+`
+	var capturedArgs []string
+	exec := &argCapturingExecutor{
+		output:   output,
+		captured: &capturedArgs,
+	}
+	cfg := Config{CLICommand: "claude --model opus --verbose", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", exec, nil)
+
+	err := s.Send(context.Background(), "hi")
+	require.NoError(t, err)
+	assert.NotEmpty(t, capturedArgs, "legitimate flags should allow spawn")
+
+	// Verify user args appear in the final argv
+	found := false
+	for _, a := range capturedArgs {
+		if a == "--model" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "--model should be in argv")
+}
+
+// B7: Test that scanner errors are surfaced as Error events.
+func TestSession_ScannerErrorSurfaced(t *testing.T) {
+	// Create a reader that emits one valid line then an oversized line
+	// that exceeds the 256KB scanner buffer, causing a scanner error.
+	var lines strings.Builder
+	lines.WriteString(`{"type":"system","subtype":"init","session_id":"test"}` + "\n")
+	// Write a line longer than 256KB without a newline terminator to force
+	// bufio.Scanner to hit ErrTooLong
+	lines.WriteString(strings.Repeat("x", 300*1024))
+	lines.WriteString("\n")
+
+	exec := newMockStreamExecutor(lines.String())
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", exec, nil)
+
+	err := s.Send(context.Background(), "hi")
+	require.NoError(t, err)
+
+	timeout := time.After(3 * time.Second)
+	var sawError bool
+loop:
+	for {
+		select {
+		case ev, ok := <-s.Events():
+			if !ok {
+				break loop
+			}
+			if ev.Kind == Error {
+				sawError = true
+				break loop
+			}
+		case <-timeout:
+			break loop
+		}
+	}
+
+	assert.True(t, sawError, "scanner error must surface as an Error event")
+}
+
+// B8: Test that Done() closes for never-spawned sessions.
+func TestSession_DoneClosesForNeverSpawned(t *testing.T) {
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	exec := newMockStreamExecutor("")
+	s := NewSession(cfg, "INC-001", exec, nil)
+
+	// Close without ever calling Send
+	err := s.Close()
+	require.NoError(t, err)
+
+	// Done() should be closed
+	select {
+	case <-s.Done():
+		// success
+	case <-time.After(time.Second):
+		t.Fatal("Done() should be closed after Close() on never-spawned session")
+	}
+}
+
+// B5: Test that Close() after natural child exit still cleans up.
+func TestSession_CloseAfterNaturalExit(t *testing.T) {
+	output := `{"type":"system","subtype":"init","session_id":"test"}
+{"type":"result","subtype":"success","session_id":"test","result":"ok","is_error":false}
+`
+	exec := newMockStreamExecutor(output)
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", exec, nil)
+
+	err := s.Send(context.Background(), "hi")
+	require.NoError(t, err)
+
+	// Wait for readLoop to finish (natural child exit)
+	<-s.Done()
+
+	// Close() after natural exit should not error
+	err = s.Close()
+	require.NoError(t, err)
+
+	// Double Close should also be safe
+	err = s.Close()
+	require.NoError(t, err)
+}
+
+// S1: Test that Send() honors context cancellation.
+func TestSession_SendHonorsContext(t *testing.T) {
+	output := `{"type":"system","subtype":"init","session_id":"test"}
+`
+	// Use a writer that blocks forever to simulate a hung pipe
+	blockingStdin := &blockingWriter{}
+	exec := &customStdinExecutor{
+		stdin:  blockingStdin,
+		output: output,
+	}
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", exec, nil)
+
+	// First send spawns the process
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := s.Send(ctx, "hello")
+	// The first Send may succeed (spawn + write to non-blocking mock).
+	// But a second send with an already-cancelled context should fail.
+	cancel()
+	err = s.Send(ctx, "this should fail")
+	assert.Error(t, err, "Send with cancelled context should fail")
+}
+
+type blockingWriter struct {
+	mu     sync.Mutex
+	closed bool
+}
+
+func (b *blockingWriter) Write(p []byte) (int, error) {
+	// Block until closed
+	for {
+		b.mu.Lock()
+		if b.closed {
+			b.mu.Unlock()
+			return 0, io.ErrClosedPipe
+		}
+		b.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (b *blockingWriter) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	return nil
+}
+
+type customStdinExecutor struct {
+	stdin  io.WriteCloser
+	output string
+}
+
+func (e *customStdinExecutor) Start(_ context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+	stdout := io.NopCloser(strings.NewReader(e.output))
+	return e.stdin, stdout, func() error { return nil }, nil
+}

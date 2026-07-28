@@ -15,6 +15,39 @@ import (
 	"github.com/google/uuid"
 )
 
+// deniedFlags are CLI flags that a user must not inject via
+// agent_cli_command because srepd owns them (they control the
+// protocol contract or security posture).
+var deniedFlags = []string{
+	"--bare",
+	"--dangerously-skip-permissions",
+	"--permission-mode",
+	"--allowedTools",
+	"--disallowedTools",
+	"--session-id",
+	"--resume",
+	"--input-format",
+	"--output-format",
+}
+
+// validateUserFlags checks that none of the user-supplied tokens
+// from agent_cli_command contain a denied flag. It handles both
+// --flag value and --flag=value forms.
+func validateUserFlags(tokens []string) error {
+	for _, tok := range tokens {
+		flag := tok
+		if idx := strings.Index(tok, "="); idx > 0 {
+			flag = tok[:idx]
+		}
+		for _, denied := range deniedFlags {
+			if flag == denied {
+				return fmt.Errorf("agent_cli_command contains denied flag %q — srepd controls this flag", denied)
+			}
+		}
+	}
+	return nil
+}
+
 // StreamCommandExecutor abstracts spawning a long-lived process with
 // stdin/stdout pipes. The real implementation uses os/exec; tests inject
 // a mock.
@@ -66,6 +99,7 @@ type Session struct {
 	stdin   io.WriteCloser
 	events  chan Event
 	done    chan struct{}
+	doneOnce sync.Once
 	closed  bool
 	err     error
 
@@ -128,10 +162,25 @@ func (s *Session) Send(ctx context.Context, text string) error {
 		return fmt.Errorf("encode user turn: %w", err)
 	}
 
-	if _, err := s.stdin.Write(data); err != nil {
-		return fmt.Errorf("write to stdin: %w", err)
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled before write: %w", err)
 	}
-	return nil
+
+	writeDone := make(chan error, 1)
+	go func() {
+		_, werr := s.stdin.Write(data)
+		writeDone <- werr
+	}()
+
+	select {
+	case werr := <-writeDone:
+		if werr != nil {
+			return fmt.Errorf("write to stdin: %w", werr)
+		}
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("context cancelled during write: %w", ctx.Err())
+	}
 }
 
 func (s *Session) spawn(ctx context.Context) error {
@@ -141,6 +190,12 @@ func (s *Session) spawn(ctx context.Context) error {
 		return fmt.Errorf("agent_cli_command is empty")
 	}
 	binPath := fields[0]
+
+	if len(fields) > 1 {
+		if err := validateUserFlags(fields[1:]); err != nil {
+			return err
+		}
+	}
 
 	args := BuildSpawnArgs(s.cfg, s.id, s.resumed)
 	if len(fields) > 1 {
@@ -165,11 +220,22 @@ func (s *Session) spawn(ctx context.Context) error {
 }
 
 func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
-	defer close(s.done)
+	defer s.doneOnce.Do(func() { close(s.done) })
 	defer func() {
 		s.mu.Lock()
 		s.closed = true
 		s.mu.Unlock()
+	}()
+	defer func() {
+		if err := wait(); err != nil {
+			s.mu.Lock()
+			s.err = err
+			s.mu.Unlock()
+			select {
+			case s.events <- Event{Kind: Error, Err: err}:
+			case <-s.ctx.Done():
+			}
+		}
 	}()
 
 	scanner := bufio.NewScanner(stdout)
@@ -199,33 +265,35 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 		}
 	}
 
-	if err := wait(); err != nil {
-		s.mu.Lock()
-		s.err = err
-		s.mu.Unlock()
+	if err := scanner.Err(); err != nil {
 		select {
-		case s.events <- Event{Kind: Error, Err: err}:
+		case s.events <- Event{Kind: Error, Err: fmt.Errorf("scanner: %w", err)}:
 		case <-s.ctx.Done():
 		}
 	}
 }
 
-// Close gracefully shuts down the session process.
+// Close gracefully shuts down the session process. It is idempotent:
+// each resource is nil-guarded and cleared after cleanup so repeated
+// calls are safe.
 func (s *Session) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.closed {
-		return nil
-	}
-	s.closed = true
-
 	if s.cancel != nil {
 		s.cancel()
+		s.cancel = nil
 	}
 	if s.stdin != nil {
 		_ = s.stdin.Close()
+		s.stdin = nil
 	}
+
+	if !s.spawned {
+		s.doneOnce.Do(func() { close(s.done) })
+	}
+
+	s.closed = true
 	return nil
 }
 

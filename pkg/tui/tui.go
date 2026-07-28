@@ -2683,3 +2683,19 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 		}),
 	).WithTheme(theme).WithKeyMap(km).WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
 }
+
+// CloseAgentSessions closes all agent sessions associated with the
+// model returned from tea.Program.Run(). This must be called on
+// srepd exit to prevent orphaned claude processes.
+func CloseAgentSessions(m tea.Model) {
+	if m == nil {
+		return
+	}
+	mdl, ok := m.(model)
+	if !ok {
+		return
+	}
+	if mdl.agentSessionMgr != nil {
+		mdl.agentSessionMgr.CloseAll()
+	}
+}
