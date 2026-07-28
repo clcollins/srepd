@@ -185,34 +185,43 @@ func (s *Session) Done() <-chan struct{} {
 // spawns (or resumes) the Claude Code process.
 func (s *Session) Send(ctx context.Context, text string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.closed {
+		s.mu.Unlock()
 		return fmt.Errorf("session closed")
 	}
 
 	if !s.spawned {
 		if err := s.spawn(ctx); err != nil {
+			s.mu.Unlock()
 			return err
 		}
 	}
 
 	data, err := EncodeUserTurn(text)
 	if err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("encode user turn: %w", err)
 	}
 
 	if err := ctx.Err(); err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("context cancelled before write: %w", err)
 	}
+
+	writeCh := s.writeCh
+	lifecycleDone := s.ctx.Done()
+	s.mu.Unlock()
 
 	errCh := make(chan error, 1)
 	req := writeRequest{data: data, err: errCh}
 
 	select {
-	case s.writeCh <- req:
+	case writeCh <- req:
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled during write: %w", ctx.Err())
+	case <-lifecycleDone:
+		return fmt.Errorf("session closing")
 	}
 
 	select {
@@ -223,6 +232,8 @@ func (s *Session) Send(ctx context.Context, text string) error {
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled during write: %w", ctx.Err())
+	case <-lifecycleDone:
+		return fmt.Errorf("session closing")
 	}
 }
 
@@ -257,18 +268,26 @@ func (s *Session) spawn(ctx context.Context) error {
 	s.writeCh = make(chan writeRequest)
 	s.spawned = true
 
-	go s.writeLoop(stdin)
+	go s.writeLoop(stdin, spawnCtx)
 	go s.readLoop(stdout, wait)
 	return nil
 }
 
 // writeLoop drains writeRequests and writes them to stdin. A single
 // goroutine per session prevents leaked goroutines when Send times out.
-// stdin is captured by value to avoid racing with Close setting s.stdin=nil.
-func (s *Session) writeLoop(stdin io.WriteCloser) {
-	for req := range s.writeCh {
-		_, err := stdin.Write(req.data)
-		req.err <- err
+// stdin and ctx are captured by value to avoid racing with Close.
+func (s *Session) writeLoop(stdin io.WriteCloser, ctx context.Context) {
+	for {
+		select {
+		case req, ok := <-s.writeCh:
+			if !ok {
+				return
+			}
+			_, err := stdin.Write(req.data)
+			req.err <- err
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -351,10 +370,8 @@ func (s *Session) Close() error {
 		_ = s.stdin.Close()
 		s.stdin = nil
 	}
-	if s.writeCh != nil {
-		close(s.writeCh)
-		s.writeCh = nil
-	}
+	// writeCh is not closed here — writeLoop exits via context cancellation
+	// (s.cancel() above). Closing writeCh would race with Send's select.
 
 	if !s.spawned {
 		s.doneOnce.Do(func() { close(s.done) })
