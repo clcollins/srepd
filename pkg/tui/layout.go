@@ -220,7 +220,7 @@ func (m *model) recomputeLayout() {
 	}
 
 	if m.chatMode {
-		chatChrome := 4 // chat header + input + help + status
+		chatChrome := 2 + m.layout.HelpLines
 		chatHeight := windowSize.Height -
 			strings.Count(m.renderHeader(), "\n") - 1 -
 			chatChrome
