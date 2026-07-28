@@ -82,6 +82,34 @@ seconds instead of blocking forever.
 `agent_session_enabled` default flipped from `false` to `true`. The
 resolver function and all related tests updated accordingly.
 
+### Hardening fixes (PR #416 follow-up)
+
+**FIX 1 — `--bare` denylist bypass on legacy spawn paths:**
+`validateUserFlags` only guarded the session path inside `pkg/agent/spawn()`.
+The legacy paths (`agentQuery` and `streamAgentCmd` in `pkg/tui/claude.go`)
+parsed the same config and exec'd directly with no validation. Fixed by
+exporting `ValidateUserFlags` and calling it once in `handleClaudePrompt`
+before any path dispatches, so all three spawn paths share one gate.
+
+**FIX 2 — Write goroutine leak in `Send`:**
+Each `Send` spawned a fresh goroutine for the stdin pipe write. When the
+child stopped draining stdin and the caller's context timed out, `Send`
+returned but the goroutine stayed pinned on the blocked write. Replaced with
+a single `writeLoop` goroutine per session, started at spawn time, that
+drains a channel of write requests. Goroutine count stays constant regardless
+of how many Sends time out; `Close()` closes the channel and stdin, allowing
+`writeLoop` to exit.
+
+**FIX 3 — Index write hygiene:**
+- Combined the two-call `f.Write(data)` + `f.Write(newline)` into a single
+  `f.Write(append(data, '\n'))` to prevent a corrupt trailing line on crash.
+  Write errors are now logged instead of silently swallowed.
+- Added `scanner.Err()` check after the load loop (identical omission was
+  fixed in `readLoop` during PR #414).
+- Narrowed `record()`'s critical section: the in-memory map is updated under
+  the lock, then released before file I/O, so `has()` on the TUI thread is
+  never blocked by slow filesystem operations.
+
 ## Key files changed
 
 | File | Change |

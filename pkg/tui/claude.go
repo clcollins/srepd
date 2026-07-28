@@ -169,10 +169,8 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	if _, err := lookPath(binary); err != nil {
 		return m, m.flashNotification(fmt.Sprintf("agent CLI %q not found on PATH", binary))
 	}
-	if len(fields) > 1 {
-		if err := agent.ValidateUserFlags(fields[1:]); err != nil {
-			return m, m.flashNotification(err.Error())
-		}
+	if err := agent.ValidateUserFlags(agent.ClaudeArgs(fields)); err != nil {
+		return m, m.flashNotification(err.Error())
 	}
 
 	incidentID := ""

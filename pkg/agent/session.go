@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,22 @@ var deniedFlags = []string{
 	"--fork-session",
 	"--input-format",
 	"--output-format",
+}
+
+// ClaudeArgs returns the tokens after the last "claude" basename in fields.
+// For wrapper commands like ["toolbox", "run", "-c", "devtools", "claude", "--print"],
+// it returns ["--print"]. For direct commands like ["claude", "--print"], it returns
+// ["--print"]. If no claude token is found, all tokens after the binary are returned.
+func ClaudeArgs(fields []string) []string {
+	for i := len(fields) - 1; i >= 0; i-- {
+		if filepath.Base(fields[i]) == "claude" {
+			return fields[i+1:]
+		}
+	}
+	if len(fields) > 1 {
+		return fields[1:]
+	}
+	return nil
 }
 
 // ValidateUserFlags checks that none of the user-supplied tokens
@@ -212,10 +229,8 @@ func (s *Session) spawn(ctx context.Context) error {
 	}
 	binPath := fields[0]
 
-	if len(fields) > 1 {
-		if err := ValidateUserFlags(fields[1:]); err != nil {
-			return err
-		}
+	if err := ValidateUserFlags(ClaudeArgs(fields)); err != nil {
+		return err
 	}
 
 	args := BuildSpawnArgs(s.cfg, s.id, s.resumed)
