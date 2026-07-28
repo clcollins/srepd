@@ -184,6 +184,8 @@ func TestGolden_ChatMode(t *testing.T) {
 	m.chatInput.Focus()
 	m.watcherBuffer = newWatcherBuffer(50)
 	m.watcherBuffer.Append(prefixLines(m.agentMarker, "Hello! How can I help?"))
-	m.updateWatcherViewport()
+	m.recomputeLayout()
+	m.updateChatViewport()
+	m.chatViewportGotoBottom()
 	golden.RequireEqual(t, m.View())
 }

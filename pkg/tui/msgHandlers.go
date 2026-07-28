@@ -108,6 +108,13 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConfirmationInput(msg.(tea.KeyMsg))
 	}
 
+	// Chat mode: route all keys to the chat focus handler before chord/global
+	// bindings. Without this, single-character bindings (u, w, :, /) match
+	// global key.Matches checks and never reach the textinput.
+	if m.chatMode {
+		return switchChatFocusMode(m, msg)
+	}
+
 	// Clear chord help overlay on any keypress so the regular help returns
 	if m.chordHelpActive {
 		m.chordHelpActive = false
@@ -229,9 +236,6 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case m.viewingDocs:
 		return switchDocsFocusMode(m, msg)
-
-	case m.chatMode:
-		return switchChatFocusMode(m, msg)
 
 	case m.viewingIncident:
 		return switchIncidentFocusMode(m, msg)
@@ -1077,8 +1081,10 @@ func (m *model) enterChatModeState() {
 	m.chatInput = ci
 	if !m.watcherExpanded {
 		m.watcherExpanded = true
-		m.recomputeLayout()
 	}
+	m.recomputeLayout()
+	m.updateChatViewport()
+	m.chatViewportGotoBottom()
 }
 
 func switchChatFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -1094,12 +1100,21 @@ func switchChatFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.table.Focus()
 			return m, nil
 
+		case key.Matches(msg, chatModeKeyMap.ScrollUp):
+			m.chatViewport.LineUp(3)
+			return m, nil
+
+		case key.Matches(msg, chatModeKeyMap.ScrollDown):
+			m.chatViewport.LineDown(3)
+			return m, nil
+
 		case key.Matches(msg, chatModeKeyMap.Enter):
 			text := strings.TrimSpace(m.chatInput.Value())
 			if text == "" {
 				return m, nil
 			}
 			m.chatInput.Reset()
+			m.chatViewportGotoBottom()
 			return m, func() tea.Msg {
 				return claudePromptMsg{prompt: text}
 			}

@@ -192,6 +192,7 @@ type model struct {
 	// Chat mode: focused pane for interactive agent conversation
 	chatMode          bool
 	chatInput         textinput.Model
+	chatViewport      viewport.Model
 	chatHasBackground bool // badge: a non-focused session produced output
 
 	// Incident viewer tab state

@@ -303,7 +303,9 @@ func TestView_ChatModeRendersExpectedContent(t *testing.T) {
 	m.chatInput.Focus()
 	m.watcherBuffer = newWatcherBuffer(50)
 	m.watcherBuffer.Append(prefixLines(m.agentMarker, "Agent response text"))
-	m.updateWatcherViewport()
+	m.recomputeLayout()
+	m.updateChatViewport()
+	m.chatViewportGotoBottom()
 
 	view := m.View()
 	assert.Contains(t, view, "Agent Chat", "chat header should be visible")

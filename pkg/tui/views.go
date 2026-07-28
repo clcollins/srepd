@@ -144,7 +144,8 @@ func (m model) View() string {
 		} else {
 			helpKeyMap = defaultKeyMap
 		}
-		helpView = m.styles.Padded.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
+		helpText := clampLineWidth(m.help.View(helpKeyMap), m.help.Width)
+		helpView = m.styles.Padded.Width(windowSize.Width).Render(helpText)
 	}
 
 	// Calculate how many newlines needed to push help and bottom status to terminal bottom
@@ -1333,18 +1334,8 @@ func (m model) renderChatPane() string {
 		header += " " + m.spinner.View() + " " + m.styles.Muted.Render("streaming...")
 	}
 
-	chatHeight := windowSize.Height -
-		strings.Count(m.renderHeader(), "\n") - 1 -
-		4 // header + input + help + status
-
-	if chatHeight < 3 {
-		chatHeight = 3
-	}
-	m.watcherViewport.Height = chatHeight
-	m.watcherViewport.Width = m.layout.WatcherWidth
-
 	s := header + "\n"
-	s += m.styles.WatcherContainer.Render(m.watcherViewport.View()) + "\n"
+	s += m.styles.WatcherContainer.Render(m.chatViewport.View()) + "\n"
 	s += m.chatInput.View()
 	return s
 }

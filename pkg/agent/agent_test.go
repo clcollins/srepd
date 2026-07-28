@@ -428,68 +428,6 @@ func TestSessionIDFor_QueueSession(t *testing.T) {
 	assert.NotEqual(t, uuid.Nil, id)
 }
 
-// ---------- Session index JSONL ----------
-
-func TestSessionEntry_RoundTrip(t *testing.T) {
-	entry := SessionEntry{
-		IncidentID: "INC-100",
-		SessionID:  "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-		CreatedAt:  "2026-07-27T10:00:00Z",
-		LastUsedAt: "2026-07-27T10:05:00Z",
-	}
-	data, err := EncodeSessionEntry(entry)
-	require.NoError(t, err)
-	assert.True(t, data[len(data)-1] == '\n')
-
-	entries, err := DecodeSessionIndex(data)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	assert.Equal(t, entry, entries[0])
-}
-
-func TestSessionIndex_MultipleEntries(t *testing.T) {
-	e1 := SessionEntry{IncidentID: "INC-1", SessionID: "a", CreatedAt: "t1", LastUsedAt: "t1"}
-	e2 := SessionEntry{IncidentID: "INC-2", SessionID: "b", CreatedAt: "t2", LastUsedAt: "t2"}
-	d1, _ := EncodeSessionEntry(e1)
-	d2, _ := EncodeSessionEntry(e2)
-	data := append(d1, d2...)
-
-	entries, err := DecodeSessionIndex(data)
-	require.NoError(t, err)
-	require.Len(t, entries, 2)
-	assert.Equal(t, "INC-1", entries[0].IncidentID)
-	assert.Equal(t, "INC-2", entries[1].IncidentID)
-}
-
-func TestSessionIndex_CorruptTrailingLine(t *testing.T) {
-	entry := SessionEntry{IncidentID: "INC-1", SessionID: "a", CreatedAt: "t", LastUsedAt: "t"}
-	data, _ := EncodeSessionEntry(entry)
-	data = append(data, []byte(`{corrupt trailing`)...)
-
-	entries, err := DecodeSessionIndex(data)
-	require.NoError(t, err, "corrupt trailing line should be tolerated")
-	require.Len(t, entries, 1)
-	assert.Equal(t, "INC-1", entries[0].IncidentID)
-}
-
-func TestSessionIndex_CorruptMiddleLine(t *testing.T) {
-	e1 := SessionEntry{IncidentID: "INC-1", SessionID: "a", CreatedAt: "t", LastUsedAt: "t"}
-	e2 := SessionEntry{IncidentID: "INC-2", SessionID: "b", CreatedAt: "t", LastUsedAt: "t"}
-	d1, _ := EncodeSessionEntry(e1)
-	d2, _ := EncodeSessionEntry(e2)
-	data := append(d1, []byte("{corrupt}\n")...)
-	data = append(data, d2...)
-
-	_, err := DecodeSessionIndex(data)
-	assert.Error(t, err, "corrupt non-trailing line should error")
-}
-
-func TestSessionIndex_EmptyData(t *testing.T) {
-	entries, err := DecodeSessionIndex([]byte(""))
-	require.NoError(t, err)
-	assert.Empty(t, entries)
-}
-
 // ---------- summarizeToolInput ----------
 
 func TestSummarizeToolInput_Command(t *testing.T) {

@@ -189,7 +189,9 @@ func (m *model) recomputeLayout() {
 	mainHOverhead := m.styles.Main.GetHorizontalMargins() +
 		m.styles.Main.GetHorizontalPadding() +
 		m.styles.Main.GetHorizontalBorderSize()
-	m.help.Width = windowSize.Width - mainHOverhead
+	paddedHOverhead := m.styles.Padded.GetHorizontalPadding() +
+		m.styles.Padded.GetHorizontalBorderSize()
+	m.help.Width = windowSize.Width - mainHOverhead - paddedHOverhead
 
 	var helpKeyMap help.KeyMap
 	if m.chordHelpActive {
@@ -215,5 +217,16 @@ func (m *model) recomputeLayout() {
 	if m.watcherExpanded {
 		m.watcherViewport.Width = m.layout.WatcherWidth
 		m.watcherViewport.Height = m.layout.WatcherHeight
+	}
+
+	if m.chatMode {
+		chatHeight := windowSize.Height -
+			strings.Count(m.renderHeader(), "\n") - 1 -
+			4 // chat header + input + help + status
+		if chatHeight < 3 {
+			chatHeight = 3
+		}
+		m.chatViewport.Width = m.layout.WatcherWidth
+		m.chatViewport.Height = chatHeight
 	}
 }

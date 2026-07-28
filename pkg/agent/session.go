@@ -61,6 +61,7 @@ type Session struct {
 	mu      sync.Mutex
 	spawned bool
 	resumed bool
+	ctx     context.Context
 	cancel  context.CancelFunc
 	stdin   io.WriteCloser
 	events  chan Event
@@ -142,8 +143,12 @@ func (s *Session) spawn(ctx context.Context) error {
 	binPath := fields[0]
 
 	args := BuildSpawnArgs(s.cfg, s.id, s.resumed)
+	if len(fields) > 1 {
+		args = append(fields[1:], args...)
+	}
 
 	spawnCtx, cancel := context.WithCancel(ctx)
+	s.ctx = spawnCtx
 	s.cancel = cancel
 
 	stdin, stdout, wait, err := s.exec.Start(spawnCtx, binPath, args, s.env)
@@ -182,17 +187,14 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 				s.useStreamEvents = true
 			}
 
-			// Double-render prevention: when we're receiving stream_event
-			// deltas, skip the consolidated assistant TextDelta events.
-			// The caller gets live deltas from stream_event lines.
-			// We detect this by checking if the line was an assistant message.
-			// In practice, we track whether we've seen stream_events and
-			// skip consolidated assistant texts when so.
+			if s.useStreamEvents && ev.Kind == TextDelta && ev.Consolidated {
+				continue
+			}
 
 			select {
 			case s.events <- ev:
-			default:
-				log.Debug("agent.session.readLoop", "msg", "event channel full, dropping")
+			case <-s.ctx.Done():
+				return
 			}
 		}
 	}
@@ -203,7 +205,7 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 		s.mu.Unlock()
 		select {
 		case s.events <- Event{Kind: Error, Err: err}:
-		default:
+		case <-s.ctx.Done():
 		}
 	}
 }
@@ -227,22 +229,14 @@ func (s *Session) Close() error {
 	return nil
 }
 
-// MarkResumable marks this session so the next spawn uses --resume.
-func (s *Session) MarkResumable() {
-	s.mu.Lock()
-	s.resumed = true
-	s.spawned = false
-	s.closed = false
-	s.done = make(chan struct{})
-	s.events = make(chan Event, 128)
-	s.mu.Unlock()
-}
-
 // SessionManager manages per-incident sessions with LRU eviction.
+// When a session is evicted, a new Session value is created on next
+// access with resumed=true, avoiding races with the old readLoop.
 type SessionManager struct {
 	mu       sync.Mutex
 	sessions map[string]*Session
-	order    []string // LRU order: oldest first
+	evicted  map[string]bool // incidents that were evicted and need --resume
+	order    []string        // LRU order: oldest first
 	maxLive  int
 	cfg      Config
 	exec     StreamCommandExecutor
@@ -259,6 +253,7 @@ func NewSessionManager(cfg Config, executor StreamCommandExecutor) *SessionManag
 	}
 	return &SessionManager{
 		sessions: make(map[string]*Session),
+		evicted:  make(map[string]bool),
 		maxLive:  max,
 		cfg:      cfg,
 		exec:     executor,
@@ -267,7 +262,8 @@ func NewSessionManager(cfg Config, executor StreamCommandExecutor) *SessionManag
 
 // GetOrCreate returns the session for the given incident, creating one
 // if needed. If the live session count exceeds MaxSessions, the oldest
-// session is killed (it can be resumed later via --resume).
+// session is closed and a fresh Session is created on next access with
+// resumed=true, avoiding races with the old readLoop goroutine.
 func (m *SessionManager) GetOrCreate(incidentID string, env []string) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -283,11 +279,15 @@ func (m *SessionManager) GetOrCreate(incidentID string, env []string) *Session {
 		m.order = m.order[1:]
 		if s, ok := m.sessions[oldest]; ok {
 			_ = s.Close()
-			s.MarkResumable()
+			delete(m.sessions, oldest)
+			m.evicted[oldest] = true
 		}
 	}
 
 	s := NewSession(m.cfg, incidentID, m.exec, env)
+	if m.evicted[incidentID] {
+		s.resumed = true
+	}
 	m.sessions[incidentID] = s
 	m.order = append(m.order, incidentID)
 	return s

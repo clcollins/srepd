@@ -79,6 +79,8 @@ func ChatModeEntries() []KeyBindingEntry {
 	return []KeyBindingEntry{
 		{Keys: km.Back.Help().Key, Help: km.Back.Help().Desc},
 		{Keys: km.Enter.Help().Key, Help: km.Enter.Help().Desc},
+		{Keys: km.ScrollUp.Help().Key, Help: km.ScrollUp.Help().Desc},
+		{Keys: km.ScrollDown.Help().Key, Help: km.ScrollDown.Help().Desc},
 		{Keys: km.Quit.Help().Key, Help: km.Quit.Help().Desc},
 	}
 }

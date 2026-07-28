@@ -119,3 +119,56 @@ Tolerates corrupt trailing lines (partial writes on crash).
 - MCP server integration (`pkg/mcpserver/`)
 - Tool policy engine (`pkg/ai/policy/`)
 - Delta-based streaming (`pkg/delta/`)
+
+---
+
+## 410a rejection and salvage (PR #414)
+
+### Rejection reason
+
+PR #414 was rejected under plan 410a (TDD amendment). The session persistence
+layer (`SessionIndexPath`, `EncodeSessionEntry`, `DecodeSessionIndex`) existed
+as pure functions called by nothing — unit tests passed on in-memory strings
+while no code path ever invoked them. This is the "false-green" failure class:
+tests verify internal consistency of dead code while the headline acceptance
+criteria (persistent sessions) remain unmet.
+
+### False-green post-mortem
+
+**Root cause:** Tests were written against the encoding/decoding functions in
+isolation. No integration test verified that any production code path called
+these functions. The session manager's `MarkResumable` method was the intended
+call site, but it was never wired into the eviction flow.
+
+**Detection gap:** CI passed because the dead-code functions were syntactically
+correct and their unit tests exercised the right edge cases. But `deadcode`
+analysis would have flagged them as unreachable. The 410a amendment now requires
+a deadcode gate before merge.
+
+**Prevention:** (1) Walking skeleton first — every new capability must have at
+least one end-to-end path before function-level tests are written. (2) Revert
+check — stub each fix, confirm the mapped test fails, restore. (3) Deadcode
+gate — `deadcode ./...` must report zero findings.
+
+### Salvage scope (this PR)
+
+The work was split into two PRs per 410a:
+
+**PR (i) — salvage (this PR):**
+- Removed dead session persistence code (`SessionIndexPath`, `EncodeSessionEntry`,
+  `DecodeSessionIndex`) and their tests
+- Set `agent_session_enabled` default to `false` with documentation explaining
+  that session persistence is not yet implemented
+- Fixed 7 defects (D1–D7) with tests per 410a TDD rules:
+  - D1: Double-render prevention (consolidated text events filtered in readLoop)
+  - D2: MarkResumable race eliminated (replaced with eviction map pattern)
+  - D3: Silent event loss under backpressure (blocking send with context cancel)
+  - D4: CLI command args discarded (prepend user args from CLICommand)
+  - D5: Key leakage into chat input (hoist chatMode check above chord machine)
+  - D6: Chat pane viewport (separate chatViewport with smart scroll, scroll keys)
+  - D7: Help text overflow (clamp help content to Padded container width)
+
+**PR (ii) — deferred (separate PR):**
+- Session persistence implementation with hermetic test harness
+- Resume semantics with `--resume` flag
+- Session index storage and corruption recovery

@@ -40,9 +40,9 @@ Both surfaces share the same incident context via `buildWatcherContext` and disp
 
 ### Persistent sessions (Claude Code)
 
-When `agent_session_enabled: true` (the default) and the configured
-`agent_cli_command` resolves to `claude`, `:agent` uses a persistent
-per-incident session instead of one-shot subprocess invocation. This means:
+When `agent_session_enabled: true` and the configured `agent_cli_command`
+resolves to `claude`, `:agent` uses a persistent per-incident session
+instead of one-shot subprocess invocation. This means:
 
 - **Conversational context** carries across `:agent` queries for the same
   incident. The agent remembers what you asked before.
@@ -52,6 +52,11 @@ per-incident session instead of one-shot subprocess invocation. This means:
   Claude Code processes alive. When you switch incidents, the oldest session
   is suspended and resumed transparently via `--resume` on next access.
 - **Markdown rendering** via glamour is applied to the final agent response.
+
+**Default: `false`.** Per-incident session persistence and restart-resume are
+not yet implemented. The flag flips to `true` in the PR that lands them with
+passing tests. While `false`, the CLI path behaves as the pre-existing
+one-shot flow.
 
 Non-Claude CLIs fall back to the one-shot blocking path automatically.
 
@@ -147,7 +152,7 @@ Context is pulled from the incident cache (populated by the OCM enrichment pipel
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `agent_session_enabled` | `true` | Use persistent per-incident sessions (Claude Code only) |
+| `agent_session_enabled` | `false` | Use persistent per-incident sessions (Claude Code only). Default false — session persistence not yet implemented; flips to true when per-incident resume lands. |
 | `agent_max_sessions` | `3` | Max live Claude Code processes before LRU eviction |
 | `agent_allowed_tools` | (empty) | Comma-separated Claude Code tool allowlist (e.g. `Bash,Read`) |
 | `agent_permission_mode` | (empty) | Passed as `--permission-mode` to Claude Code |

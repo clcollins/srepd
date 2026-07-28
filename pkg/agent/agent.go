@@ -2,10 +2,6 @@ package agent
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/google/uuid"
 )
@@ -28,13 +24,14 @@ const (
 // multiple Events (e.g. an assistant message with both text and
 // tool_use content blocks).
 type Event struct {
-	Kind      EventKind
-	Text      string
-	Tool      string
-	ToolInput string
-	SessionID string
-	IsError   bool
-	Err       error
+	Kind         EventKind
+	Text         string
+	Tool         string
+	ToolInput    string
+	SessionID    string
+	IsError      bool
+	Err          error
+	Consolidated bool // true for TextDelta from a consolidated assistant message (not stream_event)
 }
 
 // sessionNamespace is a fixed UUID used as the namespace for
@@ -107,10 +104,10 @@ func ParseStreamEvent(line []byte) ([]Event, error) {
 		return nil, nil
 
 	case "assistant":
-		return parseMessageBlocks(sl.Message, false), nil
+		return parseMessageBlocks(sl.Message, false, true), nil
 
 	case "user":
-		return parseMessageBlocks(sl.Message, true), nil
+		return parseMessageBlocks(sl.Message, true, false), nil
 
 	case "result":
 		return []Event{{
@@ -137,7 +134,7 @@ func ParseStreamEvent(line []byte) ([]Event, error) {
 	}
 }
 
-func parseMessageBlocks(msg *streamMessage, isUser bool) []Event {
+func parseMessageBlocks(msg *streamMessage, isUser bool, consolidated bool) []Event {
 	if msg == nil {
 		return nil
 	}
@@ -145,7 +142,7 @@ func parseMessageBlocks(msg *streamMessage, isUser bool) []Event {
 	for _, block := range msg.Content {
 		switch block.Type {
 		case "text":
-			events = append(events, Event{Kind: TextDelta, Text: block.Text})
+			events = append(events, Event{Kind: TextDelta, Text: block.Text, Consolidated: consolidated})
 		case "tool_use":
 			events = append(events, Event{
 				Kind:      ToolUse,
@@ -263,58 +260,4 @@ func summarizeToolInput(input json.RawMessage) string {
 		return s[:100] + "..."
 	}
 	return s
-}
-
-// SessionEntry is one record in the JSONL session index.
-type SessionEntry struct {
-	IncidentID string `json:"incident_id"`
-	SessionID  string `json:"session_id"`
-	CreatedAt  string `json:"created_at"`
-	LastUsedAt string `json:"last_used_at"`
-}
-
-// EncodeSessionEntry marshals a SessionEntry to a newline-terminated JSON line.
-func EncodeSessionEntry(e SessionEntry) ([]byte, error) {
-	data, err := json.Marshal(e)
-	if err != nil {
-		return nil, err
-	}
-	return append(data, '\n'), nil
-}
-
-// DecodeSessionIndex parses a JSONL session index, tolerating a
-// corrupt trailing line (truncate-and-warn pattern).
-func DecodeSessionIndex(data []byte) ([]SessionEntry, error) {
-	var entries []SessionEntry
-	lines := strings.Split(string(data), "\n")
-	for i, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var e SessionEntry
-		if err := json.Unmarshal([]byte(line), &e); err != nil {
-			if i == len(lines)-1 || (i == len(lines)-2 && strings.TrimSpace(lines[len(lines)-1]) == "") {
-				// Corrupt trailing line — tolerate it
-				break
-			}
-			return nil, fmt.Errorf("line %d: %w", i+1, err)
-		}
-		entries = append(entries, e)
-	}
-	return entries, nil
-}
-
-// SessionIndexPath returns the path to the session index JSONL file,
-// respecting XDG_CONFIG_HOME.
-func SessionIndexPath() string {
-	configDir := os.Getenv("XDG_CONFIG_HOME")
-	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		configDir = filepath.Join(home, ".config")
-	}
-	return filepath.Join(configDir, "srepd", "sessions", "index.jsonl")
 }

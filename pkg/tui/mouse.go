@@ -28,6 +28,11 @@ func (m model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch {
+	case m.chatMode:
+		var cmd tea.Cmd
+		m.chatViewport, cmd = m.chatViewport.Update(msg)
+		return m, cmd
+
 	case m.viewingIncident:
 		m.incidentViewer, _ = m.incidentViewer.Update(msg)
 		return m, nil

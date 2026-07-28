@@ -62,4 +62,6 @@
 |-----|--------|
 | esc | back to queue |
 | enter | send message |
+| pgup/shift+↑ | scroll up |
+| pgdn/shift+↓ | scroll down |
 | ctrl+q/ctrl+c | quit |
