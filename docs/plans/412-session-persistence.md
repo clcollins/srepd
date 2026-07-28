@@ -110,6 +110,53 @@ of how many Sends time out; `Close()` closes the channel and stdin, allowing
   the lock, then released before file I/O, so `has()` on the TUI thread is
   never blocked by slow filesystem operations.
 
+## Post-mortem / Lessons learned
+
+### `--resume <unknown-id>` remains UNVERIFIED against the real CLI
+
+The fake claude harness scripts a plausible failure for `--resume <unknown>`,
+but the actual Claude Code behaviour for this case was never captured from the
+real binary. Plan 412's verified-facts table covers `--session-id <used>` and
+`--resume <known>` but explicitly marks `--resume <unknown>` as UNVERIFIED.
+The harness's scripted failure is a reasonable assumption, not a verified fact.
+Any test relying on the exact shape of this failure (exit code, stderr message)
+should be re-verified when the tested claude version bumps.
+
+### Context-cascade bug: child killed after first send
+
+During implementation, the initial integration tests used `context.WithCancel`
+derived from the caller's `Send(ctx)` context for the spawned process. When
+the caller's context was cancelled (e.g. timeout on the send), the child
+process was killed — even though the child should outlive any single send.
+The fix was to introduce a `lifecycleCtx` on the session (derived from the
+manager's context, cancelled only by `CloseAll`) as the parent for `spawnCtx`,
+decoupling subprocess lifetime from caller-send lifetime.
+
+**The lesson:** the test harness originally stubbed `StreamCommandExecutor`
+with a mock that discarded its `context.Context` argument entirely. Every mock
+executor started a goroutine that ran until explicitly told to stop, so the
+context-cascade bug was invisible — the mock never respected cancellation, and
+the bug lived exactly on the boundary where real `exec.CommandContext` DOES
+respect it. Future harnesses must exercise process lifetime, not just protocol.
+The fake claude binary (a real subprocess) caught this because
+`exec.CommandContext` actually kills the child when the context fires.
+
+### Revert-check gate was itself unwired
+
+The `ForTestStubIndexWrite()` helper was defined and documented as the 410a
+§2c revert-check mechanism, but no test actually called it. A helper with no
+caller proves nothing. The fix was to write `TestRevertCheck_StubIndexWrite`,
+which stubs index writes and asserts the restart-resume test's inverse: with
+writes disabled, the second manager falls back to `--session-id`. Both
+`ForTestStubIndexWrite` and `IndexEntryCount` were then moved into `_test.go`
+so no test-only helper remains in production code.
+
+### Dead accessors `Session.ID()` and `Session.IncidentID()`
+
+Both methods had zero callers anywhere in the codebase. They were written
+speculatively during the initial implementation and never wired. Deleted.
+`deadcode ./...` would have caught these immediately.
+
 ## Key files changed
 
 | File | Change |

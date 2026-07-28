@@ -154,7 +154,7 @@ Context is pulled from the incident cache (populated by the OCM enrichment pipel
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `agent_session_enabled` | `false` | Use persistent per-incident sessions (Claude Code only). Default false — session persistence not yet implemented; flips to true when per-incident resume lands. |
+| `agent_session_enabled` | `true` | Use persistent per-incident sessions (Claude Code only). Session metadata is stored locally in `~/.config/srepd/sessions/index.jsonl` (XDG-aware). Set to `false` for one-shot mode. |
 | `agent_max_sessions` | `3` | Max live Claude Code processes before LRU eviction |
 | `agent_allowed_tools` | (empty) | Comma-separated Claude Code tool allowlist (e.g. `Bash,Read`) |
 | `agent_permission_mode` | (empty) | Passed as `--permission-mode` to Claude Code |
@@ -215,9 +215,14 @@ A countdown timer is shown in the footer during active queries.
 
 When using a remote provider (`anthropic`, `openai` pointed at a cloud endpoint), incident data including titles, service names, alert names, and cluster IDs is sent over the network. Use a local provider (`ollama`, `ramalama`) to keep all data on your machine.
 
-With persistent sessions enabled, Claude Code maintains session state in its
-own storage (`~/.claude/`). Session transcripts may contain incident context
-from prior queries. This data is local to your machine but persists across
-srepd restarts. Claude Code sessions are tied to your Anthropic account.
+With persistent sessions enabled (`agent_session_enabled: true`, the default),
+srepd writes a session index to `~/.config/srepd/sessions/index.jsonl`
+(XDG_CONFIG_HOME-aware). Each line records an incident ID, session UUID, and
+timestamps — no query content or responses. This file is created `0600` inside
+a `0700` directory. Delete it to clear session history; srepd will recreate it
+on next use. Claude Code additionally maintains its own session state in
+`~/.claude/`, which may contain incident context from prior queries. Both
+stores are local to your machine but persist across srepd restarts. Claude Code
+sessions are tied to your Anthropic account.
 
 See [LLM Providers](llm-providers.md) for provider setup details.
