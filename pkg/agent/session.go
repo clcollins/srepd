@@ -37,10 +37,25 @@ var deniedFlags = []string{
 	"--output-format",
 }
 
-// ClaudeArgs returns the tokens after the last "claude" basename in fields.
-// For wrapper commands like ["toolbox", "run", "-c", "devtools", "claude", "--print"],
-// it returns ["--print"]. For direct commands like ["claude", "--print"], it returns
-// ["--print"]. If no claude token is found, all tokens after the binary are returned.
+// ClaudeArgs extracts the arguments intended for the Claude CLI binary by
+// scanning backwards for the last token whose basename is "claude" and
+// returning everything after it. The backward scan exists so that wrapper
+// commands work transparently — e.g. ["toolbox", "run", "-c", "devtools",
+// "claude", "--print"] returns ["--print"]; toolbox's own "-c" is not
+// validated against the denied-flags list.
+//
+// Known limitation: if the wrapper itself passes a flag whose value is a
+// path ending in "claude", the scan anchors on that path token instead of
+// the real binary. For example:
+//
+//	["toolbox", "run", "claude", "--bare", "/usr/bin/claude"]
+//
+// Here the last "claude" basename is /usr/bin/claude, so ClaudeArgs returns
+// [] and "--bare" is never validated. This is a user-footgun in their own
+// agent_cli_command config, not an attacker vector (the config is already
+// user-owned and user-writable). A stricter parser that rejects such
+// configs would break legitimate wrapper commands, which is the worse
+// failure mode.
 func ClaudeArgs(fields []string) []string {
 	for i := len(fields) - 1; i >= 0; i-- {
 		if filepath.Base(fields[i]) == "claude" {
