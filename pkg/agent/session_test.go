@@ -331,6 +331,8 @@ func TestSessionManager_LRUEviction(t *testing.T) {
 	cfg := Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 2}
 
 	sessions := make(map[string]*mockStreamExecutor)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	mgr := &SessionManager{
 		sessions: make(map[string]*Session),
 		evicted:  make(map[string]bool),
@@ -342,7 +344,9 @@ func TestSessionManager_LRUEviction(t *testing.T) {
 			},
 			sessions: sessions,
 		},
-		index: newSessionIndex(""),
+		index:     newSessionIndex(""),
+		ctx:       ctx,
+		ctxCancel: cancel,
 	}
 
 	s1 := mgr.GetOrCreate("INC-001", nil)
@@ -380,6 +384,8 @@ func TestSessionManager_EvictionNoRace(t *testing.T) {
 	// Run with -race to verify.
 	cfg := Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 1}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	mgr := &SessionManager{
 		sessions: make(map[string]*Session),
 		evicted:  make(map[string]bool),
@@ -394,7 +400,9 @@ func TestSessionManager_EvictionNoRace(t *testing.T) {
 			},
 			sessions: make(map[string]*mockStreamExecutor),
 		},
-		index: newSessionIndex(""),
+		index:     newSessionIndex(""),
+		ctx:       ctx,
+		ctxCancel: cancel,
 	}
 
 	// Create and send on INC-001

@@ -97,18 +97,19 @@ type Session struct {
 	exec       StreamCommandExecutor
 	env        []string
 
-	mu       sync.Mutex
-	spawned  bool
-	resumed  bool
-	closing  bool // set by Close() before killing child, suppresses exit error
-	ctx      context.Context
-	cancel   context.CancelFunc
-	stdin    io.WriteCloser
-	events   chan Event
-	done     chan struct{}
-	doneOnce sync.Once
-	closed   bool
-	err      error
+	mu           sync.Mutex
+	spawned      bool
+	resumed      bool
+	closing      bool // set by Close() before killing child, suppresses exit error
+	lifecycleCtx context.Context // parent for spawnCtx; outlives any single Send call
+	ctx          context.Context
+	cancel       context.CancelFunc
+	stdin        io.WriteCloser
+	events       chan Event
+	done         chan struct{}
+	doneOnce     sync.Once
+	closed       bool
+	err          error
 
 	useStreamEvents bool
 
@@ -120,13 +121,14 @@ type Session struct {
 func NewSession(cfg Config, incidentID string, executor StreamCommandExecutor, env []string) *Session {
 	sid := SessionIDFor(incidentID)
 	return &Session{
-		cfg:        cfg,
-		id:         sid,
-		incidentID: incidentID,
-		exec:       executor,
-		env:        env,
-		events:     make(chan Event, 128),
-		done:       make(chan struct{}),
+		cfg:          cfg,
+		id:           sid,
+		incidentID:   incidentID,
+		exec:         executor,
+		env:          env,
+		lifecycleCtx: context.Background(),
+		events:       make(chan Event, 128),
+		done:         make(chan struct{}),
 	}
 }
 
@@ -211,7 +213,7 @@ func (s *Session) spawn(ctx context.Context) error {
 		args = append(fields[1:], args...)
 	}
 
-	spawnCtx, cancel := context.WithCancel(ctx)
+	spawnCtx, cancel := context.WithCancel(s.lifecycleCtx)
 	s.ctx = spawnCtx
 	s.cancel = cancel
 
@@ -320,14 +322,16 @@ func (s *Session) Close() error {
 // When a session is evicted, a new Session value is created on next
 // access with resumed=true, avoiding races with the old readLoop.
 type SessionManager struct {
-	mu       sync.Mutex
-	sessions map[string]*Session
-	evicted  map[string]bool // incidents that were evicted and need --resume
-	order    []string        // LRU order: oldest first
-	maxLive  int
-	cfg      Config
-	exec     StreamCommandExecutor
-	index    *sessionIndex
+	mu        sync.Mutex
+	sessions  map[string]*Session
+	evicted   map[string]bool // incidents that were evicted and need --resume
+	order     []string        // LRU order: oldest first
+	maxLive   int
+	cfg       Config
+	exec      StreamCommandExecutor
+	index     *sessionIndex
+	ctx       context.Context    // cancelled by CloseAll; parent for all session spawnCtx
+	ctxCancel context.CancelFunc // cancels ctx
 }
 
 // NewSessionManager creates a SessionManager with the given config.
@@ -341,13 +345,16 @@ func NewSessionManager(cfg Config, executor StreamCommandExecutor) *SessionManag
 	if max <= 0 {
 		max = 3
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SessionManager{
-		sessions: make(map[string]*Session),
-		evicted:  make(map[string]bool),
-		maxLive:  max,
-		cfg:      cfg,
-		exec:     executor,
-		index:    newSessionIndex(cfg.SessionDir),
+		sessions:  make(map[string]*Session),
+		evicted:   make(map[string]bool),
+		maxLive:   max,
+		cfg:       cfg,
+		exec:      executor,
+		index:     newSessionIndex(cfg.SessionDir),
+		ctx:       ctx,
+		ctxCancel: cancel,
 	}
 }
 
@@ -391,6 +398,7 @@ func (m *SessionManager) GetOrCreate(incidentID string, env []string) *Session {
 	}
 
 	s := NewSession(m.cfg, incidentID, m.exec, env)
+	s.lifecycleCtx = m.ctx
 	if m.evicted[incidentID] || m.index.has(incidentID) {
 		s.resumed = true
 	}
@@ -421,6 +429,9 @@ func (m *SessionManager) CloseAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.ctxCancel != nil {
+		m.ctxCancel()
+	}
 	for _, s := range m.sessions {
 		_ = s.Close()
 	}
