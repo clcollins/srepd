@@ -336,3 +336,45 @@ func TestView_ChatModeNoBadgeWhenFocused(t *testing.T) {
 	view := m.View()
 	assert.NotContains(t, view, "agent has new output", "badge should not show when in chat mode")
 }
+
+func TestView_NoLineExceedsWindowWidth(t *testing.T) {
+	for _, width := range []int{60, 80, 100, 120} {
+		t.Run(fmt.Sprintf("default_width_%d", width), func(t *testing.T) {
+			m := createTestModelWithSelectedIncident()
+			size := tea.WindowSizeMsg{Width: width, Height: 40}
+			windowSize = size
+			result, _ := m.Update(size)
+			m = result.(model)
+
+			m.table.SetRows([]table.Row{
+				{dot, "P1234567", "Test Alert Firing", "test-service"},
+			})
+
+			view := m.View()
+			for i, line := range strings.Split(view, "\n") {
+				w := lipgloss.Width(line)
+				assert.LessOrEqual(t, w, width,
+					"default mode line %d is %d cols wide (limit %d): %q",
+					i, w, width, line)
+			}
+		})
+
+		t.Run(fmt.Sprintf("chat_width_%d", width), func(t *testing.T) {
+			m := createTestModelWithSelectedIncident()
+			size := tea.WindowSizeMsg{Width: width, Height: 40}
+			windowSize = size
+			result, _ := m.Update(size)
+			m = result.(model)
+
+			m.enterChatModeState()
+
+			view := m.View()
+			for i, line := range strings.Split(view, "\n") {
+				w := lipgloss.Width(line)
+				assert.LessOrEqual(t, w, width,
+					"chat mode line %d is %d cols wide (limit %d): %q",
+					i, w, width, line)
+			}
+		})
+	}
+}

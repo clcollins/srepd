@@ -1336,7 +1336,7 @@ func (m model) renderChatPane() string {
 
 	s := header + "\n"
 	s += m.styles.WatcherContainer.Render(m.chatViewport.View()) + "\n"
-	s += m.chatInput.View()
+	s += m.chatInput.View() + "\n"
 	return s
 }
 
