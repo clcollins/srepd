@@ -957,6 +957,85 @@ func TestSession_CallerCancelDoesNotKillProcess(t *testing.T) {
 	assert.NoError(t, err, "second Send must succeed after caller cancel")
 }
 
+// N4: Send(context.Background()) against a non-draining child must not
+// prevent Close() from returning promptly. Before the fix, Send held
+// s.mu across a blocking select, so Close() would block on the lock.
+func TestSession_SendDoesNotBlockClose(t *testing.T) {
+	pr, pw := io.Pipe()
+	executor := &callbackExecutor{
+		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+			go func() {
+				_, _ = pw.Write([]byte(`{"type":"system","subtype":"init","session_id":"test"}` + "\n"))
+				<-ctx.Done()
+				_ = pw.Close()
+			}()
+			// stdin that never drains: writes block forever
+			neverDrain := &neverDrainWriter{ctx: ctx}
+			return neverDrain, pr, func() error {
+				<-ctx.Done()
+				return fmt.Errorf("signal: killed")
+			}, nil
+		},
+	}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", executor, nil)
+
+	// First send spawns the process
+	require.NoError(t, s.Send(context.Background(), "hello"))
+
+	// Wait for Init
+	select {
+	case ev := <-s.Events():
+		require.Equal(t, Init, ev.Kind)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Init")
+	}
+
+	// Launch a Send(context.Background()) that will block on the non-draining stdin
+	sendDone := make(chan struct{})
+	go func() {
+		_ = s.Send(context.Background(), "this will block")
+		close(sendDone)
+	}()
+	// Give the goroutine time to enter the blocking select
+	time.Sleep(100 * time.Millisecond)
+
+	// Close must return promptly, not be blocked by Send holding the lock
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- s.Close()
+	}()
+
+	select {
+	case err := <-closeDone:
+		assert.NoError(t, err, "Close must succeed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() blocked — Send holds s.mu across blocking select")
+	}
+
+	// The blocked Send should also unblock (context cancelled by Close)
+	select {
+	case <-sendDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocked Send did not unblock after Close")
+	}
+}
+
+// neverDrainWriter blocks writes until context is cancelled.
+type neverDrainWriter struct {
+	ctx context.Context
+}
+
+func (w *neverDrainWriter) Write(_ []byte) (int, error) {
+	<-w.ctx.Done()
+	return 0, io.ErrClosedPipe
+}
+
+func (w *neverDrainWriter) Close() error {
+	return nil
+}
+
 // C1 reaping test: CloseAll must still terminate children after the
 // fix. This proves the process is not made immortal by decoupling
 // from the caller context.
