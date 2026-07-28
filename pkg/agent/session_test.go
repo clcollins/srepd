@@ -780,3 +780,114 @@ func (e *customStdinExecutor) Start(_ context.Context, _ string, _ []string, _ [
 	stdout := io.NopCloser(strings.NewReader(e.output))
 	return e.stdin, stdout, func() error { return nil }, nil
 }
+
+// contextAwareExecutor implements StreamCommandExecutor and RESPECTS
+// context cancellation, mimicking exec.CommandContext. When the context
+// passed to Start is cancelled, stdout closes and wait() returns with
+// an error — just like a real killed subprocess.
+//
+// Unlike mockStreamExecutor and argCapturingExecutor, this executor
+// does NOT discard the context. It exists specifically to test the
+// bug where spawn derived the subprocess lifetime from the caller's
+// Send context: a mock that ignores context cannot detect that bug.
+type contextAwareExecutor struct {
+	initOutput string
+}
+
+func (e *contextAwareExecutor) Start(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+	stdin := &mockStdin{}
+	pr, pw := io.Pipe()
+
+	go func() {
+		_, _ = pw.Write([]byte(e.initOutput))
+		<-ctx.Done()
+		_ = pw.Close()
+	}()
+
+	return stdin, pr, func() error {
+		<-ctx.Done()
+		return fmt.Errorf("signal: killed")
+	}, nil
+}
+
+// C1 headline regression test: the caller's Send context must not
+// kill the subprocess. Before the fix, spawn derived spawnCtx from
+// the caller's context; cancelling it cascaded into the child.
+func TestSession_CallerCancelDoesNotKillProcess(t *testing.T) {
+	initOutput := `{"type":"system","subtype":"init","session_id":"test"}` + "\n"
+	exec := &contextAwareExecutor{initOutput: initOutput}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", exec, nil)
+	t.Cleanup(func() { _ = s.Close() })
+
+	callerCtx, callerCancel := context.WithCancel(context.Background())
+	err := s.Send(callerCtx, "hello")
+	require.NoError(t, err)
+
+	// Wait for Init event to confirm process is running
+	select {
+	case ev := <-s.Events():
+		require.Equal(t, Init, ev.Kind)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Init")
+	}
+
+	// Cancel the caller context — simulates defer cancel() in startAgentSession
+	callerCancel()
+	time.Sleep(200 * time.Millisecond)
+
+	// Session must still be alive
+	select {
+	case <-s.Done():
+		t.Fatal("session must still be alive after caller context cancel")
+	default:
+	}
+
+	s.mu.Lock()
+	assert.False(t, s.closed, "session must not be closed by caller cancel")
+	s.mu.Unlock()
+
+	// A second Send with a fresh context must succeed
+	err = s.Send(context.Background(), "second message")
+	assert.NoError(t, err, "second Send must succeed after caller cancel")
+}
+
+// C1 reaping test: CloseAll must still terminate children after the
+// fix. This proves the process is not made immortal by decoupling
+// from the caller context.
+func TestSessionManager_CloseAllReapsChildren(t *testing.T) {
+	initOutput := `{"type":"system","subtype":"init","session_id":"test"}` + "\n"
+	exec := &contextAwareExecutor{initOutput: initOutput}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 3}
+	mgr := NewSessionManager(cfg, exec)
+
+	s1 := mgr.GetOrCreate("INC-001", nil)
+	require.NoError(t, s1.Send(context.Background(), "hello"))
+
+	s2 := mgr.GetOrCreate("INC-002", nil)
+	require.NoError(t, s2.Send(context.Background(), "world"))
+
+	// Wait for both to receive Init
+	for i, s := range []*Session{s1, s2} {
+		select {
+		case ev := <-s.Events():
+			require.Equal(t, Init, ev.Kind, "session %d", i)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("session %d: timed out waiting for Init", i)
+		}
+	}
+
+	// CloseAll must terminate all children
+	mgr.CloseAll()
+
+	// Both sessions' Done() must close
+	for i, s := range []*Session{s1, s2} {
+		select {
+		case <-s.Done():
+		case <-time.After(3 * time.Second):
+			t.Fatalf("session %d: Done() must close after CloseAll", i)
+		}
+	}
+}
