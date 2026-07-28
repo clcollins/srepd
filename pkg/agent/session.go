@@ -87,6 +87,12 @@ func (e *execStreamExecutor) Start(ctx context.Context, name string, args []stri
 	return stdin, stdout, cmd.Wait, nil
 }
 
+// writeRequest is a request to write data to the child's stdin.
+type writeRequest struct {
+	data []byte
+	err  chan<- error
+}
+
 // Session manages one long-lived Claude Code process. It spawns the
 // process on the first Send, reads NDJSON events from stdout, and
 // exposes them via Events(). Close kills the process gracefully.
@@ -105,6 +111,7 @@ type Session struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	stdin        io.WriteCloser
+	writeCh      chan writeRequest // fed by Send, drained by writeLoop; nil until spawned
 	events       chan Event
 	done         chan struct{}
 	doneOnce     sync.Once
@@ -177,14 +184,17 @@ func (s *Session) Send(ctx context.Context, text string) error {
 		return fmt.Errorf("context cancelled before write: %w", err)
 	}
 
-	writeDone := make(chan error, 1)
-	go func() {
-		_, werr := s.stdin.Write(data)
-		writeDone <- werr
-	}()
+	errCh := make(chan error, 1)
+	req := writeRequest{data: data, err: errCh}
 
 	select {
-	case werr := <-writeDone:
+	case s.writeCh <- req:
+	case <-ctx.Done():
+		return fmt.Errorf("context cancelled during write: %w", ctx.Err())
+	}
+
+	select {
+	case werr := <-errCh:
 		if werr != nil {
 			return fmt.Errorf("write to stdin: %w", werr)
 		}
@@ -224,10 +234,21 @@ func (s *Session) spawn(ctx context.Context) error {
 	}
 
 	s.stdin = stdin
+	s.writeCh = make(chan writeRequest)
 	s.spawned = true
 
+	go s.writeLoop()
 	go s.readLoop(stdout, wait)
 	return nil
+}
+
+// writeLoop drains writeRequests and writes them to stdin. A single
+// goroutine per session prevents leaked goroutines when Send times out.
+func (s *Session) writeLoop() {
+	for req := range s.writeCh {
+		_, err := s.stdin.Write(req.data)
+		req.err <- err
+	}
 }
 
 func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
@@ -308,6 +329,10 @@ func (s *Session) Close() error {
 	if s.stdin != nil {
 		_ = s.stdin.Close()
 		s.stdin = nil
+	}
+	if s.writeCh != nil {
+		close(s.writeCh)
+		s.writeCh = nil
 	}
 
 	if !s.spawned {
