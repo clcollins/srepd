@@ -69,8 +69,8 @@ func (m *mockStreamExecutor) Start(_ context.Context, _ string, _ []string, _ []
 }
 
 func TestSession_SpawnOnFirstSend(t *testing.T) {
-	output := `{"type":"system","subtype":"init","session_id":"00000000-0000-0000-0000-000000000000"}
-{"type":"result","subtype":"success","session_id":"00000000-0000-0000-0000-000000000000","result":"done","is_error":false}
+	output := `{"type":"system","subtype":"init","session_id":"00000000-fake-0000-0000-000000000000"}
+{"type":"result","subtype":"success","session_id":"00000000-fake-0000-0000-000000000000","result":"done","is_error":false}
 `
 	exec := newMockStreamExecutor(output)
 
@@ -111,11 +111,11 @@ func TestSession_DoubleRenderPrevention(t *testing.T) {
 	// deltas and a consolidated assistant text block. With double-render
 	// prevention, only the stream_event deltas should surface as TextDelta;
 	// the consolidated assistant text should be suppressed.
-	output := `{"type":"system","subtype":"init","session_id":"00000000-0000-0000-0000-000000000000"}
+	output := `{"type":"system","subtype":"init","session_id":"00000000-fake-0000-0000-000000000000"}
 {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}}
 {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" world"}}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello world"}]}}
-{"type":"result","subtype":"success","session_id":"00000000-0000-0000-0000-000000000000","result":"Hello world","is_error":false}
+{"type":"result","subtype":"success","session_id":"00000000-fake-0000-0000-000000000000","result":"Hello world","is_error":false}
 `
 	exec := newMockStreamExecutor(output)
 	cfg := Config{CLICommand: "claude", SessionEnabled: true}
@@ -158,11 +158,11 @@ func TestSession_SlowConsumerReceivesResult(t *testing.T) {
 	// D3: Result must not be dropped even if the consumer is slow.
 	// We produce many TextDelta events followed by a Result.
 	var lines strings.Builder
-	lines.WriteString(`{"type":"system","subtype":"init","session_id":"00000000-0000-0000-0000-000000000000"}` + "\n")
+	lines.WriteString(`{"type":"system","subtype":"init","session_id":"00000000-fake-0000-0000-000000000000"}` + "\n")
 	for i := 0; i < 200; i++ {
 		lines.WriteString(`{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"x"}}}` + "\n")
 	}
-	lines.WriteString(`{"type":"result","subtype":"success","session_id":"00000000-0000-0000-0000-000000000000","result":"done","is_error":false}` + "\n")
+	lines.WriteString(`{"type":"result","subtype":"success","session_id":"00000000-fake-0000-0000-000000000000","result":"done","is_error":false}` + "\n")
 
 	exec := newMockStreamExecutor(lines.String())
 	cfg := Config{CLICommand: "claude", SessionEnabled: true}
@@ -196,8 +196,8 @@ done:
 
 func TestSession_CLICommandArgsPreserved(t *testing.T) {
 	// D4: user-supplied args from agent_cli_command must be passed through
-	output := `{"type":"system","subtype":"init","session_id":"00000000-0000-0000-0000-000000000000"}
-{"type":"result","subtype":"success","session_id":"00000000-0000-0000-0000-000000000000","result":"done","is_error":false}
+	output := `{"type":"system","subtype":"init","session_id":"00000000-fake-0000-0000-000000000000"}
+{"type":"result","subtype":"success","session_id":"00000000-fake-0000-0000-000000000000","result":"done","is_error":false}
 `
 	var capturedArgs []string
 	exec := &argCapturingExecutor{
@@ -244,7 +244,7 @@ func (e *argCapturingExecutor) Start(_ context.Context, _ string, args []string,
 }
 
 func TestSession_Close(t *testing.T) {
-	output := `{"type":"system","subtype":"init","session_id":"00000000-0000-0000-0000-000000000000"}
+	output := `{"type":"system","subtype":"init","session_id":"00000000-fake-0000-0000-000000000000"}
 `
 	exec := newMockStreamExecutor(output)
 

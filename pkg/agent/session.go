@@ -91,17 +91,17 @@ type Session struct {
 	exec       StreamCommandExecutor
 	env        []string
 
-	mu      sync.Mutex
-	spawned bool
-	resumed bool
-	ctx     context.Context
-	cancel  context.CancelFunc
-	stdin   io.WriteCloser
-	events  chan Event
-	done    chan struct{}
+	mu       sync.Mutex
+	spawned  bool
+	resumed  bool
+	ctx      context.Context
+	cancel   context.CancelFunc
+	stdin    io.WriteCloser
+	events   chan Event
+	done     chan struct{}
 	doneOnce sync.Once
-	closed  bool
-	err     error
+	closed   bool
+	err      error
 
 	useStreamEvents bool
 }

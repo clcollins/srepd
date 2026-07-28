@@ -34,7 +34,7 @@ func TestParseStreamEvent_InitLine(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 	assert.Equal(t, Init, events[0].Kind)
-	assert.Equal(t, "00000000-0000-0000-0000-000000000000", events[0].SessionID)
+	assert.Equal(t, "00000000-fake-0000-0000-000000000000", events[0].SessionID)
 }
 
 func TestParseStreamEvent_TextDelta(t *testing.T) {
@@ -101,12 +101,12 @@ func TestParseStreamEvent_ResultSuccess(t *testing.T) {
 	assert.Equal(t, Result, events[0].Kind)
 	assert.False(t, events[0].IsError)
 	assert.Contains(t, events[0].Text, "hello")
-	assert.Equal(t, "00000000-0000-0000-0000-000000000000", events[0].SessionID)
+	assert.Equal(t, "00000000-fake-0000-0000-000000000000", events[0].SessionID)
 }
 
 // Hand-authored fixture: result with error subtype
 func TestParseStreamEvent_ResultError(t *testing.T) {
-	line := `{"type":"result","subtype":"error","is_error":true,"session_id":"00000000-0000-0000-0000-000000000000","result":"something went wrong"}`
+	line := `{"type":"result","subtype":"error","is_error":true,"session_id":"00000000-fake-0000-0000-000000000000","result":"something went wrong"}`
 	events, err := ParseStreamEvent([]byte(line))
 	require.NoError(t, err)
 	require.Len(t, events, 1)
