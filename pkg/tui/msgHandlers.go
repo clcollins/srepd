@@ -8,6 +8,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
@@ -105,6 +106,13 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// If a confirmation prompt is active, only accept y/n/Escape/quit
 	if m.pendingConfirmation != nil {
 		return m.handleConfirmationInput(msg.(tea.KeyMsg))
+	}
+
+	// Chat mode: route all keys to the chat focus handler before chord/global
+	// bindings. Without this, single-character bindings (u, w, :, /) match
+	// global key.Matches checks and never reach the textinput.
+	if m.chatMode {
+		return switchChatFocusMode(m, msg)
 	}
 
 	// Clear chord help overlay on any keypress so the regular help returns
@@ -823,9 +831,9 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if isAgentCommand(prompt) {
 				query := parseAgentQuery(prompt)
 				if query == "" {
-					m.setStatus("usage: :agent <query>")
-					return m, nil
+					return m.enterChatMode()
 				}
+				m.enterChatModeState()
 				return m, func() tea.Msg {
 					return claudePromptMsg{prompt: query}
 				}
@@ -1052,6 +1060,69 @@ func switchErrorFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil
 		case key.Matches(msg, defaultKeyMap.Help):
 			m.toggleHelp()
+		}
+	}
+	return m, nil
+}
+
+func (m model) enterChatMode() (tea.Model, tea.Cmd) {
+	m.enterChatModeState()
+	return m, nil
+}
+
+func (m *model) enterChatModeState() {
+	m.chatMode = true
+	m.chatHasBackground = false
+	ci := textinput.New()
+	ci.Prompt = " > "
+	ci.CharLimit = 500
+	ci.Width = windowSize.Width - 6
+	ci.Focus()
+	m.chatInput = ci
+	if !m.watcherExpanded {
+		m.watcherExpanded = true
+	}
+	m.recomputeLayout()
+	m.updateChatViewport()
+	m.chatViewportGotoBottom()
+}
+
+func switchChatFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, chatModeKeyMap.Quit):
+			return m, tea.Quit
+
+		case key.Matches(msg, chatModeKeyMap.Back):
+			m.chatMode = false
+			m.chatInput.Blur()
+			m.table.Focus()
+			return m, nil
+
+		case key.Matches(msg, chatModeKeyMap.ScrollUp):
+			m.chatViewport.ScrollUp(3)
+			return m, nil
+
+		case key.Matches(msg, chatModeKeyMap.ScrollDown):
+			m.chatViewport.ScrollDown(3)
+			return m, nil
+
+		case key.Matches(msg, chatModeKeyMap.Enter):
+			text := strings.TrimSpace(m.chatInput.Value())
+			if text == "" {
+				return m, nil
+			}
+			m.chatInput.Reset()
+			m.chatViewportGotoBottom()
+			return m, func() tea.Msg {
+				return claudePromptMsg{prompt: text}
+			}
+
+		default:
+			var cmd tea.Cmd
+			m.chatInput, cmd = m.chatInput.Update(msg)
+			return m, cmd
 		}
 	}
 	return m, nil

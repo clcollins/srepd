@@ -86,6 +86,26 @@ func (m *model) updateWatcherViewport() {
 	}
 	m.watcherViewport.SetContent(content)
 	m.watcherViewport.GotoBottom()
+
+	if m.chatMode {
+		m.updateChatViewport()
+	}
+}
+
+func (m *model) updateChatViewport() {
+	content := m.watcherBuffer.Content()
+	if m.chatViewport.Width > 0 {
+		content = lipgloss.NewStyle().Width(m.chatViewport.Width).Render(content)
+	}
+	wasAtBottom := m.chatViewport.AtBottom()
+	m.chatViewport.SetContent(content)
+	if wasAtBottom {
+		m.chatViewport.GotoBottom()
+	}
+}
+
+func (m *model) chatViewportGotoBottom() {
+	m.chatViewport.GotoBottom()
 }
 
 const (

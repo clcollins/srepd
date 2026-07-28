@@ -45,6 +45,7 @@
 
 | Command | Action |
 |---------|--------|
+| :agent | open chat mode |
 | :agent <query> | ask Claude AI |
 | :watcher <query> | query AI watcher |
 | :flag cluster <id> | flag incidents by cluster ID |
@@ -54,3 +55,13 @@
 | :flags | list all flag conditions |
 | :flags save [path] | save flags to file |
 | :flags load [path] | load flags from file |
+
+## Chat Mode (`:agent`)
+
+| Key | Action |
+|-----|--------|
+| esc | back to queue |
+| enter | send message |
+| pgup/shift+↑ | scroll up |
+| pgdn/shift+↓ | scroll down |
+| ctrl+q/ctrl+c | quit |

@@ -338,7 +338,9 @@ func launchTUI() {
 		}
 	}()
 
-	_, err = p.Run()
+	finalModel, err := p.Run()
+
+	tui.CloseAgentSessions(finalModel)
 
 	if asyncOCMClient != nil {
 		asyncOCMClient.Close()
@@ -561,7 +563,10 @@ func runDevMode() {
 		}
 	}()
 
-	_, err = p.Run()
+	finalModel, err := p.Run()
+
+	tui.CloseAgentSessions(finalModel)
+
 	if err != nil {
 		fmt.Println(err)
 		log.Fatal(err)

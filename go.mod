@@ -14,6 +14,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/exp/golden v0.0.0-20260713092006-0d683c34c74b
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+	github.com/google/uuid v1.6.0
 	github.com/muesli/termenv v0.16.0
 	github.com/openshift-online/ocm-common v0.0.44
 	github.com/openshift-online/ocm-sdk-go v0.1.505
@@ -88,7 +89,6 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect

@@ -38,6 +38,8 @@ var (
 		"agent_system_prompt":   "You are in read-only investigation mode for SRE PagerDuty incident triage. Suggest commands for the user to run if changes are needed. Do not modify cluster state. All cluster commands must be read-only (oc get, oc describe, NOT oc delete/patch). If a fix requires changes, OUTPUT the commands for the SRE to review and run manually.",
 		"watcher_system_prompt": "You are an SRE assistant with access to PagerDuty incident data and OpenShift cluster information. Provide concise, actionable analysis. Do not suggest destructive commands.",
 		"rosa_boundary_command": "rosa-boundary start-task --cluster-id %%CLUSTER_ID%% --connect",
+		"agent_session_enabled": "false",
+		"agent_max_sessions":    "3",
 	}
 	OptionalKeys = map[string]string{
 		"editor":                             fmt.Sprintf("Editor to use for notes (default: %v)", DefaultOptionalKeys["editor"]),
@@ -53,6 +55,10 @@ var (
 		"agent_system_prompt":                "System prompt for :agent CLI queries (customizable per-user)",
 		"watcher_system_prompt":              "System prompt for :watcher LLM queries and ambient analysis (customizable per-user)",
 		"rosa_boundary_command":              fmt.Sprintf("rosa-boundary login command (default: %v)", DefaultOptionalKeys["rosa_boundary_command"]),
+		"agent_session_enabled":              "Use persistent per-incident Claude Code sessions instead of one-shot queries (default: false — session persistence not yet implemented; flips to true when per-incident resume lands)",
+		"agent_max_sessions":                 "Maximum number of live agent sessions before LRU eviction (default: 3)",
+		"agent_allowed_tools":                "Comma-separated list of Claude Code tools the agent may use (empty = Claude default)",
+		"agent_permission_mode":              "Claude Code permission mode to pass via --permission-mode (empty = omit flag)",
 		"colors":                             "Custom color scheme (map of color name to hex value)",
 		"default_silent_escalation_policy":   "Default silent escalation policy ID (auto-discovered via srepd config)",
 		"custom_service_escalation_policies": "Per-service silent policy overrides (service ID → policy ID)",

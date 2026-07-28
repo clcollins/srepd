@@ -174,3 +174,18 @@ func TestGolden_TourMode(t *testing.T) {
 	m.tourStep = 0
 	golden.RequireEqual(t, m.View())
 }
+
+func TestGolden_ChatMode(t *testing.T) {
+	m := goldenTestModel(t)
+	m.chatMode = true
+	m.watcherExpanded = true
+	m.chatInput = newTextInput()
+	m.chatInput.Prompt = " > "
+	m.chatInput.Focus()
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.watcherBuffer.Append(prefixLines(m.agentMarker, "Hello! How can I help?"))
+	m.recomputeLayout()
+	m.updateChatViewport()
+	m.chatViewportGotoBottom()
+	golden.RequireEqual(t, m.View())
+}

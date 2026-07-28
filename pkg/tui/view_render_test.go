@@ -8,8 +8,10 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -258,4 +260,176 @@ func TestView_ConfirmationNarrowTerminal(t *testing.T) {
 		assert.Contains(t, view, "Silence P1234567?",
 			"prompt should be visible even on narrow terminal")
 	})
+}
+
+func TestView_AgentSessionToolUseRendersInWatcher(t *testing.T) {
+	m := sizedTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.claudeQuerying = true
+
+	result, _ := m.Update(agentSessionEventMsg{
+		event: agent.Event{Kind: agent.ToolUse, Tool: "Bash", ToolInput: "ls -la"},
+	})
+	m, ok := result.(model)
+	require.True(t, ok)
+
+	view := m.View()
+	assert.Contains(t, view, "Bash", "tool name should appear in watcher pane")
+}
+
+func TestView_AgentSessionTextDeltaRendersInWatcher(t *testing.T) {
+	m := sizedTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.claudeQuerying = true
+
+	result, _ := m.Update(agentSessionEventMsg{
+		event: agent.Event{Kind: agent.TextDelta, Text: "Checking cluster health"},
+	})
+	m, ok := result.(model)
+	require.True(t, ok)
+
+	view := m.View()
+	assert.Contains(t, view, "Checking cluster health", "text delta should appear in watcher pane")
+}
+
+func TestView_ChatModeRendersExpectedContent(t *testing.T) {
+	m := sizedTestModel(t)
+	m.chatMode = true
+	m.watcherExpanded = true
+	m.chatInput = textinput.New()
+	m.chatInput.Prompt = " > "
+	m.chatInput.Focus()
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.watcherBuffer.Append(prefixLines(m.agentMarker, "Agent response text"))
+	m.recomputeLayout()
+	m.updateChatViewport()
+	m.chatViewportGotoBottom()
+
+	view := m.View()
+	assert.Contains(t, view, "Agent Chat", "chat header should be visible")
+	assert.Contains(t, view, "P1234567", "incident ID should appear in chat header")
+	assert.Contains(t, view, "Agent response text", "agent response should be visible in chat pane")
+	assert.Contains(t, view, ">", "input prompt should be visible")
+	assert.NotContains(t, view, "Test Alert Firing", "table should not be visible in chat mode")
+}
+
+func TestView_ChatModeBackgroundBadge(t *testing.T) {
+	m := sizedTestModel(t)
+	m.chatHasBackground = true
+	m.chatMode = false
+
+	view := m.View()
+	assert.Contains(t, view, "agent has new output", "background badge should show when not in chat mode")
+}
+
+func TestView_ChatModeNoBadgeWhenFocused(t *testing.T) {
+	m := sizedTestModel(t)
+	m.chatHasBackground = true
+	m.chatMode = true
+	m.watcherExpanded = true
+	m.chatInput = textinput.New()
+	m.chatInput.Prompt = " > "
+	m.chatInput.Focus()
+
+	view := m.View()
+	assert.NotContains(t, view, "agent has new output", "badge should not show when in chat mode")
+}
+
+func TestView_NoLineExceedsWindowWidth(t *testing.T) {
+	for _, width := range []int{60, 80, 100, 120} {
+		t.Run(fmt.Sprintf("default_width_%d", width), func(t *testing.T) {
+			m := createTestModelWithSelectedIncident()
+			size := tea.WindowSizeMsg{Width: width, Height: 40}
+			windowSize = size
+			result, _ := m.Update(size)
+			m = result.(model)
+
+			m.table.SetRows([]table.Row{
+				{dot, "P1234567", "Test Alert Firing", "test-service"},
+			})
+
+			view := m.View()
+			for i, line := range strings.Split(view, "\n") {
+				w := lipgloss.Width(line)
+				assert.LessOrEqual(t, w, width,
+					"default mode line %d is %d cols wide (limit %d): %q",
+					i, w, width, line)
+			}
+		})
+
+		t.Run(fmt.Sprintf("chat_width_%d", width), func(t *testing.T) {
+			m := createTestModelWithSelectedIncident()
+			size := tea.WindowSizeMsg{Width: width, Height: 40}
+			windowSize = size
+			result, _ := m.Update(size)
+			m = result.(model)
+
+			m.enterChatModeState()
+
+			view := m.View()
+			for i, line := range strings.Split(view, "\n") {
+				w := lipgloss.Width(line)
+				assert.LessOrEqual(t, w, width,
+					"chat mode line %d is %d cols wide (limit %d): %q",
+					i, w, width, line)
+			}
+		})
+	}
+}
+
+func TestView_FrameDoesNotExceedWindowHeight(t *testing.T) {
+	heights := []int{24, 30, 40}
+	widths := []int{80, 120}
+
+	for _, height := range heights {
+		for _, width := range widths {
+			t.Run(fmt.Sprintf("default_%dx%d", width, height), func(t *testing.T) {
+				m := createTestModelWithSelectedIncident()
+				size := tea.WindowSizeMsg{Width: width, Height: height}
+				windowSize = size
+				result, _ := m.Update(size)
+				m = result.(model)
+
+				m.table.SetRows([]table.Row{
+					{dot, "P1234567", "Test Alert Firing", "test-service"},
+				})
+
+				view := m.View()
+				lines := strings.Split(view, "\n")
+				lineCount := len(lines)
+				if lineCount > 0 && lines[lineCount-1] == "" {
+					lineCount--
+				}
+				assert.LessOrEqual(t, lineCount, height,
+					"default mode frame is %d lines tall (limit %d)",
+					lineCount, height)
+			})
+
+			t.Run(fmt.Sprintf("chat_%dx%d", width, height), func(t *testing.T) {
+				m := createTestModelWithSelectedIncident()
+				size := tea.WindowSizeMsg{Width: width, Height: height}
+				windowSize = size
+				result, _ := m.Update(size)
+				m = result.(model)
+
+				m.enterChatModeState()
+
+				view := m.View()
+				lines := strings.Split(view, "\n")
+				lineCount := len(lines)
+				if lineCount > 0 && lines[lineCount-1] == "" {
+					lineCount--
+				}
+				assert.LessOrEqual(t, lineCount, height,
+					"chat mode frame is %d lines tall (limit %d)",
+					lineCount, height)
+
+				require.True(t, len(lines) > 1, "view must produce at least two lines")
+				assert.Contains(t, lines[1], "Agent Chat",
+					"second line must contain the Agent Chat header (after status bar), got: %q", lines[1])
+			})
+		}
+	}
 }

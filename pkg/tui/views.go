@@ -110,6 +110,9 @@ func (m model) View() string {
 		tabWindowWidth := windowSize.Width - m.styles.Main.GetHorizontalBorderSize() - m.styles.Main.GetHorizontalMargins() - tabWindowBorders
 		s.WriteString(m.styles.TabWindow.Width(tabWindowWidth).Render(m.incidentViewer.View()))
 
+	case m.chatMode:
+		s.WriteString(m.renderChatPane())
+
 	default:
 		s.WriteString(m.styles.TableContainer.Render(m.table.View()))
 		s.WriteString("\n")
@@ -134,12 +137,15 @@ func (m model) View() string {
 			helpKeyMap = errorViewKeyMap
 		} else if m.chordHelpActive {
 			helpKeyMap = chordKeymap{prefix: m.chordPrefix}
+		} else if m.chatMode {
+			helpKeyMap = chatModeKeyMap
 		} else if m.input.Focused() {
 			helpKeyMap = inputModeKeyMap
 		} else {
 			helpKeyMap = defaultKeyMap
 		}
-		helpView = m.styles.Padded.Width(windowSize.Width).Render(m.help.View(helpKeyMap))
+		helpText := clampLineWidth(m.help.View(helpKeyMap), m.help.Width)
+		helpView = m.styles.Padded.Width(windowSize.Width).Render(helpText)
 	}
 
 	// Calculate how many newlines needed to push help and bottom status to terminal bottom
@@ -263,6 +269,9 @@ func (m model) renderHeader() string {
 	}
 
 	statusContent := statusArea(m.status, m.apiInProgress, m.spinner.View(), m.theme.Text)
+	if m.chatHasBackground && !m.chatMode {
+		statusContent += " [agent has new output]"
+	}
 
 	leftWidth := windowSize.Width * 4 / 6
 	rightWidth := windowSize.Width - leftWidth
@@ -1313,6 +1322,23 @@ const noteTemplate = `
 # Service: {{ .Service }}
 #
 `
+
+func (m model) renderChatPane() string {
+	incidentLabel := "no incident"
+	if m.selectedIncident != nil {
+		incidentLabel = m.selectedIncident.ID
+	}
+
+	header := m.styles.Muted.Render(fmt.Sprintf("  Agent Chat [%s]", incidentLabel))
+	if m.claudeQuerying {
+		header += " " + m.spinner.View() + " " + m.styles.Muted.Render("streaming...")
+	}
+
+	s := header + "\n"
+	s += m.styles.WatcherContainer.Render(m.chatViewport.View()) + "\n"
+	s += m.chatInput.View() + "\n"
+	return s
+}
 
 func (m model) renderWatcherPane() string {
 	if !m.watcherExpanded {

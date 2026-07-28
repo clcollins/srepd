@@ -2,12 +2,14 @@ package tui
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"strings"
 	"testing"
 
 	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
@@ -1476,4 +1478,33 @@ func TestRenderTabBar_ClampedToWindowWidth(t *testing.T) {
 				"tab bar line %d should not exceed terminal width (got %d)", i, w)
 		}
 	})
+}
+
+func TestHelpLine_NoOverflow(t *testing.T) {
+	for _, width := range []int{60, 80, 100, 120} {
+		t.Run(fmt.Sprintf("width_%d", width), func(t *testing.T) {
+			m := createTestModelWithSelectedIncident()
+			windowSize = tea.WindowSizeMsg{Width: width, Height: 40}
+			result, _ := m.Update(windowSize)
+			m = result.(model)
+
+			paddedH := m.styles.Padded.GetHorizontalFrameSize()
+			contentArea := width - paddedH
+
+			for _, km := range []struct {
+				name string
+				km   help.KeyMap
+			}{
+				{"default", defaultKeyMap},
+				{"chat", chatModeKeyMap},
+				{"input", inputModeKeyMap},
+			} {
+				clamped := clampLineWidth(m.help.View(km.km), m.help.Width)
+				clampedWidth := lipgloss.Width(clamped)
+				assert.LessOrEqual(t, clampedWidth, contentArea,
+					"clamped help for %s (%d chars) exceeds content area (%d) at width %d",
+					km.name, clampedWidth, contentArea, width)
+			}
+		})
+	}
 }

@@ -64,6 +64,7 @@ func TestInputCommandEntries(t *testing.T) {
 	for _, e := range entries {
 		commands[e.Command] = true
 	}
+	assert.True(t, commands[":agent"], "should include bare agent command for chat mode")
 	assert.True(t, commands[":agent <query>"], "should include agent command")
 	assert.True(t, commands[":watcher <query>"], "should include watcher command")
 	assert.True(t, commands[":flag cluster <id>"], "should include flag cluster command")
@@ -73,6 +74,25 @@ func TestInputCommandEntries(t *testing.T) {
 	assert.True(t, commands[":flags"], "should include flags list command")
 	assert.True(t, commands[":flags save [path]"], "should include flags save command")
 	assert.True(t, commands[":flags load [path]"], "should include flags load command")
+}
+
+func TestChatModeEntries(t *testing.T) {
+	entries := ChatModeEntries()
+
+	assert.NotEmpty(t, entries, "should return at least one chat mode entry")
+
+	for _, e := range entries {
+		assert.NotEmpty(t, e.Keys, "Keys should not be empty for entry with Help=%q", e.Help)
+		assert.NotEmpty(t, e.Help, "Help should not be empty for entry with Keys=%q", e.Keys)
+	}
+
+	helpTexts := make(map[string]bool)
+	for _, e := range entries {
+		helpTexts[e.Help] = true
+	}
+	assert.True(t, helpTexts["back to queue"], "should include back to queue binding")
+	assert.True(t, helpTexts["send message"], "should include send message binding")
+	assert.True(t, helpTexts["quit"], "should include quit binding")
 }
 
 func TestGenerateQuickstartMarkdown(t *testing.T) {
@@ -87,7 +107,12 @@ func TestGenerateQuickstartMarkdown(t *testing.T) {
 		{Command: ":agent <query>", Description: "ask Claude AI"},
 	}
 
-	result := GenerateQuickstartMarkdown(keys, chords, inputs)
+	chatMode := []KeyBindingEntry{
+		{Keys: "esc", Help: "back to queue"},
+		{Keys: "enter", Help: "send message"},
+	}
+
+	result := GenerateQuickstartMarkdown(keys, chords, inputs, chatMode)
 
 	assert.Contains(t, result, "# Quickstart")
 	assert.Contains(t, result, "## Key Bindings")
@@ -98,4 +123,7 @@ func TestGenerateQuickstartMarkdown(t *testing.T) {
 	assert.Contains(t, result, "## Input Commands")
 	assert.Contains(t, result, ":agent <query>")
 	assert.Contains(t, result, "ask Claude AI")
+	assert.Contains(t, result, "## Chat Mode")
+	assert.Contains(t, result, "back to queue")
+	assert.Contains(t, result, "send message")
 }

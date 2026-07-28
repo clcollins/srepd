@@ -244,7 +244,7 @@ test-coverage-patch: ## Check coverage of changed files (approximates Codecov pa
 test-fixtures: ## Check that fixture data contains no real UUIDs, domains, or org names
 	@echo "Checking fixture data for real values..."
 	@FAIL=false; \
-	for f in testdata/fixtures/*.json; do \
+	for f in $$(find . -path '*/testdata/*' \( -name '*.json' -o -name '*.ndjson' \) -not -path './vendor/*'); do \
 		if grep -qP '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$$f" 2>/dev/null; then \
 			if grep -P '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$$f" | grep -qvP 'fake'; then \
 				echo "ERROR: $$f contains UUID without 'fake' marker"; \

@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,8 +15,10 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1809,4 +1812,139 @@ func TestErrMsgHandler_ResetsApiInProgress(t *testing.T) {
 		assert.NotContains(t, updated.status, "API timeout",
 			"error must not be copied into the transient status line")
 	})
+}
+
+func TestChatMode_BareAgentEntersChatMode(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	// Simulate input mode with ":agent" typed
+	m.input = newTextInput()
+	m.input.SetValue(":agent")
+
+	// Directly call switchInputFocusMode with Enter key
+	result, _ := switchInputFocusMode(m, tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, "bare :agent should enter chat mode")
+}
+
+func TestChatMode_AgentWithQueryEntersChatMode(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.input = newTextInput()
+	m.input.SetValue(":agent hello")
+
+	result, cmd := switchInputFocusMode(m, tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, ":agent with query should enter chat mode")
+	assert.NotNil(t, cmd, "should dispatch a claudePromptMsg command")
+}
+
+func TestChatMode_EscReturnToQueue(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatInput = newTextInput()
+	m.chatInput.Focus()
+	m.watcherExpanded = true
+
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.False(t, updated.chatMode, "Esc should exit chat mode")
+}
+
+func TestChatMode_EnterSendsMessage(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatInput = newTextInput()
+	m.chatInput.Focus()
+	m.chatInput.SetValue("hello agent")
+
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, "should stay in chat mode after sending")
+	assert.NotNil(t, cmd, "should dispatch a command")
+	assert.Equal(t, "", updated.chatInput.Value(), "input should be cleared after send")
+}
+
+func TestChatMode_EmptyEnterDoesNothing(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatInput = newTextInput()
+	m.chatInput.Focus()
+	m.chatInput.SetValue("")
+
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := result.(model)
+	require.True(t, ok)
+
+	assert.True(t, updated.chatMode, "should remain in chat mode")
+	assert.Nil(t, cmd, "should not dispatch any command for empty input")
+}
+
+func TestChatViewport_PreservesScrollPosition(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatViewport.Width = 80
+	m.chatViewport.Height = 5
+	m.watcherBuffer = newWatcherBuffer(100)
+
+	for i := 0; i < 20; i++ {
+		m.watcherBuffer.Append(fmt.Sprintf("line %d", i))
+	}
+	m.updateChatViewport()
+
+	m.chatViewport.SetYOffset(0)
+	assert.False(t, m.chatViewport.AtBottom(), "after scrolling up, should not be at bottom")
+
+	m.watcherBuffer.Append("new content after scroll")
+	m.updateChatViewport()
+
+	assert.Equal(t, 0, m.chatViewport.YOffset,
+		"scroll position must be preserved when user has scrolled up")
+}
+
+func TestCloseAgentSessions_CallsCloseAll(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	mgr := agent.NewSessionManager(agent.Config{CLICommand: "echo"}, nil)
+	m.agentSessionMgr = mgr
+
+	sess := mgr.GetOrCreate("INC-TEST", nil)
+
+	CloseAgentSessions(m)
+
+	err := sess.Send(t.Context(), "hello")
+	assert.Error(t, err, "session should be closed after CloseAgentSessions")
+}
+
+func TestResolveAgentSessionEnabled_DefaultFalse(t *testing.T) {
+	// B3: when the key is unset, the resolver must return false
+	// (session persistence is not yet implemented).
+	viper.Reset()
+	defer viper.Reset()
+
+	result := resolveAgentSessionEnabled()
+	assert.False(t, result, "unset agent_session_enabled must default to false")
+}
+
+func TestResolveAgentSessionEnabled_ExplicitTrue(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	viper.Set("agent_session_enabled", true)
+	result := resolveAgentSessionEnabled()
+	assert.True(t, result, "explicitly set true must return true")
+}
+
+func TestResolveAgentSessionEnabled_ExplicitFalse(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	viper.Set("agent_session_enabled", false)
+	result := resolveAgentSessionEnabled()
+	assert.False(t, result, "explicitly set false must return false")
 }

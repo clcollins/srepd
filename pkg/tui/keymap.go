@@ -81,6 +81,51 @@ func (k inputKeymap) FullHelp() [][]key.Binding {
 	}
 }
 
+type chatKeymap struct {
+	Quit       key.Binding
+	Back       key.Binding
+	Enter      key.Binding
+	ScrollUp   key.Binding
+	ScrollDown key.Binding
+}
+
+func (k chatKeymap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Back, k.Enter, k.ScrollUp, k.ScrollDown, k.Quit}
+}
+
+func (k chatKeymap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Back, k.Enter, k.ScrollUp, k.ScrollDown},
+		{k.Quit},
+	}
+}
+
+// chatModeKeyMap contains the keys that work in chat mode.
+// Scroll keys use pgup/pgdown and shift+up/shift+down to avoid
+// conflicts with printable characters and textinput bindings.
+var chatModeKeyMap = chatKeymap{
+	Quit: key.NewBinding(
+		key.WithKeys("ctrl+c", "ctrl+q"),
+		key.WithHelp("ctrl+q/ctrl+c", "quit"),
+	),
+	Back: key.NewBinding(
+		key.WithKeys("esc"),
+		key.WithHelp("esc", "back to queue"),
+	),
+	Enter: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "send message"),
+	),
+	ScrollUp: key.NewBinding(
+		key.WithKeys("pgup", "shift+up"),
+		key.WithHelp("pgup/shift+↑", "scroll up"),
+	),
+	ScrollDown: key.NewBinding(
+		key.WithKeys("pgdown", "shift+down"),
+		key.WithHelp("pgdn/shift+↓", "scroll down"),
+	),
+}
+
 // inputModeKeyMap contains only the keys that work in input mode
 var inputModeKeyMap = inputKeymap{
 	Quit: key.NewBinding(

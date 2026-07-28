@@ -1102,3 +1102,85 @@ func TestInputMode_Enter_StillDispatchesPrompt(t *testing.T) {
 	assert.True(t, ok, "dispatched message must be claudePromptMsg")
 	assert.Equal(t, "investigate this alert", promptMsg.prompt)
 }
+
+func TestChatMode_KeysNotLeaked(t *testing.T) {
+	// D5: in chat mode, single-character keys that have global bindings
+	// (u=urgency, w=watcher, :=input, /=input) must land in chatInput
+	// and not trigger the global handlers.
+	tests := []struct {
+		name    string
+		key     tea.KeyMsg
+		checkFn func(t *testing.T, m model)
+	}{
+		{
+			name: "u lands in chatInput, not urgency toggle",
+			key:  tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}},
+			checkFn: func(t *testing.T, m model) {
+				assert.Contains(t, m.chatInput.Value(), "u")
+				assert.False(t, m.showLowUrgency, "urgency must not toggle")
+			},
+		},
+		{
+			name: "w lands in chatInput, not watcher toggle",
+			key:  tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}},
+			checkFn: func(t *testing.T, m model) {
+				assert.Contains(t, m.chatInput.Value(), "w")
+			},
+		},
+		{
+			name: "colon lands in chatInput, not input mode",
+			key:  tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}},
+			checkFn: func(t *testing.T, m model) {
+				assert.Contains(t, m.chatInput.Value(), ":")
+				assert.False(t, m.input.Focused(), "command input must not focus")
+			},
+		},
+		{
+			name: "slash lands in chatInput, not input mode",
+			key:  tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}},
+			checkFn: func(t *testing.T, m model) {
+				assert.Contains(t, m.chatInput.Value(), "/")
+				assert.False(t, m.input.Focused(), "command input must not focus")
+			},
+		},
+		{
+			name: "chord prefix lands in chatInput, not chord mode",
+			key:  tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}, Alt: true},
+			checkFn: func(t *testing.T, m model) {
+				assert.False(t, m.chordPending, "chord mode must not activate")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModel()
+			m.chatMode = true
+			m.chatInput = newTextInput()
+			m.chatInput.Prompt = " > "
+			m.chatInput.Focus()
+
+			result, _ := m.keyMsgHandler(tt.key)
+			updated := result.(model)
+			tt.checkFn(t, updated)
+		})
+	}
+}
+
+func TestChatMode_FullPangram(t *testing.T) {
+	// D5 round-trip: typing the full pangram must produce it verbatim
+	m := createTestModel()
+	m.chatMode = true
+	m.chatInput = newTextInput()
+	m.chatInput.Prompt = " > "
+	m.chatInput.Focus()
+
+	pangram := "The quick brown fox jumped over the lazy gray dog."
+	for _, ch := range pangram {
+		keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}}
+		result, _ := m.keyMsgHandler(keyMsg)
+		m = result.(model)
+	}
+
+	assert.Equal(t, pangram, m.chatInput.Value(), "full pangram must round-trip through chat input")
+}

@@ -1812,6 +1812,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case claudeResponseMsg:
 		return m.handleClaudeResponse(msg)
 
+	case agentSessionEventMsg:
+		return m.handleAgentSessionEvent(msg)
+
+	case agentSessionDoneMsg:
+		m.claudeQuerying = false
+		m.apiInProgress = false
+		if msg.err != nil {
+			if errors.Is(msg.err, context.Canceled) {
+				return m, nil
+			}
+			classified := ai.ClassifyProviderError(msg.err)
+			return m, func() tea.Msg {
+				return errMsg{fmt.Errorf("agent session error: %s", classified)}
+			}
+		}
+		m.setStatus("agent response received")
+		return m, nil
+
 	case agentStreamStartedMsg:
 		if m.agentStreamCancel != nil {
 			m.agentStreamCancel()
@@ -2664,4 +2682,20 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 				!m.configState.PresetCommandsSafe
 		}),
 	).WithTheme(theme).WithKeyMap(km).WithWidth(m.layout.FormWidth).WithHeight(m.layout.FormHeight)
+}
+
+// CloseAgentSessions closes all agent sessions associated with the
+// model returned from tea.Program.Run(). This must be called on
+// srepd exit to prevent orphaned claude processes.
+func CloseAgentSessions(m tea.Model) {
+	if m == nil {
+		return
+	}
+	mdl, ok := m.(model)
+	if !ok {
+		return
+	}
+	if mdl.agentSessionMgr != nil {
+		mdl.agentSessionMgr.CloseAll()
+	}
 }
