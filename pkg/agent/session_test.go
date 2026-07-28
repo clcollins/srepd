@@ -126,7 +126,6 @@ func TestSession_DoubleRenderPrevention(t *testing.T) {
 
 	timeout := time.After(2 * time.Second)
 	var textEvents []Event
-	var allEvents []Event
 done:
 	for {
 		select {
@@ -134,7 +133,6 @@ done:
 			if !ok {
 				break done
 			}
-			allEvents = append(allEvents, ev)
 			if ev.Kind == TextDelta {
 				textEvents = append(textEvents, ev)
 			}

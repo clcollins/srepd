@@ -1101,11 +1101,11 @@ func switchChatFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, chatModeKeyMap.ScrollUp):
-			m.chatViewport.LineUp(3)
+			m.chatViewport.ScrollUp(3)
 			return m, nil
 
 		case key.Matches(msg, chatModeKeyMap.ScrollDown):
-			m.chatViewport.LineDown(3)
+			m.chatViewport.ScrollDown(3)
 			return m, nil
 
 		case key.Matches(msg, chatModeKeyMap.Enter):
