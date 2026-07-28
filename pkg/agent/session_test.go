@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -727,6 +728,101 @@ type callbackExecutor struct {
 
 func (e *callbackExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
 	return e.startFn(ctx, name, args, env)
+}
+
+// hungWriter accepts the first write, then blocks all subsequent writes
+// until Close is called.
+type hungWriter struct {
+	mu      sync.Mutex
+	first   bool
+	closeCh chan struct{}
+}
+
+func newHungWriter() *hungWriter {
+	return &hungWriter{first: true, closeCh: make(chan struct{})}
+}
+
+func (w *hungWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	if w.first {
+		w.first = false
+		w.mu.Unlock()
+		return len(p), nil
+	}
+	w.mu.Unlock()
+	<-w.closeCh
+	return 0, io.ErrClosedPipe
+}
+
+func (w *hungWriter) Close() error {
+	select {
+	case <-w.closeCh:
+	default:
+		close(w.closeCh)
+	}
+	return nil
+}
+
+// FIX 2: Write goroutine must not leak per timed-out Send.
+// A single writer goroutine should be reused across Send calls.
+func TestSession_WriteGoroutineDoesNotLeak(t *testing.T) {
+	hw := newHungWriter()
+	executor := &callbackExecutor{
+		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+			stdoutR, stdoutW := io.Pipe()
+			go func() {
+				_, _ = stdoutW.Write([]byte(`{"type":"system","subtype":"init","session_id":"test"}` + "\n"))
+				<-ctx.Done()
+				_ = stdoutW.Close()
+			}()
+			return hw, stdoutR, func() error {
+				<-ctx.Done()
+				return fmt.Errorf("signal: killed")
+			}, nil
+		},
+	}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", executor, nil)
+	t.Cleanup(func() { _ = s.Close() })
+
+	// First send spawns the process (first write succeeds)
+	err := s.Send(context.Background(), "hello")
+	require.NoError(t, err)
+
+	// Wait for init
+	select {
+	case ev := <-s.Events():
+		require.Equal(t, Init, ev.Kind)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Init")
+	}
+
+	// Settle goroutines
+	time.Sleep(100 * time.Millisecond)
+	baseline := runtime.NumGoroutine()
+
+	// Issue several sends that will time out (child not draining stdin)
+	for i := 0; i < 5; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		_ = s.Send(ctx, fmt.Sprintf("message %d", i))
+		cancel()
+	}
+
+	// Wait for goroutines to settle
+	time.Sleep(200 * time.Millisecond)
+	after := runtime.NumGoroutine()
+
+	// With the fix (single writer goroutine), count should not grow per send.
+	assert.LessOrEqual(t, after, baseline+2,
+		"goroutine count grew from %d to %d — write goroutines are leaking", baseline, after)
+
+	// Close must release everything
+	require.NoError(t, s.Close())
+	time.Sleep(300 * time.Millisecond)
+	final := runtime.NumGoroutine()
+	assert.Less(t, final, baseline+2,
+		"goroutines not released after Close: %d (baseline was %d)", final, baseline)
 }
 
 // S1: Test that Send() honors context cancellation.
