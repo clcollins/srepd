@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -152,6 +153,47 @@ done:
 	// Revert check: the consolidated event was present in the stream but suppressed
 	assert.False(t, textEvents[0].Consolidated)
 	assert.False(t, textEvents[1].Consolidated)
+}
+
+// M3: When no stream_event deltas arrive, consolidated assistant text must
+// not be suppressed. This guards against a CLI version change or flag
+// behavior shift where partial deltas stop arriving.
+func TestSession_ConsolidatedTextSurfacedWithoutDeltas(t *testing.T) {
+	// Init → consolidated assistant text → result, NO stream_event deltas
+	output := `{"type":"system","subtype":"init","session_id":"00000000-fake-0000-0000-000000000000"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello from consolidated"}]}}
+{"type":"result","subtype":"success","session_id":"00000000-fake-0000-0000-000000000000","result":"Hello from consolidated","is_error":false}
+`
+	exec := newMockStreamExecutor(output)
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", exec, nil)
+
+	err := s.Send(context.Background(), "hi")
+	require.NoError(t, err)
+
+	timeout := time.After(2 * time.Second)
+	var textEvents []Event
+done:
+	for {
+		select {
+		case ev, ok := <-s.Events():
+			if !ok {
+				break done
+			}
+			if ev.Kind == TextDelta {
+				textEvents = append(textEvents, ev)
+			}
+			if ev.Kind == Result {
+				break done
+			}
+		case <-timeout:
+			break done
+		}
+	}
+
+	require.Len(t, textEvents, 1, "consolidated text must surface when no deltas arrive")
+	assert.Equal(t, "Hello from consolidated", textEvents[0].Text)
+	assert.True(t, textEvents[0].Consolidated, "event should be marked consolidated")
 }
 
 func TestSession_SlowConsumerReceivesResult(t *testing.T) {
@@ -409,7 +451,17 @@ func TestSpawn_RejectsDeniedFlags(t *testing.T) {
 		{"--allowedTools override", "claude --allowedTools Bash", "--allowedTools"},
 		{"--disallowedTools override", "claude --disallowedTools Read", "--disallowedTools"},
 		{"--session-id override", "claude --session-id abc", "--session-id"},
+		{"--session-id=value form", "claude --session-id=abc", "--session-id"},
 		{"--resume override", "claude --resume abc", "--resume"},
+		{"--resume=value form", "claude --resume=abc", "--resume"},
+		{"-r short alias", "claude -r abc", "-r"},
+		{"-r=value form", "claude -r=abc", "-r"},
+		{"--continue override", "claude --continue", "--continue"},
+		{"--continue=value form", "claude --continue=abc", "--continue"},
+		{"-c short alias", "claude -c", "-c"},
+		{"-c=value form", "claude -c=abc", "-c"},
+		{"--fork-session override", "claude --fork-session", "--fork-session"},
+		{"--fork-session=value form", "claude --fork-session=true", "--fork-session"},
 		{"--input-format override", "claude --input-format text", "--input-format"},
 		{"--output-format override", "claude --output-format text", "--output-format"},
 		{"--bare=value form", "claude --bare=1", "--bare"},
@@ -545,6 +597,126 @@ func TestSession_CloseAfterNaturalExit(t *testing.T) {
 	// Double Close should also be safe
 	err = s.Close()
 	require.NoError(t, err)
+}
+
+// M5: Deliberate close must not emit a spurious Error event from wait().
+// When Close() or eviction kills the child, the exec.ExitError ("signal:
+// killed") must be suppressed because the kill was intentional.
+func TestSession_CloseNoSpuriousError(t *testing.T) {
+	// Use a reader that blocks until context is cancelled, simulating a
+	// long-lived child process.
+	pr, pw := io.Pipe()
+	waitErr := fmt.Errorf("signal: killed")
+	executor := &callbackExecutor{
+		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+			go func() {
+				<-ctx.Done()
+				_ = pw.Close()
+			}()
+			return &mockStdin{}, pr, func() error { return waitErr }, nil
+		},
+	}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", executor, nil)
+
+	// Write init so readLoop starts scanning
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_, _ = pw.Write([]byte(`{"type":"system","subtype":"init","session_id":"test"}` + "\n"))
+	}()
+
+	err := s.Send(context.Background(), "hi")
+	require.NoError(t, err)
+
+	// Wait for Init event to confirm readLoop is running
+	timeout := time.After(2 * time.Second)
+	select {
+	case ev := <-s.Events():
+		assert.Equal(t, Init, ev.Kind)
+	case <-timeout:
+		t.Fatal("timed out waiting for Init")
+	}
+
+	// Close deliberately
+	require.NoError(t, s.Close())
+
+	// Drain remaining events — there must be no Error event
+	drainTimeout := time.After(time.Second)
+	for {
+		select {
+		case ev, ok := <-s.Events():
+			if !ok {
+				return // channel closed, no error — correct
+			}
+			assert.NotEqual(t, Error, ev.Kind, "deliberate close must not emit Error event, got: %v", ev.Err)
+		case <-s.Done():
+			return
+		case <-drainTimeout:
+			return
+		}
+	}
+}
+
+// M1: A crashed session (closed=true from readLoop) must be replaced by
+// GetOrCreate with a fresh Session using --resume. The dead session must
+// not brick the incident's chat.
+func TestSessionManager_CrashedSessionReplaced(t *testing.T) {
+	cfg := Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 3}
+
+	var spawnCount int
+	var lastArgs []string
+	exec := &callbackExecutor{
+		startFn: func(_ context.Context, _ string, args []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+			spawnCount++
+			lastArgs = append([]string{}, args...)
+			stdin := &mockStdin{}
+			output := `{"type":"system","subtype":"init","session_id":"test"}` + "\n" +
+				`{"type":"result","subtype":"success","session_id":"test","result":"ok","is_error":false}` + "\n"
+			stdout := io.NopCloser(strings.NewReader(output))
+			return stdin, stdout, func() error { return nil }, nil
+		},
+	}
+
+	mgr := NewSessionManager(cfg, exec)
+
+	// Get session, send to spawn it, wait for readLoop to finish (child dies)
+	s1 := mgr.GetOrCreate("INC-001", nil)
+	err := s1.Send(context.Background(), "hello")
+	require.NoError(t, err)
+	<-s1.Done() // readLoop sets closed=true
+
+	s1.mu.Lock()
+	assert.True(t, s1.closed, "session should be closed after readLoop exits")
+	s1.mu.Unlock()
+
+	// GetOrCreate must detect the dead session and create a new one
+	s2 := mgr.GetOrCreate("INC-001", nil)
+	assert.True(t, s1 != s2, "must get a different Session pointer after crash")
+	assert.True(t, s2.resumed, "replacement session must use --resume")
+
+	// Send on the new session should succeed
+	err = s2.Send(context.Background(), "world")
+	require.NoError(t, err)
+
+	// Verify --resume is in the spawn args
+	hasResume := false
+	for _, a := range lastArgs {
+		if a == "--resume" {
+			hasResume = true
+			break
+		}
+	}
+	assert.True(t, hasResume, "replacement session must be spawned with --resume")
+}
+
+// callbackExecutor delegates Start to a function for flexible test setups.
+type callbackExecutor struct {
+	startFn func(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error)
+}
+
+func (e *callbackExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+	return e.startFn(ctx, name, args, env)
 }
 
 // S1: Test that Send() honors context cancellation.

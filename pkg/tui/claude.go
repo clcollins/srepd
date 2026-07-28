@@ -192,10 +192,6 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	if m.agentSessionEnabled && isClaudeCLI(agentCmd) && m.agentSessionMgr != nil {
 		m.agentStreamPartial = ""
 		isFirst := m.agentSessionMgr != nil && !m.agentSessionSentFirst[incidentID]
-		if m.agentSessionSentFirst == nil {
-			m.agentSessionSentFirst = make(map[string]bool)
-		}
-		m.agentSessionSentFirst[incidentID] = true
 		return m, tea.Batch(
 			m.spinner.Tick,
 			startAgentSession(m.agentSessionMgr, incidentID, m.agentSystemPrompt, msg.prompt, incidentContext, m.selectedIncident, m.selectedIncidentAlerts, isFirst),
@@ -224,6 +220,13 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 // glamour markdown rendering.
 func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea.Cmd) {
 	ev := msg.event
+
+	if msg.firstSendOK {
+		if m.agentSessionSentFirst == nil {
+			m.agentSessionSentFirst = make(map[string]bool)
+		}
+		m.agentSessionSentFirst[msg.incidentID] = true
+	}
 
 	if !m.chatMode && ev.Kind != agent.Init {
 		m.chatHasBackground = true
@@ -406,8 +409,10 @@ func buildStreamingArgs(args []string) []string {
 
 // agentSessionEventMsg carries a parsed agent.Event from a session.
 type agentSessionEventMsg struct {
-	event   agent.Event
-	session *agent.Session
+	event       agent.Event
+	session     *agent.Session
+	firstSendOK bool
+	incidentID  string
 }
 
 // agentSessionDoneMsg signals the session's reader goroutine exited.
@@ -451,7 +456,7 @@ func startAgentSession(mgr *agent.SessionManager, incidentID string, systemPromp
 		if err := s.Send(context.Background(), fullPrompt); err != nil {
 			return agentSessionDoneMsg{err: err}
 		}
-		return agentSessionEventMsg{event: agent.Event{Kind: agent.Init}, session: s}
+		return agentSessionEventMsg{event: agent.Event{Kind: agent.Init}, session: s, firstSendOK: isFirstMessage, incidentID: incidentID}
 	}
 }
 

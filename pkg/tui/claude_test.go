@@ -10,6 +10,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clcollins/srepd/pkg/agent"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
@@ -996,4 +997,46 @@ func TestAgentStreamDoneMsg_CanceledIsSilent(t *testing.T) {
 	assert.Nil(t, updated.agentStreamCancel)
 	assert.Nil(t, cmd, "canceled stream must not produce an error command")
 	assert.Nil(t, updated.err, "canceled stream must not set the error view")
+}
+
+// M4: Failed first send must not permanently lose context injection.
+// agentSessionSentFirst must only be set after a SUCCESSFUL send.
+func TestHandleClaudePrompt_ContextInjectionNotLostOnFailedFirstSend(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "claude"
+	m.agentSessionEnabled = true
+	cfg := agent.Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 3}
+	m.agentSessionMgr = agent.NewSessionManager(cfg, nil)
+	m.agentSessionSentFirst = make(map[string]bool)
+	m.selectedIncident = &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-TEST"},
+	}
+
+	msg := claudePromptMsg{prompt: "hello"}
+	result, _ := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
+	updated := result.(model)
+
+	// Flag must NOT be set yet — the send hasn't happened
+	assert.False(t, updated.agentSessionSentFirst["INC-TEST"],
+		"flag must not be set before async send completes")
+
+	// Simulate a failed send → agentSessionDoneMsg with error
+	doneResult, _ := updated.Update(agentSessionDoneMsg{err: fmt.Errorf("spawn failed")})
+	afterFail := doneResult.(model)
+	assert.False(t, afterFail.agentSessionSentFirst["INC-TEST"],
+		"flag must not be set after a failed first send")
+
+	// Simulate a successful send → agentSessionEventMsg with firstSendOK
+	successMsg := agentSessionEventMsg{
+		event:       agent.Event{Kind: agent.Init},
+		session:     nil,
+		firstSendOK: true,
+		incidentID:  "INC-TEST",
+	}
+	successResult, _ := afterFail.handleAgentSessionEvent(successMsg)
+	afterSuccess := successResult.(model)
+	assert.True(t, afterSuccess.agentSessionSentFirst["INC-TEST"],
+		"flag must be set after a successful first send")
 }

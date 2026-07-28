@@ -18,6 +18,8 @@ import (
 // deniedFlags are CLI flags that a user must not inject via
 // agent_cli_command because srepd owns them (they control the
 // protocol contract or security posture).
+// This list inherently trails the CLI; re-check against `claude --help`
+// whenever the tested claude version bumps.
 var deniedFlags = []string{
 	"--bare",
 	"--dangerously-skip-permissions",
@@ -26,6 +28,10 @@ var deniedFlags = []string{
 	"--disallowedTools",
 	"--session-id",
 	"--resume",
+	"-r",
+	"--continue",
+	"-c",
+	"--fork-session",
 	"--input-format",
 	"--output-format",
 }
@@ -94,6 +100,7 @@ type Session struct {
 	mu       sync.Mutex
 	spawned  bool
 	resumed  bool
+	closing  bool // set by Close() before killing child, suppresses exit error
 	ctx      context.Context
 	cancel   context.CancelFunc
 	stdin    io.WriteCloser
@@ -229,11 +236,14 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 	defer func() {
 		if err := wait(); err != nil {
 			s.mu.Lock()
+			deliberate := s.closing
 			s.err = err
 			s.mu.Unlock()
-			select {
-			case s.events <- Event{Kind: Error, Err: err}:
-			case <-s.ctx.Done():
+			if !deliberate {
+				select {
+				case s.events <- Event{Kind: Error, Err: err}:
+				case <-s.ctx.Done():
+				}
 			}
 		}
 	}()
@@ -249,7 +259,7 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 		}
 
 		for _, ev := range events {
-			if ev.Kind == Init {
+			if ev.Kind == TextDelta && !ev.Consolidated && !s.useStreamEvents {
 				s.useStreamEvents = true
 			}
 
@@ -279,6 +289,8 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 func (s *Session) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	s.closing = true
 
 	if s.cancel != nil {
 		s.cancel()
@@ -337,8 +349,23 @@ func (m *SessionManager) GetOrCreate(incidentID string, env []string) *Session {
 	defer m.mu.Unlock()
 
 	if s, ok := m.sessions[incidentID]; ok {
-		m.touch(incidentID)
-		return s
+		s.mu.Lock()
+		dead := s.closed
+		s.mu.Unlock()
+		if !dead {
+			m.touch(incidentID)
+			return s
+		}
+		// Session's child process died — remove and recreate with --resume,
+		// reusing the same path as LRU eviction.
+		delete(m.sessions, incidentID)
+		for i, id := range m.order {
+			if id == incidentID {
+				m.order = append(m.order[:i], m.order[i+1:]...)
+				break
+			}
+		}
+		m.evicted[incidentID] = true
 	}
 
 	// Evict oldest if at capacity
