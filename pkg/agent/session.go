@@ -156,16 +156,6 @@ func NewSession(cfg Config, incidentID string, executor StreamCommandExecutor, e
 	}
 }
 
-// ID returns the session's UUID.
-func (s *Session) ID() uuid.UUID {
-	return s.id
-}
-
-// IncidentID returns the incident this session is bound to.
-func (s *Session) IncidentID() string {
-	return s.incidentID
-}
-
 // Events returns the channel from which the TUI reads parsed events.
 func (s *Session) Events() <-chan Event {
 	return s.events

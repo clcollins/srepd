@@ -702,6 +702,72 @@ func TestIndex_ScannerErrChecked(t *testing.T) {
 		"good entry must be loaded")
 }
 
+// TestRevertCheck_StubIndexWrite is the 410a §2c revert check: with
+// index writes disabled, the second manager falls back to --session-id
+// instead of --resume. This proves that TestIntegration_RestartResume
+// (H1a) and TestIntegration_AbsentIndex_SessionID (H1b) have teeth —
+// they would fail if the index write path were deleted.
+func TestRevertCheck_StubIndexWrite(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "log.jsonl")
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+	sessionDir := filepath.Join(tmpDir, "config", "sessions")
+
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+		SessionDir:     sessionDir,
+	}
+
+	env := []string{
+		"FAKECLAUDE_LOG=" + logFile,
+		"FAKECLAUDE_STATE=" + stateDir,
+	}
+
+	// Phase 1: manager with index writes STUBBED OUT
+	mgr1 := NewSessionManager(cfg, nil)
+	mgr1.ForTestStubIndexWrite()
+	t.Cleanup(func() { mgr1.CloseAll() })
+	s1 := mgr1.GetOrCreate("INC-001", env)
+	require.NoError(t, s1.Send(context.Background(), "hello"))
+	drainUntilResultOrDone(t, s1)
+	_ = s1.Close()
+
+	// Index must NOT exist (writes were stubbed)
+	indexPath := filepath.Join(sessionDir, "index.jsonl")
+	_, err := os.Stat(indexPath)
+	require.True(t, os.IsNotExist(err),
+		"with index writes stubbed, index.jsonl must not exist on disk")
+
+	// Phase 2: new manager, same config dir — without the index on disk,
+	// it cannot know a session was established. It MUST use --session-id.
+	mgr2 := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr2.CloseAll() })
+	s2 := mgr2.GetOrCreate("INC-001", env)
+	_ = s2.Send(context.Background(), "world")
+	time.Sleep(500 * time.Millisecond)
+
+	entries := readFakeLog(t, logFile)
+	argv := filterArgvEntries(entries)
+	require.GreaterOrEqual(t, len(argv), 2,
+		"need at least 2 argv entries, got %d", len(argv))
+
+	// With index writes stubbed, the second spawn MUST use --session-id
+	// (not --resume). This is the inverse of TestIntegration_RestartResume.
+	assert.True(t, hasFlag(argv[1].Args, "--session-id"),
+		"REVERT CHECK: with index writes stubbed, second spawn must use "+
+			"--session-id (not --resume), got: %v", argv[1].Args)
+	assert.False(t, hasFlag(argv[1].Args, "--resume"),
+		"REVERT CHECK: with index writes stubbed, second spawn must NOT "+
+			"use --resume, got: %v", argv[1].Args)
+}
+
 func flagValue(args []string, flag string) string {
 	for i, a := range args {
 		if a == flag && i+1 < len(args) {
