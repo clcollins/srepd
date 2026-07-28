@@ -100,7 +100,7 @@ type Session struct {
 	mu           sync.Mutex
 	spawned      bool
 	resumed      bool
-	closing      bool // set by Close() before killing child, suppresses exit error
+	closing      bool            // set by Close() before killing child, suppresses exit error
 	lifecycleCtx context.Context // parent for spawnCtx; outlives any single Send call
 	ctx          context.Context
 	cancel       context.CancelFunc
