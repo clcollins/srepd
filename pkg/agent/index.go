@@ -74,6 +74,10 @@ func (idx *sessionIndex) load() {
 		idx.established[entry.IncidentID] = sid
 	}
 
+	if err := scanner.Err(); err != nil {
+		charlog.Warn("agent.index.load", "msg", "scanner error", "error", err)
+	}
+
 	if lastLine != nil {
 		charlog.Warn("agent.index.load",
 			"msg", "corrupt trailing line truncated",
@@ -91,20 +95,23 @@ func (idx *sessionIndex) has(incidentID string) bool {
 
 func (idx *sessionIndex) record(incidentID string, sessionID uuid.UUID) {
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
-
 	idx.established[incidentID] = sessionID
+	path := idx.path
+	warned := idx.warned
+	idx.mu.Unlock()
 
-	if idx.path == "" {
+	if path == "" {
 		return
 	}
 
-	dir := filepath.Dir(idx.path)
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
+		idx.mu.Lock()
 		if !idx.warned {
 			charlog.Warn("agent.index.record", "msg", "cannot create session dir", "error", err)
 			idx.warned = true
 		}
+		idx.mu.Unlock()
 		return
 	}
 
@@ -119,18 +126,23 @@ func (idx *sessionIndex) record(incidentID string, sessionID uuid.UUID) {
 		return
 	}
 
-	f, err := os.OpenFile(idx.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		if !idx.warned {
-			charlog.Warn("agent.index.record", "msg", "cannot write index", "error", err)
-			idx.warned = true
+		if !warned {
+			idx.mu.Lock()
+			if !idx.warned {
+				charlog.Warn("agent.index.record", "msg", "cannot write index", "error", err)
+				idx.warned = true
+			}
+			idx.mu.Unlock()
 		}
 		return
 	}
 	defer func() { _ = f.Close() }()
 
-	_, _ = f.Write(data)
-	_, _ = f.Write([]byte("\n"))
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		charlog.Warn("agent.index.record", "msg", "write failed", "error", err)
+	}
 }
 
 // IndexEntryCount returns the number of established sessions in the
