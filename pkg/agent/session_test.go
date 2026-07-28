@@ -564,11 +564,11 @@ func TestSession_SendHonorsContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	err := s.Send(ctx, "hello")
+	_ = s.Send(ctx, "hello")
 	// The first Send may succeed (spawn + write to non-blocking mock).
 	// But a second send with an already-cancelled context should fail.
 	cancel()
-	err = s.Send(ctx, "this should fail")
+	err := s.Send(ctx, "this should fail")
 	assert.Error(t, err, "Send with cancelled context should fail")
 }
 
