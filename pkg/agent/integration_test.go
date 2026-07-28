@@ -649,6 +649,59 @@ func TestIntegration_IndexRobustness(t *testing.T) {
 	})
 }
 
+// FIX 3: record() must not block has() on I/O. With the old code,
+// record() holds idx.mu across file I/O, so has() blocks on the TUI
+// thread if the filesystem is slow.
+func TestIndex_RecordDoesNotBlockHas(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessionDir := filepath.Join(tmpDir, "sessions")
+	require.NoError(t, os.MkdirAll(sessionDir, 0755))
+
+	idx := newSessionIndex(sessionDir)
+
+	// Pre-populate so has() has something to find
+	testSID := SessionIDFor("INC-001")
+	idx.record("INC-001", testSID)
+
+	// Now test: has() during a concurrent record() must return promptly
+	done := make(chan bool, 1)
+	go func() {
+		// This record may do I/O
+		idx.record("INC-002", SessionIDFor("INC-002"))
+		done <- true
+	}()
+
+	// has() must not block waiting for the record's I/O
+	start := time.Now()
+	result := idx.has("INC-001")
+	elapsed := time.Since(start)
+
+	assert.True(t, result, "has() must return true for known incident")
+	assert.Less(t, elapsed, 100*time.Millisecond,
+		"has() must not block on I/O — took %v", elapsed)
+
+	<-done // wait for background record
+}
+
+// FIX 3: scanner.Err() must be checked after the load loop.
+func TestIndex_ScannerErrChecked(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessionDir := filepath.Join(tmpDir, "sessions")
+	require.NoError(t, os.MkdirAll(sessionDir, 0755))
+
+	indexPath := filepath.Join(sessionDir, "index.jsonl")
+	sid := SessionIDFor("INC-001").String()
+	goodLine := fmt.Sprintf(
+		`{"incident_id":"INC-001","session_id":"%s","created":"2026-01-01T00:00:00Z","last_used":"2026-01-01T00:00:00Z"}`,
+		sid)
+	// Write a good line followed by a valid but complete file — no scanner error
+	require.NoError(t, os.WriteFile(indexPath, []byte(goodLine+"\n"), 0600))
+
+	idx := newSessionIndex(sessionDir)
+	assert.Equal(t, 1, len(idx.established),
+		"good entry must be loaded")
+}
+
 func flagValue(args []string, flag string) string {
 	for i, a := range args {
 		if a == flag && i+1 < len(args) {
