@@ -378,3 +378,58 @@ func TestView_NoLineExceedsWindowWidth(t *testing.T) {
 		})
 	}
 }
+
+func TestView_FrameDoesNotExceedWindowHeight(t *testing.T) {
+	heights := []int{24, 30, 40}
+	widths := []int{80, 120}
+
+	for _, height := range heights {
+		for _, width := range widths {
+			t.Run(fmt.Sprintf("default_%dx%d", width, height), func(t *testing.T) {
+				m := createTestModelWithSelectedIncident()
+				size := tea.WindowSizeMsg{Width: width, Height: height}
+				windowSize = size
+				result, _ := m.Update(size)
+				m = result.(model)
+
+				m.table.SetRows([]table.Row{
+					{dot, "P1234567", "Test Alert Firing", "test-service"},
+				})
+
+				view := m.View()
+				lines := strings.Split(view, "\n")
+				lineCount := len(lines)
+				if lineCount > 0 && lines[lineCount-1] == "" {
+					lineCount--
+				}
+				assert.LessOrEqual(t, lineCount, height,
+					"default mode frame is %d lines tall (limit %d)",
+					lineCount, height)
+			})
+
+			t.Run(fmt.Sprintf("chat_%dx%d", width, height), func(t *testing.T) {
+				m := createTestModelWithSelectedIncident()
+				size := tea.WindowSizeMsg{Width: width, Height: height}
+				windowSize = size
+				result, _ := m.Update(size)
+				m = result.(model)
+
+				m.enterChatModeState()
+
+				view := m.View()
+				lines := strings.Split(view, "\n")
+				lineCount := len(lines)
+				if lineCount > 0 && lines[lineCount-1] == "" {
+					lineCount--
+				}
+				assert.LessOrEqual(t, lineCount, height,
+					"chat mode frame is %d lines tall (limit %d)",
+					lineCount, height)
+
+				require.True(t, len(lines) > 1, "view must produce at least two lines")
+				assert.Contains(t, lines[1], "Agent Chat",
+					"second line must contain the Agent Chat header (after status bar), got: %q", lines[1])
+			})
+		}
+	}
+}
