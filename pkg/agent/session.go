@@ -36,10 +36,10 @@ var deniedFlags = []string{
 	"--output-format",
 }
 
-// validateUserFlags checks that none of the user-supplied tokens
+// ValidateUserFlags checks that none of the user-supplied tokens
 // from agent_cli_command contain a denied flag. It handles both
 // --flag value and --flag=value forms.
-func validateUserFlags(tokens []string) error {
+func ValidateUserFlags(tokens []string) error {
 	for _, tok := range tokens {
 		flag := tok
 		if idx := strings.Index(tok, "="); idx > 0 {
@@ -203,7 +203,7 @@ func (s *Session) spawn(ctx context.Context) error {
 	binPath := fields[0]
 
 	if len(fields) > 1 {
-		if err := validateUserFlags(fields[1:]); err != nil {
+		if err := ValidateUserFlags(fields[1:]); err != nil {
 			return err
 		}
 	}
