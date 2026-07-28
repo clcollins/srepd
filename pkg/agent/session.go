@@ -252,16 +252,17 @@ func (s *Session) spawn(ctx context.Context) error {
 	s.writeCh = make(chan writeRequest)
 	s.spawned = true
 
-	go s.writeLoop()
+	go s.writeLoop(stdin)
 	go s.readLoop(stdout, wait)
 	return nil
 }
 
 // writeLoop drains writeRequests and writes them to stdin. A single
 // goroutine per session prevents leaked goroutines when Send times out.
-func (s *Session) writeLoop() {
+// stdin is captured by value to avoid racing with Close setting s.stdin=nil.
+func (s *Session) writeLoop(stdin io.WriteCloser) {
 	for req := range s.writeCh {
-		_, err := s.stdin.Write(req.data)
+		_, err := stdin.Write(req.data)
 		req.err <- err
 	}
 }
