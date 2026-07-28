@@ -203,6 +203,7 @@ type Config struct {
 	MaxSessions    int
 	AllowedTools   []string
 	PermissionMode string
+	SessionDir     string // path to sessions directory for index persistence; empty disables
 }
 
 // BuildSpawnArgs produces the argument list for exec.CommandContext

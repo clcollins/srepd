@@ -111,6 +111,8 @@ type Session struct {
 	err      error
 
 	useStreamEvents bool
+
+	onEstablished func() // called once when system/init is received
 }
 
 // NewSession creates a Session for the given incident. The process is
@@ -259,6 +261,11 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 		}
 
 		for _, ev := range events {
+			if ev.Kind == Init && s.onEstablished != nil {
+				s.onEstablished()
+				s.onEstablished = nil
+			}
+
 			if ev.Kind == TextDelta && !ev.Consolidated && !s.useStreamEvents {
 				s.useStreamEvents = true
 			}

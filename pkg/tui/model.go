@@ -330,6 +330,18 @@ func resolveAgentMaxSessions() int {
 	return n
 }
 
+func resolveSessionDir() string {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(dir, "srepd", "sessions")
+}
+
 func resolveAgentAllowedTools() []string {
 	raw := viper.GetStringSlice("agent_allowed_tools")
 	var result []string
@@ -453,6 +465,7 @@ func InitialModel(
 			MaxSessions:    resolveAgentMaxSessions(),
 			AllowedTools:   resolveAgentAllowedTools(),
 			PermissionMode: viper.GetString("agent_permission_mode"),
+			SessionDir:     resolveSessionDir(),
 		}
 		m.agentSessionMgr = agent.NewSessionManager(cfg, nil)
 	}
@@ -588,6 +601,7 @@ func InitialModelWithConfig(
 			MaxSessions:    resolveAgentMaxSessions(),
 			AllowedTools:   resolveAgentAllowedTools(),
 			PermissionMode: viper.GetString("agent_permission_mode"),
+			SessionDir:     resolveSessionDir(),
 		}
 		m.agentSessionMgr = agent.NewSessionManager(agentCfg, nil)
 	}
