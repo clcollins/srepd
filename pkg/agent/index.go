@@ -94,6 +94,10 @@ func (idx *sessionIndex) has(incidentID string) bool {
 
 func (idx *sessionIndex) record(incidentID string, sessionID uuid.UUID) {
 	idx.mu.Lock()
+	if _, exists := idx.established[incidentID]; exists {
+		idx.mu.Unlock()
+		return
+	}
 	idx.established[incidentID] = sessionID
 	path := idx.path
 	warned := idx.warned
