@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/spf13/viper"
@@ -1882,6 +1884,41 @@ func TestChatMode_EmptyEnterDoesNothing(t *testing.T) {
 
 	assert.True(t, updated.chatMode, "should remain in chat mode")
 	assert.Nil(t, cmd, "should not dispatch any command for empty input")
+}
+
+func TestChatViewport_PreservesScrollPosition(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	m.chatMode = true
+	m.chatViewport.Width = 80
+	m.chatViewport.Height = 5
+	m.watcherBuffer = newWatcherBuffer(100)
+
+	for i := 0; i < 20; i++ {
+		m.watcherBuffer.Append(fmt.Sprintf("line %d", i))
+	}
+	m.updateChatViewport()
+
+	m.chatViewport.SetYOffset(0)
+	assert.False(t, m.chatViewport.AtBottom(), "after scrolling up, should not be at bottom")
+
+	m.watcherBuffer.Append("new content after scroll")
+	m.updateChatViewport()
+
+	assert.Equal(t, 0, m.chatViewport.YOffset,
+		"scroll position must be preserved when user has scrolled up")
+}
+
+func TestCloseAgentSessions_CallsCloseAll(t *testing.T) {
+	m := createTestModelWithSelectedIncident()
+	mgr := agent.NewSessionManager(agent.Config{CLICommand: "echo"}, nil)
+	m.agentSessionMgr = mgr
+
+	sess := mgr.GetOrCreate("INC-TEST", nil)
+
+	CloseAgentSessions(m)
+
+	err := sess.Send(t.Context(), "hello")
+	assert.Error(t, err, "session should be closed after CloseAgentSessions")
 }
 
 func TestResolveAgentSessionEnabled_DefaultFalse(t *testing.T) {
