@@ -317,7 +317,7 @@ func resolveStreamResponses() bool {
 
 func resolveAgentSessionEnabled() bool {
 	if !viper.IsSet("agent_session_enabled") {
-		return false
+		return true
 	}
 	return viper.GetBool("agent_session_enabled")
 }

@@ -51,7 +51,7 @@ func (idx *sessionIndex) load() {
 		}
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	var lastLine []byte
@@ -127,33 +127,10 @@ func (idx *sessionIndex) record(incidentID string, sessionID uuid.UUID) {
 		}
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, _ = f.Write(data)
 	_, _ = f.Write([]byte("\n"))
-}
-
-// SessionIndexDir computes the default session index directory from
-// XDG_CONFIG_HOME (or ~/.config) + srepd/sessions.
-func SessionIndexDir() string {
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		dir = filepath.Join(home, ".config")
-	}
-	return filepath.Join(dir, "srepd", "sessions")
-}
-
-// SessionIndexPath returns the full path to the session index file.
-func SessionIndexPath() string {
-	d := SessionIndexDir()
-	if d == "" {
-		return ""
-	}
-	return filepath.Join(d, "index.jsonl")
 }
 
 // IndexEntryCount returns the number of established sessions in the

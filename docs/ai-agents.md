@@ -53,10 +53,10 @@ instead of one-shot subprocess invocation. This means:
   is suspended and resumed transparently via `--resume` on next access.
 - **Markdown rendering** via glamour is applied to the final agent response.
 
-**Default: `false`.** Per-incident session persistence and restart-resume are
-not yet implemented. The flag flips to `true` in the PR that lands them with
-passing tests. While `false`, the CLI path behaves as the pre-existing
-one-shot flow.
+**Default: `true`.** Session metadata (incident ID, session UUID, timestamps)
+is stored locally in `~/.config/srepd/sessions/index.jsonl` (XDG-aware). No
+query content or responses are persisted by srepd — only the mapping needed to
+resume sessions. Set `agent_session_enabled: false` to revert to one-shot mode.
 
 Non-Claude CLIs fall back to the one-shot blocking path automatically.
 
@@ -72,10 +72,12 @@ Dispatches a query to the configured CLI agent subprocess. The agent command is 
 :agent what oc commands should I run?
 ```
 
+`:agent <query>` dispatches the query and returns to the incident queue
+immediately (fire-and-return). The response appears in the watcher pane.
+
 Bare `:agent` (no query) opens **chat mode**: a focused pane for interactive
 conversation with the agent. Type messages and press `Enter` to send; `Esc`
-returns to the incident queue. `:agent <query>` is a shortcut that opens chat
-mode and sends the query in one step.
+returns to the incident queue.
 
 When a background session produces output while you are not in chat mode, the
 status bar shows `[agent has new output]`. Entering chat mode clears the badge.

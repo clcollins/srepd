@@ -453,7 +453,9 @@ func startAgentSession(mgr *agent.SessionManager, incidentID string, systemPromp
 			fullPrompt += "\n\nContext:\n" + incidentContext
 		}
 
-		if err := s.Send(context.Background(), fullPrompt); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.Send(ctx, fullPrompt); err != nil {
 			return agentSessionDoneMsg{err: err}
 		}
 		return agentSessionEventMsg{event: agent.Event{Kind: agent.Init}, session: s, firstSendOK: isFirstMessage, incidentID: incidentID}

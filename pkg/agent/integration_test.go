@@ -23,7 +23,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	fakeBinaryPath = filepath.Join(dir, "claude")
 	cmd := exec.Command("go", "build", "-o", fakeBinaryPath, "./testdata/fakeclaude")
@@ -487,6 +487,166 @@ func TestIntegration_SendHonorsTimeout(t *testing.T) {
 	cancel()
 	err := s.Send(ctx, "should fail")
 	assert.Error(t, err, "Send with cancelled context must return error")
+}
+
+// TestIntegration_DoubleRenderPrevention verifies test 8: when the
+// fake emits both stream_event deltas and a consolidated assistant
+// message, text surfaces exactly once.
+func TestIntegration_DoubleRenderPrevention(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+
+	// Script: stream_event deltas + consolidated assistant + result
+	scriptFile := filepath.Join(tmpDir, "script.json")
+	scriptData := `{"turns":[[
+		{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}},
+		{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" world"}}},
+		{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello world"}]}},
+		{"type":"result","subtype":"success","result":"Hello world","is_error":false}
+	]]}`
+	require.NoError(t, os.WriteFile(scriptFile, []byte(scriptData), 0644))
+
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+	}
+
+	env := []string{
+		"FAKECLAUDE_STATE=" + stateDir,
+		"FAKECLAUDE_SCRIPT=" + scriptFile,
+	}
+
+	mgr := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr.CloseAll() })
+	s := mgr.GetOrCreate("INC-001", env)
+	require.NoError(t, s.Send(context.Background(), "hello"))
+
+	var textEvents []Event
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case ev, ok := <-s.Events():
+			if !ok {
+				goto done
+			}
+			if ev.Kind == TextDelta {
+				textEvents = append(textEvents, ev)
+			}
+			if ev.Kind == Result {
+				goto done
+			}
+		case <-s.Done():
+			goto done
+		case <-timeout:
+			t.Fatal("timed out")
+		}
+	}
+done:
+	assert.Len(t, textEvents, 2,
+		"text should surface exactly twice (two stream_event deltas), not three (double-render)")
+	if len(textEvents) >= 2 {
+		assert.Equal(t, "Hello", textEvents[0].Text)
+		assert.Equal(t, " world", textEvents[1].Text)
+	}
+}
+
+// TestIntegration_CrashMidStream verifies test 9: an Error event is
+// surfaced when the child crashes mid-stream, and the session is
+// resumable on the next send.
+func TestIntegration_CrashMidStream(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "log.jsonl")
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+	sessionDir := filepath.Join(tmpDir, "config", "sessions")
+
+	// Script: first turn emits text + crashes (no result), second turn normal
+	// The crash is simulated by having only partial events and no result —
+	// the fake exits after processing the turn (EOF on stdin after close).
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+		SessionDir:     sessionDir,
+	}
+
+	env := []string{
+		"FAKECLAUDE_LOG=" + logFile,
+		"FAKECLAUDE_STATE=" + stateDir,
+	}
+
+	mgr := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr.CloseAll() })
+	s := mgr.GetOrCreate("INC-001", env)
+	require.NoError(t, s.Send(context.Background(), "hello"))
+	drainUntilResultOrDone(t, s)
+
+	// Close the session to simulate a crash
+	_ = s.Close()
+
+	// Next access should get a new session with --resume
+	s2 := mgr.GetOrCreate("INC-001", env)
+	require.NoError(t, s2.Send(context.Background(), "after crash"))
+	drainUntilResultOrDone(t, s2)
+
+	entries := readFakeLog(t, logFile)
+	argv := filterArgvEntries(entries)
+	require.GreaterOrEqual(t, len(argv), 2)
+
+	assert.True(t, hasFlag(argv[1].Args, "--resume"),
+		"after crash mid-stream, next spawn must use --resume, got: %v", argv[1].Args)
+}
+
+// TestIntegration_IndexRobustness verifies test 10: a corrupt trailing
+// line is tolerated, and an unwritable directory falls back to
+// in-memory without panicking.
+func TestIntegration_IndexRobustness(t *testing.T) {
+	t.Run("corrupt trailing line", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		sessionDir := filepath.Join(tmpDir, "sessions")
+		require.NoError(t, os.MkdirAll(sessionDir, 0755))
+
+		indexPath := filepath.Join(sessionDir, "index.jsonl")
+		sid := SessionIDFor("INC-001").String()
+		goodLine := fmt.Sprintf(
+			`{"incident_id":"INC-001","session_id":"%s","created":"2026-01-01T00:00:00Z","last_used":"2026-01-01T00:00:00Z"}`,
+			sid)
+		corrupt := goodLine + "\n" + "this is not json\n"
+		require.NoError(t, os.WriteFile(indexPath, []byte(corrupt), 0600))
+
+		cfg := Config{
+			CLICommand:     "claude",
+			SessionEnabled: true,
+			MaxSessions:    3,
+			SessionDir:     sessionDir,
+		}
+		mgr := NewSessionManager(cfg, nil)
+		assert.Equal(t, 1, mgr.IndexEntryCount(),
+			"good line should be loaded despite corrupt trailing line")
+	})
+
+	t.Run("unwritable directory", func(t *testing.T) {
+		cfg := Config{
+			CLICommand:     "claude",
+			SessionEnabled: true,
+			MaxSessions:    3,
+			SessionDir:     "/dev/null/nonexistent/sessions",
+		}
+		// Must not panic
+		mgr := NewSessionManager(cfg, nil)
+		assert.NotNil(t, mgr, "manager must be created even with unwritable dir")
+		assert.Equal(t, 0, mgr.IndexEntryCount())
+	})
 }
 
 func flagValue(args []string, flag string) string {

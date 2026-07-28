@@ -1828,7 +1828,7 @@ func TestChatMode_BareAgentEntersChatMode(t *testing.T) {
 	assert.True(t, updated.chatMode, "bare :agent should enter chat mode")
 }
 
-func TestChatMode_AgentWithQueryEntersChatMode(t *testing.T) {
+func TestChatMode_AgentWithQueryFiresAndReturns(t *testing.T) {
 	m := createTestModelWithSelectedIncident()
 	m.input = newTextInput()
 	m.input.SetValue(":agent hello")
@@ -1837,7 +1837,7 @@ func TestChatMode_AgentWithQueryEntersChatMode(t *testing.T) {
 	updated, ok := result.(model)
 	require.True(t, ok)
 
-	assert.True(t, updated.chatMode, ":agent with query should enter chat mode")
+	assert.False(t, updated.chatMode, ":agent with query must NOT enter chat mode (fire-and-return)")
 	assert.NotNil(t, cmd, "should dispatch a claudePromptMsg command")
 }
 
@@ -1921,14 +1921,12 @@ func TestCloseAgentSessions_CallsCloseAll(t *testing.T) {
 	assert.Error(t, err, "session should be closed after CloseAgentSessions")
 }
 
-func TestResolveAgentSessionEnabled_DefaultFalse(t *testing.T) {
-	// B3: when the key is unset, the resolver must return false
-	// (session persistence is not yet implemented).
+func TestResolveAgentSessionEnabled_DefaultTrue(t *testing.T) {
 	viper.Reset()
 	defer viper.Reset()
 
 	result := resolveAgentSessionEnabled()
-	assert.False(t, result, "unset agent_session_enabled must default to false")
+	assert.True(t, result, "unset agent_session_enabled must default to true")
 }
 
 func TestResolveAgentSessionEnabled_ExplicitTrue(t *testing.T) {
