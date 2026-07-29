@@ -157,6 +157,37 @@ Both methods had zero callers anywhere in the codebase. They were written
 speculatively during the initial implementation and never wired. Deleted.
 `deadcode ./...` would have caught these immediately.
 
+### Index/store divergence: "Session ID already in use" (PR #416)
+
+Reproduced live: running `srepd --dev` with `:agent <query>` produced
+`Error: Session ID ... is already in use.` with no recovery. The session
+was permanently dead for that incident because `SessionIDFor` is
+deterministic — every retry rebuilt the same UUID and hit the same wall.
+
+**Root cause:** srepd's index and Claude Code's session store can
+disagree. The index says "never seen" (use `--session-id`); Claude Code
+says "already exists" (rejects duplicate). Real triggers: index file
+deleted or corrupted while Claude Code's store persists, XDG_CONFIG_HOME
+changes between runs, session created by something other than this srepd
+instance, or index write failure after session establishment.
+
+**The fix:** `spawn()` now detects immediate child exit with "already in
+use" on stderr and retries once with `--resume` on the same session ID.
+On success, `onEstablished` writes the index entry so subsequent spawns
+go straight to `--resume`. At most one retry — if `--resume` also fails,
+the error surfaces as before.
+
+**The lesson — a third false-green shape:** the fake claude harness
+faithfully modelled the "already in use" rejection (`exit 1`, stderr
+error, no result line). `TestIntegration_DuplicateSessionID` honestly
+asserted that an Error event was surfaced without hanging. The fixture
+was faithful, the test was honest, and the behaviour it locked in was
+still wrong — because the test asserted **graceful failure** without
+anyone asking whether failure was **correct**. The semantically right
+move was always to `--resume`, since "already in use" means a real
+session exists. Plan 412 did not anticipate index/store divergence; this
+recovery path was added after live testing found it.
+
 ## Key files changed
 
 | File | Change |
