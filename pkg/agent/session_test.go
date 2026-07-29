@@ -624,7 +624,10 @@ func TestSession_CloseNoSpuriousError(t *testing.T) {
 				<-ctx.Done()
 				_ = pw.Close()
 			}()
-			return &mockStdin{}, pr, &bytes.Buffer{}, func() error { return waitErr }, nil
+			return &mockStdin{}, pr, &bytes.Buffer{}, func() error {
+				<-ctx.Done()
+				return waitErr
+			}, nil
 		},
 	}
 

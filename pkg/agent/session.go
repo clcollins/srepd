@@ -122,6 +122,29 @@ func (e *execStreamExecutor) Start(ctx context.Context, name string, args []stri
 	return stdin, stdout, &stderrBuf, cmd.Wait, nil
 }
 
+// prefixedReadCloser prepends a consumed peek byte to the underlying
+// reader. Used by spawn's event-driven detection: we read one byte to
+// confirm the child is alive, then reconstruct the full stream for readLoop.
+type prefixedReadCloser struct {
+	prefix []byte
+	inner  io.ReadCloser
+	done   bool
+}
+
+func (p *prefixedReadCloser) Read(buf []byte) (int, error) {
+	if !p.done {
+		n := copy(buf, p.prefix)
+		p.prefix = p.prefix[n:]
+		if len(p.prefix) == 0 {
+			p.done = true
+		}
+		return n, nil
+	}
+	return p.inner.Read(buf)
+}
+
+func (p *prefixedReadCloser) Close() error { return p.inner.Close() }
+
 // writeRequest is a request to write data to the child's stdin.
 type writeRequest struct {
 	data []byte
@@ -267,18 +290,26 @@ func (s *Session) spawn(ctx context.Context) error {
 
 	waitFn := wait
 
-	// When spawning with --session-id (not --resume), briefly check for
-	// immediate process exit. If the child rejects the ID with "Session
-	// ID already in use" (index/store divergence), retry once with
-	// --resume — the session exists, so resume is the correct flag.
+	// When spawning with --session-id (not --resume), detect duplicate-ID
+	// rejection by racing first stdout output against process exit.
+	// On success the child writes system/init to stdout immediately.
+	// On duplicate-ID rejection the child exits non-zero with no stdout.
+	// This is event-driven: no timer, no delay on the happy path.
 	if !s.resumed {
 		exitCh := make(chan error, 1)
 		go func() { exitCh <- wait() }()
 
-		timer := time.NewTimer(100 * time.Millisecond)
+		peekBuf := make([]byte, 1)
+		peekResult := make(chan error, 1)
+		go func() {
+			_, err := io.ReadFull(stdout, peekBuf)
+			peekResult <- err
+		}()
+
 		select {
 		case exitErr := <-exitCh:
-			timer.Stop()
+			_ = stdout.Close() // unblock peek goroutine; real exec.Wait already closes pipes
+			<-peekResult
 			if exitErr != nil && stderrBuf != nil &&
 				strings.Contains(stderrBuf.String(), "already in use") {
 				cancel()
@@ -288,9 +319,23 @@ func (s *Session) spawn(ctx context.Context) error {
 				s.resumed = true
 				return s.spawn(ctx)
 			}
-			// Other immediate failure — re-queue for readLoop.
 			exitCh <- exitErr
-		case <-timer.C:
+		case peekErr := <-peekResult:
+			if peekErr != nil {
+				exitErr := <-exitCh
+				if exitErr != nil && stderrBuf != nil &&
+					strings.Contains(stderrBuf.String(), "already in use") {
+					cancel()
+					log.Info("agent.session.spawn",
+						"msg", "session ID already in use, retrying with --resume",
+						"session_id", s.id.String())
+					s.resumed = true
+					return s.spawn(ctx)
+				}
+				exitCh <- exitErr
+			} else {
+				stdout = &prefixedReadCloser{prefix: peekBuf[:1], inner: stdout}
+			}
 		}
 
 		waitFn = func() error { return <-exitCh }
