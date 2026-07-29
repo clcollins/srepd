@@ -308,16 +308,22 @@ func (s *Session) spawn(ctx context.Context) error {
 
 		select {
 		case exitErr := <-exitCh:
-			_ = stdout.Close() // unblock peek goroutine; real exec.Wait already closes pipes
-			<-peekResult
-			if exitErr != nil && stderrBuf != nil &&
-				strings.Contains(stderrBuf.String(), "already in use") {
-				cancel()
-				log.Info("agent.session.spawn",
-					"msg", "session ID already in use, retrying with --resume",
-					"session_id", s.id.String())
-				s.resumed = true
-				return s.spawn(ctx)
+			if exitErr != nil {
+				_ = stdout.Close() // unblock peek goroutine; real exec.Wait already closes pipes
+				<-peekResult
+				if stderrBuf != nil &&
+					strings.Contains(stderrBuf.String(), "already in use") {
+					cancel()
+					log.Info("agent.session.spawn",
+						"msg", "session ID already in use, retrying with --resume",
+						"session_id", s.id.String())
+					s.resumed = true
+					return s.spawn(ctx)
+				}
+			} else {
+				if peekErr := <-peekResult; peekErr == nil {
+					stdout = &prefixedReadCloser{prefix: peekBuf[:1], inner: stdout}
+				}
 			}
 			exitCh <- exitErr
 		case peekErr := <-peekResult:
