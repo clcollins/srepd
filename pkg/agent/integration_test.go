@@ -841,6 +841,175 @@ func TestIndex_NoDuplicateOnReEstablish(t *testing.T) {
 		"restart after bounded index must still use --resume, got: %v", argv[0].Args)
 }
 
+// TestIntegration_SessionIDInUse_RetryResume is the headline test for
+// "session ID already in use" recovery (PR #416). When the index is
+// empty but Claude Code's store already has the session, spawn detects
+// the duplicate-session-id rejection and retries with --resume.
+//
+// This test is committed FAILING before the recovery code exists.
+func TestIntegration_SessionIDInUse_RetryResume(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "log.jsonl")
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+	sessionDir := filepath.Join(tmpDir, "config", "sessions")
+
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+		SessionDir:     sessionDir,
+	}
+
+	sid := SessionIDFor("INC-001").String()
+
+	// Pre-create the state file to simulate an already-used session ID
+	// (index/store divergence: srepd's index is empty, Claude Code's
+	// session store has the session).
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, sid), []byte("used"), 0644))
+
+	env := []string{
+		"FAKECLAUDE_LOG=" + logFile,
+		"FAKECLAUDE_STATE=" + stateDir,
+	}
+
+	mgr := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr.CloseAll() })
+	s := mgr.GetOrCreate("INC-001", env)
+
+	// Send must succeed transparently — the recovery is internal.
+	err := s.Send(context.Background(), "hello")
+	require.NoError(t, err, "Send must succeed after session-ID-in-use recovery")
+
+	drainUntilResultOrDone(t, s)
+
+	entries := readFakeLog(t, logFile)
+	argv := filterArgvEntries(entries)
+	require.GreaterOrEqual(t, len(argv), 2,
+		"need at least 2 argv entries (first --session-id, then --resume), got %d", len(argv))
+
+	assert.True(t, hasFlag(argv[0].Args, "--session-id"),
+		"first spawn must use --session-id, got: %v", argv[0].Args)
+	assert.True(t, hasFlag(argv[1].Args, "--resume"),
+		"second spawn (retry) must use --resume, got: %v", argv[1].Args)
+
+	// The index must now have an entry for INC-001.
+	indexPath := filepath.Join(sessionDir, "index.jsonl")
+	assert.FileExists(t, indexPath,
+		"index.jsonl must exist after successful recovery")
+}
+
+// TestIntegration_SessionIDInUse_NoInfiniteRetry verifies that at most
+// one retry occurs: if both --session-id and --resume fail, the error is
+// surfaced with exactly two spawn attempts.
+func TestIntegration_SessionIDInUse_NoInfiniteRetry(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "log.jsonl")
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+
+	// Script: reject_resume ensures the --resume retry also fails.
+	scriptFile := filepath.Join(tmpDir, "script.json")
+	require.NoError(t, os.WriteFile(scriptFile,
+		[]byte(`{"reject_resume":true}`), 0644))
+
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+	}
+
+	sid := SessionIDFor("INC-001").String()
+
+	// Pre-create state file so --session-id triggers "already in use"
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, sid), []byte("used"), 0644))
+
+	env := []string{
+		"FAKECLAUDE_LOG=" + logFile,
+		"FAKECLAUDE_STATE=" + stateDir,
+		"FAKECLAUDE_SCRIPT=" + scriptFile,
+	}
+
+	mgr := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr.CloseAll() })
+	s := mgr.GetOrCreate("INC-001", env)
+
+	// Send will fail — both attempts are rejected.
+	_ = s.Send(context.Background(), "hello")
+
+	// Wait for the session to finish (readLoop exits).
+	select {
+	case <-s.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for session to finish")
+	}
+
+	entries := readFakeLog(t, logFile)
+	argv := filterArgvEntries(entries)
+	require.Len(t, argv, 2,
+		"must have exactly 2 spawn attempts (--session-id then --resume), got %d", len(argv))
+
+	assert.True(t, hasFlag(argv[0].Args, "--session-id"),
+		"first spawn must use --session-id, got: %v", argv[0].Args)
+	assert.True(t, hasFlag(argv[1].Args, "--resume"),
+		"second spawn must use --resume, got: %v", argv[1].Args)
+}
+
+// TestIntegration_OtherFailure_NoRetry verifies that failures other
+// than "session ID already in use" do NOT trigger the resume retry.
+func TestIntegration_OtherFailure_NoRetry(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "log.jsonl")
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+
+	// crash_before_init: exits 1 with no stderr "already in use" message
+	scriptFile := filepath.Join(tmpDir, "script.json")
+	require.NoError(t, os.WriteFile(scriptFile,
+		[]byte(`{"crash_before_init":true}`), 0644))
+
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+	}
+
+	env := []string{
+		"FAKECLAUDE_LOG=" + logFile,
+		"FAKECLAUDE_STATE=" + stateDir,
+		"FAKECLAUDE_SCRIPT=" + scriptFile,
+	}
+
+	mgr := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr.CloseAll() })
+	s := mgr.GetOrCreate("INC-001", env)
+
+	_ = s.Send(context.Background(), "hello")
+
+	select {
+	case <-s.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for crashed session")
+	}
+
+	entries := readFakeLog(t, logFile)
+	argv := filterArgvEntries(entries)
+	assert.Equal(t, 1, len(argv),
+		"non-'already in use' failure must NOT trigger retry — got %d spawn attempts", len(argv))
+}
+
 func countNonEmptyLines(s string) int {
 	count := 0
 	for _, line := range strings.Split(s, "\n") {

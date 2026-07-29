@@ -22,6 +22,7 @@ import (
 type script struct {
 	Turns           [][]json.RawMessage `json:"turns"`
 	CrashBeforeInit bool                `json:"crash_before_init"`
+	RejectResume    bool                `json:"reject_resume"`
 }
 
 type logEntry struct {
@@ -79,6 +80,10 @@ func main() {
 	}
 
 	if resumeID != "" {
+		if s.RejectResume {
+			fmt.Fprintf(os.Stderr, "Error: Session %s resume rejected by script.\n", resumeID)
+			os.Exit(1)
+		}
 		id = resumeID
 		if stateDir != "" {
 			statePath := filepath.Join(stateDir, resumeID)
