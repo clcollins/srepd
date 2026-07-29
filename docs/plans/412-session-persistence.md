@@ -188,6 +188,42 @@ move was always to `--resume`, since "already in use" means a real
 session exists. Plan 412 did not anticipate index/store divergence; this
 recovery path was added after live testing found it.
 
+### Timer-based detection was logically correct but never fired (fourth false-green shape)
+
+The session-ID-in-use recovery added in the previous round worked correctly
+in every test: `spawn()` waited 100ms for an immediate child exit, detected
+"already in use" on stderr, and retried with `--resume`. The logic was
+sound, the tests were thorough, and CI was green.
+
+**It never fired in production.** The real `claude` CLI (2.1.220) takes
+352–411ms to reject a duplicate session ID — measured three times. The 100ms
+timer always won the race, the spawn was treated as successful, and the
+rejection surfaced later as a raw `agent session error: exit status 1`.
+
+**Why every test passed:** the fake claude harness exited instantly on a
+duplicate ID. The fixture was faithful in *content* (same exit code, same
+stderr message, same absence of a result line) and wrong in *timing* (0ms
+vs ~400ms). This is a **fourth distinct false-green shape** for the
+retrospective:
+
+1. PR #414: pure functions called by nothing (dead code)
+2. PR #414 validation: Claude Code's project memory masquerading as srepd
+   persistence (confounder)
+3. PR #416 (prior round): test asserted graceful failure without asking
+   whether failure was correct (wrong specification)
+4. PR #416 (this round): fixture accurate in what it says, inaccurate in
+   when it says it (timing fidelity)
+
+**The fix:** replaced the fixed timer with an event-driven approach — race
+the first stdout byte against process exit. The child writes `system/init`
+on success (detected instantly), or exits non-zero on rejection (detected
+whenever it happens, no timing assumption). Happy path has zero delay.
+
+**The lesson:** fixtures must be faithful in timing, not only in content.
+`FAKECLAUDE_REJECT_DELAY_MS` now defaults to 400ms, matching the measured
+real CLI. The timing-faithful test fails with the old 100ms timer and
+passes with the event-driven fix (verified via revert check).
+
 ## Key files changed
 
 | File | Change |
