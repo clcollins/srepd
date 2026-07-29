@@ -330,8 +330,13 @@ func TestIntegration_CrashBeforeInit(t *testing.T) {
 }
 
 // TestIntegration_DuplicateSessionID verifies V1: when the fake exits
-// with code 1 and no result line (duplicate session-id), an Error event
-// is surfaced and no hang occurs.
+// with code 1 and "Session ID already in use" on stderr, spawn retries
+// with --resume and the session recovers transparently.
+//
+// Updated for PR #416: prior to the recovery fix, this test asserted
+// that an Error event was surfaced. With recovery, the session is
+// self-healed and Send succeeds. The no-recovery case (both attempts
+// fail) is covered by TestIntegration_SessionIDInUse_NoInfiniteRetry.
 func TestIntegration_DuplicateSessionID(t *testing.T) {
 	if fakeBinaryPath == "" {
 		t.Skip("fake claude binary not built")
@@ -362,30 +367,21 @@ func TestIntegration_DuplicateSessionID(t *testing.T) {
 	t.Cleanup(func() { mgr.CloseAll() })
 	s := mgr.GetOrCreate("INC-001", env)
 
-	// Send will spawn, the fake will exit 1 with no result
-	_ = s.Send(context.Background(), "hello")
+	// Send recovers transparently via retry with --resume.
+	err := s.Send(context.Background(), "hello")
+	require.NoError(t, err, "Send must succeed after session-ID-in-use recovery")
 
-	// Must receive an Error event (not hang)
-	timeout := time.After(5 * time.Second)
-	var sawError bool
-	for {
-		select {
-		case ev, ok := <-s.Events():
-			if !ok {
-				goto done
-			}
-			if ev.Kind == Error {
-				sawError = true
-				goto done
-			}
-		case <-s.Done():
-			goto done
-		case <-timeout:
-			t.Fatal("timed out — code waiting for result line would hang here")
-		}
-	}
-done:
-	assert.True(t, sawError, "duplicate session-id must surface an Error event")
+	drainUntilResultOrDone(t, s)
+
+	entries := readFakeLog(t, logFile)
+	argv := filterArgvEntries(entries)
+	require.GreaterOrEqual(t, len(argv), 2,
+		"need at least 2 argv entries (--session-id then --resume)")
+
+	assert.True(t, hasFlag(argv[0].Args, "--session-id"),
+		"first spawn must use --session-id, got: %v", argv[0].Args)
+	assert.True(t, hasFlag(argv[1].Args, "--resume"),
+		"second spawn (recovery) must use --resume, got: %v", argv[1].Args)
 }
 
 // TestIntegration_LRUEvictionResume verifies that an evicted incident's

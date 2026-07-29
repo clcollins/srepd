@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -88,35 +89,37 @@ func ValidateUserFlags(tokens []string) error {
 
 // StreamCommandExecutor abstracts spawning a long-lived process with
 // stdin/stdout pipes. The real implementation uses os/exec; tests inject
-// a mock.
+// a mock. stderr is captured into a buffer for error detection (e.g.
+// "Session ID already in use" recovery).
 type StreamCommandExecutor interface {
-	Start(ctx context.Context, name string, args []string, env []string) (stdin io.WriteCloser, stdout io.ReadCloser, wait func() error, err error)
+	Start(ctx context.Context, name string, args []string, env []string) (stdin io.WriteCloser, stdout io.ReadCloser, stderr *bytes.Buffer, wait func() error, err error)
 }
 
 // execStreamExecutor is the default implementation using os/exec.
 type execStreamExecutor struct{}
 
-func (e *execStreamExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+func (e *execStreamExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = env
-	cmd.Stderr = os.Stderr
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	cmd.WaitDelay = 2 * time.Second
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("stdin pipe: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("stdin pipe: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = stdin.Close()
-		return nil, nil, nil, fmt.Errorf("stdout pipe: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
 		_ = stdout.Close()
-		return nil, nil, nil, fmt.Errorf("start: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("start: %w", err)
 	}
-	return stdin, stdout, cmd.Wait, nil
+	return stdin, stdout, &stderrBuf, cmd.Wait, nil
 }
 
 // writeRequest is a request to write data to the child's stdin.
@@ -255,21 +258,52 @@ func (s *Session) spawn(ctx context.Context) error {
 	}
 
 	spawnCtx, cancel := context.WithCancel(s.lifecycleCtx)
-	s.ctx = spawnCtx
-	s.cancel = cancel
 
-	stdin, stdout, wait, err := s.exec.Start(spawnCtx, binPath, args, s.env)
+	stdin, stdout, stderrBuf, wait, err := s.exec.Start(spawnCtx, binPath, args, s.env)
 	if err != nil {
 		cancel()
 		return fmt.Errorf("spawn session: %w", err)
 	}
 
+	waitFn := wait
+
+	// When spawning with --session-id (not --resume), briefly check for
+	// immediate process exit. If the child rejects the ID with "Session
+	// ID already in use" (index/store divergence), retry once with
+	// --resume — the session exists, so resume is the correct flag.
+	if !s.resumed {
+		exitCh := make(chan error, 1)
+		go func() { exitCh <- wait() }()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case exitErr := <-exitCh:
+			timer.Stop()
+			if exitErr != nil && stderrBuf != nil &&
+				strings.Contains(stderrBuf.String(), "already in use") {
+				cancel()
+				log.Info("agent.session.spawn",
+					"msg", "session ID already in use, retrying with --resume",
+					"session_id", s.id.String())
+				s.resumed = true
+				return s.spawn(ctx)
+			}
+			// Other immediate failure — re-queue for readLoop.
+			exitCh <- exitErr
+		case <-timer.C:
+		}
+
+		waitFn = func() error { return <-exitCh }
+	}
+
+	s.ctx = spawnCtx
+	s.cancel = cancel
 	s.stdin = stdin
 	s.writeCh = make(chan writeRequest)
 	s.spawned = true
 
 	go s.writeLoop(stdin, spawnCtx)
-	go s.readLoop(stdout, wait)
+	go s.readLoop(stdout, waitFn)
 	return nil
 }
 
