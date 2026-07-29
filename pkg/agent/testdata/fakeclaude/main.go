@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 )
 
 type script struct {
@@ -71,6 +73,17 @@ func main() {
 	if sessionID != "" && stateDir != "" {
 		statePath := filepath.Join(stateDir, sessionID)
 		if _, err := os.Stat(statePath); err == nil {
+			// Simulate real CLI rejection timing (measured: 352–411ms against
+			// claude 2.1.220). Default 400ms; override with FAKECLAUDE_REJECT_DELAY_MS.
+			delayMs := 400
+			if v := os.Getenv("FAKECLAUDE_REJECT_DELAY_MS"); v != "" {
+				if parsed, err := strconv.Atoi(v); err == nil && parsed >= 0 {
+					delayMs = parsed
+				}
+			}
+			if delayMs > 0 {
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
+			}
 			// Verified: duplicate session-id → exit 1, stderr, NO result line
 			fmt.Fprintf(os.Stderr, "Error: Session ID %s is already in use.\n", sessionID)
 			os.Exit(1)

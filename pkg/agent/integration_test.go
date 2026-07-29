@@ -1006,6 +1006,44 @@ func TestIntegration_OtherFailure_NoRetry(t *testing.T) {
 		"non-'already in use' failure must NOT trigger retry — got %d spawn attempts", len(argv))
 }
 
+// TestIntegration_HappyPathNotDelayed guards against "just raise the
+// timeout" fixes: a successful first spawn must complete well under the
+// rejection delay. The fake has no delay on the success path, so Send
+// returning in < 200ms proves the detection mechanism is event-driven.
+func TestIntegration_HappyPathNotDelayed(t *testing.T) {
+	if fakeBinaryPath == "" {
+		t.Skip("fake claude binary not built")
+	}
+
+	tmpDir := t.TempDir()
+	stateDir := filepath.Join(tmpDir, "state")
+	require.NoError(t, os.MkdirAll(stateDir, 0755))
+
+	cfg := Config{
+		CLICommand:     fakeBinaryPath,
+		SessionEnabled: true,
+		MaxSessions:    3,
+	}
+
+	env := []string{
+		"FAKECLAUDE_STATE=" + stateDir,
+	}
+
+	mgr := NewSessionManager(cfg, nil)
+	t.Cleanup(func() { mgr.CloseAll() })
+	s := mgr.GetOrCreate("INC-HAPPY", env)
+
+	start := time.Now()
+	err := s.Send(context.Background(), "hello")
+	elapsed := time.Since(start)
+
+	require.NoError(t, err, "happy-path Send must succeed")
+	assert.Less(t, elapsed, 200*time.Millisecond,
+		"happy-path Send took %v — detection mechanism must not delay success", elapsed)
+
+	drainUntilResultOrDone(t, s)
+}
+
 func countNonEmptyLines(s string) int {
 	count := 0
 	for _, line := range strings.Split(s, "\n") {
