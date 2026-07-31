@@ -833,7 +833,6 @@ func switchInputFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				if query == "" {
 					return m.enterChatMode()
 				}
-				m.enterChatModeState()
 				return m, func() tea.Msg {
 					return claudePromptMsg{prompt: query}
 				}

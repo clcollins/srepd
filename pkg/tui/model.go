@@ -188,6 +188,7 @@ type model struct {
 	agentSessionEnabled   bool
 	agentSessionMgr       *agent.SessionManager
 	agentSessionSentFirst map[string]bool // tracks first message per incident for context injection
+	agentSessionInitSeen  bool            // suppresses duplicate Init marker from subprocess
 
 	// Chat mode: focused pane for interactive agent conversation
 	chatMode          bool
@@ -317,7 +318,7 @@ func resolveStreamResponses() bool {
 
 func resolveAgentSessionEnabled() bool {
 	if !viper.IsSet("agent_session_enabled") {
-		return false
+		return true
 	}
 	return viper.GetBool("agent_session_enabled")
 }
@@ -328,6 +329,18 @@ func resolveAgentMaxSessions() int {
 		return 3
 	}
 	return n
+}
+
+func resolveSessionDir() string {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(dir, "srepd", "sessions")
 }
 
 func resolveAgentAllowedTools() []string {
@@ -453,6 +466,7 @@ func InitialModel(
 			MaxSessions:    resolveAgentMaxSessions(),
 			AllowedTools:   resolveAgentAllowedTools(),
 			PermissionMode: viper.GetString("agent_permission_mode"),
+			SessionDir:     resolveSessionDir(),
 		}
 		m.agentSessionMgr = agent.NewSessionManager(cfg, nil)
 	}
@@ -588,6 +602,7 @@ func InitialModelWithConfig(
 			MaxSessions:    resolveAgentMaxSessions(),
 			AllowedTools:   resolveAgentAllowedTools(),
 			PermissionMode: viper.GetString("agent_permission_mode"),
+			SessionDir:     resolveSessionDir(),
 		}
 		m.agentSessionMgr = agent.NewSessionManager(agentCfg, nil)
 	}

@@ -88,7 +88,7 @@ func ChatModeEntries() []KeyBindingEntry {
 func InputCommandEntries() []InputCommandEntry {
 	return []InputCommandEntry{
 		{Command: ":agent", Description: "open chat mode"},
-		{Command: ":agent <query>", Description: "ask Claude AI"},
+		{Command: ":agent <query>", Description: "ask Claude AI (fire-and-return)"},
 		{Command: ":watcher <query>", Description: "query AI watcher"},
 		{Command: ":flag cluster <id>", Description: "flag incidents by cluster ID"},
 		{Command: ":flag org <pattern>", Description: "flag incidents by org name"},

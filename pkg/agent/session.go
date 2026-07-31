@@ -2,11 +2,13 @@ package agent
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -36,10 +38,41 @@ var deniedFlags = []string{
 	"--output-format",
 }
 
-// validateUserFlags checks that none of the user-supplied tokens
+// ClaudeArgs extracts the arguments intended for the Claude CLI binary by
+// scanning backwards for the last token whose basename is "claude" and
+// returning everything after it. The backward scan exists so that wrapper
+// commands work transparently — e.g. ["toolbox", "run", "-c", "devtools",
+// "claude", "--print"] returns ["--print"]; toolbox's own "-c" is not
+// validated against the denied-flags list.
+//
+// Known limitation: if the wrapper itself passes a flag whose value is a
+// path ending in "claude", the scan anchors on that path token instead of
+// the real binary. For example:
+//
+//	["toolbox", "run", "claude", "--bare", "/usr/bin/claude"]
+//
+// Here the last "claude" basename is /usr/bin/claude, so ClaudeArgs returns
+// [] and "--bare" is never validated. This is a user-footgun in their own
+// agent_cli_command config, not an attacker vector (the config is already
+// user-owned and user-writable). A stricter parser that rejects such
+// configs would break legitimate wrapper commands, which is the worse
+// failure mode.
+func ClaudeArgs(fields []string) []string {
+	for i := len(fields) - 1; i >= 0; i-- {
+		if filepath.Base(fields[i]) == "claude" {
+			return fields[i+1:]
+		}
+	}
+	if len(fields) > 1 {
+		return fields[1:]
+	}
+	return nil
+}
+
+// ValidateUserFlags checks that none of the user-supplied tokens
 // from agent_cli_command contain a denied flag. It handles both
 // --flag value and --flag=value forms.
-func validateUserFlags(tokens []string) error {
+func ValidateUserFlags(tokens []string) error {
 	for _, tok := range tokens {
 		flag := tok
 		if idx := strings.Index(tok, "="); idx > 0 {
@@ -56,35 +89,66 @@ func validateUserFlags(tokens []string) error {
 
 // StreamCommandExecutor abstracts spawning a long-lived process with
 // stdin/stdout pipes. The real implementation uses os/exec; tests inject
-// a mock.
+// a mock. stderr is captured into a buffer for error detection (e.g.
+// "Session ID already in use" recovery).
 type StreamCommandExecutor interface {
-	Start(ctx context.Context, name string, args []string, env []string) (stdin io.WriteCloser, stdout io.ReadCloser, wait func() error, err error)
+	Start(ctx context.Context, name string, args []string, env []string) (stdin io.WriteCloser, stdout io.ReadCloser, stderr *bytes.Buffer, wait func() error, err error)
 }
 
 // execStreamExecutor is the default implementation using os/exec.
 type execStreamExecutor struct{}
 
-func (e *execStreamExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+func (e *execStreamExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = env
-	cmd.Stderr = os.Stderr
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	cmd.WaitDelay = 2 * time.Second
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("stdin pipe: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("stdin pipe: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = stdin.Close()
-		return nil, nil, nil, fmt.Errorf("stdout pipe: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
 		_ = stdout.Close()
-		return nil, nil, nil, fmt.Errorf("start: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("start: %w", err)
 	}
-	return stdin, stdout, cmd.Wait, nil
+	return stdin, stdout, &stderrBuf, cmd.Wait, nil
+}
+
+// prefixedReadCloser prepends a consumed peek byte to the underlying
+// reader. Used by spawn's event-driven detection: we read one byte to
+// confirm the child is alive, then reconstruct the full stream for readLoop.
+type prefixedReadCloser struct {
+	prefix []byte
+	inner  io.ReadCloser
+	done   bool
+}
+
+func (p *prefixedReadCloser) Read(buf []byte) (int, error) {
+	if !p.done {
+		n := copy(buf, p.prefix)
+		p.prefix = p.prefix[n:]
+		if len(p.prefix) == 0 {
+			p.done = true
+		}
+		return n, nil
+	}
+	return p.inner.Read(buf)
+}
+
+func (p *prefixedReadCloser) Close() error { return p.inner.Close() }
+
+// writeRequest is a request to write data to the child's stdin.
+type writeRequest struct {
+	data []byte
+	err  chan<- error
 }
 
 // Session manages one long-lived Claude Code process. It spawns the
@@ -97,20 +161,24 @@ type Session struct {
 	exec       StreamCommandExecutor
 	env        []string
 
-	mu       sync.Mutex
-	spawned  bool
-	resumed  bool
-	closing  bool // set by Close() before killing child, suppresses exit error
-	ctx      context.Context
-	cancel   context.CancelFunc
-	stdin    io.WriteCloser
-	events   chan Event
-	done     chan struct{}
-	doneOnce sync.Once
-	closed   bool
-	err      error
+	mu           sync.Mutex
+	spawned      bool
+	resumed      bool
+	closing      bool            // set by Close() before killing child, suppresses exit error
+	lifecycleCtx context.Context // parent for spawnCtx; outlives any single Send call
+	ctx          context.Context
+	cancel       context.CancelFunc
+	stdin        io.WriteCloser
+	writeCh      chan writeRequest // fed by Send, drained by writeLoop; nil until spawned
+	events       chan Event
+	done         chan struct{}
+	doneOnce     sync.Once
+	closed       bool
+	err          error
 
 	useStreamEvents bool
+
+	onEstablished func() // called once when system/init is received
 }
 
 // NewSession creates a Session for the given incident. The process is
@@ -118,24 +186,15 @@ type Session struct {
 func NewSession(cfg Config, incidentID string, executor StreamCommandExecutor, env []string) *Session {
 	sid := SessionIDFor(incidentID)
 	return &Session{
-		cfg:        cfg,
-		id:         sid,
-		incidentID: incidentID,
-		exec:       executor,
-		env:        env,
-		events:     make(chan Event, 128),
-		done:       make(chan struct{}),
+		cfg:          cfg,
+		id:           sid,
+		incidentID:   incidentID,
+		exec:         executor,
+		env:          env,
+		lifecycleCtx: context.Background(),
+		events:       make(chan Event, 128),
+		done:         make(chan struct{}),
 	}
-}
-
-// ID returns the session's UUID.
-func (s *Session) ID() uuid.UUID {
-	return s.id
-}
-
-// IncidentID returns the incident this session is bound to.
-func (s *Session) IncidentID() string {
-	return s.incidentID
 }
 
 // Events returns the channel from which the TUI reads parsed events.
@@ -152,41 +211,55 @@ func (s *Session) Done() <-chan struct{} {
 // spawns (or resumes) the Claude Code process.
 func (s *Session) Send(ctx context.Context, text string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.closed {
+		s.mu.Unlock()
 		return fmt.Errorf("session closed")
 	}
 
 	if !s.spawned {
 		if err := s.spawn(ctx); err != nil {
+			s.mu.Unlock()
 			return err
 		}
 	}
 
 	data, err := EncodeUserTurn(text)
 	if err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("encode user turn: %w", err)
 	}
 
 	if err := ctx.Err(); err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("context cancelled before write: %w", err)
 	}
 
-	writeDone := make(chan error, 1)
-	go func() {
-		_, werr := s.stdin.Write(data)
-		writeDone <- werr
-	}()
+	writeCh := s.writeCh
+	lifecycleDone := s.ctx.Done()
+	s.mu.Unlock()
+
+	errCh := make(chan error, 1)
+	req := writeRequest{data: data, err: errCh}
 
 	select {
-	case werr := <-writeDone:
+	case writeCh <- req:
+	case <-ctx.Done():
+		return fmt.Errorf("context cancelled during write: %w", ctx.Err())
+	case <-lifecycleDone:
+		return fmt.Errorf("session closing")
+	}
+
+	select {
+	case werr := <-errCh:
 		if werr != nil {
 			return fmt.Errorf("write to stdin: %w", werr)
 		}
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled during write: %w", ctx.Err())
+	case <-lifecycleDone:
+		return fmt.Errorf("session closing")
 	}
 }
 
@@ -198,10 +271,8 @@ func (s *Session) spawn(ctx context.Context) error {
 	}
 	binPath := fields[0]
 
-	if len(fields) > 1 {
-		if err := validateUserFlags(fields[1:]); err != nil {
-			return err
-		}
+	if err := ValidateUserFlags(ClaudeArgs(fields)); err != nil {
+		return err
 	}
 
 	args := BuildSpawnArgs(s.cfg, s.id, s.resumed)
@@ -209,21 +280,100 @@ func (s *Session) spawn(ctx context.Context) error {
 		args = append(fields[1:], args...)
 	}
 
-	spawnCtx, cancel := context.WithCancel(ctx)
-	s.ctx = spawnCtx
-	s.cancel = cancel
+	spawnCtx, cancel := context.WithCancel(s.lifecycleCtx)
 
-	stdin, stdout, wait, err := s.exec.Start(spawnCtx, binPath, args, s.env)
+	stdin, stdout, stderrBuf, wait, err := s.exec.Start(spawnCtx, binPath, args, s.env)
 	if err != nil {
 		cancel()
 		return fmt.Errorf("spawn session: %w", err)
 	}
 
+	waitFn := wait
+
+	// When spawning with --session-id (not --resume), detect duplicate-ID
+	// rejection by racing first stdout output against process exit.
+	// On success the child writes system/init to stdout immediately.
+	// On duplicate-ID rejection the child exits non-zero with no stdout.
+	// This is event-driven: no timer, no delay on the happy path.
+	if !s.resumed {
+		exitCh := make(chan error, 1)
+		go func() { exitCh <- wait() }()
+
+		peekBuf := make([]byte, 1)
+		peekResult := make(chan error, 1)
+		go func() {
+			_, err := io.ReadFull(stdout, peekBuf)
+			peekResult <- err
+		}()
+
+		select {
+		case exitErr := <-exitCh:
+			if exitErr != nil {
+				_ = stdout.Close() // unblock peek goroutine; real exec.Wait already closes pipes
+				<-peekResult
+				if stderrBuf != nil &&
+					strings.Contains(stderrBuf.String(), "already in use") {
+					cancel()
+					log.Info("agent.session.spawn",
+						"msg", "session ID already in use, retrying with --resume",
+						"session_id", s.id.String())
+					s.resumed = true
+					return s.spawn(ctx)
+				}
+			} else {
+				if peekErr := <-peekResult; peekErr == nil {
+					stdout = &prefixedReadCloser{prefix: peekBuf[:1], inner: stdout}
+				}
+			}
+			exitCh <- exitErr
+		case peekErr := <-peekResult:
+			if peekErr != nil {
+				exitErr := <-exitCh
+				if exitErr != nil && stderrBuf != nil &&
+					strings.Contains(stderrBuf.String(), "already in use") {
+					cancel()
+					log.Info("agent.session.spawn",
+						"msg", "session ID already in use, retrying with --resume",
+						"session_id", s.id.String())
+					s.resumed = true
+					return s.spawn(ctx)
+				}
+				exitCh <- exitErr
+			} else {
+				stdout = &prefixedReadCloser{prefix: peekBuf[:1], inner: stdout}
+			}
+		}
+
+		waitFn = func() error { return <-exitCh }
+	}
+
+	s.ctx = spawnCtx
+	s.cancel = cancel
 	s.stdin = stdin
+	s.writeCh = make(chan writeRequest)
 	s.spawned = true
 
-	go s.readLoop(stdout, wait)
+	go s.writeLoop(stdin, spawnCtx)
+	go s.readLoop(stdout, waitFn)
 	return nil
+}
+
+// writeLoop drains writeRequests and writes them to stdin. A single
+// goroutine per session prevents leaked goroutines when Send times out.
+// stdin and ctx are captured by value to avoid racing with Close.
+func (s *Session) writeLoop(stdin io.WriteCloser, ctx context.Context) {
+	for {
+		select {
+		case req, ok := <-s.writeCh:
+			if !ok {
+				return
+			}
+			_, err := stdin.Write(req.data)
+			req.err <- err
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
@@ -259,6 +409,11 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 		}
 
 		for _, ev := range events {
+			if ev.Kind == Init && s.onEstablished != nil {
+				s.onEstablished()
+				s.onEstablished = nil
+			}
+
 			if ev.Kind == TextDelta && !ev.Consolidated && !s.useStreamEvents {
 				s.useStreamEvents = true
 			}
@@ -300,6 +455,8 @@ func (s *Session) Close() error {
 		_ = s.stdin.Close()
 		s.stdin = nil
 	}
+	// writeCh is not closed here — writeLoop exits via context cancellation
+	// (s.cancel() above). Closing writeCh would race with Send's select.
 
 	if !s.spawned {
 		s.doneOnce.Do(func() { close(s.done) })
@@ -313,16 +470,21 @@ func (s *Session) Close() error {
 // When a session is evicted, a new Session value is created on next
 // access with resumed=true, avoiding races with the old readLoop.
 type SessionManager struct {
-	mu       sync.Mutex
-	sessions map[string]*Session
-	evicted  map[string]bool // incidents that were evicted and need --resume
-	order    []string        // LRU order: oldest first
-	maxLive  int
-	cfg      Config
-	exec     StreamCommandExecutor
+	mu        sync.Mutex
+	sessions  map[string]*Session
+	evicted   map[string]bool // incidents that were evicted and need --resume
+	order     []string        // LRU order: oldest first
+	maxLive   int
+	cfg       Config
+	exec      StreamCommandExecutor
+	index     *sessionIndex
+	ctx       context.Context    // cancelled by CloseAll; parent for all session spawnCtx
+	ctxCancel context.CancelFunc // cancels ctx
 }
 
 // NewSessionManager creates a SessionManager with the given config.
+// If cfg.SessionDir is non-empty, the manager loads the session index
+// from disk and persists new session establishments to it.
 func NewSessionManager(cfg Config, executor StreamCommandExecutor) *SessionManager {
 	if executor == nil {
 		executor = &execStreamExecutor{}
@@ -331,12 +493,16 @@ func NewSessionManager(cfg Config, executor StreamCommandExecutor) *SessionManag
 	if max <= 0 {
 		max = 3
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SessionManager{
-		sessions: make(map[string]*Session),
-		evicted:  make(map[string]bool),
-		maxLive:  max,
-		cfg:      cfg,
-		exec:     executor,
+		sessions:  make(map[string]*Session),
+		evicted:   make(map[string]bool),
+		maxLive:   max,
+		cfg:       cfg,
+		exec:      executor,
+		index:     newSessionIndex(cfg.SessionDir),
+		ctx:       ctx,
+		ctxCancel: cancel,
 	}
 }
 
@@ -380,9 +546,17 @@ func (m *SessionManager) GetOrCreate(incidentID string, env []string) *Session {
 	}
 
 	s := NewSession(m.cfg, incidentID, m.exec, env)
-	if m.evicted[incidentID] {
+	s.lifecycleCtx = m.ctx
+	if m.evicted[incidentID] || m.index.has(incidentID) {
 		s.resumed = true
 	}
+
+	idx := m.index
+	sid := s.id
+	s.onEstablished = func() {
+		idx.record(incidentID, sid)
+	}
+
 	m.sessions[incidentID] = s
 	m.order = append(m.order, incidentID)
 	return s
@@ -403,6 +577,9 @@ func (m *SessionManager) CloseAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.ctxCancel != nil {
+		m.ctxCancel()
+	}
 	for _, s := range m.sessions {
 		_ = s.Close()
 	}

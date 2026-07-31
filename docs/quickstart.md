@@ -46,7 +46,7 @@
 | Command | Action |
 |---------|--------|
 | :agent | open chat mode |
-| :agent <query> | ask Claude AI |
+| :agent <query> | ask Claude AI (fire-and-return) |
 | :watcher <query> | query AI watcher |
 | :flag cluster <id> | flag incidents by cluster ID |
 | :flag org <pattern> | flag incidents by org name |

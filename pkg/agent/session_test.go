@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -62,11 +63,11 @@ func newMockStreamExecutor(output string) *mockStreamExecutor {
 	}
 }
 
-func (m *mockStreamExecutor) Start(_ context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+func (m *mockStreamExecutor) Start(_ context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.started = true
-	return m.stdin, m.stdout, m.wait, nil
+	return m.stdin, m.stdout, &bytes.Buffer{}, m.wait, nil
 }
 
 func TestSession_SpawnOnFirstSend(t *testing.T) {
@@ -278,11 +279,11 @@ type argCapturingExecutor struct {
 	captured *[]string
 }
 
-func (e *argCapturingExecutor) Start(_ context.Context, _ string, args []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+func (e *argCapturingExecutor) Start(_ context.Context, _ string, args []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 	*e.captured = append([]string{}, args...)
 	stdin := &mockStdin{}
 	stdout := io.NopCloser(strings.NewReader(e.output))
-	return stdin, stdout, func() error { return nil }, nil
+	return stdin, stdout, &bytes.Buffer{}, func() error { return nil }, nil
 }
 
 func TestSession_Close(t *testing.T) {
@@ -331,6 +332,8 @@ func TestSessionManager_LRUEviction(t *testing.T) {
 	cfg := Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 2}
 
 	sessions := make(map[string]*mockStreamExecutor)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	mgr := &SessionManager{
 		sessions: make(map[string]*Session),
 		evicted:  make(map[string]bool),
@@ -342,6 +345,9 @@ func TestSessionManager_LRUEviction(t *testing.T) {
 			},
 			sessions: sessions,
 		},
+		index:     newSessionIndex(""),
+		ctx:       ctx,
+		ctxCancel: cancel,
 	}
 
 	s1 := mgr.GetOrCreate("INC-001", nil)
@@ -367,7 +373,7 @@ type delegatingExecutor struct {
 	sessions map[string]*mockStreamExecutor
 }
 
-func (d *delegatingExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+func (d *delegatingExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	m := d.create()
@@ -379,6 +385,8 @@ func TestSessionManager_EvictionNoRace(t *testing.T) {
 	// Run with -race to verify.
 	cfg := Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 1}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	mgr := &SessionManager{
 		sessions: make(map[string]*Session),
 		evicted:  make(map[string]bool),
@@ -393,6 +401,9 @@ func TestSessionManager_EvictionNoRace(t *testing.T) {
 			},
 			sessions: make(map[string]*mockStreamExecutor),
 		},
+		index:     newSessionIndex(""),
+		ctx:       ctx,
+		ctxCancel: cancel,
 	}
 
 	// Create and send on INC-001
@@ -608,12 +619,15 @@ func TestSession_CloseNoSpuriousError(t *testing.T) {
 	pr, pw := io.Pipe()
 	waitErr := fmt.Errorf("signal: killed")
 	executor := &callbackExecutor{
-		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 			go func() {
 				<-ctx.Done()
 				_ = pw.Close()
 			}()
-			return &mockStdin{}, pr, func() error { return waitErr }, nil
+			return &mockStdin{}, pr, &bytes.Buffer{}, func() error {
+				<-ctx.Done()
+				return waitErr
+			}, nil
 		},
 	}
 
@@ -667,14 +681,14 @@ func TestSessionManager_CrashedSessionReplaced(t *testing.T) {
 	var spawnCount int
 	var lastArgs []string
 	exec := &callbackExecutor{
-		startFn: func(_ context.Context, _ string, args []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+		startFn: func(_ context.Context, _ string, args []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 			spawnCount++
 			lastArgs = append([]string{}, args...)
 			stdin := &mockStdin{}
 			output := `{"type":"system","subtype":"init","session_id":"test"}` + "\n" +
 				`{"type":"result","subtype":"success","session_id":"test","result":"ok","is_error":false}` + "\n"
 			stdout := io.NopCloser(strings.NewReader(output))
-			return stdin, stdout, func() error { return nil }, nil
+			return stdin, stdout, &bytes.Buffer{}, func() error { return nil }, nil
 		},
 	}
 
@@ -712,11 +726,106 @@ func TestSessionManager_CrashedSessionReplaced(t *testing.T) {
 
 // callbackExecutor delegates Start to a function for flexible test setups.
 type callbackExecutor struct {
-	startFn func(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error)
+	startFn func(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error)
 }
 
-func (e *callbackExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+func (e *callbackExecutor) Start(ctx context.Context, name string, args []string, env []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 	return e.startFn(ctx, name, args, env)
+}
+
+// hungWriter accepts the first write, then blocks all subsequent writes
+// until Close is called.
+type hungWriter struct {
+	mu      sync.Mutex
+	first   bool
+	closeCh chan struct{}
+}
+
+func newHungWriter() *hungWriter {
+	return &hungWriter{first: true, closeCh: make(chan struct{})}
+}
+
+func (w *hungWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	if w.first {
+		w.first = false
+		w.mu.Unlock()
+		return len(p), nil
+	}
+	w.mu.Unlock()
+	<-w.closeCh
+	return 0, io.ErrClosedPipe
+}
+
+func (w *hungWriter) Close() error {
+	select {
+	case <-w.closeCh:
+	default:
+		close(w.closeCh)
+	}
+	return nil
+}
+
+// FIX 2: Write goroutine must not leak per timed-out Send.
+// A single writer goroutine should be reused across Send calls.
+func TestSession_WriteGoroutineDoesNotLeak(t *testing.T) {
+	hw := newHungWriter()
+	executor := &callbackExecutor{
+		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
+			stdoutR, stdoutW := io.Pipe()
+			go func() {
+				_, _ = stdoutW.Write([]byte(`{"type":"system","subtype":"init","session_id":"test"}` + "\n"))
+				<-ctx.Done()
+				_ = stdoutW.Close()
+			}()
+			return hw, stdoutR, &bytes.Buffer{}, func() error {
+				<-ctx.Done()
+				return fmt.Errorf("signal: killed")
+			}, nil
+		},
+	}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", executor, nil)
+	t.Cleanup(func() { _ = s.Close() })
+
+	// First send spawns the process (first write succeeds)
+	err := s.Send(context.Background(), "hello")
+	require.NoError(t, err)
+
+	// Wait for init
+	select {
+	case ev := <-s.Events():
+		require.Equal(t, Init, ev.Kind)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Init")
+	}
+
+	// Settle goroutines
+	time.Sleep(100 * time.Millisecond)
+	baseline := runtime.NumGoroutine()
+
+	// Issue several sends that will time out (child not draining stdin)
+	for i := 0; i < 5; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		_ = s.Send(ctx, fmt.Sprintf("message %d", i))
+		cancel()
+	}
+
+	// Wait for goroutines to settle
+	time.Sleep(200 * time.Millisecond)
+	after := runtime.NumGoroutine()
+
+	// With the fix (single writer goroutine), count should not grow per send.
+	assert.LessOrEqual(t, after, baseline+2,
+		"goroutine count grew from %d to %d — write goroutines are leaking", baseline, after)
+
+	// Close must release everything
+	require.NoError(t, s.Close())
+	time.Sleep(300 * time.Millisecond)
+	final := runtime.NumGoroutine()
+	assert.Less(t, final, baseline+2,
+		"goroutines not released after Close: %d (baseline was %d)", final, baseline)
 }
 
 // S1: Test that Send() honors context cancellation.
@@ -774,7 +883,183 @@ type customStdinExecutor struct {
 	output string
 }
 
-func (e *customStdinExecutor) Start(_ context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, func() error, error) {
+func (e *customStdinExecutor) Start(_ context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
 	stdout := io.NopCloser(strings.NewReader(e.output))
-	return e.stdin, stdout, func() error { return nil }, nil
+	return e.stdin, stdout, &bytes.Buffer{}, func() error { return nil }, nil
+}
+
+// contextAwareExecutor implements StreamCommandExecutor and RESPECTS
+// context cancellation, mimicking exec.CommandContext. When the context
+// passed to Start is cancelled, stdout closes and wait() returns with
+// an error — just like a real killed subprocess.
+//
+// Unlike mockStreamExecutor and argCapturingExecutor, this executor
+// does NOT discard the context. It exists specifically to test the
+// bug where spawn derived the subprocess lifetime from the caller's
+// Send context: a mock that ignores context cannot detect that bug.
+type contextAwareExecutor struct {
+	initOutput string
+}
+
+func (e *contextAwareExecutor) Start(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
+	stdin := &mockStdin{}
+	pr, pw := io.Pipe()
+
+	go func() {
+		_, _ = pw.Write([]byte(e.initOutput))
+		<-ctx.Done()
+		_ = pw.Close()
+	}()
+
+	return stdin, pr, &bytes.Buffer{}, func() error {
+		<-ctx.Done()
+		return fmt.Errorf("signal: killed")
+	}, nil
+}
+
+// C1 headline regression test: the caller's Send context must not
+// kill the subprocess. Before the fix, spawn derived spawnCtx from
+// the caller's context; cancelling it cascaded into the child.
+func TestSession_CallerCancelDoesNotKillProcess(t *testing.T) {
+	initOutput := `{"type":"system","subtype":"init","session_id":"test"}` + "\n"
+	exec := &contextAwareExecutor{initOutput: initOutput}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", exec, nil)
+	t.Cleanup(func() { _ = s.Close() })
+
+	callerCtx, callerCancel := context.WithCancel(context.Background())
+	err := s.Send(callerCtx, "hello")
+	require.NoError(t, err)
+
+	// Wait for Init event to confirm process is running
+	select {
+	case ev := <-s.Events():
+		require.Equal(t, Init, ev.Kind)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Init")
+	}
+
+	// Cancel the caller context — simulates defer cancel() in startAgentSession
+	callerCancel()
+	time.Sleep(200 * time.Millisecond)
+
+	// Session must still be alive
+	select {
+	case <-s.Done():
+		t.Fatal("session must still be alive after caller context cancel")
+	default:
+	}
+
+	s.mu.Lock()
+	assert.False(t, s.closed, "session must not be closed by caller cancel")
+	s.mu.Unlock()
+
+	// A second Send with a fresh context must succeed
+	err = s.Send(context.Background(), "second message")
+	assert.NoError(t, err, "second Send must succeed after caller cancel")
+}
+
+// N4: Send(context.Background()) against a non-draining child must not
+// prevent Close() from returning promptly. Before the fix, Send held
+// s.mu across a blocking select, so Close() would block on the lock.
+func TestSession_SendDoesNotBlockClose(t *testing.T) {
+	pr, pw := io.Pipe()
+	hw := newHungWriter() // first write succeeds, subsequent writes block until Close
+	executor := &callbackExecutor{
+		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
+			go func() {
+				_, _ = pw.Write([]byte(`{"type":"system","subtype":"init","session_id":"test"}` + "\n"))
+				<-ctx.Done()
+				_ = pw.Close()
+			}()
+			return hw, pr, &bytes.Buffer{}, func() error {
+				<-ctx.Done()
+				return fmt.Errorf("signal: killed")
+			}, nil
+		},
+	}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", executor, nil)
+
+	// First send spawns the process (first write to hungWriter succeeds)
+	require.NoError(t, s.Send(context.Background(), "hello"))
+
+	// Wait for Init
+	select {
+	case ev := <-s.Events():
+		require.Equal(t, Init, ev.Kind)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Init")
+	}
+
+	// Launch a Send(context.Background()) that will block because the
+	// hungWriter's second write blocks and the writeLoop can't drain writeCh
+	sendDone := make(chan struct{})
+	go func() {
+		_ = s.Send(context.Background(), "this will block")
+		close(sendDone)
+	}()
+	// Give the goroutine time to enter the blocking select
+	time.Sleep(100 * time.Millisecond)
+
+	// Close must return promptly, not be blocked by Send holding the lock
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- s.Close()
+	}()
+
+	select {
+	case err := <-closeDone:
+		assert.NoError(t, err, "Close must succeed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() blocked — Send holds s.mu across blocking select")
+	}
+
+	// The blocked Send should also unblock (lifecycle context cancelled by Close)
+	select {
+	case <-sendDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocked Send did not unblock after Close")
+	}
+}
+
+// C1 reaping test: CloseAll must still terminate children after the
+// fix. This proves the process is not made immortal by decoupling
+// from the caller context.
+func TestSessionManager_CloseAllReapsChildren(t *testing.T) {
+	initOutput := `{"type":"system","subtype":"init","session_id":"test"}` + "\n"
+	exec := &contextAwareExecutor{initOutput: initOutput}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true, MaxSessions: 3}
+	mgr := NewSessionManager(cfg, exec)
+
+	s1 := mgr.GetOrCreate("INC-001", nil)
+	require.NoError(t, s1.Send(context.Background(), "hello"))
+
+	s2 := mgr.GetOrCreate("INC-002", nil)
+	require.NoError(t, s2.Send(context.Background(), "world"))
+
+	// Wait for both to receive Init
+	for i, s := range []*Session{s1, s2} {
+		select {
+		case ev := <-s.Events():
+			require.Equal(t, Init, ev.Kind, "session %d", i)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("session %d: timed out waiting for Init", i)
+		}
+	}
+
+	// CloseAll must terminate all children
+	mgr.CloseAll()
+
+	// Both sessions' Done() must close
+	for i, s := range []*Session{s1, s2} {
+		select {
+		case <-s.Done():
+		case <-time.After(3 * time.Second):
+			t.Fatalf("session %d: Done() must close after CloseAll", i)
+		}
+	}
 }

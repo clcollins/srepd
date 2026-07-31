@@ -169,6 +169,9 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	if _, err := lookPath(binary); err != nil {
 		return m, m.flashNotification(fmt.Sprintf("agent CLI %q not found on PATH", binary))
 	}
+	if err := agent.ValidateUserFlags(agent.ClaudeArgs(fields)); err != nil {
+		return m, m.flashNotification(err.Error())
+	}
 
 	incidentID := ""
 	if m.selectedIncident != nil {
@@ -191,6 +194,7 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 	// Session path: persistent per-incident sessions via stream-json
 	if m.agentSessionEnabled && isClaudeCLI(agentCmd) && m.agentSessionMgr != nil {
 		m.agentStreamPartial = ""
+		m.agentSessionInitSeen = false
 		isFirst := m.agentSessionMgr != nil && !m.agentSessionSentFirst[incidentID]
 		return m, tea.Batch(
 			m.spinner.Tick,
@@ -239,6 +243,10 @@ func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea
 
 	switch ev.Kind {
 	case agent.Init:
+		if m.agentSessionInitSeen {
+			return m, readAgentSessionCmd(msg.session)
+		}
+		m.agentSessionInitSeen = true
 		m.agentStreamPartial = ""
 		m.watcherBuffer.Append(prefixLines(m.agentMarker, ""))
 		m.updateWatcherViewport()
@@ -453,7 +461,9 @@ func startAgentSession(mgr *agent.SessionManager, incidentID string, systemPromp
 			fullPrompt += "\n\nContext:\n" + incidentContext
 		}
 
-		if err := s.Send(context.Background(), fullPrompt); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.Send(ctx, fullPrompt); err != nil {
 			return agentSessionDoneMsg{err: err}
 		}
 		return agentSessionEventMsg{event: agent.Event{Kind: agent.Init}, session: s, firstSendOK: isFirstMessage, incidentID: incidentID}

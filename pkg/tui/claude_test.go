@@ -999,6 +999,77 @@ func TestAgentStreamDoneMsg_CanceledIsSilent(t *testing.T) {
 	assert.Nil(t, updated.err, "canceled stream must not set the error view")
 }
 
+// FIX 1: Denied flags must be rejected on ALL spawn paths, not just sessions.
+// This table test covers the session path, streaming path, and blocking path,
+// plus both --flag value and --flag=value forms.
+func TestHandleClaudePrompt_RejectsDeniedFlagsAllPaths(t *testing.T) {
+	paths := []struct {
+		name    string
+		setupFn func(m *model)
+	}{
+		{
+			"session path",
+			func(m *model) {
+				m.agentSessionEnabled = true
+				cfg := agent.Config{CLICommand: "claude --bare", SessionEnabled: true, MaxSessions: 3}
+				m.agentSessionMgr = agent.NewSessionManager(cfg, nil)
+				m.agentSessionSentFirst = make(map[string]bool)
+			},
+		},
+		{
+			"streaming path",
+			func(m *model) {
+				m.streamResponses = true
+			},
+		},
+		{
+			"blocking path",
+			func(m *model) {
+				// Default config — no session, no streaming
+			},
+		},
+	}
+
+	flags := []struct {
+		name       string
+		cliCommand string
+		wantFlag   string
+	}{
+		{"--bare flag", "claude --bare", "--bare"},
+		{"--bare=true", "claude --bare=true", "--bare"},
+		{"--dangerously-skip-permissions", "claude --dangerously-skip-permissions", "--dangerously-skip-permissions"},
+		{"--session-id override", "claude --session-id abc", "--session-id"},
+		{"--session-id=value", "claude --session-id=abc", "--session-id"},
+		{"--output-format override", "claude --output-format text", "--output-format"},
+		{"denied flag mid-args", "claude --model opus --bare --verbose", "--bare"},
+	}
+
+	for _, path := range paths {
+		for _, flag := range flags {
+			t.Run(path.name+"/"+flag.name, func(t *testing.T) {
+				m := createTestModel()
+				m.agentCLICommand = flag.cliCommand
+				m.selectedIncident = &pagerduty.Incident{
+					APIObject: pagerduty.APIObject{ID: "INC-TEST"},
+				}
+				path.setupFn(&m)
+
+				msg := claudePromptMsg{prompt: "hello"}
+				result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+					return "/usr/bin/" + s, nil
+				})
+				updated := result.(model)
+
+				assert.False(t, updated.claudeQuerying,
+					"denied flag %q must prevent query dispatch on %s", flag.wantFlag, path.name)
+				assert.NotNil(t, cmd, "must return a notification command")
+				assert.Contains(t, updated.status, flag.wantFlag,
+					"status must name the denied flag")
+			})
+		}
+	}
+}
+
 // M4: Failed first send must not permanently lose context injection.
 // agentSessionSentFirst must only be set after a SUCCESSFUL send.
 func TestHandleClaudePrompt_ContextInjectionNotLostOnFailedFirstSend(t *testing.T) {
@@ -1039,4 +1110,35 @@ func TestHandleClaudePrompt_ContextInjectionNotLostOnFailedFirstSend(t *testing.
 	afterSuccess := successResult.(model)
 	assert.True(t, afterSuccess.agentSessionSentFirst["INC-TEST"],
 		"flag must be set after a successful first send")
+}
+
+// TestHandleAgentSessionEvent_InitOnce verifies that two Init events
+// (the synthetic one from startAgentSession and the real one from the
+// subprocess) produce only one marker line in the watcher buffer.
+func TestHandleAgentSessionEvent_InitOnce(t *testing.T) {
+	m := sizedTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.claudeQuerying = true
+	m.agentSessionInitSeen = false
+
+	// First Init (synthetic, from startAgentSession return)
+	result1, _ := m.handleAgentSessionEvent(agentSessionEventMsg{
+		event:      agent.Event{Kind: agent.Init},
+		incidentID: "INC-001",
+	})
+	m1 := result1.(model)
+	assert.Equal(t, 1, m1.watcherBuffer.Len(),
+		"first Init must produce exactly one marker line")
+	assert.True(t, m1.agentSessionInitSeen,
+		"agentSessionInitSeen must be set after first Init")
+
+	// Second Init (real, from subprocess via readAgentSessionCmd)
+	result2, _ := m1.handleAgentSessionEvent(agentSessionEventMsg{
+		event:      agent.Event{Kind: agent.Init},
+		incidentID: "INC-001",
+	})
+	m2 := result2.(model)
+	assert.Equal(t, 1, m2.watcherBuffer.Len(),
+		"second Init must NOT add another marker line — would cause cosmetic double blank")
 }

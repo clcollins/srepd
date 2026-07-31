@@ -53,10 +53,10 @@ instead of one-shot subprocess invocation. This means:
   is suspended and resumed transparently via `--resume` on next access.
 - **Markdown rendering** via glamour is applied to the final agent response.
 
-**Default: `false`.** Per-incident session persistence and restart-resume are
-not yet implemented. The flag flips to `true` in the PR that lands them with
-passing tests. While `false`, the CLI path behaves as the pre-existing
-one-shot flow.
+**Default: `true`.** Session metadata (incident ID, session UUID, timestamps)
+is stored locally in `~/.config/srepd/sessions/index.jsonl` (XDG-aware). No
+query content or responses are persisted by srepd — only the mapping needed to
+resume sessions. Set `agent_session_enabled: false` to revert to one-shot mode.
 
 Non-Claude CLIs fall back to the one-shot blocking path automatically.
 
@@ -72,10 +72,12 @@ Dispatches a query to the configured CLI agent subprocess. The agent command is 
 :agent what oc commands should I run?
 ```
 
+`:agent <query>` dispatches the query and returns to the incident queue
+immediately (fire-and-return). The response appears in the watcher pane.
+
 Bare `:agent` (no query) opens **chat mode**: a focused pane for interactive
 conversation with the agent. Type messages and press `Enter` to send; `Esc`
-returns to the incident queue. `:agent <query>` is a shortcut that opens chat
-mode and sends the query in one step.
+returns to the incident queue.
 
 When a background session produces output while you are not in chat mode, the
 status bar shows `[agent has new output]`. Entering chat mode clears the badge.
@@ -152,7 +154,7 @@ Context is pulled from the incident cache (populated by the OCM enrichment pipel
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `agent_session_enabled` | `false` | Use persistent per-incident sessions (Claude Code only). Default false — session persistence not yet implemented; flips to true when per-incident resume lands. |
+| `agent_session_enabled` | `true` | Use persistent per-incident sessions (Claude Code only). Session metadata is stored locally in `~/.config/srepd/sessions/index.jsonl` (XDG-aware). Set to `false` for one-shot mode. |
 | `agent_max_sessions` | `3` | Max live Claude Code processes before LRU eviction |
 | `agent_allowed_tools` | (empty) | Comma-separated Claude Code tool allowlist (e.g. `Bash,Read`) |
 | `agent_permission_mode` | (empty) | Passed as `--permission-mode` to Claude Code |
@@ -213,9 +215,14 @@ A countdown timer is shown in the footer during active queries.
 
 When using a remote provider (`anthropic`, `openai` pointed at a cloud endpoint), incident data including titles, service names, alert names, and cluster IDs is sent over the network. Use a local provider (`ollama`, `ramalama`) to keep all data on your machine.
 
-With persistent sessions enabled, Claude Code maintains session state in its
-own storage (`~/.claude/`). Session transcripts may contain incident context
-from prior queries. This data is local to your machine but persists across
-srepd restarts. Claude Code sessions are tied to your Anthropic account.
+With persistent sessions enabled (`agent_session_enabled: true`, the default),
+srepd writes a session index to `~/.config/srepd/sessions/index.jsonl`
+(XDG_CONFIG_HOME-aware). Each line records an incident ID, session UUID, and
+timestamps — no query content or responses. This file is created `0600` inside
+a `0700` directory. Delete it to clear session history; srepd will recreate it
+on next use. Claude Code additionally maintains its own session state in
+`~/.claude/`, which may contain incident context from prior queries. Both
+stores are local to your machine but persist across srepd restarts. Claude Code
+sessions are tied to your Anthropic account.
 
 See [LLM Providers](llm-providers.md) for provider setup details.
