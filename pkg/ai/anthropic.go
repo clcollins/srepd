@@ -50,6 +50,10 @@ func (p *anthropicProvider) Name() string {
 	return p.name
 }
 
+func (p *anthropicProvider) Model() string {
+	return p.model
+}
+
 // SupportsStreaming reports that this provider streams tokens via StreamQuery.
 func (p *anthropicProvider) SupportsStreaming() bool { return true }
 
@@ -84,6 +88,11 @@ func (p *anthropicProvider) Query(ctx context.Context, systemPrompt string, user
 	}
 
 	return result.String(), nil
+}
+
+// BetaMessages returns the Beta Messages service for tool runner construction.
+func (p *anthropicProvider) BetaMessages() *anthropic.BetaMessageService {
+	return &p.client.Beta.Messages
 }
 
 func (p *anthropicProvider) StreamQuery(ctx context.Context, systemPrompt string, userPrompt string, ch chan<- string) error {

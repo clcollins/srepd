@@ -22,6 +22,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/ai/tools"
 	"github.com/clcollins/srepd/pkg/alert"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
@@ -703,6 +704,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.aiHealth = aiHealthOK
 		m.watcherBuffer.Append("")
 		return m, m.startTypewriter(m.watcherMarker, msg.response)
+
+	case investigationMsg:
+		m.watcherAnalyzing = false
+		if msg.err != nil {
+			log.Debug("investigation", "error", msg.err)
+			log.Warn("investigation", "error", ai.ClassifyProviderError(msg.err))
+			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
+			m.updateWatcherViewport()
+			return m, nil
+		}
+		if !m.watcherExpanded {
+			m.watcherExpanded = true
+			m.recomputeLayout()
+		}
+		switch msg.verdict.Tier {
+		case tools.TierSilent:
+			log.Debug("investigation.silent", "observation", msg.observation, "summary", msg.verdict.Summary)
+		case tools.TierNoteworthy:
+			m.watcherBuffer.Append("")
+			return m, m.startTypewriter(m.watcherMarker, msg.verdict.Summary)
+		case tools.TierActionable:
+			m.watcherBuffer.Append("")
+			if msg.verdict.Action != "" {
+				ask := m.buildAskFromVerdict(msg.verdict)
+				m.approvals.Add(ask)
+			}
+			return m, m.startTypewriter(m.watcherMarker, msg.verdict.Summary)
+		}
+		m.updateWatcherViewport()
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		return m.windowSizeMsgHandler(msg)

@@ -54,6 +54,7 @@ func KeyBindingEntries() []KeyBindingEntry {
 		{km.TabNext.Help().Key, km.TabNext.Help().Desc},
 		{km.TabPrev.Help().Key, km.TabPrev.Help().Desc},
 		{km.ViewDocs.Help().Key, km.ViewDocs.Help().Desc},
+		{km.Approvals.Help().Key, km.Approvals.Help().Desc},
 	}
 
 	entries := make([]KeyBindingEntry, 0, len(bindings))

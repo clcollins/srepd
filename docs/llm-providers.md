@@ -315,6 +315,21 @@ llm_api:
 1. Install RamaLama: https://github.com/containers/ramalama
 2. Start the server: `ramalama serve --port 8080 granite-code:8b`
 
+## Tool Support
+
+Tool-assisted watcher investigation (Phase 3) requires an Anthropic-family provider. Non-Anthropic providers fall back to synthesis-only analysis automatically.
+
+| Provider | Tool Investigation |
+|----------|--------------------|
+| `anthropic` | Yes |
+| `anthropic-bedrock` | Yes |
+| `anthropic-vertex` | Yes |
+| `ollama` | No (synthesis only) |
+| `openai` | No (synthesis only) |
+| `ramalama` | No (synthesis only) |
+
+See [AI Agents](ai-agents.md) for tool investigation configuration and policy engine details.
+
 ## Privacy Considerations
 
 When using a remote provider (`anthropic`, `openai` pointed at a cloud endpoint), incident data is sent over the network. This includes:

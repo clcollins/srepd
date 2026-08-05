@@ -62,6 +62,7 @@ type keymap struct {
 	TabNext     key.Binding
 	TabPrev     key.Binding
 	ViewDocs    key.Binding
+	Approvals   key.Binding
 }
 
 type inputKeymap struct {
@@ -254,6 +255,10 @@ var defaultKeyMap = keymap{
 	ViewDocs: key.NewBinding(
 		key.WithKeys("ctrl+h"),
 		key.WithHelp("ctrl+h", "docs"),
+	),
+	Approvals: key.NewBinding(
+		key.WithKeys("A"),
+		key.WithHelp("A", "approvals"),
 	),
 }
 

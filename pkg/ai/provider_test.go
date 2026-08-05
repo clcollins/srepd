@@ -65,6 +65,42 @@ func TestSupportsHealthCheck(t *testing.T) {
 	})
 }
 
+func TestResolvedModel(t *testing.T) {
+	t.Run("anthropic provider exposes configured model", func(t *testing.T) {
+		p, err := newAnthropicProvider(Config{Model: "claude-opus-4-20250514"}, "test-key")
+		assert.NoError(t, err)
+		assert.Equal(t, "claude-opus-4-20250514", ResolvedModel(p))
+	})
+
+	t.Run("anthropic provider exposes default model when none configured", func(t *testing.T) {
+		p, err := newAnthropicProvider(Config{}, "test-key")
+		assert.NoError(t, err)
+		assert.Equal(t, anthropicDefaultModel, ResolvedModel(p))
+	})
+
+	t.Run("bedrock provider yields inference-profile ID not bare model", func(t *testing.T) {
+		p, err := newBedrockProvider(Config{})
+		assert.NoError(t, err)
+		assert.Equal(t, bedrockDefaultModel, ResolvedModel(p),
+			"Bedrock default must be the inference-profile ID, not the bare model")
+		assert.Contains(t, ResolvedModel(p), "us.anthropic.",
+			"Bedrock model must be a cross-region inference profile")
+	})
+
+	t.Run("non-ModelReporter provider returns empty", func(t *testing.T) {
+		assert.Equal(t, "", ResolvedModel(nonStreamingProvider{}))
+	})
+
+	t.Run("nil provider returns empty", func(t *testing.T) {
+		assert.Equal(t, "", ResolvedModel(nil))
+	})
+
+	t.Run("mock provider without ModelReporter returns empty", func(t *testing.T) {
+		p := NewMockProvider("mock")
+		assert.Equal(t, "", ResolvedModel(p))
+	})
+}
+
 func TestRealProviders_SupportStreaming(t *testing.T) {
 	// All shipped providers implement real streaming; they must advertise it so the
 	// TUI turns streaming on for them.
