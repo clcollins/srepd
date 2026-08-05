@@ -22,6 +22,8 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/ai/policy"
+	"github.com/clcollins/srepd/pkg/ai/tools"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/clcollins/srepd/pkg/docs"
@@ -172,6 +174,14 @@ type model struct {
 	watcherQueryStart   time.Time
 	watcherQueryTimeout time.Duration
 	typewriter          *typewriterState
+
+	// Tool investigation state (Phase 3 AI rearchitecture)
+	toolRegistry      *tools.Registry
+	toolRunnerFactory ToolRunnerFactory
+	investigationCfg  investigationConfig
+	approvals         *approvalsStrip
+	approvalsExpanded bool
+	toolsLoggedOnce   bool // whether non-Anthropic degradation was logged
 
 	// Live streaming state. When streamResponses is true and the provider supports
 	// streaming, watcher responses are appended token-by-token as they arrive
@@ -343,6 +353,37 @@ func resolveSessionDir() string {
 	return filepath.Join(dir, "srepd", "sessions")
 }
 
+func resolveInvestigationConfig() investigationConfig {
+	cfg := defaultInvestigationConfig()
+	if v := viper.GetInt("watcher_max_tool_turns"); v > 0 {
+		cfg.maxToolTurns = v
+	}
+	if v := viper.GetString("watcher_investigation_timeout"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			cfg.timeout = d
+		}
+	}
+	cfg.policyConfig = resolveAIPermissionConfig()
+	return cfg
+}
+
+func resolveAIPermissionConfig() policy.Config {
+	mode := policy.ModeInteractive
+	switch viper.GetString("ai_permission_mode") {
+	case "plan":
+		mode = policy.ModePlan
+	case "auto":
+		mode = policy.ModeAuto
+	case "custom":
+		mode = policy.ModeCustom
+	}
+	return policy.Config{
+		Mode:                   mode,
+		AutoAllowTools:         viper.GetStringSlice("ai_auto_allow_tools"),
+		AllowedCommandPrefixes: viper.GetStringSlice("ai_allowed_command_prefixes"),
+	}
+}
+
 func resolveAgentAllowedTools() []string {
 	raw := viper.GetStringSlice("agent_allowed_tools")
 	var result []string
@@ -452,6 +493,8 @@ func InitialModel(
 	m.watcherMarker = mk.watcher
 	m.agentMarker = mk.agent
 	m.watcherDedup = newWatcherDedup(5 * time.Minute)
+	m.approvals = newApprovalsStrip()
+	m.investigationCfg = resolveInvestigationConfig()
 	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 	m.reescalateLevel = resolveReescalateLevel()
@@ -496,6 +539,8 @@ func InitialModel(
 		log.Error("InitialModel", "error", err)
 		m.err = err
 	}
+
+	initToolRegistryForModel(&m)
 
 	return m, func() tea.Msg {
 		return errMsg{err}
@@ -588,6 +633,8 @@ func InitialModelWithConfig(
 	m.watcherMarker = mk2.watcher
 	m.agentMarker = mk2.agent
 	m.watcherDedup = newWatcherDedup(5 * time.Minute)
+	m.approvals = newApprovalsStrip()
+	m.investigationCfg = resolveInvestigationConfig()
 	m.agentSystemPrompt = viper.GetString("agent_system_prompt")
 	m.watcherSystemPrompt = viper.GetString("watcher_system_prompt")
 	m.reescalateLevel = resolveReescalateLevel()
@@ -622,6 +669,8 @@ func InitialModelWithConfig(
 	if config == nil {
 		m.err = fmt.Errorf("InitialModelWithConfig: config is nil")
 	}
+
+	initToolRegistryForModel(&m)
 
 	return m, func() tea.Msg {
 		return errMsg{m.err}
@@ -901,4 +950,99 @@ func logFilePathForOS(goos string) string {
 // selected based on the current operating system.
 func defaultLogFilePath() string {
 	return logFilePathForOS(runtime.GOOS)
+}
+
+func (m *model) buildAskFromVerdict(verdict tools.Verdict) Ask {
+	kind := inferAskKind(verdict.Action)
+	ask := Ask{
+		Kind:  kind,
+		Title: verdict.Summary,
+		Body:  verdict.Action,
+	}
+
+	switch kind {
+	case AskDraftNote:
+		noteContent := verdict.Action
+		ask.Action = func() tea.Cmd {
+			return m.postAINoteCmd(noteContent)
+		}
+	case AskSuggestedCommand:
+		cmdText := verdict.Action
+		ask.Action = func() tea.Cmd {
+			return m.copyToClipboardCmd(cmdText)
+		}
+	case AskEscalationSuggestion:
+		ask.Action = func() tea.Cmd {
+			if m.selectedIncident == nil {
+				return func() tea.Msg { return setStatusMsg{"no incident selected for re-escalation"} }
+			}
+			incident := *m.selectedIncident
+			return func() tea.Msg {
+				return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{incident}}
+			}
+		}
+	default:
+		noteContent := verdict.Action
+		ask.Action = func() tea.Cmd {
+			return m.postAINoteCmd(noteContent)
+		}
+	}
+
+	return ask
+}
+
+func (m *model) postAINoteCmd(content string) tea.Cmd {
+	return func() tea.Msg {
+		if m.config == nil || m.config.Client == nil {
+			return errMsg{fmt.Errorf("PagerDuty not configured")}
+		}
+		if m.selectedIncident == nil {
+			return setStatusMsg{"no incident selected for note"}
+		}
+		u, err := pd.GetCurrentUser(m.config.Client)
+		if err != nil {
+			return errMsg{err}
+		}
+		n, err := pd.PostNote(m.config.Client, m.selectedIncident.ID, u, content)
+		return addedIncidentNoteMsg{n, err}
+	}
+}
+
+func (m *model) copyToClipboardCmd(text string) tea.Cmd {
+	return func() tea.Msg {
+		return setStatusMsg{fmt.Sprintf("Suggested command: %s (copy to terminal)", text)}
+	}
+}
+
+func initToolRegistryForModel(m *model) {
+	if m.aiProvider == nil {
+		return
+	}
+	if !isAnthropicFamily(m.aiProvider.Name()) {
+		if !m.toolsLoggedOnce {
+			log.Info("ai.tools", "msg", "tool investigation requires an Anthropic-family provider; falling back to synthesis", "provider", m.aiProvider.Name())
+			m.toolsLoggedOnce = true
+		}
+		return
+	}
+
+	factory := extractToolRunnerFactory(m.aiProvider)
+	if factory == nil {
+		return
+	}
+	m.toolRunnerFactory = factory
+
+	reg := tools.NewRegistry()
+	if m.config != nil && m.config.Client != nil {
+		if err := tools.RegisterPDTools(reg, m.config.Client, m.config); err != nil {
+			log.Warn("ai.tools", "msg", "failed to register PD tools", "error", err)
+		}
+	}
+	if m.ocmClient != nil {
+		if err := tools.RegisterOCMTools(reg, m.ocmClient); err != nil {
+			log.Warn("ai.tools", "msg", "failed to register OCM tools", "error", err)
+		}
+	}
+	m.toolRegistry = reg
+	log.Info("ai.tools", "msg", "tool registry initialized", "tools", len(reg.Tools()))
 }

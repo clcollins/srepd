@@ -33,8 +33,8 @@ SREPD provides two distinct AI surfaces:
 | Surface | Command | Backend | Context | Use Case |
 |---------|---------|---------|---------|----------|
 | **CLI Agent** | `:agent` | Subprocess (`agent_cli_command`) | Stdin + env vars | Interactive investigation with tool access |
-| **LLM Watcher** | `:watcher` | LLM API (`llm_api` provider) | API prompt | Data analysis, pattern synthesis |
-| **Ambient Watcher** | (automatic) | LLM API (`llm_api` provider) | API prompt | Cross-incident pattern detection |
+| **LLM Watcher** | `:watcher` | LLM API (`llm_api` provider) | API prompt | Data analysis, pattern synthesis; tool investigation with Anthropic providers |
+| **Ambient Watcher** | (automatic) | LLM API (`llm_api` provider) | API prompt | Cross-incident pattern detection; tool investigation with Anthropic providers |
 
 Both surfaces share the same incident context via `buildWatcherContext` and display responses in the watcher pane with source-specific markers.
 
@@ -108,6 +108,28 @@ When the watcher pane is active and an LLM provider is configured and healthy, S
 
 When a pattern is detected, the observation is sent to the LLM for natural-language synthesis. If the LLM is unavailable, the raw heuristic text is shown instead. Observations are deduplicated with a 5-minute cooldown.
 
+### Tool-Assisted Investigation
+
+When the configured LLM provider is an Anthropic-family provider (`anthropic`, `anthropic-bedrock`, `anthropic-vertex`), the watcher uses tool-assisted investigation instead of plain synthesis. During investigation, the watcher can call read-only tools to fetch live PagerDuty and OCM data:
+
+| Source | Available Tools |
+|--------|----------------|
+| PagerDuty | `get_incident`, `get_alerts`, `get_notes`, `list_queue` |
+| OCM | `get_cluster_info`, `get_service_logs`, `get_limited_support` |
+
+Investigation is bounded by `watcher_max_tool_turns` (default 6) and `watcher_investigation_timeout` (default 90s). Each investigation round may invoke multiple tools before producing a final synthesis.
+
+The policy engine controls which tools can execute. The `ai_permission_mode` setting determines the mode:
+
+| Mode | Behavior |
+|------|----------|
+| `plan` | Read-only tools only |
+| `interactive` | Read tools allowed automatically; write tools are not executed (deferred to plan 415) |
+| `auto` | Tools on the `ai_auto_allow_tools` allowlist execute without prompting |
+| `custom` | Fully user-defined allowlist via `ai_auto_allow_tools` |
+
+Non-Anthropic providers (`ollama`, `openai`, `ramalama`) do not support tool use and fall back to synthesis-only mode automatically. See [LLM Providers](llm-providers.md) for provider-level tool support details.
+
 ## Watcher Pane
 
 The watcher pane appears below the incident table. Toggle visibility with `w`.
@@ -165,6 +187,16 @@ To disable persistent sessions and use one-shot mode:
 agent_session_enabled: false
 ```
 
+### Tool investigation keys
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `watcher_max_tool_turns` | `6` | Maximum tool-use turns per watcher investigation. Values ≤ 0 are clamped to 6. |
+| `watcher_investigation_timeout` | `90s` | Timeout for a single watcher investigation |
+| `ai_permission_mode` | `interactive` | AI tool policy mode: plan (read-only), interactive (reads allowed, writes ask), auto (per allowlist), custom |
+| `ai_auto_allow_tools` | (empty) | Tool names auto-allowed in auto/custom mode |
+| `ai_allowed_command_prefixes` | (empty) | Command prefixes allowed in auto mode (reserved for phase 415) |
+
 ### System Prompts
 
 Both agents have configurable system prompts:
@@ -206,6 +238,7 @@ Health status is shown in the watcher footer. The `:watcher` command will show a
 |-----------|---------|
 | CLI agent query | 60 seconds |
 | Watcher LLM query | 60 seconds |
+| Watcher tool investigation | 90 seconds (configurable via `watcher_investigation_timeout`) |
 | Ambient synthesis | 30 seconds |
 | Health check | 10 seconds |
 

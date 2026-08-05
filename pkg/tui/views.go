@@ -169,6 +169,16 @@ func (m model) View() string {
 	s.WriteString(helpView)
 	s.WriteString("\n")
 
+	// Add approvals strip above bottom status when asks are pending
+	if m.approvals != nil && m.approvals.Count() > 0 {
+		if m.approvalsExpanded {
+			s.WriteString(m.approvals.RenderExpanded(m.layout.ContentWidth))
+		} else {
+			s.WriteString(m.approvals.Render(m.layout.ContentWidth))
+			s.WriteString("\n")
+		}
+	}
+
 	// Add bottom status line at terminal bottom
 	s.WriteString(m.renderBottomStatus())
 

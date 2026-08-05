@@ -32,6 +32,7 @@
 | tab/→ | next tab |
 | shift+tab/← | prev tab |
 | ctrl+h | docs |
+| A | approvals |
 
 ## Chord Commands (ctrl+x + key)
 

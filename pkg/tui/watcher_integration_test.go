@@ -2,14 +2,22 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/ai/policy"
+	"github.com/clcollins/srepd/pkg/ai/tools"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWatcherToggle(t *testing.T) {
@@ -865,6 +873,112 @@ func TestWatcherSynthesisMsg_SuccessAppendsEmptyLine(t *testing.T) {
 		assert.True(t, updated.watcherBuffer.Len() >= 2,
 			"buffer should have at least 2 entries (prior + empty line)")
 	})
+}
+
+// bedrockProvider is a test-only Provider that implements ModelReporter with a
+// Bedrock inference-profile model ID, and returns an Anthropic-family Name().
+type bedrockProvider struct {
+	model string
+}
+
+func (p *bedrockProvider) Query(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
+func (p *bedrockProvider) StreamQuery(_ context.Context, _, _ string, ch chan<- string) error {
+	close(ch)
+	return nil
+}
+func (p *bedrockProvider) Name() string  { return "anthropic-bedrock" }
+func (p *bedrockProvider) Model() string { return p.model }
+
+// TestRunDetectors_ModelPlumbing exercises runDetectors directly and asserts
+// that the model passed to watcherInvestigateCmd comes from the provider's
+// ResolvedModel — the exact call site of the F1 bug (watcher.go:249).
+func TestRunDetectors_ModelPlumbing(t *testing.T) {
+	const resolvedModel = "us.anthropic.claude-sonnet-4-6"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"id": "msg_rd", "type": "message", "role": "assistant",
+			"model": "claude-sonnet-4-6",
+			"content": []map[string]interface{}{
+				{"type": "text", "text": "Done.\n```json\n{\"tier\": \"silent\", \"summary\": \"ok\"}\n```"},
+			},
+			"stop_reason": "end_turn",
+			"usage":       map[string]int{"input_tokens": 10, "output_tokens": 20},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := anthropic.NewClient(
+		option.WithAPIKey("test-key"),
+		option.WithBaseURL(server.URL),
+	)
+	factory := &capturingFactory{inner: &client.Beta.Messages}
+
+	reg := tools.NewRegistry()
+	require.NoError(t, reg.Register(tools.Tool{
+		Name:        "get_incident",
+		Description: "Get incident details",
+		Class:       policy.ClassRead,
+		Schema:      []byte(`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}`),
+		Handler: func(_ context.Context, _ json.RawMessage) (string, error) {
+			return `{"id":"INC-001"}`, nil
+		},
+	}))
+
+	m := createTestModel()
+	m.aiProvider = &bedrockProvider{model: resolvedModel}
+	m.aiHealth = aiHealthOK
+	m.toolRunnerFactory = factory
+	m.toolRegistry = reg
+	m.investigationCfg = investigationConfig{
+		maxToolTurns: 2,
+		timeout:      5 * time.Second,
+		policyConfig: policy.Config{Mode: policy.ModeInteractive},
+	}
+	m.watcherSystemPrompt = "test system prompt"
+	m.incidentClusterMap = make(map[string][]string)
+
+	// 3 incidents on the same service triggers detectServiceStorm.
+	m.incidentList = []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "P001"}, Service: pagerduty.APIObject{Summary: "svc-a"}, Urgency: "low"},
+		{APIObject: pagerduty.APIObject{ID: "P002"}, Service: pagerduty.APIObject{Summary: "svc-a"}, Urgency: "low"},
+		{APIObject: pagerduty.APIObject{ID: "P003"}, Service: pagerduty.APIObject{Summary: "svc-a"}, Urgency: "low"},
+	}
+
+	cmds := m.runDetectors()
+	require.NotEmpty(t, cmds, "runDetectors must produce commands for a service-storm with a healthy Anthropic provider")
+
+	// Execute the first command to trigger the investigation path.
+	msg := cmds[0]()
+	result, ok := msg.(investigationMsg)
+	require.True(t, ok, "expected investigationMsg, got %T", msg)
+	assert.NoError(t, result.err)
+
+	// The model that reached the runner must be the provider's resolved model.
+	assert.Equal(t, anthropic.Model(resolvedModel), factory.capturedParams.Model,
+		"runDetectors must pass ai.ResolvedModel(provider), not a hardcoded model ID")
+
+	// Explicitly assert it is NOT the bare model ID that the F1 bug hardcoded.
+	assert.NotEqual(t, anthropic.Model("claude-sonnet-4-6"), factory.capturedParams.Model,
+		"the model must be the Bedrock inference-profile ID, not the bare claude-sonnet-4-6")
+
+	// Assert watcherSystemPrompt reached the runner's system blocks.
+	require.NotEmpty(t, factory.capturedParams.System,
+		"system prompt must be plumbed through runDetectors")
+	assert.Contains(t, factory.capturedParams.System[0].Text, "test system prompt",
+		"runDetectors must pass m.watcherSystemPrompt to the investigation")
+
+	// Assert contextStr (from buildWatcherContext) reached the user message.
+	require.NotEmpty(t, factory.capturedParams.Messages,
+		"user message must be plumbed through runDetectors")
+
+	// Assert investigationCfg.maxToolTurns reached the runner's MaxIterations.
+	assert.Equal(t, 2, factory.capturedParams.MaxIterations,
+		"runDetectors must pass m.investigationCfg.maxToolTurns to the runner")
 }
 
 func TestWatcherStreamChunkMsg_FirstTokenSetsHealthOK(t *testing.T) {

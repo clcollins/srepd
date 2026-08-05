@@ -208,6 +208,19 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	}
 
+	// Approvals overlay: when expanded, route keys to the approvals handler
+	if m.approvalsExpanded {
+		return switchApprovalsFocusMode(m, msg)
+	}
+
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Approvals) {
+		if m.approvals != nil && m.approvals.Count() > 0 {
+			m.approvalsExpanded = true
+			return m, nil
+		}
+		return m, m.flashNotification("no pending approvals")
+	}
+
 	// Default commands for the table view
 	switch {
 	case m.tourMode:
@@ -1084,6 +1097,46 @@ func (m *model) enterChatModeState() {
 	m.recomputeLayout()
 	m.updateChatViewport()
 	m.chatViewportGotoBottom()
+}
+
+func switchApprovalsFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, defaultKeyMap.Quit):
+			return m, tea.Quit
+
+		case key.Matches(msg, defaultKeyMap.Back):
+			m.approvalsExpanded = false
+			return m, nil
+
+		case key.Matches(msg, defaultKeyMap.Up):
+			m.approvals.MoveUp()
+			return m, nil
+
+		case key.Matches(msg, defaultKeyMap.Down):
+			m.approvals.MoveDown()
+			return m, nil
+
+		case key.Matches(msg, defaultKeyMap.Enter):
+			cmd := m.approvals.Accept(m.approvals.Selected())
+			if m.approvals.Count() == 0 {
+				m.approvalsExpanded = false
+			}
+			return m, cmd
+
+		default:
+			keyStr := msg.String()
+			if keyStr == "d" {
+				m.approvals.Dismiss(m.approvals.Selected())
+				if m.approvals.Count() == 0 {
+					m.approvalsExpanded = false
+				}
+				return m, nil
+			}
+		}
+	}
+	return m, nil
 }
 
 func switchChatFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {

@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/clcollins/srepd/pkg/ai"
 )
 
 const (
@@ -233,8 +234,26 @@ func (m *model) runDetectors() []tea.Cmd {
 			m.watcherAnalyzing = true
 			m.watcherQueryStart = time.Now()
 			m.watcherQueryTimeout = watcherSynthesisTimeout
-			summary := buildIncidentSummary(m.incidentList)
-			cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, m.watcherSystemPrompt, obs.Summary, summary))
+
+			// If the provider supports tools (Anthropic family) and a tool
+			// registry is available, run a tool-using investigation.
+			if m.toolRunnerFactory != nil && m.toolRegistry != nil && isAnthropicFamily(m.aiProvider.Name()) {
+				m.watcherQueryTimeout = m.investigationCfg.timeout
+				contextStr := buildWatcherContext(m)
+				cmds = append(cmds, watcherInvestigateCmd(
+					m.toolRunnerFactory,
+					m.toolRegistry,
+					m.investigationCfg,
+					m.watcherSystemPrompt,
+					obs.Summary,
+					contextStr,
+					ai.ResolvedModel(m.aiProvider),
+					nil, // collected by wrappedOnAsk inside watcherInvestigateCmd
+				))
+			} else {
+				summary := buildIncidentSummary(m.incidentList)
+				cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, m.watcherSystemPrompt, obs.Summary, summary))
+			}
 		} else {
 			m.watcherBuffer.Append(prefixLines(m.watcherMarker, obs.Summary))
 			added = true

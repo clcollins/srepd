@@ -67,6 +67,25 @@ func SupportsHealthCheck(p Provider) bool {
 	return ok
 }
 
+// ModelReporter is an optional interface a Provider may implement to expose the
+// resolved model ID (after provider-specific defaults have been applied).
+type ModelReporter interface {
+	Model() string
+}
+
+// ResolvedModel returns the model ID from p if it implements ModelReporter, or
+// the empty string otherwise.
+func ResolvedModel(p Provider) string {
+	if p == nil {
+		return ""
+	}
+	mr, ok := p.(ModelReporter)
+	if !ok {
+		return ""
+	}
+	return mr.Model()
+}
+
 // Config holds the configuration for an LLM API provider.
 type Config struct {
 	Provider  string `mapstructure:"provider"`
