@@ -679,10 +679,46 @@ func TestLogin_DoesNotStartUntilInvoked(t *testing.T) {
 	msg, ok := cmd().(loginFinishedMsg)
 	require.True(t, ok)
 	require.NoError(t, msg.err)
+	require.NotNil(t, msg.waitCmd, "should return a waitCmd for process reaping")
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(target)
 		return err == nil
 	}, 2*time.Second, 10*time.Millisecond, "process should run once the command is invoked")
+}
+
+func TestLogin_WaitCmdReturnsExitError(t *testing.T) {
+	l, err := launcher.NewClusterLauncherWithToolbox("false", "%%CLUSTER_ID%%", "false", func() bool { return false })
+	require.NoError(t, err)
+
+	vars := map[string]string{"%%CLUSTER_ID%%": "unused"}
+	cmd := login(vars, l, nil, nil, nil)
+
+	msg, ok := cmd().(loginFinishedMsg)
+	require.True(t, ok)
+	require.NoError(t, msg.err, "Start() should succeed even when the process will fail")
+	require.NotNil(t, msg.waitCmd)
+
+	exitMsg, ok := msg.waitCmd().(loginProcessExitedMsg)
+	require.True(t, ok)
+	require.Error(t, exitMsg.exitErr, "false command should exit with error")
+}
+
+func TestLogin_WaitCmdCapturesStderr(t *testing.T) {
+	l, err := launcher.NewClusterLauncherWithToolbox("sh", "-c %%CLUSTER_ID%%", "false", func() bool { return false })
+	require.NoError(t, err)
+
+	vars := map[string]string{"%%CLUSTER_ID%%": "echo test-stderr-output >&2; exit 1"}
+	cmd := login(vars, l, nil, nil, nil)
+
+	msg, ok := cmd().(loginFinishedMsg)
+	require.True(t, ok)
+	require.NoError(t, msg.err)
+	require.NotNil(t, msg.waitCmd)
+
+	exitMsg, ok := msg.waitCmd().(loginProcessExitedMsg)
+	require.True(t, ok)
+	require.Error(t, exitMsg.exitErr)
+	assert.Contains(t, exitMsg.stderr, "test-stderr-output")
 }
 
 func TestRequeueAfterDelay_ReturnsOriginalMessage(t *testing.T) {

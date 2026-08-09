@@ -782,7 +782,13 @@ type rosaBoundaryLoginMsg string
 type rosaBoundaryClusterSelectedMsg string
 
 type loginFinishedMsg struct {
-	err error
+	err     error
+	waitCmd tea.Cmd
+}
+
+type loginProcessExitedMsg struct {
+	exitErr error
+	stderr  string
 }
 
 // buildPagerDutyEnvVars constructs a slice of "-e", "KEY=VALUE" pairs for passing
@@ -967,6 +973,9 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 
 		c := exec.Command(finalCommand[0], finalCommand[1:]...)
 
+		var stderrBuf bytes.Buffer
+		c.Stderr = &stderrBuf
+
 		// For the non-ocm-container, non-toolbox case, set env vars on the process
 		if len(processEnvVars) > 0 {
 			c.Env = append(os.Environ(), processEnvVars...)
@@ -980,19 +989,19 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 		startCmdErr := c.Start()
 		if startCmdErr != nil {
 			log.Error("tui.login()", "error", startCmdErr)
-			return loginFinishedMsg{startCmdErr}
+			return loginFinishedMsg{err: startCmdErr}
 		}
 
-		// Reap the child process in background to avoid zombies.
-		// Don't block — return immediately so srepd stays responsive.
-		go func() {
+		waitCmd := func() tea.Msg {
 			err := c.Wait()
+			stderr := strings.TrimSpace(stderrBuf.String())
 			if err != nil {
-				log.Debug("tui.login(): terminal process exited", "error", err)
+				log.Debug("tui.login(): terminal process exited", "error", err, "stderr", stderr)
 			}
-		}()
+			return loginProcessExitedMsg{exitErr: err, stderr: stderr}
+		}
 
-		return loginFinishedMsg{}
+		return loginFinishedMsg{waitCmd: waitCmd}
 	}
 }
 

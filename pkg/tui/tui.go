@@ -1466,6 +1466,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			log.Info("login completed")
 		}
+		if msg.waitCmd != nil {
+			return m, msg.waitCmd
+		}
+
+	case loginProcessExitedMsg:
+		if msg.exitErr != nil {
+			detail := msg.exitErr.Error()
+			if msg.stderr != "" {
+				detail = fmt.Sprintf("%s: %s", detail, msg.stderr)
+			}
+			loginErr := fmt.Errorf("terminal exited with error: %s", detail)
+			log.Error("tui.loginProcessExitedMsg()", "error", msg.exitErr, "stderr", msg.stderr)
+			return m, func() tea.Msg { return errMsg{loginErr} }
+		}
 
 	case openBrowserMsg:
 		if m.selectedIncident == nil {
