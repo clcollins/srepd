@@ -975,6 +975,7 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 
 		var stderrBuf bytes.Buffer
 		c.Stderr = &stderrBuf
+		c.WaitDelay = 5 * time.Second
 
 		// For the non-ocm-container, non-toolbox case, set env vars on the process
 		if len(processEnvVars) > 0 {
