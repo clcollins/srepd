@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/PagerDuty/go-pagerduty"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
@@ -140,9 +141,8 @@ func TestLoginFinishedMsg_HappyWithSelectedIncident(t *testing.T) {
 		}
 
 		output := captureLogOutput(log.InfoLevel, func() {
-			result, cmd := m.Update(loginFinishedMsg{err: nil})
+			result, _ := m.Update(loginFinishedMsg{err: nil})
 			m = result.(model)
-			assert.Nil(t, cmd, "no command should be returned on successful login")
 		})
 
 		assert.Contains(t, output, "login completed",
@@ -158,13 +158,98 @@ func TestLoginFinishedMsg_HappyWithoutSelectedIncident(t *testing.T) {
 		m.selectedIncident = nil
 
 		output := captureLogOutput(log.InfoLevel, func() {
-			result, cmd := m.Update(loginFinishedMsg{err: nil})
+			result, _ := m.Update(loginFinishedMsg{err: nil})
 			m = result.(model)
-			assert.Nil(t, cmd, "no command should be returned on successful login")
 		})
 
 		assert.Contains(t, output, "login completed",
 			"should log login completed at INFO level")
+	})
+}
+
+func TestLoginFinishedMsg_DispatchesWaitCmd(t *testing.T) {
+	t.Run("dispatches waitCmd when present", func(t *testing.T) {
+		m := createTestModel()
+		m.selectedIncident = &pagerduty.Incident{
+			APIObject: pagerduty.APIObject{ID: "P999"},
+		}
+
+		waitCalled := false
+		waitCmd := func() tea.Msg {
+			waitCalled = true
+			return loginProcessExitedMsg{}
+		}
+
+		result, cmd := m.Update(loginFinishedMsg{err: nil, waitCmd: waitCmd})
+		m = result.(model)
+
+		assert.NotNil(t, cmd, "should return the waitCmd")
+		msg := cmd()
+		assert.True(t, waitCalled, "waitCmd should have been invoked")
+		_, ok := msg.(loginProcessExitedMsg)
+		assert.True(t, ok, "waitCmd should produce loginProcessExitedMsg")
+	})
+}
+
+func TestLoginFinishedMsg_NilWaitCmd(t *testing.T) {
+	t.Run("returns nil cmd when waitCmd is nil", func(t *testing.T) {
+		m := createTestModel()
+		m.selectedIncident = nil
+
+		result, cmd := m.Update(loginFinishedMsg{err: nil, waitCmd: nil})
+		m = result.(model)
+
+		assert.Nil(t, cmd, "should return nil when waitCmd is nil")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// loginProcessExitedMsg
+// ---------------------------------------------------------------------------
+
+func TestLoginProcessExitedMsg_WithError(t *testing.T) {
+	t.Run("returns errMsg command for error modal", func(t *testing.T) {
+		m := createTestModel()
+
+		exitErr := errors.New("exit status 1")
+		_, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr})
+
+		assert.NotNil(t, cmd, "should return a command wrapping errMsg")
+		msg := cmd()
+		em, ok := msg.(errMsg)
+		assert.True(t, ok, "returned command should produce errMsg")
+		assert.Contains(t, em.Error(), "terminal exited with error")
+		assert.Contains(t, em.Error(), "exit status 1")
+	})
+}
+
+func TestLoginProcessExitedMsg_WithErrorAndStderr(t *testing.T) {
+	t.Run("includes stderr in errMsg for error modal", func(t *testing.T) {
+		m := createTestModel()
+
+		exitErr := errors.New("exit status 1")
+		stderr := "error connecting to /tmp/tmux-106593/default (No such file or directory)"
+		_, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr, stderr: stderr})
+
+		assert.NotNil(t, cmd, "should return a command wrapping errMsg")
+		msg := cmd()
+		em, ok := msg.(errMsg)
+		assert.True(t, ok, "returned command should produce errMsg")
+		assert.Contains(t, em.Error(), "exit status 1")
+		assert.Contains(t, em.Error(), "No such file or directory")
+	})
+}
+
+func TestLoginProcessExitedMsg_Success(t *testing.T) {
+	t.Run("no-op when process exits cleanly", func(t *testing.T) {
+		m := createTestModel()
+		m.status = "previous status"
+
+		result, cmd := m.Update(loginProcessExitedMsg{exitErr: nil})
+		m = result.(model)
+
+		assert.Equal(t, "previous status", m.status, "status should be unchanged on clean exit")
+		assert.Nil(t, cmd, "should not return a command")
 	})
 }
 

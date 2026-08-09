@@ -22,7 +22,7 @@ type TerminalProfile interface {
 
 // SeparatorProfile is used by terminals that expect a "--" separator
 // between their own flags and the executed command (gnome-terminal,
-// ptyxis, wezterm, BlackBox, tmux).
+// ptyxis, wezterm, BlackBox).
 type SeparatorProfile struct {
 	terminalName string
 }
@@ -166,7 +166,6 @@ var separatorTerminals = map[string]bool{
 	"ptyxis":         true,
 	"wezterm":        true,
 	"blackbox":       true,
-	"tmux":           true,
 }
 
 // flagTerminals maps executable names to the flag they use.

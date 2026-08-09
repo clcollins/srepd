@@ -29,8 +29,8 @@ func TestDetectProfile_Wezterm(t *testing.T) {
 
 func TestDetectProfile_Tmux(t *testing.T) {
 	profile := DetectTerminalProfile("tmux new-window -n test")
-	assert.IsType(t, &SeparatorProfile{}, profile)
-	assert.Contains(t, profile.Name(), "tmux")
+	assert.IsType(t, &GenericProfile{}, profile)
+	assert.Equal(t, "generic", profile.Name())
 }
 
 func TestDetectProfile_Konsole(t *testing.T) {

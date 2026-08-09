@@ -282,10 +282,10 @@ func TestProfile_ReturnsDetectedProfile(t *testing.T) {
 			expectedProfile: "separator (gnome-terminal)",
 		},
 		{
-			name:            "tmux detected as SeparatorProfile",
+			name:            "tmux detected as GenericProfile",
 			terminal:        "tmux new-window -n %%CLUSTER_ID%%",
 			loginCommand:    "ocm-container -C %%CLUSTER_ID%%",
-			expectedProfile: "separator (tmux)",
+			expectedProfile: "generic",
 		},
 		{
 			name:            "konsole detected as FlagProfile",
