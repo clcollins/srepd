@@ -872,52 +872,6 @@ func buildPagerDutyEnvVars(incident *pagerduty.Incident, alerts []pagerduty.Inci
 	return envFlags
 }
 
-// commandContainsOCMContainer returns true if any element of the command
-// slice contains "ocm-container", indicating this is an ocm-container flow
-// where -e flags should be passed directly as container arguments.
-func commandContainsOCMContainer(command []string) bool {
-	for _, arg := range command {
-		if strings.Contains(arg, "ocm-container") {
-			return true
-		}
-	}
-	return false
-}
-
-// insertOCMContainerEnvFlags inserts -e env flags into a command at the
-// correct position for ocm-container: after the ocm-container command itself
-// but before its other arguments (like --cluster-id).
-func insertOCMContainerEnvFlags(command []string, envFlags []string) []string {
-	if len(envFlags) == 0 {
-		return command
-	}
-
-	// Find the ocm-container argument in the command slice
-	ocmIdx := -1
-	for i, arg := range command {
-		if strings.Contains(arg, "ocm-container") {
-			ocmIdx = i
-			break
-		}
-	}
-
-	log.Debug("tui.insertOCMContainerEnvFlags()", "ocmIdx", ocmIdx, "commandLen", len(command))
-
-	if ocmIdx < 0 {
-		// No ocm-container found; return command unchanged
-		return command
-	}
-
-	// Insert env flags right after the ocm-container argument
-	insertIdx := ocmIdx + 1
-	result := make([]string, 0, len(command)+len(envFlags))
-	result = append(result, command[:insertIdx]...)
-	result = append(result, envFlags...)
-	result = append(result, command[insertIdx:]...)
-
-	return result
-}
-
 // extractEnvVarPairs extracts "KEY=VALUE" strings from a slice of
 // ["-e", "KEY=VALUE", "-e", "KEY2=VALUE2", ...] pairs. It skips the "-e"
 // elements and returns only the environment variable assignments, suitable
@@ -933,40 +887,53 @@ func extractEnvVarPairs(envFlags []string) []string {
 }
 
 func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerduty.Incident, alerts []pagerduty.IncidentAlert, notes []pagerduty.IncidentNote) tea.Cmd {
-	// All process work happens inside the returned command so the Update
-	// loop is never blocked by command construction or a slow Start().
-	// The arguments are snapshots (map, launcher value, pointer, slices),
-	// so deferring execution is safe.
 	return func() tea.Msg {
-		// The first element of Terminal is the command to be executed, followed by args, in order
-		// This handles if folks use, eg: flatpak run <some package> as a terminal.
-		command := l.BuildLoginCommand(vars)
-
-		// Build individual PAGERDUTY_* environment variables filtered to the selected cluster
 		clusterID := vars["%%CLUSTER_ID%%"]
 		envFlags := buildPagerDutyEnvVars(incident, alerts, notes, clusterID)
 
-		// Determine the correct env var passing mechanism based on the command flow:
-		// 1. ocm-container flow: use -e flags (they become podman -e flags)
-		// 2. Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
-		// 3. Non-ocm-container, not in toolbox: set on exec.Cmd.Env
+		// Determine the correct env var passing mechanism. Detection uses
+		// the raw launcher state (before profile wrapping) so that
+		// AppleScript profiles don't break when "ocm-container" appears
+		// inside an AppleScript string literal.
 
 		var finalCommand []string
-		var processEnvVars []string // Only used for the exec.Cmd.Env case
+		var processEnvVars []string
 
-		if commandContainsOCMContainer(command) {
-			// ocm-container flow: insert -e flags into the command for ocm-container
-			finalCommand = insertOCMContainerEnvFlags(command, envFlags)
+		if l.NeedsWrapperScript() {
+			// AppleScript terminals: write a wrapper script that exports
+			// env vars and exec's the login command with proper quoting.
+			// This handles both ocm-container and non-ocm-container flows.
+			loginCmd := l.BuildRawLoginCommand(vars)
+			if l.LoginCommandContainsOCMContainer() {
+				loginCmd = launcher.InsertEnvFlagsAfterOCMContainer(loginCmd, envFlags)
+			}
+
+			wrapperDir, err := launcher.WrapperScriptDir()
+			if err != nil {
+				log.Error("tui.login(): wrapper dir", "error", err)
+				return loginFinishedMsg{err: fmt.Errorf("wrapper script setup: %w", err)}
+			}
+
+			scriptPath, err := launcher.WriteWrapperScript(loginCmd, extractEnvVarPairs(envFlags), wrapperDir)
+			if err != nil {
+				log.Error("tui.login(): wrapper script", "error", err)
+				return loginFinishedMsg{err: fmt.Errorf("wrapper script creation: %w", err)}
+			}
+
+			finalCommand = l.BuildLoginCommandForScript(vars, scriptPath)
+			log.Debug("tui.login(): AppleScript wrapper flow", "scriptPath", scriptPath, "finalCommand", finalCommand)
+		} else if l.LoginCommandContainsOCMContainer() {
+			// Non-AppleScript ocm-container: inject -e flags before
+			// profile wrapping so argv boundaries are preserved.
+			finalCommand = l.BuildLoginCommandWithEnv(vars, envFlags)
 			log.Debug("tui.login(): ocm-container flow", "finalCommand", finalCommand)
 		} else if l.IsToolbox() {
-			// Non-ocm-container in toolbox: use --env= flags on flatpak-spawn
-			// so that the host process launched via flatpak-spawn inherits them
+			command := l.BuildLoginCommand(vars)
 			toolboxFlags := l.ToolboxEnvFlags(envFlags)
 			finalCommand = launcher.InsertToolboxEnvFlags(command, toolboxFlags)
 			log.Debug("tui.login(): toolbox non-ocm-container flow", "toolboxFlags", toolboxFlags, "finalCommand", finalCommand)
 		} else {
-			// Non-ocm-container, not in toolbox: set env vars on the process directly
-			finalCommand = command
+			finalCommand = l.BuildLoginCommand(vars)
 			processEnvVars = extractEnvVarPairs(envFlags)
 			log.Debug("tui.login(): direct process env flow", "processEnvVars", processEnvVars, "finalCommand", finalCommand)
 		}
@@ -977,12 +944,10 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 		c.Stderr = &stderrBuf
 		c.WaitDelay = 5 * time.Second
 
-		// For the non-ocm-container, non-toolbox case, set env vars on the process
 		if len(processEnvVars) > 0 {
 			c.Env = append(os.Environ(), processEnvVars...)
 		}
 
-		log.Debug("tui.login(): original command", "command", command)
 		log.Debug("tui.login(): env flags", "envFlags", envFlags)
 		log.Debug("tui.login(): final command", "finalCommand", finalCommand)
 		log.Debug("tui.login()", "command", c.String())

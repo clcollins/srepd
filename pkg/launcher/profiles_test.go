@@ -510,6 +510,81 @@ func TestAppleScriptProfile_BuildCommand_ITerm2_QuotesInCommand(t *testing.T) {
 	assert.Contains(t, script, "bash -c echo hello world")
 }
 
+// --- AppleScript escaping ---
+
+func TestAppleScriptEscape(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "no special characters",
+			input:    "hello world",
+			expected: "hello world",
+		},
+		{
+			name:     "double quote",
+			input:    `say "hi"`,
+			expected: `say \"hi\"`,
+		},
+		{
+			name:     "backslash",
+			input:    `path\to\file`,
+			expected: `path\\to\\file`,
+		},
+		{
+			name:     "both quotes and backslashes",
+			input:    `a\"b`,
+			expected: `a\\\"b`,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "unicode characters",
+			input:    "café résumé",
+			expected: "café résumé",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, appleScriptEscape(tt.input))
+		})
+	}
+}
+
+func TestAppleScriptProfile_BuildCommand_EscapesLoginCommand(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"}
+	termArgs := []string{"iterm2"}
+	loginCmd := []string{"/tmp/login-script.sh"}
+
+	cmd, err := p.BuildCommand(termArgs, loginCmd)
+	require.NoError(t, err)
+
+	script := cmd[2]
+	assert.Contains(t, script, "/tmp/login-script.sh",
+		"simple path should pass through escaping unchanged")
+}
+
+func TestAppleScriptProfile_BuildCommand_EscapesBackslashInPath(t *testing.T) {
+	p := &AppleScriptProfile{terminalName: "terminal", appName: "Terminal"}
+	termArgs := []string{"terminal"}
+	loginCmd := []string{`/path/with\backslash/script.sh`}
+
+	cmd, err := p.BuildCommand(termArgs, loginCmd)
+	require.NoError(t, err)
+
+	script := cmd[2]
+	assert.Contains(t, script, `/path/with\\backslash/script.sh`,
+		"backslash in path must be escaped for AppleScript")
+	assert.NotContains(t, script, `with\b`,
+		"unescaped backslash should not appear")
+}
+
 func TestAppleScriptProfile_ValidateTerminal_ITerm2(t *testing.T) {
 	// "iterm2" is a virtual terminal name; validation should check for
 	// "osascript" rather than "iterm2" itself.
