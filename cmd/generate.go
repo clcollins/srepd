@@ -44,7 +44,7 @@ func init() {
 func detectEnvironment() *pkgconfig.GenerateEnvironment {
 	env := &pkgconfig.GenerateEnvironment{}
 
-	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS, os.Stat)
 	for _, dt := range detected {
 		env.Terminals = append(env.Terminals, dt.Command)
 	}

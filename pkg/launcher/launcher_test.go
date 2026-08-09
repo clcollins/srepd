@@ -578,6 +578,12 @@ func TestBuildLoginCommandWithEnv_SeparatorProfile(t *testing.T) {
 	assert.Equal(t, expected, cmd)
 }
 
+// This tests the underlying BuildLoginCommandWithEnv mechanism with an
+// AppleScript profile. In practice, login() in commands.go deliberately
+// routes AppleScript profiles through the wrapper script path instead —
+// strings.Join flattening in AppleScript re-tokenizes space-containing
+// env values (incident titles, service names). This test ensures the
+// fallback path still works correctly if ever needed directly.
 func TestBuildLoginCommandWithEnv_AppleScriptProfile(t *testing.T) {
 	l := ClusterLauncher{
 		terminal:            []string{"iterm2"},
