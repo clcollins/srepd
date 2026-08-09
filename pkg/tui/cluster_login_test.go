@@ -212,8 +212,7 @@ func TestLoginProcessExitedMsg_WithError(t *testing.T) {
 		m := createTestModel()
 
 		exitErr := errors.New("exit status 1")
-		result, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr})
-		m = result.(model)
+		_, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr})
 
 		assert.NotNil(t, cmd, "should return a command wrapping errMsg")
 		msg := cmd()
@@ -230,8 +229,7 @@ func TestLoginProcessExitedMsg_WithErrorAndStderr(t *testing.T) {
 
 		exitErr := errors.New("exit status 1")
 		stderr := "error connecting to /tmp/tmux-106593/default (No such file or directory)"
-		result, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr, stderr: stderr})
-		m = result.(model)
+		_, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr, stderr: stderr})
 
 		assert.NotNil(t, cmd, "should return a command wrapping errMsg")
 		msg := cmd()
