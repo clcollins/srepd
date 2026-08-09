@@ -6,9 +6,9 @@ import (
 )
 
 // DetectedTerminal describes a terminal emulator found on this system,
-// with the config-ready `terminal` value to use for it. Profiles handle
-// argument style at launch time, so Command is just the executable name
-// (or AppleScript identifier on macOS).
+// with the config-ready `terminal` value to use for it. Command is the
+// executable name for PATH-found terminals, the full binary path for
+// macOS bundle-detected terminals, or an AppleScript identifier on macOS.
 type DetectedTerminal struct {
 	Name    string
 	Command string
@@ -43,14 +43,33 @@ var termProgramNames = map[string]string{
 	"Apple_Terminal": "terminal",
 }
 
-// macOSBundleTerminals maps terminal names to their /Applications/ bundle
-// paths. On macOS, these terminals are commonly installed as .app bundles
-// whose binaries are not on PATH.
-var macOSBundleTerminals = map[string]string{
-	"alacritty": "/Applications/Alacritty.app",
-	"ghostty":   "/Applications/Ghostty.app",
-	"kitty":     "/Applications/kitty.app",
-	"wezterm":   "/Applications/WezTerm.app",
+// macOSBundleTerminal describes a terminal installed as a macOS .app bundle.
+type macOSBundleTerminal struct {
+	appPath    string // /Applications/<Name>.app — stat'd to detect installation
+	binaryPath string // full path to the executable inside the bundle
+}
+
+// macOSBundleTerminals maps terminal names to their bundle metadata.
+// Command is set to binaryPath so exec.Command can find the binary even
+// when it's not on PATH. DetectTerminalProfile resolves the profile from
+// filepath.Base, so full paths work transparently.
+//
+// Ghostty is intentionally excluded: its macOS CLI cannot reliably launch
+// the terminal — the supported route is `open -na Ghostty.app`, which
+// needs its own profile. See ghostty#5739, #10203.
+var macOSBundleTerminals = map[string]macOSBundleTerminal{
+	"alacritty": {
+		appPath:    "/Applications/Alacritty.app",
+		binaryPath: "/Applications/Alacritty.app/Contents/MacOS/alacritty",
+	},
+	"kitty": {
+		appPath:    "/Applications/kitty.app",
+		binaryPath: "/Applications/kitty.app/Contents/MacOS/kitty",
+	},
+	"wezterm": {
+		appPath:    "/Applications/WezTerm.app",
+		binaryPath: "/Applications/WezTerm.app/Contents/MacOS/wezterm",
+	},
 }
 
 // DetectTerminals probes this system for known terminal emulators and
@@ -58,10 +77,10 @@ var macOSBundleTerminals = map[string]string{
 // next when running inside a session, then the rest in probe order. On
 // darwin, Terminal.app is always a candidate (built into macOS); iTerm2 is
 // offered only when /Applications/iTerm.app exists; and bundle-installed
-// terminals (kitty, alacritty, wezterm, ghostty) are detected from
-// /Applications/. lookPath, getenv, goos, and statFn are injectable for
-// tests; production callers pass exec.LookPath, os.Getenv, runtime.GOOS,
-// os.Stat.
+// terminals (kitty, alacritty, wezterm) are detected from /Applications/
+// with their full binary path as Command. lookPath, getenv, goos, and
+// statFn are injectable for tests; production callers pass exec.LookPath,
+// os.Getenv, runtime.GOOS, os.Stat.
 func DetectTerminals(lookPath func(string) (string, error), getenv func(string) string, goos string, statFn func(string) (os.FileInfo, error)) []DetectedTerminal {
 	var found []DetectedTerminal
 	foundSet := make(map[string]bool)
@@ -93,8 +112,9 @@ func DetectTerminals(lookPath func(string) (string, error), getenv func(string) 
 			if foundSet[name] {
 				continue
 			}
-			if _, err := statFn(macOSBundleTerminals[name]); err == nil {
-				found = append(found, DetectedTerminal{Name: name, Command: name})
+			bundle := macOSBundleTerminals[name]
+			if _, err := statFn(bundle.appPath); err == nil {
+				found = append(found, DetectedTerminal{Name: name, Command: bundle.binaryPath})
 				foundSet[name] = true
 			}
 		}

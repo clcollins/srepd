@@ -141,13 +141,26 @@ func TestDetectTerminals_DarwinBundleDetection(t *testing.T) {
 		fakeLookPath(),
 		fakeGetenv(nil),
 		"darwin",
-		fakeStat("/Applications/kitty.app", "/Applications/Ghostty.app"),
+		fakeStat("/Applications/kitty.app", "/Applications/WezTerm.app"),
 	)
 	n := names(dts)
 	assert.Contains(t, n, "kitty", "kitty should be detected from bundle")
-	assert.Contains(t, n, "ghostty", "ghostty should be detected from bundle")
+	assert.Contains(t, n, "wezterm", "wezterm should be detected from bundle")
 	assert.NotContains(t, n, "alacritty", "alacritty bundle doesn't exist")
-	assert.NotContains(t, n, "wezterm", "wezterm bundle doesn't exist")
+	assert.NotContains(t, n, "ghostty", "ghostty excluded from bundle map")
+
+	// Bundle-detected terminals must emit their full binary path as Command
+	// so exec.Command can find them even when they're not on PATH.
+	for _, dt := range dts {
+		switch dt.Name {
+		case "kitty":
+			assert.Equal(t, "/Applications/kitty.app/Contents/MacOS/kitty", dt.Command,
+				"bundle-detected kitty must use full binary path")
+		case "wezterm":
+			assert.Equal(t, "/Applications/WezTerm.app/Contents/MacOS/wezterm", dt.Command,
+				"bundle-detected wezterm must use full binary path")
+		}
+	}
 }
 
 func TestDetectTerminals_DarwinBundleSkippedOnLinux(t *testing.T) {
@@ -169,7 +182,6 @@ func TestDetectTerminals_PATHTakesPrecedenceOverBundle(t *testing.T) {
 		fakeStat("/Applications/kitty.app"),
 	)
 	n := names(dts)
-	// kitty should appear exactly once (from PATH, not duplicated by bundle)
 	count := 0
 	for _, name := range n {
 		if name == "kitty" {
@@ -177,4 +189,12 @@ func TestDetectTerminals_PATHTakesPrecedenceOverBundle(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, count, "kitty should appear exactly once when found via both PATH and bundle")
+
+	// PATH-found terminals keep the bare name (not the bundle binary path).
+	for _, dt := range dts {
+		if dt.Name == "kitty" {
+			assert.Equal(t, "kitty", dt.Command,
+				"PATH-found kitty should use bare name, not bundle path")
+		}
+	}
 }

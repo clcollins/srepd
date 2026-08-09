@@ -7,9 +7,9 @@
 Three detection/validation gaps remain after PR #421 (AppleScript env
 var fix), plus four items from the PR #421 review:
 
-1. **Bundle-installed terminals invisible:** kitty, alacritty, wezterm,
-   ghostty installed as `/Applications/*.app` on macOS are not on PATH,
-   so `DetectTerminals()` misses them — the config wizard never offers
+1. **Bundle-installed terminals invisible:** kitty, alacritty, wezterm
+   installed as `/Applications/*.app` on macOS are not on PATH, so
+   `DetectTerminals()` misses them — the config wizard never offers
    them.
 2. **iTerm2 unconditionally offered:** always appended on darwin even
    when `/Applications/iTerm.app` doesn't exist.
@@ -27,10 +27,17 @@ var fix), plus four items from the PR #421 review:
 
 ### Bundle detection
 
-Added `macOSBundleTerminals` map and `statFn func(string)(os.FileInfo, error)`
-parameter to `DetectTerminals`. On darwin, after PATH probing, each known
-bundle path is stat'd; if the bundle exists and the terminal wasn't already
-found via PATH, it's appended. PATH-found terminals take precedence.
+Added `macOSBundleTerminals` map (kitty, alacritty, wezterm) with full
+binary paths (e.g., `/Applications/kitty.app/Contents/MacOS/kitty`) and
+`statFn func(string)(os.FileInfo, error)` parameter to `DetectTerminals`.
+On darwin, after PATH probing, each known bundle's `.app` path is stat'd;
+if the bundle exists and the terminal wasn't already found via PATH, it's
+appended with the full binary path as Command so `exec.Command` can find
+it. PATH-found terminals take precedence and keep their bare name.
+
+Ghostty is intentionally excluded: its macOS CLI cannot reliably launch
+the terminal — the supported route is `open -na Ghostty.app`, which needs
+its own profile (ghostty#5739, #10203).
 
 ### Conditional iTerm2
 
@@ -44,9 +51,10 @@ For `iterm2`, after confirming `osascript` exists, also checks
 
 ### login() integration tests
 
-Three tests in `commands_test.go`:
+Two tests in `commands_test.go`, both using `t.TempDir()` via
+`SREPD_WRAPPER_DIR` env override to avoid writing to the real cache:
 - Wrapper branch wins for AppleScript (osascript in error proves path)
-- Wrapper script is created in cache dir
+  and wrapper script is created with correct content
 - OCM-container flow does NOT duplicate env vars as exports
 
 ### Env var duplication fix
@@ -70,7 +78,8 @@ duplicated profile-resolve-and-wrap logic.
 | `pkg/launcher/launcher.go` | Extracted `buildTerminalCommand` shared helper |
 | `pkg/launcher/launcher_test.go` | Comment on AppleScript test re: login() bypass |
 | `pkg/tui/commands.go` | Fix env duplication, pass `os.Stat` to `DetectTerminals` |
-| `pkg/tui/commands_test.go` | 3 login() integration tests for AppleScript flows |
+| `pkg/launcher/wrapper.go` | `SREPD_WRAPPER_DIR` env override for test isolation |
+| `pkg/tui/commands_test.go` | 2 login() integration tests for AppleScript flows (temp dir isolation) |
 | `cmd/generate.go` | Pass `os.Stat` to `DetectTerminals` |
 | `pkg/tui/tui.go` | Pass `os.Stat` to `DetectTerminals` |
 | `README.md` | macOS terminal support section |

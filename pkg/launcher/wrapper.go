@@ -123,8 +123,12 @@ func CleanupWrapperScripts(baseDir string, maxAge time.Duration) error {
 	return nil
 }
 
-// WrapperScriptDir returns the default directory for wrapper scripts.
+// WrapperScriptDir returns the directory for wrapper scripts. Tests can
+// override it via SREPD_WRAPPER_DIR to avoid writing to the real cache.
 func WrapperScriptDir() (string, error) {
+	if override := os.Getenv("SREPD_WRAPPER_DIR"); override != "" {
+		return override, nil
+	}
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("determining cache directory: %w", err)
