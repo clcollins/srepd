@@ -118,6 +118,11 @@ but rather a simple tool to make on-call tasks easier.`,
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		if dir, err := launcher.WrapperScriptDir(); err == nil {
+			if err := launcher.CleanupWrapperScripts(dir, 1*time.Hour); err != nil {
+				log.Warn("failed to clean up wrapper scripts", "error", err)
+			}
+		}
 
 		if viper.GetBool("dev") {
 			runDevMode()

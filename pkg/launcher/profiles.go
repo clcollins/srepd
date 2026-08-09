@@ -118,7 +118,7 @@ func (p *AppleScriptProfile) BuildCommand(terminalArgs []string, loginCmd []stri
 		return nil, fmt.Errorf("login command must not be empty")
 	}
 
-	fullLoginCmd := strings.Join(loginCmd, " ")
+	fullLoginCmd := appleScriptEscape(strings.Join(loginCmd, " "))
 
 	var script string
 	switch p.terminalName {
@@ -136,6 +136,14 @@ func (p *AppleScriptProfile) BuildCommand(terminalArgs []string, loginCmd []stri
 	}
 
 	return []string{"osascript", "-e", script}, nil
+}
+
+// appleScriptEscape escapes characters that are special inside
+// AppleScript double-quoted string literals.
+func appleScriptEscape(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
 }
 
 // GenericProfile is the fallback that preserves the original launcher

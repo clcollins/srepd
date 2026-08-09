@@ -453,6 +453,240 @@ func TestReplaceVars_PreservesArgBoundaries(t *testing.T) {
 	})
 }
 
+// ---------------------------------------------------------------------------
+// LoginCommandContainsOCMContainer
+// ---------------------------------------------------------------------------
+
+func TestLoginCommandContainsOCMContainer(t *testing.T) {
+	tests := []struct {
+		name     string
+		loginCmd []string
+		expected bool
+	}{
+		{
+			name:     "ocm-container as first arg",
+			loginCmd: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+			expected: true,
+		},
+		{
+			name:     "ocm-container with path prefix",
+			loginCmd: []string{"/usr/local/bin/ocm-container", "-C", "%%CLUSTER_ID%%"},
+			expected: true,
+		},
+		{
+			name:     "ocm backplane login (no ocm-container)",
+			loginCmd: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
+			expected: false,
+		},
+		{
+			name:     "rosa-boundary (no ocm-container)",
+			loginCmd: []string{"rosa-boundary", "start-task", "--cluster-id", "%%CLUSTER_ID%%"},
+			expected: false,
+		},
+		{
+			name:     "empty login command",
+			loginCmd: []string{},
+			expected: false,
+		},
+		{
+			name:     "nil login command",
+			loginCmd: nil,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := ClusterLauncher{
+				clusterLoginCommand: tt.loginCmd,
+			}
+			assert.Equal(t, tt.expected, l.LoginCommandContainsOCMContainer())
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NeedsWrapperScript
+// ---------------------------------------------------------------------------
+
+func TestNeedsWrapperScript(t *testing.T) {
+	tests := []struct {
+		name     string
+		profile  TerminalProfile
+		loginCmd []string
+		expected bool
+	}{
+		{
+			name:     "AppleScript + non-ocm-container → needs wrapper",
+			profile:  &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"},
+			loginCmd: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
+			expected: true,
+		},
+		{
+			name:     "AppleScript + ocm-container → still needs wrapper (strings.Join breaks space-containing env values)",
+			profile:  &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"},
+			loginCmd: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+			expected: true,
+		},
+		{
+			name:     "Separator profile + non-ocm → no wrapper",
+			profile:  &SeparatorProfile{terminalName: "gnome-terminal"},
+			loginCmd: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
+			expected: false,
+		},
+		{
+			name:     "GenericProfile + non-ocm → no wrapper",
+			profile:  &GenericProfile{},
+			loginCmd: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
+			expected: false,
+		},
+		{
+			name:     "nil profile → no wrapper",
+			profile:  nil,
+			loginCmd: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := ClusterLauncher{
+				profile:             tt.profile,
+				clusterLoginCommand: tt.loginCmd,
+			}
+			assert.Equal(t, tt.expected, l.NeedsWrapperScript())
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BuildLoginCommandWithEnv
+// ---------------------------------------------------------------------------
+
+func TestBuildLoginCommandWithEnv_SeparatorProfile(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		profile:             &SeparatorProfile{terminalName: "gnome-terminal"},
+	}
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-123"}
+	envFlags := []string{"-e", "KEY1=val1", "-e", "KEY2=val2"}
+
+	cmd := l.BuildLoginCommandWithEnv(vars, envFlags)
+
+	expected := []string{"gnome-terminal", "--", "ocm-container", "-e", "KEY1=val1", "-e", "KEY2=val2", "-C", "test-123"}
+	assert.Equal(t, expected, cmd)
+}
+
+func TestBuildLoginCommandWithEnv_AppleScriptProfile(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"iterm2"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		profile:             &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"},
+	}
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-456"}
+	envFlags := []string{"-e", "INC_ID=P999"}
+
+	cmd := l.BuildLoginCommandWithEnv(vars, envFlags)
+
+	assert.Equal(t, "osascript", cmd[0])
+	assert.Equal(t, "-e", cmd[1])
+	assert.Len(t, cmd, 3, "AppleScript output should be exactly [osascript, -e, <script>]")
+	script := cmd[2]
+	assert.Contains(t, script, "ocm-container -e INC_ID=P999 -C test-456",
+		"env flags must be inside the AppleScript string, after ocm-container and before other args")
+}
+
+func TestBuildLoginCommandWithEnv_EmptyEnvFlags(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		profile:             &SeparatorProfile{terminalName: "gnome-terminal"},
+	}
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-789"}
+
+	cmd := l.BuildLoginCommandWithEnv(vars, []string{})
+	cmdNoEnv := l.BuildLoginCommand(vars)
+
+	assert.Equal(t, cmdNoEnv, cmd, "empty envFlags should produce same result as BuildLoginCommand")
+}
+
+func TestBuildLoginCommandWithEnv_ToolboxWrapping(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"gnome-terminal", "--"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		profile:             &SeparatorProfile{terminalName: "gnome-terminal"},
+		runInToolbox:        true,
+	}
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-tb"}
+	envFlags := []string{"-e", "K=V"}
+
+	cmd := l.BuildLoginCommandWithEnv(vars, envFlags)
+
+	assert.Equal(t, "flatpak-spawn", cmd[0], "toolbox wrapping should still be applied")
+	assert.Equal(t, "--host", cmd[1])
+	assert.Contains(t, cmd, "-e")
+	assert.Contains(t, cmd, "K=V")
+}
+
+func TestBuildLoginCommandWithEnv_MultipleEnvFlags(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"ptyxis"},
+		clusterLoginCommand: []string{"ocm-container", "-C", "%%CLUSTER_ID%%"},
+		profile:             &SeparatorProfile{terminalName: "ptyxis"},
+	}
+	vars := map[string]string{"%%CLUSTER_ID%%": "abc"}
+	envFlags := []string{"-e", "A=1", "-e", "B=2", "-e", "C=3"}
+
+	cmd := l.BuildLoginCommandWithEnv(vars, envFlags)
+
+	cmdStr := strings.Join(cmd, " ")
+	assert.Contains(t, cmdStr, "ocm-container -e A=1 -e B=2 -e C=3 -C abc",
+		"all env flags should be inserted between ocm-container and its arguments")
+}
+
+// ---------------------------------------------------------------------------
+// BuildRawLoginCommand
+// ---------------------------------------------------------------------------
+
+func TestBuildRawLoginCommand(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"iterm2"},
+		clusterLoginCommand: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
+		profile:             &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"},
+	}
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-raw"}
+
+	cmd := l.BuildRawLoginCommand(vars)
+
+	assert.Equal(t, []string{"ocm", "backplane", "login", "test-raw"}, cmd,
+		"should only replace vars in login cmd, no profile wrapping")
+}
+
+// ---------------------------------------------------------------------------
+// BuildLoginCommandForScript
+// ---------------------------------------------------------------------------
+
+func TestBuildLoginCommandForScript(t *testing.T) {
+	l := ClusterLauncher{
+		terminal:            []string{"iterm2"},
+		clusterLoginCommand: []string{"ocm", "backplane", "login", "%%CLUSTER_ID%%"},
+		profile:             &AppleScriptProfile{terminalName: "iterm2", appName: "iTerm2"},
+	}
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-script"}
+
+	cmd := l.BuildLoginCommandForScript(vars, "/tmp/test-wrapper.sh")
+
+	assert.Equal(t, "osascript", cmd[0])
+	assert.Equal(t, "-e", cmd[1])
+	assert.Len(t, cmd, 3)
+	script := cmd[2]
+	assert.Contains(t, script, "/tmp/test-wrapper.sh",
+		"AppleScript should reference the wrapper script path")
+	assert.NotContains(t, script, "ocm",
+		"should NOT contain the original login command, only the script path")
+}
+
 // TestBuildLoginCommand_RosaBoundary documents that rosa-boundary shares the
 // cluster login conventions wholesale: it launches an interactive session
 // into a protected cluster exactly like ocm-container, so its launcher

@@ -185,6 +185,143 @@ func (l *ClusterLauncher) Profile() TerminalProfile {
 	return l.profile
 }
 
+// LoginCommandContainsOCMContainer checks the raw clusterLoginCommand
+// (before profile wrapping) for the presence of "ocm-container". This
+// determines whether -e flags should be spliced into the login command
+// as ocm-container environment arguments.
+func (l *ClusterLauncher) LoginCommandContainsOCMContainer() bool {
+	for _, arg := range l.clusterLoginCommand {
+		if strings.Contains(arg, "ocm-container") {
+			return true
+		}
+	}
+	return false
+}
+
+// NeedsWrapperScript returns true when the terminal profile is an
+// AppleScriptProfile. AppleScript terminals need a wrapper script because:
+//  1. exec.Cmd.Env doesn't cross AppleEvents
+//  2. Even with ocm-container, strings.Join flattening in AppleScript
+//     re-tokenizes env values containing spaces (e.g., incident titles)
+//
+// The wrapper script's single-quoted exec line preserves argv boundaries.
+func (l *ClusterLauncher) NeedsWrapperScript() bool {
+	if l.profile == nil {
+		return false
+	}
+	_, isAppleScript := l.profile.(*AppleScriptProfile)
+	return isAppleScript
+}
+
+// BuildLoginCommandWithEnv builds the login command with -e env flags
+// inserted into the login command at the correct position for ocm-container
+// (after the ocm-container arg, before its other arguments), and then
+// applies the terminal profile wrapping. This ensures env flags ride
+// inside the login command string even for AppleScript profiles where
+// the login command gets interpolated into an AppleScript string.
+func (l *ClusterLauncher) BuildLoginCommandWithEnv(vars map[string]string, envFlags []string) []string {
+	profile := l.profile
+	if profile == nil {
+		profile = &GenericProfile{}
+	}
+
+	terminalArgs := []string{l.terminal[0]}
+	if len(l.terminal) > 1 {
+		terminalArgs = append(terminalArgs, replaceVars(l.terminal[1:], vars)...)
+	}
+
+	loginCmd := replaceVars(l.clusterLoginCommand, vars)
+
+	if len(envFlags) > 0 {
+		loginCmd = InsertEnvFlagsAfterOCMContainer(loginCmd, envFlags)
+	}
+
+	var command []string
+	if alreadyHasSeparator(profile, terminalArgs) {
+		command = append(terminalArgs, loginCmd...)
+	} else {
+		var err error
+		command, err = profile.BuildCommand(terminalArgs, loginCmd)
+		if err != nil {
+			log.Debug("launcher.BuildLoginCommandWithEnv(): profile.BuildCommand failed, falling back", "error", err)
+			command = append(terminalArgs, loginCmd...)
+		}
+	}
+
+	if l.runInToolbox {
+		command = append([]string{"flatpak-spawn", "--host"}, command...)
+	}
+
+	l.logCommand(command)
+	return command
+}
+
+// InsertEnvFlagsAfterOCMContainer inserts -e env flags into a login
+// command slice right after the ocm-container argument.
+func InsertEnvFlagsAfterOCMContainer(loginCmd []string, envFlags []string) []string {
+	ocmIdx := -1
+	for i, arg := range loginCmd {
+		if strings.Contains(arg, "ocm-container") {
+			ocmIdx = i
+			break
+		}
+	}
+
+	if ocmIdx < 0 {
+		return loginCmd
+	}
+
+	insertIdx := ocmIdx + 1
+	result := make([]string, 0, len(loginCmd)+len(envFlags))
+	result = append(result, loginCmd[:insertIdx]...)
+	result = append(result, envFlags...)
+	result = append(result, loginCmd[insertIdx:]...)
+	return result
+}
+
+// BuildRawLoginCommand returns the login command with variables replaced
+// but without any terminal profile wrapping. Used when the caller needs
+// the raw command (e.g., for writing a wrapper script).
+func (l *ClusterLauncher) BuildRawLoginCommand(vars map[string]string) []string {
+	return replaceVars(l.clusterLoginCommand, vars)
+}
+
+// BuildLoginCommandForScript builds a terminal command that executes a
+// wrapper script instead of the original login command. The script path
+// is passed as the login command to the terminal profile.
+func (l *ClusterLauncher) BuildLoginCommandForScript(vars map[string]string, scriptPath string) []string {
+	profile := l.profile
+	if profile == nil {
+		profile = &GenericProfile{}
+	}
+
+	terminalArgs := []string{l.terminal[0]}
+	if len(l.terminal) > 1 {
+		terminalArgs = append(terminalArgs, replaceVars(l.terminal[1:], vars)...)
+	}
+
+	loginCmd := []string{scriptPath}
+
+	var command []string
+	if alreadyHasSeparator(profile, terminalArgs) {
+		command = append(terminalArgs, loginCmd...)
+	} else {
+		var err error
+		command, err = profile.BuildCommand(terminalArgs, loginCmd)
+		if err != nil {
+			log.Debug("launcher.BuildLoginCommandForScript(): profile.BuildCommand failed, falling back", "error", err)
+			command = append(terminalArgs, loginCmd...)
+		}
+	}
+
+	if l.runInToolbox {
+		command = append([]string{"flatpak-spawn", "--host"}, command...)
+	}
+
+	l.logCommand(command)
+	return command
+}
+
 func (l *ClusterLauncher) BuildLoginCommand(vars map[string]string) []string {
 	// Ensure a profile is set; default to GenericProfile if nil (e.g.,
 	// when ClusterLauncher was constructed directly without NewClusterLauncher).
