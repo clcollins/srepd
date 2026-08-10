@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/delta"
 )
 
 const (
@@ -214,8 +215,15 @@ func (d *watcherDedup) IsNew(observation string) bool {
 	return true
 }
 
-func (m *model) runDetectors() []tea.Cmd {
+func (m *model) runDetectors(changes []delta.Change) []tea.Cmd {
 	if len(m.incidentList) < 2 {
+		return nil
+	}
+
+	// D1 gate: only investigate when the incident state actually changed.
+	// On first poll (no previous state), every incident is a first-sighting
+	// and produces IncidentNew changes — that is correct.
+	if len(changes) == 0 {
 		return nil
 	}
 
@@ -224,25 +232,27 @@ func (m *model) runDetectors() []tea.Cmd {
 	var cmds []tea.Cmd
 	added := false
 	for _, obs := range observations {
+		// Secondary rate limit: suppress re-investigation of the same
+		// observation text within the cooldown window, even if the delta
+		// gate fires (e.g. an unrelated field changed).
 		if !m.watcherDedup.IsNew(obs.Summary) {
 			continue
 		}
 
 		log.Debug("watcher.runDetectors", "observation", obs.Summary)
 
-		// Ambient synthesis runs unless the provider is in a known-error
-		// state — unverified providers get their first health signal from
-		// this very query.
 		if m.aiProvider != nil && m.aiHealth != aiHealthError && !m.watcherAnalyzing {
 			m.watcherAnalyzing = true
 			m.watcherQueryStart = time.Now()
 			m.watcherQueryTimeout = watcherSynthesisTimeout
 
-			// If the provider supports tools (Anthropic family) and a tool
-			// registry is available, run a tool-using investigation.
 			if m.toolRunnerFactory != nil && m.toolRegistry != nil && isAnthropicFamily(m.aiProvider.Name()) {
 				m.watcherQueryTimeout = m.investigationCfg.timeout
 				contextStr := buildObservationContext(m, obs)
+				changesNarrative := delta.Narrate(changes, time.Now())
+				if changesNarrative != "" {
+					contextStr = changesNarrative + "\n\n" + contextStr
+				}
 				cmds = append(cmds, watcherInvestigateCmd(
 					m.toolRunnerFactory,
 					m.toolRegistry,
@@ -251,7 +261,7 @@ func (m *model) runDetectors() []tea.Cmd {
 					obs.Summary,
 					contextStr,
 					ai.ResolvedModel(m.aiProvider),
-					nil, // collected by wrappedOnAsk inside watcherInvestigateCmd
+					nil,
 					obs.IncidentIDs,
 				))
 			} else {
@@ -273,6 +283,44 @@ func (m *model) runDetectors() []tea.Cmd {
 	}
 
 	return cmds
+}
+
+const maxRecentChanges = 200
+
+func toSnapshots(incidents []pagerduty.Incident, cache map[string]*cachedIncidentData) []delta.Snapshot {
+	snaps := make([]delta.Snapshot, 0, len(incidents))
+	for _, inc := range incidents {
+		var noteCount, alertCount int
+		if c, ok := cache[inc.ID]; ok {
+			if c.notesLoaded {
+				noteCount = len(c.notes)
+			}
+			if c.alertsLoaded {
+				alertCount = len(c.alerts)
+			}
+		}
+		snaps = append(snaps, delta.SnapshotFromFields(
+			inc.ID, inc.Title, inc.Service.Summary,
+			inc.Status, inc.Urgency,
+			noteCount, alertCount, 0,
+		))
+	}
+	return snaps
+}
+
+func (m *model) computeAndStoreDeltas() []delta.Change {
+	curr := toSnapshots(m.incidentList, m.incidentCache)
+	changes := delta.Diff(m.prevSnapshots, curr)
+	m.prevSnapshots = curr
+
+	if len(changes) > 0 {
+		m.recentChanges = append(m.recentChanges, changes...)
+		if len(m.recentChanges) > maxRecentChanges {
+			m.recentChanges = m.recentChanges[len(m.recentChanges)-maxRecentChanges:]
+		}
+	}
+
+	return changes
 }
 
 func buildIncidentSummary(incidents []pagerduty.Incident) string {

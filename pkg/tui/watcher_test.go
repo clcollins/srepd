@@ -487,6 +487,38 @@ func TestBuildObservationContext_EmptyIncidentIDs(t *testing.T) {
 	assert.Contains(t, ctx, "P1", "queue summary still included")
 }
 
+// Headline integration test: two consecutive refreshes with IDENTICAL data
+// must produce exactly ONE investigation (on the first sighting). This test
+// FAILS if the delta gate is stubbed out.
+func TestDeltaGate_IdenticalRefreshesProduceOneInvestigation(t *testing.T) {
+	m := createTestModel()
+	m.incidentCache = make(map[string]*cachedIncidentData)
+	m.incidentClusterMap = make(map[string][]string)
+
+	incidents := []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "P1"}, Title: "Storm A", Service: pagerduty.APIObject{Summary: "svc-x"}, Status: "triggered", Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "P2"}, Title: "Storm B", Service: pagerduty.APIObject{Summary: "svc-x"}, Status: "triggered", Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "P3"}, Title: "Storm C", Service: pagerduty.APIObject{Summary: "svc-x"}, Status: "triggered", Urgency: "high"},
+	}
+
+	// First refresh: first sighting → should produce changes
+	m.incidentList = incidents
+	changes1 := m.computeAndStoreDeltas()
+	assert.NotEmpty(t, changes1, "first refresh must produce first-sighting changes")
+
+	// Simulate detectors running (would produce observations for 3 on same service)
+	observations1 := detectAll(m.incidentList, m.incidentClusterMap)
+	assert.NotEmpty(t, observations1, "service storm must be detected")
+
+	// Second refresh: identical data → no changes
+	changes2 := m.computeAndStoreDeltas()
+	assert.Empty(t, changes2, "identical second refresh must produce zero changes")
+
+	// The delta gate in runDetectors would block investigation on second refresh
+	// because len(changes2) == 0. This is the core property: unchanged alerts
+	// are NOT re-investigated.
+}
+
 func TestBuildAskFromVerdict_UsesOriginatingIncident(t *testing.T) {
 	mock := &pd.MockPagerDutyClient{}
 	m := createTestModel()

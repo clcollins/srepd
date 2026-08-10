@@ -22,6 +22,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/agent"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/delta"
 	"github.com/clcollins/srepd/pkg/ai/policy"
 	"github.com/clcollins/srepd/pkg/ai/tools"
 	"github.com/clcollins/srepd/pkg/backplane"
@@ -170,6 +171,8 @@ type model struct {
 	watcherMarker       string
 	agentMarker         string
 	watcherDedup        *watcherDedup
+	prevSnapshots       []delta.Snapshot   // previous poll's snapshots for diffing
+	recentChanges       []delta.Change     // bounded log of recent changes (max 200)
 	watcherAnalyzing    bool
 	watcherQueryStart   time.Time
 	watcherQueryTimeout time.Duration

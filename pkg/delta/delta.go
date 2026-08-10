@@ -61,6 +61,21 @@ type Snapshot struct {
 	EscalationLevel int
 }
 
+// SnapshotFromFields constructs a Snapshot from individual fields, avoiding a
+// dependency on any PagerDuty type in this package.
+func SnapshotFromFields(id, title, service, status, urgency string, noteCount, alertCount, escalationLevel int) Snapshot {
+	return Snapshot{
+		ID:              id,
+		Title:           title,
+		Service:         service,
+		Status:          status,
+		Urgency:         urgency,
+		NoteCount:       noteCount,
+		AlertCount:      alertCount,
+		EscalationLevel: escalationLevel,
+	}
+}
+
 // Diff computes changes between prev and curr snapshots. Pure function: values
 // in, values out, no I/O. First-sighting semantics: a snapshot in curr with no
 // match in prev produces IncidentNew. A snapshot in prev with no match in curr
