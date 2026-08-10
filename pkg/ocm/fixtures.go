@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type fixtureCluster struct {
@@ -20,6 +21,7 @@ type fixtureCluster struct {
 	CCS            bool   `json:"ccs"`
 	Organization   string `json:"organization"`
 	OrganizationID string `json:"organization_id"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type fixtureServiceLog struct {
@@ -84,6 +86,7 @@ func loadClusterFixtures(path string, mock *MockClient) error {
 			CCS:            fc.CCS,
 			Organization:   fc.Organization,
 			OrganizationID: fc.OrganizationID,
+			CreatedAt:      fc.CreatedAt,
 		}
 	}
 	return nil
