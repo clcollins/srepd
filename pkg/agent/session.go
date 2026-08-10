@@ -174,7 +174,6 @@ type Session struct {
 	done         chan struct{}
 	doneOnce     sync.Once
 	closed       bool
-	err          error
 
 	useStreamEvents bool
 
@@ -205,6 +204,13 @@ func (s *Session) Events() <-chan Event {
 // Done returns a channel that closes when the session's reader goroutine exits.
 func (s *Session) Done() <-chan struct{} {
 	return s.done
+}
+
+// SetTestChannels replaces the event and done channels for testing.
+// Only for use in tests — the session must not be spawned.
+func SetTestChannels(s *Session, events chan Event, done chan struct{}) {
+	s.events = events
+	s.done = done
 }
 
 // Send writes a user turn to the session's stdin. On the first call it
@@ -295,6 +301,10 @@ func (s *Session) spawn(ctx context.Context) error {
 	// On success the child writes system/init to stdout immediately.
 	// On duplicate-ID rejection the child exits non-zero with no stdout.
 	// This is event-driven: no timer, no delay on the happy path.
+	//
+	// The select includes ctx.Done so a hung child (auth prompt, stuck MCP
+	// server) cannot block spawn indefinitely. Without this, Close/CloseAll
+	// deadlocks because Send holds s.mu while spawn blocks.
 	if !s.resumed {
 		exitCh := make(chan error, 1)
 		go func() { exitCh <- wait() }()
@@ -306,19 +316,29 @@ func (s *Session) spawn(ctx context.Context) error {
 			peekResult <- err
 		}()
 
+		spawnDetectTimeout := 30 * time.Second
+		timer := time.NewTimer(spawnDetectTimeout)
+		defer timer.Stop()
+
+		retryAsResume := func() error {
+			_ = stdin.Close()
+			_ = stdout.Close()
+			cancel()
+			log.Info("agent.session.spawn",
+				"msg", "session ID already in use, retrying with --resume",
+				"session_id", s.id.String())
+			s.resumed = true
+			return s.spawn(ctx)
+		}
+
 		select {
 		case exitErr := <-exitCh:
 			if exitErr != nil {
-				_ = stdout.Close() // unblock peek goroutine; real exec.Wait already closes pipes
+				_ = stdout.Close()
 				<-peekResult
 				if stderrBuf != nil &&
 					strings.Contains(stderrBuf.String(), "already in use") {
-					cancel()
-					log.Info("agent.session.spawn",
-						"msg", "session ID already in use, retrying with --resume",
-						"session_id", s.id.String())
-					s.resumed = true
-					return s.spawn(ctx)
+					return retryAsResume()
 				}
 			} else {
 				if peekErr := <-peekResult; peekErr == nil {
@@ -331,17 +351,22 @@ func (s *Session) spawn(ctx context.Context) error {
 				exitErr := <-exitCh
 				if exitErr != nil && stderrBuf != nil &&
 					strings.Contains(stderrBuf.String(), "already in use") {
-					cancel()
-					log.Info("agent.session.spawn",
-						"msg", "session ID already in use, retrying with --resume",
-						"session_id", s.id.String())
-					s.resumed = true
-					return s.spawn(ctx)
+					return retryAsResume()
 				}
 				exitCh <- exitErr
 			} else {
 				stdout = &prefixedReadCloser{prefix: peekBuf[:1], inner: stdout}
 			}
+		case <-ctx.Done():
+			_ = stdin.Close()
+			_ = stdout.Close()
+			cancel()
+			return fmt.Errorf("spawn: context cancelled while waiting for child: %w", ctx.Err())
+		case <-timer.C:
+			_ = stdin.Close()
+			_ = stdout.Close()
+			cancel()
+			return fmt.Errorf("spawn: child produced no output within %s", spawnDetectTimeout)
 		}
 
 		waitFn = func() error { return <-exitCh }
@@ -387,7 +412,6 @@ func (s *Session) readLoop(stdout io.ReadCloser, wait func() error) {
 		if err := wait(); err != nil {
 			s.mu.Lock()
 			deliberate := s.closing
-			s.err = err
 			s.mu.Unlock()
 			if !deliberate {
 				select {

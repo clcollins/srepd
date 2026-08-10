@@ -187,3 +187,20 @@ func TestApprovalsStrip_AcceptSelected(t *testing.T) {
 	assert.Equal(t, "cmd1", called, "must accept the selected ask")
 	assert.Equal(t, 1, strip.Count())
 }
+
+func TestAskKindLabel(t *testing.T) {
+	tests := []struct {
+		kind AskKind
+		want string
+	}{
+		{AskDraftNote, "Note"},
+		{AskSuggestedCommand, "Command"},
+		{AskEscalationSuggestion, "Escalation"},
+		{AskKind(99), "Unknown"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			assert.Equal(t, tt.want, askKindLabel(tt.kind))
+		})
+	}
+}

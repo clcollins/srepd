@@ -258,7 +258,8 @@ func summarizeToolInput(input json.RawMessage) string {
 	}
 	s := string(input)
 	if len(s) > 100 {
-		return s[:100] + "..."
+		truncated := string([]rune(s)[:100])
+		return truncated + "..."
 	}
 	return s
 }

@@ -148,6 +148,129 @@ func TestInferAskKind_Fallback_IsSensibleDefault(t *testing.T) {
 	}
 }
 
+func TestBuildAskFromVerdict_DraftNote_TargetsOriginalIncident(t *testing.T) {
+	mock := &pd.MockPagerDutyClient{}
+	m := createTestModel()
+	m.config = &pd.Config{Client: mock}
+
+	incidentA := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-A"},
+		Title:     "Incident A",
+	}
+	incidentB := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-B"},
+		Title:     "Incident B",
+	}
+
+	m.selectedIncident = incidentA
+
+	verdict := tools.Verdict{
+		Tier:    tools.TierActionable,
+		Summary: "Post note",
+		Action:  "Note content for incident A",
+	}
+	ask := m.buildAskFromVerdict(verdict)
+
+	assert.Equal(t, "INC-A", ask.IncidentID,
+		"Ask must snapshot the incident ID at creation time")
+	assert.Equal(t, "Incident A", ask.IncidentTitle,
+		"Ask must snapshot the incident title at creation time")
+
+	// Simulate user browsing to a different incident
+	m.selectedIncident = incidentB
+
+	cmd := ask.Action()
+	require.NotNil(t, cmd)
+	msg := cmd()
+
+	noteMsg, ok := msg.(addedIncidentNoteMsg)
+	require.True(t, ok, "expected addedIncidentNoteMsg, got %T", msg)
+	require.NoError(t, noteMsg.err)
+
+	assert.Equal(t, "INC-A", noteMsg.incidentID,
+		"note must target incident A (snapshotted), not B (live selection)")
+}
+
+func TestBuildAskFromVerdict_Escalation_TargetsOriginalIncident(t *testing.T) {
+	m := createTestModel()
+
+	incidentA := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-A"},
+		Title:     "Incident A",
+	}
+	incidentB := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-B"},
+		Title:     "Incident B",
+	}
+
+	m.selectedIncident = &incidentA
+
+	verdict := tools.Verdict{
+		Tier:    tools.TierActionable,
+		Summary: "Re-escalate",
+		Action:  "Re-escalate this incident",
+	}
+	ask := m.buildAskFromVerdict(verdict)
+
+	assert.Equal(t, "INC-A", ask.IncidentID)
+
+	// Simulate user browsing to a different incident
+	m.selectedIncident = &incidentB
+
+	cmd := ask.Action()
+	require.NotNil(t, cmd)
+	msg := cmd()
+
+	reescMsg, ok := msg.(unAcknowledgeIncidentsMsg)
+	require.True(t, ok, "expected unAcknowledgeIncidentsMsg, got %T", msg)
+	require.Len(t, reescMsg.incidents, 1)
+	assert.Equal(t, "INC-A", reescMsg.incidents[0].ID,
+		"escalation must target incident A (snapshotted), not B (live selection)")
+}
+
+func TestBuildAskFromVerdict_NilSelectedIncident_NoAction(t *testing.T) {
+	m := createTestModel()
+	m.selectedIncident = nil
+
+	verdict := tools.Verdict{
+		Tier:    tools.TierActionable,
+		Summary: "Re-escalate",
+		Action:  "Re-escalate this incident",
+	}
+	ask := m.buildAskFromVerdict(verdict)
+
+	assert.Empty(t, ask.IncidentID, "no incident selected means empty IncidentID")
+	require.NotNil(t, ask.Action)
+
+	cmd := ask.Action()
+	require.NotNil(t, cmd)
+	msg := cmd()
+
+	statusMsg, ok := msg.(setStatusMsg)
+	require.True(t, ok, "nil incident must produce setStatusMsg, got %T", msg)
+	assert.Contains(t, statusMsg.string, "no incident")
+}
+
+func TestBuildAskFromVerdict_SanitizesControlSequences(t *testing.T) {
+	m := createTestModel()
+	m.selectedIncident = &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-SANITIZE-001"},
+	}
+
+	verdict := tools.Verdict{
+		Tier:    tools.TierActionable,
+		Summary: "Clean\x1b]52;c;SGVsbG8=\x07title\x1b[31m",
+		Action:  "Injected\x1b[2Jaction\x07text",
+	}
+
+	ask := m.buildAskFromVerdict(verdict)
+
+	assert.Equal(t, "Cleantitle", ask.Title,
+		"Ask.Title must have control sequences stripped")
+	assert.Equal(t, "Injectedactiontext", ask.Body,
+		"Ask.Body must have control sequences stripped")
+}
+
 func TestBuildAskFromVerdict_UnhandledKind_FallbackAction(t *testing.T) {
 	mock := &pd.MockPagerDutyClient{}
 	m := createTestModel()

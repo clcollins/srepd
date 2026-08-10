@@ -868,6 +868,7 @@ func TestAgentStreamChunkMsg_AppendsText(t *testing.T) {
 
 	ch := make(chan streamEvent, 1)
 	ch <- streamEvent{text: "more"}
+	m.agentStreamCh = ch
 	msg := agentStreamChunkMsg{text: "world", ch: ch}
 
 	result, cmd := m.Update(msg)
@@ -1115,6 +1116,176 @@ func TestHandleClaudePrompt_ContextInjectionNotLostOnFailedFirstSend(t *testing.
 // TestHandleAgentSessionEvent_InitOnce verifies that two Init events
 // (the synthetic one from startAgentSession and the real one from the
 // subprocess) produce only one marker line in the watcher buffer.
+func TestReadAgentSessionCmd_PrefersEventsOverDone(t *testing.T) {
+	delivered := 0
+	for i := 0; i < 100; i++ {
+		events := make(chan agent.Event, 1)
+		done := make(chan struct{})
+		events <- agent.Event{Kind: agent.Result, Text: "final answer"}
+		close(done)
+
+		s := &agent.Session{}
+		agent.SetTestChannels(s, events, done)
+
+		cmd := readAgentSessionCmd(s)
+		msg := cmd()
+		if evMsg, ok := msg.(agentSessionEventMsg); ok {
+			if evMsg.event.Kind == agent.Result {
+				delivered++
+			}
+		}
+	}
+	assert.Equal(t, 100, delivered,
+		"with a buffered Result and closed Done, all 100 reads must deliver the Result")
+}
+
+func TestStaleAgentStreamDoneMsg_IgnoredWhenSuperseded(t *testing.T) {
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.apiInProgress = true
+
+	// Simulate an active (current) stream: store its channel and cancel func.
+	currentCh := make(chan streamEvent)
+	currentCancelCalled := false
+	m.agentStreamCancel = func() { currentCancelCalled = true }
+	m.agentStreamCh = currentCh
+
+	// A stale Done arrives from a PREVIOUS (superseded) stream.
+	staleCh := make(chan streamEvent)
+	staleMsg := agentStreamDoneMsg{ch: staleCh}
+
+	result, cmd := m.Update(staleMsg)
+	updated := result.(model)
+
+	assert.True(t, updated.claudeQuerying,
+		"stale Done must NOT clear claudeQuerying — a new stream is active")
+	assert.True(t, updated.apiInProgress,
+		"stale Done must NOT clear apiInProgress")
+	assert.NotNil(t, updated.agentStreamCancel,
+		"stale Done must NOT nil the current stream's cancel func")
+	assert.False(t, currentCancelCalled,
+		"stale Done must NOT call the current stream's cancel func")
+	assert.Nil(t, cmd,
+		"stale Done must not produce any command")
+}
+
+func TestStaleAgentStreamChunkMsg_IgnoredWhenSuperseded(t *testing.T) {
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.agentStreamPartial = "current text"
+	m.watcherExpanded = true
+
+	// The model's active stream channel
+	currentCh := make(chan streamEvent)
+	m.agentStreamCh = currentCh
+
+	// A stale Chunk arrives from a superseded stream.
+	staleCh := make(chan streamEvent)
+	staleMsg := agentStreamChunkMsg{text: " stale chunk", ch: staleCh}
+
+	result, cmd := m.Update(staleMsg)
+	updated := result.(model)
+
+	assert.Equal(t, "current text", updated.agentStreamPartial,
+		"stale chunk must NOT append to the current stream's partial text")
+	assert.Nil(t, cmd,
+		"stale chunk must not continue reading the stale channel")
+}
+
+func TestStaleWatcherStreamDoneMsg_IgnoredWhenSuperseded(t *testing.T) {
+	m := createTestModel()
+	m.watcherAnalyzing = true
+	m.apiInProgress = true
+
+	currentCh := make(chan streamEvent)
+	currentCancelCalled := false
+	m.watcherStreamCancel = func() { currentCancelCalled = true }
+	m.watcherStreamCh = currentCh
+
+	staleCh := make(chan streamEvent)
+	staleMsg := watcherStreamDoneMsg{ch: staleCh}
+
+	result, cmd := m.Update(staleMsg)
+	updated := result.(model)
+
+	assert.True(t, updated.watcherAnalyzing,
+		"stale Done must NOT clear watcherAnalyzing")
+	assert.True(t, updated.apiInProgress,
+		"stale Done must NOT clear apiInProgress")
+	assert.NotNil(t, updated.watcherStreamCancel,
+		"stale Done must NOT nil the current stream's cancel func")
+	assert.False(t, currentCancelCalled,
+		"stale Done must NOT call the current stream's cancel func")
+	assert.Nil(t, cmd,
+		"stale Done must not produce any command")
+}
+
+func TestStaleWatcherStreamChunkMsg_IgnoredWhenSuperseded(t *testing.T) {
+	m := createTestModel()
+	m.watcherAnalyzing = true
+	m.watcherStreamPartial = "current text"
+	m.watcherExpanded = true
+
+	currentCh := make(chan streamEvent)
+	m.watcherStreamCh = currentCh
+
+	staleCh := make(chan streamEvent)
+	staleMsg := watcherStreamChunkMsg{text: " stale chunk", ch: staleCh}
+
+	result, cmd := m.Update(staleMsg)
+	updated := result.(model)
+
+	assert.Equal(t, "current text", updated.watcherStreamPartial,
+		"stale chunk must NOT append to the current stream's partial text")
+	assert.Nil(t, cmd,
+		"stale chunk must not continue reading the stale channel")
+}
+
+func TestCurrentStreamDoneMsg_StillClearsState(t *testing.T) {
+	m := createTestModel()
+	m.claudeQuerying = true
+	m.apiInProgress = true
+
+	currentCh := make(chan streamEvent)
+	m.agentStreamCancel = func() {}
+	m.agentStreamCh = currentCh
+
+	// Done from the CURRENT stream — should clear state as before.
+	msg := agentStreamDoneMsg{ch: currentCh}
+
+	result, _ := m.Update(msg)
+	updated := result.(model)
+
+	assert.False(t, updated.claudeQuerying,
+		"current stream Done must clear claudeQuerying")
+	assert.False(t, updated.apiInProgress,
+		"current stream Done must clear apiInProgress")
+	assert.Nil(t, updated.agentStreamCancel,
+		"current stream Done must nil cancel func")
+}
+
+func TestHandleClaudePrompt_RejectsWhileInFlight(t *testing.T) {
+	m := createTestModel()
+	m.agentCLICommand = "claude --print"
+	m.claudeQuerying = true
+	m.apiInProgress = true
+
+	msg := claudePromptMsg{prompt: "second query while first is running"}
+	result, cmd := m.handleClaudePrompt(msg, func(s string) (string, error) {
+		return "/usr/bin/" + s, nil
+	})
+	updated := result.(model)
+
+	assert.True(t, updated.claudeQuerying,
+		"in-flight flag must remain set")
+	assert.True(t, updated.apiInProgress,
+		"apiInProgress must remain set")
+	assert.NotNil(t, cmd,
+		"must return a flash notification command")
+	assert.Contains(t, updated.status, "in progress",
+		"status must tell user a query is already running")
+}
+
 func TestHandleAgentSessionEvent_InitOnce(t *testing.T) {
 	m := sizedTestModel(t)
 	m.watcherExpanded = true
