@@ -101,6 +101,45 @@ func TestResolvedModel(t *testing.T) {
 	})
 }
 
+// chatProvider embeds a non-streaming provider and implements Chat.
+type chatProvider struct{ nonStreamingProvider }
+
+func (chatProvider) Send(_ context.Context, _ string) (string, error) {
+	return "reply", nil
+}
+func (chatProvider) History() []Turn { return nil }
+
+func TestSupportsChat(t *testing.T) {
+	t.Run("provider without Chat is not chatty", func(t *testing.T) {
+		assert.False(t, SupportsChat(nonStreamingProvider{}))
+	})
+
+	t.Run("provider with Chat is chatty", func(t *testing.T) {
+		assert.True(t, SupportsChat(chatProvider{}))
+	})
+
+	t.Run("nil provider is not chatty", func(t *testing.T) {
+		assert.False(t, SupportsChat(nil))
+	})
+}
+
+func TestAsChat(t *testing.T) {
+	t.Run("returns Chat for implementing provider", func(t *testing.T) {
+		c := AsChat(chatProvider{})
+		assert.NotNil(t, c)
+	})
+
+	t.Run("returns nil for non-implementing provider", func(t *testing.T) {
+		c := AsChat(nonStreamingProvider{})
+		assert.Nil(t, c)
+	})
+
+	t.Run("returns nil for nil provider", func(t *testing.T) {
+		c := AsChat(nil)
+		assert.Nil(t, c)
+	})
+}
+
 func TestRealProviders_SupportStreaming(t *testing.T) {
 	// All shipped providers implement real streaming; they must advertise it so the
 	// TUI turns streaming on for them.
