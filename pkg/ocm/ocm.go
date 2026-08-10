@@ -1,6 +1,9 @@
 package ocm
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // ClusterInfo contains enriched cluster data from the OCM API.
 type ClusterInfo struct {
@@ -16,6 +19,7 @@ type ClusterInfo struct {
 	CCS            bool
 	Organization   string
 	OrganizationID string
+	CreatedAt      time.Time
 }
 
 // ServiceLog represents a single service log entry.

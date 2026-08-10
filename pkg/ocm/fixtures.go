@@ -5,21 +5,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type fixtureCluster struct {
-	ID             string `json:"id"`
-	ExternalID     string `json:"external_id"`
-	Name           string `json:"name"`
-	DisplayName    string `json:"display_name"`
-	State          string `json:"state"`
-	Region         string `json:"region"`
-	CloudProvider  string `json:"cloud_provider"`
-	Version        string `json:"version"`
-	Hypershift     bool   `json:"hypershift"`
-	CCS            bool   `json:"ccs"`
-	Organization   string `json:"organization"`
-	OrganizationID string `json:"organization_id"`
+	ID             string    `json:"id"`
+	ExternalID     string    `json:"external_id"`
+	Name           string    `json:"name"`
+	DisplayName    string    `json:"display_name"`
+	State          string    `json:"state"`
+	Region         string    `json:"region"`
+	CloudProvider  string    `json:"cloud_provider"`
+	Version        string    `json:"version"`
+	Hypershift     bool      `json:"hypershift"`
+	CCS            bool      `json:"ccs"`
+	Organization   string    `json:"organization"`
+	OrganizationID string    `json:"organization_id"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type fixtureServiceLog struct {
@@ -84,6 +86,7 @@ func loadClusterFixtures(path string, mock *MockClient) error {
 			CCS:            fc.CCS,
 			Organization:   fc.Organization,
 			OrganizationID: fc.OrganizationID,
+			CreatedAt:      fc.CreatedAt,
 		}
 	}
 	return nil
