@@ -904,7 +904,8 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 			// env vars and exec's the login command with proper quoting.
 			// This handles both ocm-container and non-ocm-container flows.
 			loginCmd := l.BuildRawLoginCommand(vars)
-			if l.LoginCommandContainsOCMContainer() {
+			hasOCM := l.LoginCommandContainsOCMContainer()
+			if hasOCM {
 				loginCmd = launcher.InsertEnvFlagsAfterOCMContainer(loginCmd, envFlags)
 			}
 
@@ -914,7 +915,14 @@ func login(vars map[string]string, l launcher.ClusterLauncher, incident *pagerdu
 				return loginFinishedMsg{err: fmt.Errorf("wrapper script setup: %w", err)}
 			}
 
-			scriptPath, err := launcher.WriteWrapperScript(loginCmd, extractEnvVarPairs(envFlags), wrapperDir)
+			// When ocm-container is present, env vars ride as -e flags in
+			// loginCmd — don't also export them in the wrapper script.
+			var envPairsForScript []string
+			if !hasOCM {
+				envPairsForScript = extractEnvVarPairs(envFlags)
+			}
+
+			scriptPath, err := launcher.WriteWrapperScript(loginCmd, envPairsForScript, wrapperDir)
 			if err != nil {
 				log.Error("tui.login(): wrapper script", "error", err)
 				return loginFinishedMsg{err: fmt.Errorf("wrapper script creation: %w", err)}
@@ -1619,7 +1627,7 @@ func (realFS) Chmod(name string, mode os.FileMode) error {
 // commented alternatives and detected values.
 func detectGenerateEnvironment() *pkgconfig.GenerateEnvironment {
 	env := &pkgconfig.GenerateEnvironment{}
-	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS, os.Stat)
 	for _, dt := range detected {
 		env.Terminals = append(env.Terminals, dt.Command)
 	}

@@ -148,6 +148,8 @@ Supported terminals: gnome-terminal, ptyxis, wezterm, blackbox, tmux, konsole, a
 
 Flatpak-installed terminals are also supported using their application ID (e.g., `org.kde.konsole`).
 
+**macOS:** Terminal.app is always available. iTerm2 is detected when installed (`/Applications/iTerm.app`). Terminals installed as `.app` bundles (kitty, alacritty, wezterm) are auto-detected from `/Applications/` even when not on PATH. AppleScript terminals use wrapper scripts (`~/.cache/srepd/launch/`) for correct environment variable passing; stale scripts are cleaned up automatically.
+
 When running inside a Fedora Toolbox, terminal commands are automatically prefixed with `flatpak-spawn --host` (controlled by `toolbox_mode`).
 
 ## OCM Integration

@@ -337,11 +337,17 @@ func validateTerminalExists(terminal string) string {
 	parts := strings.Fields(terminal)
 	name := parts[0]
 
-	// For AppleScript terminals, check that "osascript" is available.
+	// For AppleScript terminals, check that "osascript" is available
+	// and that the target application is installed.
 	if _, ok := appleScriptTerminals[strings.ToLower(name)]; ok {
 		_, err := exec.LookPath("osascript")
 		if err != nil {
 			return fmt.Sprintf("osascript command not found in PATH; cluster login via %s may fail (requires macOS)", name)
+		}
+		if strings.ToLower(name) == "iterm2" {
+			if _, err := os.Stat("/Applications/iTerm.app"); err != nil {
+				return "iTerm2.app not found in /Applications; cluster login via iterm2 may fail"
+			}
 		}
 		return ""
 	}

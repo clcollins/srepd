@@ -2471,7 +2471,7 @@ func (m *model) buildConfigForm(msg configWizardReadyMsg, tokenDesc, keepTeamsDe
 
 	// Environment step data (OB-5): detect terminals, check the current one,
 	// and decide whether to offer the AI section (#324).
-	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS)
+	detected := launcher.DetectTerminals(exec.LookPath, os.Getenv, runtime.GOOS, os.Stat)
 	currentTerminal := msg.existing.Terminal
 	currentFound := true
 	if fields := strings.Fields(currentTerminal); len(fields) > 0 {

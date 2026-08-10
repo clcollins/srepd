@@ -1213,6 +1213,89 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 	}
 }
 
+func TestLogin_AppleScriptUsesWrapperPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("SREPD_TEST_WRAPPER_DIR", tmpDir)
+
+	l, err := launcher.NewClusterLauncherWithToolbox(
+		"iterm2", "ocm-container --cluster-id %%CLUSTER_ID%%",
+		"false", func() bool { return false },
+	)
+	require.NoError(t, err)
+
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "P123"},
+		Title:     "test incident",
+		Service:   pagerduty.APIObject{Summary: "test-service"},
+	}
+
+	vars := map[string]string{"%%CLUSTER_ID%%": "test-cluster-42"}
+	cmd := login(vars, l, incident, nil, nil)
+
+	msg, ok := cmd().(loginFinishedMsg)
+	require.True(t, ok)
+
+	// On Linux, osascript doesn't exist — Start() fails, proving the
+	// wrapper path was taken (argv[0] is osascript, not ocm-container).
+	require.Error(t, msg.err, "osascript should not exist on Linux")
+	assert.Contains(t, msg.err.Error(), "osascript",
+		"error should mention osascript, proving AppleScript wrapper path was used")
+
+	// The wrapper script should have been created in the temp dir.
+	entries, readErr := os.ReadDir(tmpDir)
+	require.NoError(t, readErr)
+	var foundScript bool
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "login-") && strings.HasSuffix(e.Name(), ".sh") {
+			foundScript = true
+			content, _ := os.ReadFile(filepath.Join(tmpDir, e.Name()))
+			assert.Contains(t, string(content), "ocm-container",
+				"wrapper script should contain the login command")
+			break
+		}
+	}
+	assert.True(t, foundScript, "wrapper script should exist in temp dir")
+}
+
+func TestLogin_AppleScriptOCMContainerNoEnvDuplication(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("SREPD_TEST_WRAPPER_DIR", tmpDir)
+
+	l, err := launcher.NewClusterLauncherWithToolbox(
+		"iterm2", "ocm-container --cluster-id %%CLUSTER_ID%%",
+		"false", func() bool { return false },
+	)
+	require.NoError(t, err)
+
+	incident := &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "PDUP456"},
+		Title:     "CPU high on node-42",
+		Service:   pagerduty.APIObject{Summary: "test-svc"},
+	}
+
+	vars := map[string]string{"%%CLUSTER_ID%%": "cluster-dup-test"}
+	cmd := login(vars, l, incident, nil, nil)
+	msg, ok := cmd().(loginFinishedMsg)
+	require.True(t, ok)
+	require.Error(t, msg.err)
+
+	entries, readErr := os.ReadDir(tmpDir)
+	require.NoError(t, readErr)
+
+	var foundScript bool
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "login-") && strings.HasSuffix(e.Name(), ".sh") {
+			content, _ := os.ReadFile(filepath.Join(tmpDir, e.Name()))
+			if strings.Contains(string(content), "cluster-dup-test") {
+				foundScript = true
+				assert.NotContains(t, string(content), "export PAGERDUTY_",
+					"ocm-container flow should not duplicate env vars as exports in wrapper script")
+			}
+		}
+	}
+	assert.True(t, foundScript, "should find wrapper script for this test's cluster ID")
+}
+
 func TestGetSOPLink_HasLink(t *testing.T) {
 	alerts := []pagerduty.IncidentAlert{
 		{
