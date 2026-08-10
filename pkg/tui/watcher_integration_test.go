@@ -633,6 +633,7 @@ func TestWatcherStreamChunkMsg_AccumulatesInPlace(t *testing.T) {
 	m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
 
 	ch := make(chan streamEvent)
+	m.watcherStreamCh = ch
 	result, _ := m.Update(watcherStreamChunkMsg{text: "Hello", ch: ch})
 	m = result.(model)
 	result, _ = m.Update(watcherStreamChunkMsg{text: " world", ch: ch})
@@ -991,6 +992,7 @@ func TestWatcherStreamChunkMsg_FirstTokenSetsHealthOK(t *testing.T) {
 	m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
 
 	ch := make(chan streamEvent)
+	m.watcherStreamCh = ch
 	result, _ := m.Update(watcherStreamChunkMsg{text: "Hello", ch: ch})
 	updated := result.(model)
 

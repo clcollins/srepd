@@ -2132,6 +2132,8 @@ func TestSanitizeEnvValue(t *testing.T) {
 		{"with backticks", "alert `cmd` here", "alert cmd here"},
 		{"with dollar signs", "alert $VAR here", "alert VAR here"},
 		{"with backslashes", `alert \n here`, "alert n here"},
+		{"strips ANSI escape", "alert \x1b[31mred\x1b[0m value", "alert red value"},
+		{"strips OSC sequence", "title\x1b]0;pwned\x07value", "titlevalue"},
 		{"empty string", "", ""},
 	}
 	for _, tt := range tests {

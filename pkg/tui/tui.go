@@ -628,6 +628,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.watcherStreamCancel()
 		}
 		m.watcherStreamCancel = msg.cancel
+		m.watcherStreamCh = msg.ch
 		m.watcherStreamPartial = ""
 		if !m.watcherExpanded {
 			m.watcherExpanded = true
@@ -638,6 +639,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, readStreamCmd(msg.ch)
 
 	case watcherStreamChunkMsg:
+		if msg.ch != m.watcherStreamCh {
+			return m, nil
+		}
 		// The first token is proof the provider answered — mark it healthy
 		// now, not at end of stream (idempotent for subsequent chunks).
 		m.aiHealth = aiHealthOK
@@ -647,6 +651,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, readStreamCmd(msg.ch)
 
 	case watcherStreamDoneMsg:
+		if msg.ch != m.watcherStreamCh {
+			return m, nil
+		}
 		m.watcherAnalyzing = false
 		m.apiInProgress = false
 		m.watcherStreamCancel = nil
@@ -1880,6 +1887,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agentStreamCancel()
 		}
 		m.agentStreamCancel = msg.cancel
+		m.agentStreamCh = msg.ch
 		m.agentStreamPartial = ""
 		if !m.watcherExpanded {
 			m.watcherExpanded = true
@@ -1890,12 +1898,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, readAgentStreamCmd(msg.ch)
 
 	case agentStreamChunkMsg:
+		if msg.ch != m.agentStreamCh {
+			return m, nil
+		}
 		m.agentStreamPartial += msg.text
 		m.watcherBuffer.SetLast(prefixLines(m.agentMarker, m.agentStreamPartial))
 		m.updateWatcherViewport()
 		return m, readAgentStreamCmd(msg.ch)
 
 	case agentStreamDoneMsg:
+		if msg.ch != m.agentStreamCh {
+			return m, nil
+		}
 		m.claudeQuerying = false
 		m.apiInProgress = false
 		m.agentStreamCancel = nil

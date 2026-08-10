@@ -54,6 +54,7 @@ func newWatcherBuffer(capacity int) *watcherBuffer {
 }
 
 func (b *watcherBuffer) Append(entry string) {
+	entry = stripControl(entry)
 	if len(b.entries) >= b.capacity {
 		b.entries = b.entries[1:]
 	}
@@ -61,6 +62,7 @@ func (b *watcherBuffer) Append(entry string) {
 }
 
 func (b *watcherBuffer) SetLast(entry string) {
+	entry = stripControl(entry)
 	if len(b.entries) == 0 {
 		b.Append(entry)
 		return
@@ -403,8 +405,8 @@ func buildWatcherContext(m *model) string {
 					break
 				}
 				content := n.Content
-				if len(content) > 300 {
-					content = content[:300] + "..."
+				if r := []rune(content); len(r) > 300 {
+					content = string(r[:300]) + "..."
 				}
 				parts = append(parts, fmt.Sprintf("  - %s", content))
 			}
@@ -446,6 +448,67 @@ func buildClusterContext(m *model, clusterID string) []string {
 	}
 
 	return parts
+}
+
+// stripControl removes ANSI escape sequences (CSI, OSC, ESC) and C0
+// control characters from s, preserving only \n and \t. Applied at
+// the buffer-append boundary so all AI output is sanitized in one
+// place, preventing terminal injection from attacker-influenced data.
+func stripControl(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	i := 0
+	for i < len(s) {
+		ch := s[i]
+		if ch == 0x1b {
+			i++
+			if i >= len(s) {
+				break
+			}
+			switch s[i] {
+			case '[':
+				// CSI sequence: ESC [ ... final byte (0x40-0x7E)
+				i++
+				for i < len(s) && (s[i] < 0x40 || (s[i] > 0x7E && s[i] < 0x80)) {
+					i++
+				}
+				if i < len(s) {
+					i++ // skip final byte
+				}
+			case ']':
+				// OSC sequence: ESC ] ... (terminated by BEL or ST)
+				i++
+				for i < len(s) {
+					if s[i] == 0x07 {
+						i++
+						break
+					}
+					if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '\\' {
+						i += 2
+						break
+					}
+					i++
+				}
+			default:
+				// Other ESC sequences (e.g., ESC c, ESC D): skip one char after ESC
+				i++
+			}
+			continue
+		}
+		// Preserve \n and \t, strip all other C0 controls and DEL
+		if ch == '\n' || ch == '\t' {
+			b.WriteByte(ch)
+			i++
+			continue
+		}
+		if ch < 0x20 || ch == 0x7f {
+			i++
+			continue
+		}
+		b.WriteByte(ch)
+		i++
+	}
+	return b.String()
 }
 
 func prefixLines(marker string, text string) string {

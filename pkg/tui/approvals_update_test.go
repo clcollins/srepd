@@ -101,14 +101,17 @@ func TestUpdate_ApprovalsEnter_ReturnsCmdThatPostsNote(t *testing.T) {
 	}
 
 	noteContent := "Investigation: elevated error rate on cluster"
-	m.approvals.Add(Ask{
-		Kind:  AskDraftNote,
-		Title: "Post investigation note",
-		Body:  noteContent,
-		Action: func() tea.Cmd {
-			return m.postAINoteCmd(noteContent)
-		},
+	ask := m.buildAskFromVerdict(tools.Verdict{
+		Tier:    tools.TierActionable,
+		Summary: "Post investigation note",
+		Action:  noteContent,
 	})
+	m.approvals.Add(ask)
+
+	// Simulate user browsing to a different incident after ask creation
+	m.selectedIncident = &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-DIFFERENT"},
+	}
 
 	m.approvalsExpanded = true
 	m.table.Focus()
@@ -130,6 +133,8 @@ func TestUpdate_ApprovalsEnter_ReturnsCmdThatPostsNote(t *testing.T) {
 	require.NotNil(t, noteMsg.note)
 	assert.Equal(t, noteContent, noteMsg.note.Content,
 		"the posted note content must match the verdict action")
+	assert.Equal(t, "INC-M2-001", noteMsg.incidentID,
+		"note must target the snapshotted incident, not the current selection")
 	assert.Equal(t, 1, mock.CallCounts["CreateIncidentNoteWithContext"],
 		"PD mock CreateIncidentNoteWithContext must be called exactly once")
 }

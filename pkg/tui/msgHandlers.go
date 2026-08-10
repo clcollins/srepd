@@ -917,14 +917,6 @@ func switchIncidentFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.incidentViewer, _ = m.incidentViewer.Update(msg)
 			return m, nil
 
-		case key.Matches(msg, defaultKeyMap.Top):
-			m.incidentViewer.GotoTop()
-			return m, nil
-
-		case key.Matches(msg, defaultKeyMap.Bottom):
-			m.incidentViewer.GotoBottom()
-			return m, nil
-
 		// Tab/Shift+Tab: switch between tabs
 		case key.Matches(msg, defaultKeyMap.TabNext):
 			m.activeTab = (m.activeTab + 1) % tabCount

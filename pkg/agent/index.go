@@ -16,7 +16,6 @@ type sessionEntry struct {
 	IncidentID string    `json:"incident_id"`
 	SessionID  string    `json:"session_id"`
 	Created    time.Time `json:"created"`
-	LastUsed   time.Time `json:"last_used"`
 }
 
 type sessionIndex struct {
@@ -79,9 +78,9 @@ func (idx *sessionIndex) load() {
 
 	if lastLine != nil {
 		charlog.Warn("agent.index.load",
-			"msg", "corrupt trailing line truncated",
+			"msg", "corrupt trailing line ignored",
 			"line", lineNum,
-			"content", string(lastLine))
+			"len", len(lastLine))
 	}
 }
 
@@ -122,7 +121,6 @@ func (idx *sessionIndex) record(incidentID string, sessionID uuid.UUID) {
 		IncidentID: incidentID,
 		SessionID:  sessionID.String(),
 		Created:    time.Now(),
-		LastUsed:   time.Now(),
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {

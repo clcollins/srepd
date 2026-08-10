@@ -9,6 +9,7 @@ import (
 func TestNewBedrockProvider_AuthPanicRecovery(t *testing.T) {
 	cfg := Config{
 		Provider: "anthropic-bedrock",
+		Region:   "us-east-1",
 	}
 	_, err := newBedrockProvider(cfg)
 	if err != nil {

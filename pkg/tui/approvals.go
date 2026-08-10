@@ -21,12 +21,14 @@ const (
 
 // Ask represents a pending approval item from the AI watcher.
 type Ask struct {
-	ID        string
-	Kind      AskKind
-	Title     string
-	Body      string
-	Action    func() tea.Cmd
-	CreatedAt time.Time
+	ID            string
+	Kind          AskKind
+	Title         string
+	Body          string
+	IncidentID    string
+	IncidentTitle string
+	Action        func() tea.Cmd
+	CreatedAt     time.Time
 }
 
 // approvalsStrip manages the list of pending asks.
@@ -150,7 +152,7 @@ func inferAskKind(action string) AskKind {
 	switch {
 	case strings.Contains(lower, "escalat") || strings.Contains(lower, "re-escalat"):
 		return AskEscalationSuggestion
-	case strings.Contains(lower, "command") || strings.Contains(lower, "oc ") || strings.Contains(lower, "kubectl"):
+	case strings.Contains(lower, "command") || strings.HasPrefix(lower, "oc ") || strings.Contains(lower, " oc ") || strings.Contains(lower, "kubectl"):
 		return AskSuggestedCommand
 	default:
 		return AskDraftNote

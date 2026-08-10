@@ -799,9 +799,9 @@ type loginProcessExitedMsg struct {
 // sanitizeEnvValue removes or escapes characters that could cause issues
 // in environment variable values passed via -e flags to terminals or containers.
 func sanitizeEnvValue(s string) string {
+	s = stripControl(s)
 	r := strings.NewReplacer(
 		"\n", " ",
-		"\r", "",
 		"\t", " ",
 		"'", "",
 		"\"", "",
@@ -1101,8 +1101,9 @@ func silenceIncidents(incidents []pagerduty.Incident, policy *pagerduty.Escalati
 //lint:ignore U1000 - future proofing
 type addIncidentNoteMsg string
 type addedIncidentNoteMsg struct {
-	note *pagerduty.IncidentNote
-	err  error
+	note       *pagerduty.IncidentNote
+	err        error
+	incidentID string
 }
 
 func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, file *os.File) tea.Cmd {
@@ -1123,10 +1124,10 @@ func addNoteToIncident(p *pd.Config, incident *pagerduty.Incident, file *os.File
 
 		if note != "" {
 			n, err := pd.PostNote(p.Client, incident.ID, u, note)
-			return addedIncidentNoteMsg{n, err}
+			return addedIncidentNoteMsg{n, err, incident.ID}
 		}
 
-		return addedIncidentNoteMsg{nil, errors.New(nilNoteErr)}
+		return addedIncidentNoteMsg{nil, errors.New(nilNoteErr), incident.ID}
 	}
 }
 

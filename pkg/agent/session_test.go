@@ -1063,3 +1063,114 @@ func TestSessionManager_CloseAllReapsChildren(t *testing.T) {
 		}
 	}
 }
+
+func TestSpawn_HungChildReturnsWithinTimeout(t *testing.T) {
+	// A child that neither prints nor exits should not block forever.
+	// The spawn detection select must have a timeout/ctx.Done case.
+	executor := &callbackExecutor{
+		startFn: func(ctx context.Context, _ string, _ []string, _ []string) (io.WriteCloser, io.ReadCloser, *bytes.Buffer, func() error, error) {
+			stdoutR, stdoutW := io.Pipe()
+			go func() {
+				<-ctx.Done()
+				_ = stdoutW.Close()
+			}()
+			return &mockStdin{}, stdoutR, &bytes.Buffer{}, func() error {
+				<-ctx.Done()
+				return fmt.Errorf("signal: killed")
+			}, nil
+		},
+	}
+
+	cfg := Config{CLICommand: "claude", SessionEnabled: true}
+	s := NewSession(cfg, "INC-001", executor, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := s.Send(ctx, "hello")
+	require.Error(t, err, "spawn must return an error when child neither prints nor exits")
+	assert.Contains(t, err.Error(), "spawn",
+		"error should mention spawn")
+
+	// Close must not block
+	done := make(chan struct{})
+	go func() {
+		_ = s.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() blocked after hung spawn — deadlock")
+	}
+}
+
+func TestClaudeArgs(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields []string
+		want   []string
+	}{
+		{"bare claude", []string{"claude", "--print"}, []string{"--print"}},
+		{"absolute path", []string{"/usr/bin/claude", "--model", "opus"}, []string{"--model", "opus"}},
+		{"toolbox wrapper", []string{"toolbox", "run", "-c", "devtools", "claude", "--print"}, []string{"--print"}},
+		{"flatpak-spawn wrapper", []string{"flatpak-spawn", "--host", "claude", "--verbose"}, []string{"--verbose"}},
+		{"backward scan anchors on last claude", []string{"toolbox", "run", "claude", "--bare", "/usr/bin/claude"}, []string{}},
+		{"/usr/bin/claude as value does not trick backward scan",
+			[]string{"toolbox", "run", "claude", "--model", "opus"},
+			[]string{"--model", "opus"}},
+		{"no claude token falls back to fields[1:]", []string{"my-agent", "--flag"}, []string{"--flag"}},
+		{"single element returns nil", []string{"my-agent"}, nil},
+		{"empty returns nil", []string{}, nil},
+		{"claude with no args", []string{"claude"}, []string{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ClaudeArgs(tt.fields)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestValidateUserFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		tokens  []string
+		wantErr string
+	}{
+		{"nil tokens", nil, ""},
+		{"empty tokens", []string{}, ""},
+		{"allowed flags", []string{"--model", "opus", "--verbose", "--print"}, ""},
+		{"--bare denied", []string{"--bare"}, "--bare"},
+		{"--bare=true denied", []string{"--bare=true"}, "--bare"},
+		{"--dangerously-skip-permissions denied", []string{"--dangerously-skip-permissions"}, "--dangerously-skip-permissions"},
+		{"--permission-mode denied", []string{"--permission-mode", "bypassPermissions"}, "--permission-mode"},
+		{"--allowedTools denied", []string{"--allowedTools", "Bash"}, "--allowedTools"},
+		{"--disallowedTools denied", []string{"--disallowedTools", "Read"}, "--disallowedTools"},
+		{"--session-id denied", []string{"--session-id", "abc"}, "--session-id"},
+		{"--session-id=abc denied", []string{"--session-id=abc"}, "--session-id"},
+		{"--resume denied", []string{"--resume", "id"}, "--resume"},
+		{"-r short alias denied", []string{"-r", "id"}, "-r"},
+		{"--continue denied", []string{"--continue"}, "--continue"},
+		{"-c short alias denied", []string{"-c"}, "-c"},
+		{"--fork-session denied", []string{"--fork-session"}, "--fork-session"},
+		{"--input-format denied", []string{"--input-format", "text"}, "--input-format"},
+		{"--output-format denied", []string{"--output-format", "json"}, "--output-format"},
+		{"denied flag mid-args", []string{"--model", "opus", "--bare", "--verbose"}, "--bare"},
+		{"--flag=value form", []string{"--output-format=text"}, "--output-format"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateUserFlags(tt.tokens)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				assert.Contains(t, err.Error(), "denied flag")
+			}
+		})
+	}
+}

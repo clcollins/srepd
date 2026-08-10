@@ -35,8 +35,11 @@ type watcherStreamChunkMsg struct {
 }
 
 // watcherStreamDoneMsg signals the stream finished (err is nil on success).
+// ch identifies which stream produced this message so stale Done events from
+// superseded streams can be ignored.
 type watcherStreamDoneMsg struct {
 	err error
+	ch  <-chan streamEvent
 }
 
 // streamWatcherCmd starts a streaming provider query. A background goroutine runs
@@ -132,10 +135,10 @@ func readStreamCmd(ch <-chan streamEvent) tea.Cmd {
 	return func() tea.Msg {
 		ev, ok := <-ch
 		if !ok {
-			return watcherStreamDoneMsg{}
+			return watcherStreamDoneMsg{ch: ch}
 		}
 		if ev.done {
-			return watcherStreamDoneMsg{err: ev.err}
+			return watcherStreamDoneMsg{err: ev.err, ch: ch}
 		}
 		return watcherStreamChunkMsg{text: ev.text, ch: ch}
 	}

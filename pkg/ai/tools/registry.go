@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"unicode/utf8"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/clcollins/srepd/pkg/ai/policy"
@@ -144,6 +145,8 @@ func (r *Registry) GatedBetaTools(
 }
 
 // Truncate shortens s to maxBytes, appending a truncation marker if cut.
+// The cut point is backed up to the last valid UTF-8 rune boundary to
+// avoid splitting multi-byte characters.
 func Truncate(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
@@ -153,7 +156,15 @@ func Truncate(s string, maxBytes int) string {
 		return ""
 	}
 	if maxBytes <= len(marker) {
-		return s[:maxBytes]
+		cut := maxBytes
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		return s[:cut]
 	}
-	return s[:maxBytes-len(marker)] + marker
+	cut := maxBytes - len(marker)
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + marker
 }

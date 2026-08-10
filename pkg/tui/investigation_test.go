@@ -12,6 +12,7 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/ai/policy"
 	"github.com/clcollins/srepd/pkg/ai/tools"
 	"github.com/stretchr/testify/assert"
@@ -358,5 +359,56 @@ func TestIsAnthropicFamily(t *testing.T) {
 func TestDefaultInvestigationConfig(t *testing.T) {
 	cfg := defaultInvestigationConfig()
 	assert.Equal(t, 6, cfg.maxToolTurns)
-	assert.Greater(t, cfg.timeout.Seconds(), float64(0))
+	assert.Equal(t, 90*time.Second, cfg.timeout)
+	assert.Equal(t, policy.ModeInteractive, cfg.policyConfig.Mode)
+}
+
+func TestExtractToolRunnerFactory_NilProvider(t *testing.T) {
+	assert.Nil(t, extractToolRunnerFactory(nil))
+}
+
+func TestExtractToolRunnerFactory_NonAnthropicProvider(t *testing.T) {
+	mock := &ai.MockProvider{ProviderName: "ollama"}
+	assert.Nil(t, extractToolRunnerFactory(mock),
+		"non-Anthropic provider must return nil factory")
+}
+
+type mockBetaMessagesProvider struct {
+	ai.MockProvider
+}
+
+func (m *mockBetaMessagesProvider) BetaMessages() *anthropic.BetaMessageService {
+	return nil
+}
+
+func TestExtractToolRunnerFactory_WithBetaMessages(t *testing.T) {
+	mock := &mockBetaMessagesProvider{}
+	result := extractToolRunnerFactory(mock)
+	assert.Nil(t, result,
+		"BetaMessages() returns nil service so factory should be nil")
+}
+
+type realBetaMessagesProvider struct {
+	ai.MockProvider
+	svc *anthropic.BetaMessageService
+}
+
+func (r *realBetaMessagesProvider) BetaMessages() *anthropic.BetaMessageService {
+	return r.svc
+}
+
+func TestExtractToolRunnerFactory_NonNilService_ReturnsUsableFactory(t *testing.T) {
+	svc := anthropic.NewBetaMessageService()
+	mock := &realBetaMessagesProvider{svc: &svc}
+	factory := extractToolRunnerFactory(mock)
+	require.NotNil(t, factory,
+		"anthropic-family provider with non-nil BetaMessages must yield a non-nil factory")
+
+	runner := factory.NewToolRunner(nil, anthropic.BetaToolRunnerParams{
+		BetaMessageNewParams: anthropic.BetaMessageNewParams{
+			MaxTokens: 1,
+		},
+	})
+	assert.NotNil(t, runner,
+		"factory must be able to construct a BetaToolRunner")
 }
