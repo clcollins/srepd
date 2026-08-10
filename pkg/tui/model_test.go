@@ -1290,6 +1290,39 @@ func TestTabSwitch_TabKey(t *testing.T) {
 	}
 }
 
+func TestIncidentViewer_TopBottom(t *testing.T) {
+	m := createTestModel()
+	m.viewingIncident = true
+	m.selectedIncident = &pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "Q123"},
+	}
+	m.incidentViewer = newIncidentViewer()
+	m.incidentViewer.Height = 5
+	lines := ""
+	for i := 0; i < 50; i++ {
+		lines += "line\n"
+	}
+	m.incidentViewer.SetContent(lines)
+
+	// Scroll down first so we're not at the top
+	m.incidentViewer.GotoBottom()
+	assert.Greater(t, m.incidentViewer.YOffset, 0)
+
+	t.Run("g jumps to top", func(t *testing.T) {
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}
+		result, _ := m.Update(msg)
+		updated := result.(model)
+		assert.Equal(t, 0, updated.incidentViewer.YOffset)
+	})
+
+	t.Run("G jumps to bottom", func(t *testing.T) {
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}}
+		result, _ := m.Update(msg)
+		updated := result.(model)
+		assert.Greater(t, updated.incidentViewer.YOffset, 0)
+	})
+}
+
 // captureLogOutput runs a function while capturing log output at the given level.
 // Returns the captured log output as a string.
 func captureLogOutput(level log.Level, fn func()) string {
