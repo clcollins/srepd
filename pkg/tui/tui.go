@@ -734,7 +734,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tools.TierActionable:
 			m.watcherBuffer.Append("")
 			if msg.verdict.Action != "" {
-				ask := m.buildAskFromVerdict(msg.verdict)
+				ask := m.buildAskFromVerdict(msg.verdict, msg.incidentIDs)
 				m.approvals.Add(ask)
 			}
 			return m, m.startTypewriter(m.watcherMarker, msg.verdict.Summary)

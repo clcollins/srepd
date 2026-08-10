@@ -954,7 +954,7 @@ func defaultLogFilePath() string {
 	return logFilePathForOS(runtime.GOOS)
 }
 
-func (m *model) buildAskFromVerdict(verdict tools.Verdict) Ask {
+func (m *model) buildAskFromVerdict(verdict tools.Verdict, originatingIncidentIDs []string) Ask {
 	kind := inferAskKind(verdict.Action)
 	ask := Ask{
 		Kind:  kind,
@@ -962,10 +962,17 @@ func (m *model) buildAskFromVerdict(verdict tools.Verdict) Ask {
 		Body:  stripControl(verdict.Action),
 	}
 
-	// Snapshot the incident identity at creation time so that actions
-	// always target the incident that seeded the investigation, never
-	// whichever incident happens to be selected when the user accepts.
-	if m.selectedIncident != nil {
+	// Use the investigation's originating incident rather than whichever
+	// incident happens to be selected in the UI. This fixes D2: an ambient
+	// watcher must not depend on UI selection state.
+	var originInc *pagerduty.Incident
+	if len(originatingIncidentIDs) > 0 {
+		originInc = findIncidentByID(m.incidentList, originatingIncidentIDs[0])
+	}
+	if originInc != nil {
+		ask.IncidentID = originInc.ID
+		ask.IncidentTitle = originInc.Title
+	} else if m.selectedIncident != nil {
 		ask.IncidentID = m.selectedIncident.ID
 		ask.IncidentTitle = m.selectedIncident.Title
 	}

@@ -189,7 +189,8 @@ func (m *model) advanceTypewriter() tea.Cmd {
 }
 
 type watcherObservation struct {
-	Summary string
+	Summary     string
+	IncidentIDs []string // triggering incident IDs for scoped context
 }
 
 type watcherDedup struct {
@@ -241,7 +242,7 @@ func (m *model) runDetectors() []tea.Cmd {
 			// registry is available, run a tool-using investigation.
 			if m.toolRunnerFactory != nil && m.toolRegistry != nil && isAnthropicFamily(m.aiProvider.Name()) {
 				m.watcherQueryTimeout = m.investigationCfg.timeout
-				contextStr := buildWatcherContext(m)
+				contextStr := buildObservationContext(m, obs)
 				cmds = append(cmds, watcherInvestigateCmd(
 					m.toolRunnerFactory,
 					m.toolRegistry,
@@ -251,6 +252,7 @@ func (m *model) runDetectors() []tea.Cmd {
 					contextStr,
 					ai.ResolvedModel(m.aiProvider),
 					nil, // collected by wrappedOnAsk inside watcherInvestigateCmd
+					obs.IncidentIDs,
 				))
 			} else {
 				summary := buildIncidentSummary(m.incidentList)
@@ -290,16 +292,19 @@ func detectAll(incidents []pagerduty.Incident, clusterMap map[string][]string) [
 }
 
 func detectServiceStorm(incidents []pagerduty.Incident) []watcherObservation {
+	serviceIncidents := make(map[string][]string)
 	serviceCounts := make(map[string]int)
 	for _, inc := range incidents {
 		serviceCounts[inc.Service.Summary]++
+		serviceIncidents[inc.Service.Summary] = append(serviceIncidents[inc.Service.Summary], inc.ID)
 	}
 
 	var observations []watcherObservation
 	for svc, count := range serviceCounts {
 		if count >= 3 {
 			observations = append(observations, watcherObservation{
-				Summary: fmt.Sprintf("Service storm: %d incidents on %s", count, svc),
+				Summary:     fmt.Sprintf("Service storm: %d incidents on %s", count, svc),
+				IncidentIDs: serviceIncidents[svc],
 			})
 		}
 	}
@@ -312,9 +317,11 @@ func detectClusterStorm(incidents []pagerduty.Incident, clusterMap map[string][]
 	}
 
 	clusterCounts := make(map[string]int)
+	clusterIncidents := make(map[string][]string)
 	for _, inc := range incidents {
 		for _, clusterID := range clusterMap[inc.ID] {
 			clusterCounts[clusterID]++
+			clusterIncidents[clusterID] = append(clusterIncidents[clusterID], inc.ID)
 		}
 	}
 
@@ -322,7 +329,8 @@ func detectClusterStorm(incidents []pagerduty.Incident, clusterMap map[string][]
 	for cluster, count := range clusterCounts {
 		if count >= 2 {
 			observations = append(observations, watcherObservation{
-				Summary: fmt.Sprintf("Cluster storm: %d incidents on cluster %s", count, cluster),
+				Summary:     fmt.Sprintf("Cluster storm: %d incidents on cluster %s", count, cluster),
+				IncidentIDs: clusterIncidents[cluster],
 			})
 		}
 	}
@@ -331,15 +339,18 @@ func detectClusterStorm(incidents []pagerduty.Incident, clusterMap map[string][]
 
 func detectUrgencyShift(incidents []pagerduty.Incident) []watcherObservation {
 	highCount := 0
+	var highIDs []string
 	for _, inc := range incidents {
 		if inc.Urgency == "high" {
 			highCount++
+			highIDs = append(highIDs, inc.ID)
 		}
 	}
 
 	if highCount >= 3 {
 		return []watcherObservation{{
-			Summary: fmt.Sprintf("High urgency cluster: %d/%d incidents are high urgency", highCount, len(incidents)),
+			Summary:     fmt.Sprintf("High urgency cluster: %d/%d incidents are high urgency", highCount, len(incidents)),
+			IncidentIDs: highIDs,
 		}}
 	}
 	return nil
@@ -356,6 +367,83 @@ func isWatcherCommand(input string) bool {
 
 func parseWatcherQuery(input string) string {
 	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), ":watcher"))
+}
+
+// buildObservationContext derives context from the observation's triggering
+// incidents, never from m.selectedIncident. Implements design choice (c):
+// triggering incidents are foregrounded with sibling alerts labelled as background.
+func buildObservationContext(m *model, obs watcherObservation) string {
+	var parts []string
+
+	for i, incID := range obs.IncidentIDs {
+		inc := findIncidentByID(m.incidentList, incID)
+		if inc == nil {
+			continue
+		}
+
+		label := "Triggering incident"
+		if i > 0 {
+			label = "Related incident"
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s (%s)", label, inc.Title, inc.ID))
+		parts = append(parts, fmt.Sprintf("Service: %s", inc.Service.Summary))
+		parts = append(parts, fmt.Sprintf("Status: %s, Urgency: %s", inc.Status, inc.Urgency))
+
+		var alerts []pagerduty.IncidentAlert
+		if cached, ok := m.incidentCache[inc.ID]; ok && cached.alertsLoaded {
+			alerts = cached.alerts
+		}
+
+		for _, alert := range alerts {
+			if details, ok := alert.Body["details"].(map[string]interface{}); ok {
+				if name, ok := details["alert_name"].(string); ok {
+					parts = append(parts, fmt.Sprintf("Alert: %s", name))
+				}
+				if sopURL, ok := details["firing"].(string); ok && sopURL != "" {
+					parts = append(parts, fmt.Sprintf("SOP: %s", sopURL))
+				}
+				if cluster, ok := details["cluster_id"].(string); ok {
+					parts = append(parts, fmt.Sprintf("Cluster: %s", cluster))
+					parts = append(parts, buildClusterContext(m, cluster)...)
+				}
+			}
+		}
+
+		var notes []pagerduty.IncidentNote
+		if cached, ok := m.incidentCache[inc.ID]; ok && cached.notesLoaded {
+			notes = cached.notes
+		}
+
+		if len(notes) > 0 {
+			parts = append(parts, fmt.Sprintf("Notes: %d", len(notes)))
+			for j, n := range notes {
+				if j >= 5 {
+					break
+				}
+				content := n.Content
+				if r := []rune(content); len(r) > 300 {
+					content = string(r[:300]) + "..."
+				}
+				parts = append(parts, fmt.Sprintf("  - %s", content))
+			}
+		}
+	}
+
+	if len(m.incidentList) > 0 {
+		parts = append(parts, fmt.Sprintf("\nFull incident queue (%d incidents):", len(m.incidentList)))
+		parts = append(parts, buildIncidentSummary(m.incidentList))
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+func findIncidentByID(incidents []pagerduty.Incident, id string) *pagerduty.Incident {
+	for i := range incidents {
+		if incidents[i].ID == id {
+			return &incidents[i]
+		}
+	}
+	return nil
 }
 
 func buildWatcherContext(m *model) string {

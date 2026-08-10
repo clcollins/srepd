@@ -105,7 +105,7 @@ func TestUpdate_ApprovalsEnter_ReturnsCmdThatPostsNote(t *testing.T) {
 		Tier:    tools.TierActionable,
 		Summary: "Post investigation note",
 		Action:  noteContent,
-	})
+	}, nil)
 	m.approvals.Add(ask)
 
 	// Simulate user browsing to a different incident after ask creation

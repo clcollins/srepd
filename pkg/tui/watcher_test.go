@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/clcollins/srepd/pkg/ai/tools"
+	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -409,4 +411,107 @@ func TestBuildWatcherContext_WithIncident(t *testing.T) {
 	assert.Contains(t, ctx, "test-service")
 	assert.Contains(t, ctx, "triggered")
 	assert.Contains(t, ctx, "high")
+}
+
+// D2 test: an observation for alert A, with a DIFFERENT incident selected,
+// must produce context naming A — and would FAIL if it reverted to m.selectedIncident.
+func TestBuildObservationContext_ScopedToTriggeringIncident(t *testing.T) {
+	m := createTestModel()
+
+	incidentA := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-A"},
+		Title:     "Alert on cluster-xyz",
+		Status:    "triggered",
+		Urgency:   "high",
+		Service:   pagerduty.APIObject{Summary: "svc-alpha"},
+	}
+	incidentB := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-B"},
+		Title:     "Unrelated alert",
+		Status:    "acknowledged",
+		Urgency:   "low",
+		Service:   pagerduty.APIObject{Summary: "svc-beta"},
+	}
+	m.incidentList = []pagerduty.Incident{incidentA, incidentB}
+
+	// User has selected incident B, but the observation is about A
+	m.selectedIncident = &incidentB
+
+	obs := watcherObservation{
+		Summary:     "Service storm on svc-alpha",
+		IncidentIDs: []string{"INC-A"},
+	}
+
+	ctx := buildObservationContext(&m, obs)
+
+	// Must contain triggering incident A's details
+	assert.Contains(t, ctx, "INC-A")
+	assert.Contains(t, ctx, "Alert on cluster-xyz")
+	assert.Contains(t, ctx, "svc-alpha")
+	assert.Contains(t, ctx, "triggered")
+
+	// The triggering section must not label incident B as "Triggering" or "Related"
+	assert.NotContains(t, ctx, "Triggering incident: Unrelated alert")
+	assert.NotContains(t, ctx, "Related incident: Unrelated alert")
+	// Queue summary includes all incidents (expected — design choice c)
+	assert.Contains(t, ctx, "Full incident queue")
+}
+
+func TestBuildObservationContext_MultipleTriggering(t *testing.T) {
+	m := createTestModel()
+	m.incidentList = []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "P1"}, Title: "First", Service: pagerduty.APIObject{Summary: "svc-a"}, Status: "triggered", Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "P2"}, Title: "Second", Service: pagerduty.APIObject{Summary: "svc-a"}, Status: "triggered", Urgency: "high"},
+	}
+
+	obs := watcherObservation{
+		Summary:     "Service storm",
+		IncidentIDs: []string{"P1", "P2"},
+	}
+
+	ctx := buildObservationContext(&m, obs)
+	assert.Contains(t, ctx, "P1")
+	assert.Contains(t, ctx, "P2")
+	assert.Contains(t, ctx, "Triggering incident")
+	assert.Contains(t, ctx, "Related incident")
+}
+
+func TestBuildObservationContext_EmptyIncidentIDs(t *testing.T) {
+	m := createTestModel()
+	m.incidentList = []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+	obs := watcherObservation{Summary: "Something happened"}
+
+	ctx := buildObservationContext(&m, obs)
+	assert.Contains(t, ctx, "P1", "queue summary still included")
+}
+
+func TestBuildAskFromVerdict_UsesOriginatingIncident(t *testing.T) {
+	mock := &pd.MockPagerDutyClient{}
+	m := createTestModel()
+	m.config = &pd.Config{Client: mock}
+
+	incidentA := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-ORIGIN"},
+		Title:     "Originating Alert",
+	}
+	incidentB := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-SELECTED"},
+		Title:     "UI Selected Alert",
+	}
+	m.incidentList = []pagerduty.Incident{incidentA, incidentB}
+	m.selectedIncident = &incidentB
+
+	verdict := tools.Verdict{
+		Tier:    tools.TierActionable,
+		Summary: "Post note",
+		Action:  "Investigation note content",
+	}
+
+	ask := m.buildAskFromVerdict(verdict, []string{"INC-ORIGIN"})
+
+	assert.Equal(t, "INC-ORIGIN", ask.IncidentID,
+		"must use originating incident, not m.selectedIncident")
+	assert.Equal(t, "Originating Alert", ask.IncidentTitle)
 }

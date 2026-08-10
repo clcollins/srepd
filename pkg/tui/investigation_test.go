@@ -95,6 +95,7 @@ func TestWatcherInvestigateCmd_DenyEverything_ProductionPath(t *testing.T) {
 		"Test context",
 		"claude-sonnet-4-6",
 		nil,
+		nil,
 	)
 
 	msg := cmd()
@@ -175,6 +176,7 @@ func TestWatcherInvestigateCmd_AllowPath_HandlerRuns(t *testing.T) {
 		"Test context",
 		"claude-sonnet-4-6",
 		nil,
+		nil,
 	)
 
 	msg := cmd()
@@ -229,7 +231,7 @@ func TestWatcherInvestigateCmd_ModelPlumbing_ExplicitModel(t *testing.T) {
 	}
 
 	configuredModel := "us.anthropic.claude-sonnet-4-6"
-	cmd := watcherInvestigateCmd(factory, reg, cfg, "test prompt", "obs", "ctx", configuredModel, nil)
+	cmd := watcherInvestigateCmd(factory, reg, cfg, "test prompt", "obs", "ctx", configuredModel, nil, nil)
 	msg := cmd()
 	result, ok := msg.(investigationMsg)
 	require.True(t, ok)
@@ -257,7 +259,7 @@ func TestWatcherInvestigateCmd_ModelPlumbing_EmptyModelReturnsError(t *testing.T
 		option.WithBaseURL(server.URL),
 	)
 
-	cmd := watcherInvestigateCmd(&client.Beta.Messages, reg, cfg, "prompt", "obs", "ctx", "", nil)
+	cmd := watcherInvestigateCmd(&client.Beta.Messages, reg, cfg, "prompt", "obs", "ctx", "", nil, nil)
 	msg := cmd()
 	result, ok := msg.(investigationMsg)
 	require.True(t, ok)
@@ -323,7 +325,7 @@ func TestWatcherInvestigateCmd_AskDedup_SameToolAndInput(t *testing.T) {
 
 	cmd := watcherInvestigateCmd(
 		&client.Beta.Messages, reg, cfg,
-		"test prompt", "obs", "ctx", "claude-sonnet-4-6", nil,
+		"test prompt", "obs", "ctx", "claude-sonnet-4-6", nil, nil,
 	)
 
 	msg := cmd()

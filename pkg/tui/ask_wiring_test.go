@@ -24,7 +24,7 @@ func TestBuildAskFromVerdict_DraftNote_ActionCallsPDAddNote(t *testing.T) {
 		Action:  "The cluster error rate is above threshold — posting investigation note",
 	}
 
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Equal(t, AskDraftNote, ask.Kind)
 	require.NotNil(t, ask.Action, "DraftNote Action must not be nil")
@@ -52,7 +52,7 @@ func TestBuildAskFromVerdict_SuggestedCommand_CopiesNotExecutes(t *testing.T) {
 		Action:  cmdText,
 	}
 
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Equal(t, AskSuggestedCommand, ask.Kind)
 	require.NotNil(t, ask.Action, "SuggestedCommand Action must not be nil")
@@ -83,7 +83,7 @@ func TestBuildAskFromVerdict_EscalationSuggestion_ReEscalates(t *testing.T) {
 		Action:  "Re-escalate this incident to the on-call team",
 	}
 
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Equal(t, AskEscalationSuggestion, ask.Kind)
 	require.NotNil(t, ask.Action, "EscalationSuggestion Action must not be nil")
@@ -113,7 +113,7 @@ func TestBuildAskFromVerdict_UnknownText_FallbackHasAction(t *testing.T) {
 		Action:  "Something happened that does not match any known pattern",
 	}
 
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Equal(t, AskDraftNote, ask.Kind,
 		"inferAskKind fallback must return AskDraftNote, not zero-value")
@@ -169,7 +169,7 @@ func TestBuildAskFromVerdict_DraftNote_TargetsOriginalIncident(t *testing.T) {
 		Summary: "Post note",
 		Action:  "Note content for incident A",
 	}
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Equal(t, "INC-A", ask.IncidentID,
 		"Ask must snapshot the incident ID at creation time")
@@ -210,7 +210,7 @@ func TestBuildAskFromVerdict_Escalation_TargetsOriginalIncident(t *testing.T) {
 		Summary: "Re-escalate",
 		Action:  "Re-escalate this incident",
 	}
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Equal(t, "INC-A", ask.IncidentID)
 
@@ -237,7 +237,7 @@ func TestBuildAskFromVerdict_NilSelectedIncident_NoAction(t *testing.T) {
 		Summary: "Re-escalate",
 		Action:  "Re-escalate this incident",
 	}
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Empty(t, ask.IncidentID, "no incident selected means empty IncidentID")
 	require.NotNil(t, ask.Action)
@@ -263,7 +263,7 @@ func TestBuildAskFromVerdict_SanitizesControlSequences(t *testing.T) {
 		Action:  "Injected\x1b[2Jaction\x07text",
 	}
 
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	assert.Equal(t, "Cleantitle", ask.Title,
 		"Ask.Title must have control sequences stripped")
@@ -285,7 +285,7 @@ func TestBuildAskFromVerdict_UnhandledKind_FallbackAction(t *testing.T) {
 		Action:  "Permission to run write_note tool",
 	}
 
-	ask := m.buildAskFromVerdict(verdict)
+	ask := m.buildAskFromVerdict(verdict, nil)
 
 	require.NotNil(t, ask.Action,
 		"even if the AskKind switch has no matching case, Action must not be nil")
