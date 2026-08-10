@@ -272,6 +272,7 @@ func clusterFromResponse(cluster *cmv1.Cluster) *ClusterInfo {
 		State:         string(cluster.State()),
 		CloudProvider: cluster.CloudProvider().ID(),
 		Version:       cluster.OpenshiftVersion(),
+		CreatedAt:     cluster.CreationTimestamp(),
 	}
 
 	if cluster.Region() != nil {

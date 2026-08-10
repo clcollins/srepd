@@ -11,7 +11,8 @@
     "hypershift": false,
     "ccs": true,
     "organization": "Fake Aeronautical Ltd",
-    "organization_id": "1a2b3c4d5e6f7g8h9i0j"
+    "organization_id": "1a2b3c4d5e6f7g8h9i0j",
+    "created_at": "2024-03-15T10:30:00Z"
   },
   "b2d4e6f8-fake-uuid-test-def012345678": {
     "id": "cluster-osd-002",
