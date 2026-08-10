@@ -79,7 +79,7 @@ func TestResolvedModel(t *testing.T) {
 	})
 
 	t.Run("bedrock provider yields inference-profile ID not bare model", func(t *testing.T) {
-		p, err := newBedrockProvider(Config{})
+		p, err := newBedrockProvider(Config{Region: "us-east-1"})
 		assert.NoError(t, err)
 		assert.Equal(t, bedrockDefaultModel, ResolvedModel(p),
 			"Bedrock default must be the inference-profile ID, not the bare model")

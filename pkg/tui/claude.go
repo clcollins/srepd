@@ -173,6 +173,10 @@ func (m model) handleClaudePrompt(msg claudePromptMsg, lookPath func(string) (st
 		return m, m.flashNotification(err.Error())
 	}
 
+	if m.claudeQuerying {
+		return m, m.flashNotification("agent query already in progress")
+	}
+
 	incidentID := ""
 	if m.selectedIncident != nil {
 		incidentID = m.selectedIncident.ID
@@ -291,6 +295,7 @@ func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea
 		return m, nil
 
 	case agent.PermissionAsk:
+		// TODO(phase-2): wire interactive permission approval through the TUI
 		m.setStatus("⚠ Agent needs permission — check terminal")
 		return m, readAgentSessionCmd(msg.session)
 
@@ -330,10 +335,11 @@ func (m model) handleClaudeResponse(msg claudeResponseMsg) (tea.Model, tea.Cmd) 
 
 // truncatePrompt shortens a prompt string for display in the status bar
 func truncatePrompt(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	r := []rune(s)
+	if len(r) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return string(r[:maxLen]) + "..."
 }
 
 // defaultLookPath wraps exec.LookPath for production use
@@ -429,9 +435,24 @@ type agentSessionDoneMsg struct {
 }
 
 // readAgentSessionCmd drains events from a session and returns them
-// as Bubble Tea messages.
+// as Bubble Tea messages. Events are drained preferentially: Done()
+// is only checked when the event channel has nothing buffered, so a
+// final Result that arrives simultaneously with process exit is never
+// discarded by Go's random select.
 func readAgentSessionCmd(s *agent.Session) tea.Cmd {
 	return func() tea.Msg {
+		select {
+		case ev, ok := <-s.Events():
+			if !ok {
+				return agentSessionDoneMsg{}
+			}
+			if ev.Kind == agent.Error {
+				return agentSessionDoneMsg{err: ev.Err}
+			}
+			return agentSessionEventMsg{event: ev, session: s}
+		default:
+		}
+		// No event buffered — wait for either.
 		select {
 		case ev, ok := <-s.Events():
 			if !ok {
@@ -480,8 +501,11 @@ type agentStreamChunkMsg struct {
 	ch   <-chan streamEvent
 }
 
+// agentStreamDoneMsg signals the agent stream finished. ch identifies which
+// stream produced this message so stale Done events can be ignored.
 type agentStreamDoneMsg struct {
 	err error
+	ch  <-chan streamEvent
 }
 
 // readAgentStreamCmd drains one event from the stream channel and returns it
@@ -490,10 +514,10 @@ func readAgentStreamCmd(ch <-chan streamEvent) tea.Cmd {
 	return func() tea.Msg {
 		ev, ok := <-ch
 		if !ok {
-			return agentStreamDoneMsg{}
+			return agentStreamDoneMsg{ch: ch}
 		}
 		if ev.done {
-			return agentStreamDoneMsg{err: ev.err}
+			return agentStreamDoneMsg{err: ev.err, ch: ch}
 		}
 		return agentStreamChunkMsg{text: ev.text, ch: ch}
 	}

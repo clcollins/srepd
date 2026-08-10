@@ -190,9 +190,11 @@ type model struct {
 	streamResponses      bool
 	watcherStreamPartial string
 	watcherStreamCancel  context.CancelFunc
+	watcherStreamCh      <-chan streamEvent
 
 	agentStreamPartial string
 	agentStreamCancel  context.CancelFunc
+	agentStreamCh      <-chan streamEvent
 
 	// Session-based agent state (Phase 1 AI rearchitecture)
 	agentSessionEnabled   bool
@@ -956,55 +958,72 @@ func (m *model) buildAskFromVerdict(verdict tools.Verdict) Ask {
 	kind := inferAskKind(verdict.Action)
 	ask := Ask{
 		Kind:  kind,
-		Title: verdict.Summary,
-		Body:  verdict.Action,
+		Title: stripControl(verdict.Summary),
+		Body:  stripControl(verdict.Action),
+	}
+
+	// Snapshot the incident identity at creation time so that actions
+	// always target the incident that seeded the investigation, never
+	// whichever incident happens to be selected when the user accepts.
+	if m.selectedIncident != nil {
+		ask.IncidentID = m.selectedIncident.ID
+		ask.IncidentTitle = m.selectedIncident.Title
 	}
 
 	switch kind {
 	case AskDraftNote:
-		noteContent := verdict.Action
+		noteContent := ask.Body
+		incidentID := ask.IncidentID
 		ask.Action = func() tea.Cmd {
-			return m.postAINoteCmd(noteContent)
+			if incidentID == "" {
+				return func() tea.Msg { return setStatusMsg{"no incident selected for note"} }
+			}
+			return m.postAINoteToIncidentCmd(incidentID, noteContent)
 		}
 	case AskSuggestedCommand:
-		cmdText := verdict.Action
+		cmdText := ask.Body
 		ask.Action = func() tea.Cmd {
 			return m.copyToClipboardCmd(cmdText)
 		}
 	case AskEscalationSuggestion:
+		incidentID := ask.IncidentID
+		var snapshotIncident pagerduty.Incident
+		if m.selectedIncident != nil {
+			snapshotIncident = *m.selectedIncident
+		}
 		ask.Action = func() tea.Cmd {
-			if m.selectedIncident == nil {
+			if incidentID == "" {
 				return func() tea.Msg { return setStatusMsg{"no incident selected for re-escalation"} }
 			}
-			incident := *m.selectedIncident
 			return func() tea.Msg {
-				return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{incident}}
+				return unAcknowledgeIncidentsMsg{incidents: []pagerduty.Incident{snapshotIncident}}
 			}
 		}
 	default:
-		noteContent := verdict.Action
+		noteContent := ask.Body
+		incidentID := ask.IncidentID
 		ask.Action = func() tea.Cmd {
-			return m.postAINoteCmd(noteContent)
+			if incidentID == "" {
+				return func() tea.Msg { return setStatusMsg{"no incident selected for note"} }
+			}
+			return m.postAINoteToIncidentCmd(incidentID, noteContent)
 		}
 	}
 
 	return ask
 }
 
-func (m *model) postAINoteCmd(content string) tea.Cmd {
+func (m *model) postAINoteToIncidentCmd(incidentID string, content string) tea.Cmd {
 	return func() tea.Msg {
 		if m.config == nil || m.config.Client == nil {
 			return errMsg{fmt.Errorf("PagerDuty not configured")}
-		}
-		if m.selectedIncident == nil {
-			return setStatusMsg{"no incident selected for note"}
 		}
 		u, err := pd.GetCurrentUser(m.config.Client)
 		if err != nil {
 			return errMsg{err}
 		}
-		n, err := pd.PostNote(m.config.Client, m.selectedIncident.ID, u, content)
-		return addedIncidentNoteMsg{n, err}
+		n, err := pd.PostNote(m.config.Client, incidentID, u, content)
+		return addedIncidentNoteMsg{n, err, incidentID}
 	}
 }
 

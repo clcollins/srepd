@@ -1410,8 +1410,9 @@ func TestSREActionsLogAtInfoLevel(t *testing.T) {
 		{
 			name: "note added logs at INFO",
 			msg: addedIncidentNoteMsg{
-				note: &pagerduty.IncidentNote{ID: "N123", Content: "test note"},
-				err:  nil,
+				note:       &pagerduty.IncidentNote{ID: "N123", Content: "test note"},
+				err:        nil,
+				incidentID: "Q789",
 			},
 			setupModel: func(m *model) {
 				m.selectedIncident = &pagerduty.Incident{

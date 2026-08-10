@@ -339,6 +339,58 @@ func TestBuildWatcherContext_NoIncident(t *testing.T) {
 	assert.Contains(t, ctx, "svc-a")
 }
 
+func TestStripControl(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"plain text", "hello world", "hello world"},
+		{"preserves newline", "line1\nline2", "line1\nline2"},
+		{"preserves tab", "col1\tcol2", "col1\tcol2"},
+		{"strips ANSI color", "hello \x1b[31mred\x1b[0m world", "hello red world"},
+		{"strips ANSI cursor move", "text\x1b[2Amoved", "textmoved"},
+		{"strips OSC-52 clipboard", "text\x1b]52;c;SGVsbG8=\x07done", "textdone"},
+		{"strips OSC with ST terminator", "text\x1b]0;title\x1b\\done", "textdone"},
+		{"strips BEL", "hello\x07world", "helloworld"},
+		{"strips C0 NUL", "hello\x00world", "helloworld"},
+		{"strips C0 BS", "hello\x08world", "helloworld"},
+		{"strips C0 CR", "hello\rworld", "helloworld"},
+		{"strips mixed controls", "\x1b[31m\x07alert\x1b[0m\x00", "alert"},
+		{"empty string", "", ""},
+		{"only controls", "\x1b[31m\x07\x00", ""},
+		{"unicode preserved", "hello 世界 🤖", "hello 世界 🤖"},
+		{"CSI with params", "\x1b[38;5;196mcolored\x1b[0m", "colored"},
+		// Truncated/malformed sequences — must not panic (R1)
+		{"truncated CSI params", "\x1b[999", ""},
+		{"truncated CSI bare", "\x1b[", ""},
+		{"lone ESC at end", "\x1b", ""},
+		{"truncated OSC bare", "\x1b]", ""},
+		{"truncated OSC-8 link", "\x1b]8;;", ""},
+		{"lone ESC mid-string", "hello\x1bworld", "helloorld"},
+		{"truncated CSI after text", "ok\x1b[999", "ok"},
+		{"truncated OSC after text", "ok\x1b]title", "ok"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, stripControl(tt.input))
+		})
+	}
+}
+
+func TestWatcherBuffer_StripsControlOnAppend(t *testing.T) {
+	buf := newWatcherBuffer(5)
+	buf.Append("safe \x1b[31mred\x1b[0m text")
+	assert.Equal(t, "safe red text", buf.Content())
+}
+
+func TestWatcherBuffer_StripsControlOnSetLast(t *testing.T) {
+	buf := newWatcherBuffer(5)
+	buf.Append("initial")
+	buf.SetLast("updated \x1b]52;c;SGVsbG8=\x07 content")
+	assert.Equal(t, "updated  content", buf.Content())
+}
+
 func TestBuildWatcherContext_WithIncident(t *testing.T) {
 	m := createTestModel()
 	m.selectedIncident = &pagerduty.Incident{

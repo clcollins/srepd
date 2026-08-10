@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewProvider_Anthropic(t *testing.T) {
@@ -249,6 +250,71 @@ func TestValidateConfig_Invalid(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errContains)
 		})
+	}
+}
+
+func TestNewProvider_BedrockNoRegion(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+
+	provider, err := NewProvider(Config{
+		Provider: "anthropic-bedrock",
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "region")
+	assert.Contains(t, err.Error(), "AWS_REGION")
+}
+
+func TestNewProvider_BedrockRegionFromConfig(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+
+	provider, err := NewProvider(Config{
+		Provider: "anthropic-bedrock",
+		Region:   "us-west-2",
+	})
+
+	// Should pass region validation (may still fail on AWS auth, which is OK)
+	if err != nil {
+		assert.NotContains(t, err.Error(), "AWS_REGION",
+			"with Region set in config, region validation should pass")
+	} else {
+		assert.NotNil(t, provider)
+	}
+}
+
+func TestNewProvider_BedrockRegionFromEnv(t *testing.T) {
+	t.Setenv("AWS_REGION", "eu-west-1")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+
+	provider, err := NewProvider(Config{
+		Provider: "anthropic-bedrock",
+	})
+
+	// Should pass region validation (may still fail on AWS auth, which is OK)
+	if err != nil {
+		assert.NotContains(t, err.Error(), "AWS_REGION",
+			"with AWS_REGION set, region validation should pass")
+	} else {
+		assert.NotNil(t, provider)
+	}
+}
+
+func TestNewProvider_BedrockRegionFromDefaultRegionEnv(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "ap-southeast-1")
+
+	provider, err := NewProvider(Config{
+		Provider: "anthropic-bedrock",
+	})
+
+	if err != nil {
+		assert.NotContains(t, err.Error(), "AWS_REGION",
+			"with AWS_DEFAULT_REGION set, region validation should pass")
+	} else {
+		assert.NotNil(t, provider)
 	}
 }
 
