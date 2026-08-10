@@ -245,7 +245,7 @@ func TestLoginProcessExitedMsg_TCCDenialShowsGuidance(t *testing.T) {
 		m := createTestModel()
 
 		exitErr := errors.New("exit status 1")
-		stderr := "execution error: System Events got an error: osascript is not allowed. (-1743)"
+		stderr := "execution error: System Events got an error: osascript is not allowed to send keystrokes. (-1743)"
 		_, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr, stderr: stderr})
 
 		assert.NotNil(t, cmd, "should return a command wrapping errMsg")

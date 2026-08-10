@@ -795,14 +795,15 @@ type loginProcessExitedMsg struct {
 // a known macOS error pattern. Returns empty if no pattern matches.
 // The translation appends to, never replaces, the raw stderr.
 func translateLoginStderr(stderr string) string {
-	if strings.Contains(stderr, "-1743") || strings.Contains(stderr, "Not authorized to send Apple events") {
+	lower := strings.ToLower(stderr)
+	if strings.Contains(stderr, "(-1743)") || strings.Contains(lower, "not authorized to send apple events") {
 		return "\n\nmacOS blocked the terminal automation request. " +
 			"Open System Settings > Privacy & Security > Automation and enable " +
 			"the toggle for the app you run srepd in. If it is already enabled " +
 			"(or missing), toggle it off then on. As a last resort, run " +
 			"`tccutil reset AppleEvents` in a terminal and retry."
 	}
-	if strings.Contains(stderr, "-600") || strings.Contains(stderr, "application isn't running") || strings.Contains(stderr, "-10810") {
+	if strings.Contains(stderr, "(-600)") || strings.Contains(lower, "application isn't running") || strings.Contains(stderr, "(-10810)") {
 		return "\n\nmacOS could not launch the terminal application. " +
 			"Please verify it is installed and can be opened manually."
 	}

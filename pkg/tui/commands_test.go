@@ -3218,14 +3218,24 @@ func TestTranslateLoginStderr(t *testing.T) {
 			contains: "Privacy & Security",
 		},
 		{
-			name:     "application not running error -600",
+			name:     "application not running error (-600)",
 			stderr:   "execution error: iTerm2 got an error: Application isn't running. (-600)",
 			contains: "verify it is installed",
 		},
 		{
-			name:     "launch failure error -10810",
-			stderr:   "execution error: An error of type -10810 has occurred.",
+			name:     "application not running text only (capital A)",
+			stderr:   "Application isn't running.",
 			contains: "verify it is installed",
+		},
+		{
+			name:     "launch failure error (-10810)",
+			stderr:   "execution error: An error of type (-10810) has occurred.",
+			contains: "verify it is installed",
+		},
+		{
+			name:   "bare -600 without parens does not match",
+			stderr: "error code -600 encountered",
+			empty:  true,
 		},
 		{
 			name:   "unrecognized stderr",
