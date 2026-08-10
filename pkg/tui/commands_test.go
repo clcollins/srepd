@@ -1215,7 +1215,7 @@ func TestLoginCommandStructureWithEnvVars(t *testing.T) {
 
 func TestLogin_AppleScriptUsesWrapperPath(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SREPD_WRAPPER_DIR", tmpDir)
+	t.Setenv("SREPD_TEST_WRAPPER_DIR", tmpDir)
 
 	l, err := launcher.NewClusterLauncherWithToolbox(
 		"iterm2", "ocm-container --cluster-id %%CLUSTER_ID%%",
@@ -1259,7 +1259,7 @@ func TestLogin_AppleScriptUsesWrapperPath(t *testing.T) {
 
 func TestLogin_AppleScriptOCMContainerNoEnvDuplication(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SREPD_WRAPPER_DIR", tmpDir)
+	t.Setenv("SREPD_TEST_WRAPPER_DIR", tmpDir)
 
 	l, err := launcher.NewClusterLauncherWithToolbox(
 		"iterm2", "ocm-container --cluster-id %%CLUSTER_ID%%",

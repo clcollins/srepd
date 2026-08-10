@@ -124,9 +124,9 @@ func CleanupWrapperScripts(baseDir string, maxAge time.Duration) error {
 }
 
 // WrapperScriptDir returns the directory for wrapper scripts. Tests can
-// override it via SREPD_WRAPPER_DIR to avoid writing to the real cache.
+// override it via SREPD_TEST_WRAPPER_DIR to avoid writing to the real cache.
 func WrapperScriptDir() (string, error) {
-	if override := os.Getenv("SREPD_WRAPPER_DIR"); override != "" {
+	if override := os.Getenv("SREPD_TEST_WRAPPER_DIR"); override != "" {
 		return override, nil
 	}
 	cacheDir, err := os.UserCacheDir()

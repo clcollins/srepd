@@ -52,7 +52,7 @@ For `iterm2`, after confirming `osascript` exists, also checks
 ### login() integration tests
 
 Two tests in `commands_test.go`, both using `t.TempDir()` via
-`SREPD_WRAPPER_DIR` env override to avoid writing to the real cache:
+`SREPD_TEST_WRAPPER_DIR` env override to avoid writing to the real cache:
 - Wrapper branch wins for AppleScript (osascript in error proves path)
   and wrapper script is created with correct content
 - OCM-container flow does NOT duplicate env vars as exports
@@ -78,11 +78,31 @@ duplicated profile-resolve-and-wrap logic.
 | `pkg/launcher/launcher.go` | Extracted `buildTerminalCommand` shared helper |
 | `pkg/launcher/launcher_test.go` | Comment on AppleScript test re: login() bypass |
 | `pkg/tui/commands.go` | Fix env duplication, pass `os.Stat` to `DetectTerminals` |
-| `pkg/launcher/wrapper.go` | `SREPD_WRAPPER_DIR` env override for test isolation |
+| `pkg/launcher/wrapper.go` | `SREPD_TEST_WRAPPER_DIR` env override for test isolation |
 | `pkg/tui/commands_test.go` | 2 login() integration tests for AppleScript flows (temp dir isolation) |
 | `cmd/generate.go` | Pass `os.Stat` to `DetectTerminals` |
 | `pkg/tui/tui.go` | Pass `os.Stat` to `DetectTerminals` |
 | `README.md` | macOS terminal support section |
+
+## Documentation
+
+Added `docs/terminals.md` covering all supported terminals across Linux,
+Flatpak, macOS, and Toolbox environments, including profile types,
+environment variable passing mechanisms, wrapper scripts, variable
+substitution, and configuration examples.
+
+## Known limitations (acknowledged, not blocking)
+
+- `SREPD_TEST_WRAPPER_DIR` is a test-only hook for wrapper script
+  directory isolation; not intended as user-facing configuration.
+- `~/Applications/` is not probed for bundle detection or iTerm2
+  validation — only `/Applications/`. Per-user app installs are uncommon
+  enough that this is future work if users request it.
+- Ghostty macOS bundle needs an `open -na Ghostty.app`-based launch
+  profile; currently only works when on `$PATH`.
+- TCC error translation: macOS permission denials produce cryptic
+  `-1743` AppleScript errors. Future work to detect and surface a
+  user-friendly message.
 
 ## macOS testing note
 
