@@ -197,7 +197,7 @@ terminal: gnome-terminal
 cluster_login_command: ocm-container --cluster-id %%CLUSTER_ID%%
 ```
 
-Produces: `gnome-terminal -- ocm-container -e INC_ID=P123 ... --cluster-id abc-123`
+Produces: `gnome-terminal -- ocm-container -e PAGERDUTY_INCIDENT_ID=P123 ... --cluster-id abc-123`
 
 ### Linux with kitty and ocm backplane
 
@@ -230,15 +230,16 @@ cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 Produces: `/Applications/kitty.app/Contents/MacOS/kitty ocm backplane
 login abc-123` (env vars set via `exec.Cmd.Env`)
 
-### Flatpak konsole inside Toolbox
+### Flatpak konsole inside Toolbox (non-ocm login)
 
 ```yaml
 terminal: org.kde.konsole
+cluster_login_command: ocm backplane login %%CLUSTER_ID%%
 toolbox_mode: auto
 ```
 
-Produces: `flatpak-spawn --host --env=INC_ID=P123 ... flatpak run
-org.kde.konsole -e ocm-container --cluster-id abc-123`
+Produces: `flatpak-spawn --host --env=PAGERDUTY_INCIDENT_ID=P123 ...
+flatpak run org.kde.konsole -e ocm backplane login abc-123`
 
 ## Known Limitations and Future Work
 
