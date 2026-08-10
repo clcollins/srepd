@@ -238,6 +238,8 @@ Press `h` to toggle the help overlay inside srepd.
 | `ctrl+x ?` | Show chord help | | |
 | `Tab`/`Shift+Tab`/`←`/`→` | Switch tabs (incident view) | `↑`/`↓` | Scroll within tab |
 
+**Mouse:** Scroll wheel works in the incident table and detail views. To select text for copying, hold `Shift` while clicking and dragging.
+
 Chord commands use a configurable prefix (default `ctrl+x`) followed by a second key. Set `chord_prefix` in config to change.
 
 ### rosa-boundary Support
