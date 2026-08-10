@@ -345,8 +345,12 @@ func validateTerminalExists(terminal string) string {
 			return fmt.Sprintf("osascript command not found in PATH; cluster login via %s may fail (requires macOS)", name)
 		}
 		if strings.ToLower(name) == "iterm2" {
-			if _, err := os.Stat("/Applications/iTerm.app"); err != nil {
-				return "iTerm2.app not found in /Applications; cluster login via iterm2 may fail"
+			systemPath := "/Applications/iTerm.app"
+			userPath := filepath.Join(os.Getenv("HOME"), "Applications", "iTerm.app")
+			if _, err := os.Stat(systemPath); err != nil {
+				if _, err := os.Stat(userPath); err != nil {
+					return "iTerm2.app not found in /Applications or ~/Applications; cluster login via iterm2 may fail"
+				}
 			}
 		}
 		return ""

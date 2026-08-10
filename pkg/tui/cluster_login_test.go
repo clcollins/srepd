@@ -240,6 +240,24 @@ func TestLoginProcessExitedMsg_WithErrorAndStderr(t *testing.T) {
 	})
 }
 
+func TestLoginProcessExitedMsg_TCCDenialShowsGuidance(t *testing.T) {
+	t.Run("TCC -1743 error includes Automation guidance", func(t *testing.T) {
+		m := createTestModel()
+
+		exitErr := errors.New("exit status 1")
+		stderr := "execution error: System Events got an error: osascript is not allowed. (-1743)"
+		_, cmd := m.Update(loginProcessExitedMsg{exitErr: exitErr, stderr: stderr})
+
+		assert.NotNil(t, cmd, "should return a command wrapping errMsg")
+		msg := cmd()
+		em, ok := msg.(errMsg)
+		assert.True(t, ok, "returned command should produce errMsg")
+		assert.Contains(t, em.Error(), "-1743", "raw stderr preserved")
+		assert.Contains(t, em.Error(), "Privacy & Security", "should include TCC guidance")
+		assert.Contains(t, em.Error(), "Automation", "should mention Automation settings")
+	})
+}
+
 func TestLoginProcessExitedMsg_Success(t *testing.T) {
 	t.Run("no-op when process exits cleanly", func(t *testing.T) {
 		m := createTestModel()

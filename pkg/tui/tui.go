@@ -1483,6 +1483,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.stderr != "" {
 				detail = fmt.Sprintf("%s: %s", detail, msg.stderr)
 			}
+			detail += translateLoginStderr(msg.stderr)
 			loginErr := fmt.Errorf("terminal exited with error: %s", detail)
 			log.Debug("tui.loginProcessExitedMsg()", "error", msg.exitErr, "stderr", msg.stderr)
 			return m, func() tea.Msg { return errMsg{loginErr} }
