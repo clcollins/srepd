@@ -3,10 +3,13 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/clcollins/srepd/pkg/ai/policy"
 	"github.com/clcollins/srepd/pkg/ai/tools"
+	"github.com/clcollins/srepd/pkg/delta"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
@@ -247,6 +250,72 @@ func TestHandler_FormatErrorIncludesClass(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "incident not found")
 	assert.Contains(t, result, "(", "error string should include a parenthesized error class")
+}
+
+func TestGetRecentEvents_HappyPath(t *testing.T) {
+	changes := []delta.Change{
+		{Kind: delta.IncidentNew, IncidentID: "P1", Summary: "New incident: Alert A"},
+		{Kind: delta.StatusChanged, IncidentID: "P2", Summary: "Status changed: triggered → acknowledged"},
+	}
+	reg := tools.NewRegistry()
+	require.NoError(t, tools.RegisterDeltaTools(reg, func() []delta.Change { return changes }))
+
+	tool := findTool(t, reg, "get_recent_events")
+	result, err := tool.Handler(context.Background(), json.RawMessage(`{}`))
+	require.NoError(t, err)
+	assert.Contains(t, result, "P1")
+	assert.Contains(t, result, "P2")
+	assert.Contains(t, result, "new")
+	assert.Contains(t, result, "status_changed")
+}
+
+func TestGetRecentEvents_EmptyChanges(t *testing.T) {
+	reg := tools.NewRegistry()
+	require.NoError(t, tools.RegisterDeltaTools(reg, func() []delta.Change { return nil }))
+
+	tool := findTool(t, reg, "get_recent_events")
+	result, err := tool.Handler(context.Background(), json.RawMessage(`{}`))
+	require.NoError(t, err)
+	assert.Equal(t, "[]", result)
+}
+
+func TestGetRecentEvents_WithLimit(t *testing.T) {
+	var changes []delta.Change
+	for i := 0; i < 10; i++ {
+		changes = append(changes, delta.Change{
+			Kind:       delta.IncidentNew,
+			IncidentID: fmt.Sprintf("P%d", i),
+			Summary:    fmt.Sprintf("Event %d", i),
+		})
+	}
+	reg := tools.NewRegistry()
+	require.NoError(t, tools.RegisterDeltaTools(reg, func() []delta.Change { return changes }))
+
+	tool := findTool(t, reg, "get_recent_events")
+	result, err := tool.Handler(context.Background(), json.RawMessage(`{"limit":3}`))
+	require.NoError(t, err)
+
+	var parsed []map[string]string
+	require.NoError(t, json.Unmarshal([]byte(result), &parsed))
+	assert.Len(t, parsed, 3, "limit must cap returned events")
+	assert.Equal(t, "P7", parsed[0]["incident_id"], "must return most recent events")
+}
+
+func TestGetRecentEvents_InvalidInput(t *testing.T) {
+	reg := tools.NewRegistry()
+	require.NoError(t, tools.RegisterDeltaTools(reg, func() []delta.Change { return nil }))
+
+	tool := findTool(t, reg, "get_recent_events")
+	result, err := tool.Handler(context.Background(), json.RawMessage(`{invalid}`))
+	require.NoError(t, err)
+	assert.Contains(t, result, "invalid input")
+}
+
+func TestGetRecentEvents_IsClassRead(t *testing.T) {
+	reg := tools.NewRegistry()
+	require.NoError(t, tools.RegisterDeltaTools(reg, func() []delta.Change { return nil }))
+	tool := findTool(t, reg, "get_recent_events")
+	assert.Equal(t, policy.ClassRead, tool.Class)
 }
 
 // findTool finds a tool by name in the registry.

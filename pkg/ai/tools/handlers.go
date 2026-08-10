@@ -9,6 +9,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai/policy"
+	"github.com/clcollins/srepd/pkg/delta"
 	"github.com/clcollins/srepd/pkg/ocm"
 	"github.com/clcollins/srepd/pkg/pd"
 )
@@ -207,6 +208,64 @@ func newGetLimitedSupportTool(client ocm.OCMClient) Tool {
 				return formatError("limited support info not found", err), nil
 			}
 			return marshalResult(reasons)
+		},
+	}
+}
+
+// RegisterDeltaTools registers the get_recent_events tool, which exposes
+// recent incident-state changes to the AI. The getChanges function is called
+// at handler time to read the current in-memory change log.
+func RegisterDeltaTools(reg *Registry, getChanges func() []delta.Change) error {
+	return reg.Register(newGetRecentEventsTool(getChanges))
+}
+
+func newGetRecentEventsTool(getChanges func() []delta.Change) Tool {
+	return Tool{
+		Name:        "get_recent_events",
+		Description: "Get recent incident-state change events (new, resolved, status/urgency changes, new alerts/notes)",
+		Class:       policy.ClassRead,
+		Schema:      []byte(`{"type":"object","properties":{"limit":{"type":"integer","description":"Maximum number of recent events to return (default 50, max 200)"}}}`),
+		Handler: func(_ context.Context, input json.RawMessage) (string, error) {
+			var params struct {
+				Limit int `json:"limit"`
+			}
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &params); err != nil {
+					return formatError("invalid input", err), nil
+				}
+			}
+			if params.Limit <= 0 {
+				params.Limit = 50
+			}
+			if params.Limit > 200 {
+				params.Limit = 200
+			}
+
+			changes := getChanges()
+			if len(changes) == 0 {
+				return "[]", nil
+			}
+
+			start := 0
+			if len(changes) > params.Limit {
+				start = len(changes) - params.Limit
+			}
+			recent := changes[start:]
+
+			type eventJSON struct {
+				Kind       string `json:"kind"`
+				IncidentID string `json:"incident_id"`
+				Summary    string `json:"summary"`
+			}
+			events := make([]eventJSON, 0, len(recent))
+			for _, c := range recent {
+				events = append(events, eventJSON{
+					Kind:       c.Kind.String(),
+					IncidentID: c.IncidentID,
+					Summary:    c.Summary,
+				})
+			}
+			return marshalResult(events)
 		},
 	}
 }

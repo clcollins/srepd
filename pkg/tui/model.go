@@ -1072,6 +1072,11 @@ func initToolRegistryForModel(m *model) {
 			log.Warn("ai.tools", "msg", "failed to register OCM tools", "error", err)
 		}
 	}
+	if err := tools.RegisterDeltaTools(reg, func() []delta.Change {
+		return m.recentChanges
+	}); err != nil {
+		log.Warn("ai.tools", "msg", "failed to register delta tools", "error", err)
+	}
 	m.toolRegistry = reg
 	log.Info("ai.tools", "msg", "tool registry initialized", "tools", len(reg.Tools()))
 }
