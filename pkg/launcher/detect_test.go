@@ -174,6 +174,82 @@ func TestDetectTerminals_DarwinBundleSkippedOnLinux(t *testing.T) {
 		"bundle detection should not run on linux")
 }
 
+func TestDetectTerminals_DarwinBundleDetectionUserHome(t *testing.T) {
+	dts := DetectTerminals(
+		fakeLookPath(),
+		fakeGetenv(map[string]string{"HOME": "/Users/testuser"}),
+		"darwin",
+		fakeStat(
+			"/Users/testuser/Applications/kitty.app",
+			"/Users/testuser/Applications/Alacritty.app",
+		),
+	)
+	n := names(dts)
+	assert.Contains(t, n, "kitty", "kitty should be detected from ~/Applications bundle")
+	assert.Contains(t, n, "alacritty", "alacritty should be detected from ~/Applications bundle")
+
+	for _, dt := range dts {
+		switch dt.Name {
+		case "kitty":
+			assert.Equal(t, "/Users/testuser/Applications/kitty.app/Contents/MacOS/kitty", dt.Command,
+				"~/Applications bundle-detected kitty must use full binary path")
+		case "alacritty":
+			assert.Equal(t, "/Users/testuser/Applications/Alacritty.app/Contents/MacOS/alacritty", dt.Command,
+				"~/Applications bundle-detected alacritty must use full binary path")
+		}
+	}
+}
+
+func TestDetectTerminals_DarwinSystemBundleTakesPrecedenceOverUserHome(t *testing.T) {
+	dts := DetectTerminals(
+		fakeLookPath(),
+		fakeGetenv(map[string]string{"HOME": "/Users/testuser"}),
+		"darwin",
+		fakeStat(
+			"/Applications/kitty.app",
+			"/Users/testuser/Applications/kitty.app",
+		),
+	)
+	n := names(dts)
+	count := 0
+	for _, name := range n {
+		if name == "kitty" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "kitty should appear exactly once even when in both /Applications and ~/Applications")
+
+	for _, dt := range dts {
+		if dt.Name == "kitty" {
+			assert.Equal(t, "/Applications/kitty.app/Contents/MacOS/kitty", dt.Command,
+				"/Applications should take precedence over ~/Applications")
+		}
+	}
+}
+
+func TestDetectTerminals_DarwinUserHomeBundleSkippedWithoutHOME(t *testing.T) {
+	dts := DetectTerminals(
+		fakeLookPath(),
+		fakeGetenv(nil),
+		"darwin",
+		fakeStat("/Users/testuser/Applications/kitty.app"),
+	)
+	n := names(dts)
+	assert.NotContains(t, n, "kitty",
+		"~/Applications probing should not run when HOME is empty")
+}
+
+func TestDetectTerminals_DarwinITerm2FromUserHome(t *testing.T) {
+	dts := DetectTerminals(
+		fakeLookPath(),
+		fakeGetenv(map[string]string{"HOME": "/Users/testuser"}),
+		"darwin",
+		fakeStat("/Users/testuser/Applications/iTerm.app"),
+	)
+	assert.Contains(t, names(dts), "iterm2",
+		"iTerm2 should be detected from ~/Applications/iTerm.app")
+}
+
 func TestDetectTerminals_PATHTakesPrecedenceOverBundle(t *testing.T) {
 	dts := DetectTerminals(
 		fakeLookPath("kitty"),

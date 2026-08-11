@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 )
 
@@ -44,43 +45,37 @@ var termProgramNames = map[string]string{
 }
 
 // macOSBundleTerminal describes a terminal installed as a macOS .app bundle.
+// appName is the .app directory name and binaryRelPath is the executable
+// path relative to the bundle root (e.g., "Contents/MacOS/kitty").
+// Detection probes /Applications/<appName> and $HOME/Applications/<appName>
+// in that order; the first hit wins.
 type macOSBundleTerminal struct {
-	appPath    string // /Applications/<Name>.app — stat'd to detect installation
-	binaryPath string // full path to the executable inside the bundle
+	appName       string // e.g., "kitty.app"
+	binaryRelPath string // e.g., "Contents/MacOS/kitty"
 }
 
 // macOSBundleTerminals maps terminal names to their bundle metadata.
-// Command is set to binaryPath so exec.Command can find the binary even
-// when it's not on PATH. DetectTerminalProfile resolves the profile from
-// filepath.Base, so full paths work transparently.
+// DetectTerminalProfile resolves the profile from filepath.Base, so full
+// binary paths work transparently.
 //
-// Ghostty is intentionally excluded: its macOS CLI cannot reliably launch
-// the terminal — the supported route is `open -na Ghostty.app`, which
-// needs its own profile. See ghostty#5739, #10203.
+// Ghostty is intentionally excluded from this map: its macOS CLI cannot
+// reliably launch terminal windows. Ghostty >=1.3 supports AppleScript,
+// which will be handled by a dedicated profile. See ghostty#5739, #10203.
 var macOSBundleTerminals = map[string]macOSBundleTerminal{
-	"alacritty": {
-		appPath:    "/Applications/Alacritty.app",
-		binaryPath: "/Applications/Alacritty.app/Contents/MacOS/alacritty",
-	},
-	"kitty": {
-		appPath:    "/Applications/kitty.app",
-		binaryPath: "/Applications/kitty.app/Contents/MacOS/kitty",
-	},
-	"wezterm": {
-		appPath:    "/Applications/WezTerm.app",
-		binaryPath: "/Applications/WezTerm.app/Contents/MacOS/wezterm",
-	},
+	"alacritty": {appName: "Alacritty.app", binaryRelPath: "Contents/MacOS/alacritty"},
+	"kitty":     {appName: "kitty.app", binaryRelPath: "Contents/MacOS/kitty"},
+	"wezterm":   {appName: "WezTerm.app", binaryRelPath: "Contents/MacOS/wezterm"},
 }
 
 // DetectTerminals probes this system for known terminal emulators and
 // returns them ranked: the terminal identified by $TERM_PROGRAM first, tmux
 // next when running inside a session, then the rest in probe order. On
 // darwin, Terminal.app is always a candidate (built into macOS); iTerm2 is
-// offered only when /Applications/iTerm.app exists; and bundle-installed
-// terminals (kitty, alacritty, wezterm) are detected from /Applications/
-// with their full binary path as Command. lookPath, getenv, goos, and
-// statFn are injectable for tests; production callers pass exec.LookPath,
-// os.Getenv, runtime.GOOS, os.Stat.
+// offered only when iTerm.app exists; and bundle-installed terminals
+// (kitty, alacritty, wezterm) are detected from /Applications/ and
+// ~/Applications/ with their full binary path as Command. lookPath, getenv,
+// goos, and statFn are injectable for tests; production callers pass
+// exec.LookPath, os.Getenv, runtime.GOOS, os.Stat.
 func DetectTerminals(lookPath func(string) (string, error), getenv func(string) string, goos string, statFn func(string) (os.FileInfo, error)) []DetectedTerminal {
 	var found []DetectedTerminal
 	foundSet := make(map[string]bool)
@@ -101,6 +96,11 @@ func DetectTerminals(lookPath func(string) (string, error), getenv func(string) 
 	}
 
 	if goos == "darwin" {
+		bundleRoots := []string{"/Applications"}
+		if home := getenv("HOME"); home != "" {
+			bundleRoots = append(bundleRoots, filepath.Join(home, "Applications"))
+		}
+
 		// Check for bundle-installed terminals not found via PATH.
 		bundleNames := make([]string, 0, len(macOSBundleTerminals))
 		for name := range macOSBundleTerminals {
@@ -113,9 +113,14 @@ func DetectTerminals(lookPath func(string) (string, error), getenv func(string) 
 				continue
 			}
 			bundle := macOSBundleTerminals[name]
-			if _, err := statFn(bundle.appPath); err == nil {
-				found = append(found, DetectedTerminal{Name: name, Command: bundle.binaryPath})
-				foundSet[name] = true
+			for _, root := range bundleRoots {
+				appPath := filepath.Join(root, bundle.appName)
+				if _, err := statFn(appPath); err == nil {
+					binaryPath := filepath.Join(appPath, bundle.binaryRelPath)
+					found = append(found, DetectedTerminal{Name: name, Command: binaryPath})
+					foundSet[name] = true
+					break
+				}
 			}
 		}
 
@@ -123,10 +128,13 @@ func DetectTerminals(lookPath func(string) (string, error), getenv func(string) 
 		found = append(found, DetectedTerminal{Name: "terminal", Command: "terminal"})
 		foundSet["terminal"] = true
 
-		// iTerm2 only when installed.
-		if _, err := statFn("/Applications/iTerm.app"); err == nil {
-			found = append(found, DetectedTerminal{Name: "iterm2", Command: "iterm2"})
-			foundSet["iterm2"] = true
+		// iTerm2 only when installed (check both roots).
+		for _, root := range bundleRoots {
+			if _, err := statFn(filepath.Join(root, "iTerm.app")); err == nil {
+				found = append(found, DetectedTerminal{Name: "iterm2", Command: "iterm2"})
+				foundSet["iterm2"] = true
+				break
+			}
 		}
 	}
 

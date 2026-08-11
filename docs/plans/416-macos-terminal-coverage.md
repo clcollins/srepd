@@ -95,14 +95,8 @@ substitution, and configuration examples.
 
 - `SREPD_TEST_WRAPPER_DIR` is a test-only hook for wrapper script
   directory isolation; not intended as user-facing configuration.
-- `~/Applications/` is not probed for bundle detection or iTerm2
-  validation — only `/Applications/`. Per-user app installs are uncommon
-  enough that this is future work if users request it.
-- Ghostty macOS bundle needs an `open -na Ghostty.app`-based launch
-  profile; currently only works when on `$PATH`.
-- TCC error translation: macOS permission denials produce cryptic
-  `-1743` AppleScript errors. Future work to detect and surface a
-  user-friendly message.
+- Ghostty macOS bundle needs a dedicated AppleScript profile (>=1.3);
+  currently only works when on `$PATH`. Planned for a follow-up PR.
 
 ## macOS testing note
 

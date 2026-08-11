@@ -3199,3 +3199,64 @@ func TestUpdatedIncidentList_AutoAck_DispatchesFreshOnCallCheck(t *testing.T) {
 	assert.GreaterOrEqual(t, mockClient.CallCounts["ListOnCallsWithContext"], 1,
 		"on-call status must be checked live (ListOnCalls called), never cached")
 }
+
+func TestTranslateLoginStderr(t *testing.T) {
+	tests := []struct {
+		name     string
+		stderr   string
+		contains string
+		empty    bool
+	}{
+		{
+			name:     "TCC denial with error code -1743",
+			stderr:   "execution error: System Events got an error: osascript is not allowed to send keystrokes. (-1743)",
+			contains: "Privacy & Security",
+		},
+		{
+			name:     "TCC denial with text",
+			stderr:   "Not authorized to send Apple events to Terminal",
+			contains: "Privacy & Security",
+		},
+		{
+			name:     "application not running error (-600)",
+			stderr:   "execution error: iTerm2 got an error: Application isn't running. (-600)",
+			contains: "verify it is installed",
+		},
+		{
+			name:     "application not running text only (capital A)",
+			stderr:   "Application isn't running.",
+			contains: "verify it is installed",
+		},
+		{
+			name:     "launch failure error (-10810)",
+			stderr:   "execution error: An error of type (-10810) has occurred.",
+			contains: "verify it is installed",
+		},
+		{
+			name:   "bare -600 without parens does not match",
+			stderr: "error code -600 encountered",
+			empty:  true,
+		},
+		{
+			name:   "unrecognized stderr",
+			stderr: "some other osascript error",
+			empty:  true,
+		},
+		{
+			name:   "empty stderr",
+			stderr: "",
+			empty:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := translateLoginStderr(tt.stderr)
+			if tt.empty {
+				assert.Empty(t, result, "should return empty for unrecognized stderr")
+			} else {
+				assert.Contains(t, result, tt.contains)
+			}
+		})
+	}
+}

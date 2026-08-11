@@ -64,28 +64,28 @@ SREPD prepends `flatpak run` automatically. Recognized Flatpak app IDs:
 **Detection:**
 
 - **Terminal.app** is always available (built into macOS).
-- **iTerm2** is offered only when `/Applications/iTerm.app` exists.
+- **iTerm2** is offered only when `iTerm.app` exists in `/Applications/`
+  or `~/Applications/`.
 - **kitty, Alacritty, WezTerm** are detected by checking for their
-  `.app` bundle in `/Applications/`. When found, the config value is
-  set to the full binary path inside the bundle (e.g.,
+  `.app` bundle in `/Applications/` and `~/Applications/` (in that
+  order; `/Applications/` takes precedence). When found, the config
+  value is set to the full binary path inside the bundle (e.g.,
   `/Applications/kitty.app/Contents/MacOS/kitty`) so that
   `exec.Command` can find the binary even when it's not on `$PATH`.
   If the terminal IS on `$PATH` (e.g., via Homebrew), the bare name
   is used instead.
 - **Ghostty** is not currently supported for bundle detection. Its
-  macOS CLI cannot reliably launch terminal windows — the supported
-  route is `open -na Ghostty.app`, which needs its own launch profile.
-  If Ghostty is on `$PATH`, it works normally via the flag profile.
+  macOS CLI cannot reliably launch terminal windows. Ghostty >=1.3
+  supports AppleScript, which a future PR will add as a dedicated
+  profile. If Ghostty is on `$PATH`, it works via the flag profile.
 
-**Current limitations:**
+**TCC (Transparency, Consent, and Control):**
 
-- Only `/Applications/` is probed for bundles, not `~/Applications/`.
-- `validateTerminalExists` checks `/Applications/iTerm.app` for iterm2
-  but does not check `~/Applications/iTerm.app`.
-- macOS TCC (Transparency, Consent, and Control) may block AppleScript
-  automation. If you see a `-1743` error or the terminal doesn't open,
-  grant Automation permission in System Settings > Privacy & Security >
-  Automation for the application running srepd.
+macOS TCC may block AppleScript automation on the first use. When this
+happens, srepd shows an actionable error message explaining how to
+grant permission in System Settings > Privacy & Security > Automation.
+If the permission toggle is missing or stuck, toggling it off/on or
+running `tccutil reset AppleEvents` in a terminal can help.
 
 ### Fedora Toolbox
 
@@ -243,10 +243,6 @@ flatpak run org.kde.konsole -e ocm backplane login abc-123`
 
 ## Known Limitations and Future Work
 
-- **`~/Applications/` not probed:** macOS bundle detection only checks
-  `/Applications/`, not per-user `~/Applications/`.
-- **Ghostty macOS bundle:** Needs an `open -na`-based launch profile;
-  currently only works when installed on `$PATH`.
-- **TCC error translation:** macOS TCC permission denials produce a
-  cryptic `-1743` AppleScript error. A future change could detect this
-  and show a user-friendly message explaining what to allow.
+- **Ghostty macOS bundle:** Ghostty >=1.3 supports AppleScript, which
+  will be added as a dedicated profile in a future PR. Until then,
+  Ghostty only works on macOS when installed on `$PATH`.
