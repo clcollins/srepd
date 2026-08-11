@@ -6,6 +6,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/clcollins/srepd/pkg/ai/tools"
+	"github.com/clcollins/srepd/pkg/delta"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 )
@@ -517,6 +518,66 @@ func TestDeltaGate_IdenticalRefreshesProduceOneInvestigation(t *testing.T) {
 	// The delta gate in runDetectors would block investigation on second refresh
 	// because len(changes2) == 0. This is the core property: unchanged alerts
 	// are NOT re-investigated.
+}
+
+// M2: cache loading between polls must not produce false NoteAdded/AlertAdded.
+// Poll 1 with unloaded cache → Poll 2 with loaded cache (same data) → zero
+// note/alert changes. This test FAILS if toSnapshots treats "not loaded" as 0.
+func TestToSnapshots_UnloadedCacheSuppressesFalseChanges(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+
+	// Poll 1: cache entry exists but notes/alerts not yet loaded
+	cache1 := map[string]*cachedIncidentData{
+		"P1": {notesLoaded: false, alertsLoaded: false},
+	}
+	snap1 := toSnapshots(incidents, cache1)
+
+	// Between polls: lazy enrichment loads 5 notes and 3 alerts
+	cache2 := map[string]*cachedIncidentData{
+		"P1": {
+			notesLoaded:  true,
+			notes:        make([]pagerduty.IncidentNote, 5),
+			alertsLoaded: true,
+			alerts:       make([]pagerduty.IncidentAlert, 3),
+		},
+	}
+	snap2 := toSnapshots(incidents, cache2)
+
+	changes := delta.Diff(snap1, snap2)
+	for _, c := range changes {
+		assert.NotEqual(t, delta.NoteAdded, c.Kind,
+			"cache loading must not produce false NoteAdded")
+		assert.NotEqual(t, delta.AlertAdded, c.Kind,
+			"cache loading must not produce false AlertAdded")
+	}
+}
+
+// M2 counterpart: a genuine note addition AFTER cache load must still be detected.
+func TestToSnapshots_GenuineNoteAdditionAfterCacheLoad(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+
+	cache1 := map[string]*cachedIncidentData{
+		"P1": {notesLoaded: true, notes: make([]pagerduty.IncidentNote, 2)},
+	}
+	snap1 := toSnapshots(incidents, cache1)
+
+	cache2 := map[string]*cachedIncidentData{
+		"P1": {notesLoaded: true, notes: make([]pagerduty.IncidentNote, 3)},
+	}
+	snap2 := toSnapshots(incidents, cache2)
+
+	changes := delta.Diff(snap1, snap2)
+	found := false
+	for _, c := range changes {
+		if c.Kind == delta.NoteAdded {
+			found = true
+		}
+	}
+	assert.True(t, found, "genuine note addition must be detected")
 }
 
 func TestBuildAskFromVerdict_UsesOriginatingIncident(t *testing.T) {
