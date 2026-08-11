@@ -49,6 +49,11 @@ type Change struct {
 
 // Snapshot captures the fingerprint-relevant fields of an incident at a point
 // in time. Pure value type — no I/O.
+//
+// NoteCount and AlertCount use *int to distinguish "unknown/not yet loaded"
+// (nil) from "loaded and genuinely zero" (&0). Diff skips note/alert
+// comparisons when the previous value is nil, preventing false-change bursts
+// when the lazy enrichment cache loads between polls.
 type Snapshot struct {
 	ID              string
 	Title           string
@@ -56,14 +61,14 @@ type Snapshot struct {
 	ClusterID       string
 	Status          string
 	Urgency         string
-	NoteCount       int
-	AlertCount      int
+	NoteCount       *int
+	AlertCount      *int
 	EscalationLevel int
 }
 
 // SnapshotFromFields constructs a Snapshot from individual fields, avoiding a
 // dependency on any PagerDuty type in this package.
-func SnapshotFromFields(id, title, service, status, urgency string, noteCount, alertCount, escalationLevel int) Snapshot {
+func SnapshotFromFields(id, title, service, status, urgency string, noteCount, alertCount *int, escalationLevel int) Snapshot {
 	return Snapshot{
 		ID:              id,
 		Title:           title,
@@ -125,16 +130,16 @@ func Diff(prev, curr []Snapshot) []Change {
 				Summary:    fmt.Sprintf("Escalated: level %d → %d", p.EscalationLevel, c.EscalationLevel),
 			})
 		}
-		if c.NoteCount > p.NoteCount {
-			added := c.NoteCount - p.NoteCount
+		if p.NoteCount != nil && c.NoteCount != nil && *c.NoteCount > *p.NoteCount {
+			added := *c.NoteCount - *p.NoteCount
 			changes = append(changes, Change{
 				Kind:       NoteAdded,
 				IncidentID: c.ID,
 				Summary:    fmt.Sprintf("%d new note(s)", added),
 			})
 		}
-		if c.AlertCount > p.AlertCount {
-			added := c.AlertCount - p.AlertCount
+		if p.AlertCount != nil && c.AlertCount != nil && *c.AlertCount > *p.AlertCount {
+			added := *c.AlertCount - *p.AlertCount
 			changes = append(changes, Change{
 				Kind:       AlertAdded,
 				IncidentID: c.ID,

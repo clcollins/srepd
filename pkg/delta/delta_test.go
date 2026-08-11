@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func intPtr(n int) *int { return &n }
+
 func TestDiff_NoChange(t *testing.T) {
 	snaps := []Snapshot{
 		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high"},
@@ -90,10 +92,10 @@ func TestDiff_Escalated(t *testing.T) {
 
 func TestDiff_NoteAdded(t *testing.T) {
 	prev := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", NoteCount: 2},
+		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", NoteCount: intPtr(2)},
 	}
 	curr := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", NoteCount: 4},
+		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", NoteCount: intPtr(4)},
 	}
 	changes := Diff(prev, curr)
 	require.Len(t, changes, 1)
@@ -103,10 +105,10 @@ func TestDiff_NoteAdded(t *testing.T) {
 
 func TestDiff_AlertAdded(t *testing.T) {
 	prev := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", AlertCount: 1},
+		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", AlertCount: intPtr(1)},
 	}
 	curr := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", AlertCount: 3},
+		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", AlertCount: intPtr(3)},
 	}
 	changes := Diff(prev, curr)
 	require.Len(t, changes, 1)
@@ -116,13 +118,51 @@ func TestDiff_AlertAdded(t *testing.T) {
 
 func TestDiff_MultipleChanges(t *testing.T) {
 	prev := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "low", NoteCount: 1, AlertCount: 1},
+		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "low", NoteCount: intPtr(1), AlertCount: intPtr(1)},
 	}
 	curr := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "acknowledged", Urgency: "high", NoteCount: 3, AlertCount: 2},
+		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "acknowledged", Urgency: "high", NoteCount: intPtr(3), AlertCount: intPtr(2)},
 	}
 	changes := Diff(prev, curr)
 	assert.Len(t, changes, 4, "status + urgency + notes + alerts")
+}
+
+func TestDiff_NilNoteCountSkipsComparison(t *testing.T) {
+	prev := []Snapshot{
+		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", NoteCount: nil},
+	}
+	curr := []Snapshot{
+		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", NoteCount: intPtr(5)},
+	}
+	changes := Diff(prev, curr)
+	for _, c := range changes {
+		assert.NotEqual(t, NoteAdded, c.Kind, "nil→known must not produce NoteAdded")
+	}
+}
+
+func TestDiff_NilAlertCountSkipsComparison(t *testing.T) {
+	prev := []Snapshot{
+		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", AlertCount: nil},
+	}
+	curr := []Snapshot{
+		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", AlertCount: intPtr(3)},
+	}
+	changes := Diff(prev, curr)
+	for _, c := range changes {
+		assert.NotEqual(t, AlertAdded, c.Kind, "nil→known must not produce AlertAdded")
+	}
+}
+
+func TestDiff_ZeroToNonZeroNoteCountDetected(t *testing.T) {
+	prev := []Snapshot{
+		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", NoteCount: intPtr(0)},
+	}
+	curr := []Snapshot{
+		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", NoteCount: intPtr(1)},
+	}
+	changes := Diff(prev, curr)
+	require.Len(t, changes, 1)
+	assert.Equal(t, NoteAdded, changes[0].Kind, "genuine 0→1 must be detected")
 }
 
 func TestDiff_FirstSighting(t *testing.T) {

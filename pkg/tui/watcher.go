@@ -290,13 +290,15 @@ const maxRecentChanges = 200
 func toSnapshots(incidents []pagerduty.Incident, cache map[string]*cachedIncidentData) []delta.Snapshot {
 	snaps := make([]delta.Snapshot, 0, len(incidents))
 	for _, inc := range incidents {
-		var noteCount, alertCount int
+		var noteCount, alertCount *int
 		if c, ok := cache[inc.ID]; ok {
 			if c.notesLoaded {
-				noteCount = len(c.notes)
+				n := len(c.notes)
+				noteCount = &n
 			}
 			if c.alertsLoaded {
-				alertCount = len(c.alerts)
+				a := len(c.alerts)
+				alertCount = &a
 			}
 		}
 		snaps = append(snaps, delta.SnapshotFromFields(
