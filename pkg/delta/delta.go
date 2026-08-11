@@ -14,7 +14,6 @@ const (
 	IncidentResolved                   // was present, now absent
 	StatusChanged
 	UrgencyChanged
-	Escalated
 	NoteAdded
 	AlertAdded
 )
@@ -29,8 +28,6 @@ func (k ChangeKind) String() string {
 		return "status_changed"
 	case UrgencyChanged:
 		return "urgency_changed"
-	case Escalated:
-		return "escalated"
 	case NoteAdded:
 		return "note_added"
 	case AlertAdded:
@@ -55,29 +52,27 @@ type Change struct {
 // comparisons when the previous value is nil, preventing false-change bursts
 // when the lazy enrichment cache loads between polls.
 type Snapshot struct {
-	ID              string
-	Title           string
-	Service         string
-	ClusterID       string
-	Status          string
-	Urgency         string
-	NoteCount       *int
-	AlertCount      *int
-	EscalationLevel int
+	ID         string
+	Title      string
+	Service    string
+	ClusterID  string
+	Status     string
+	Urgency    string
+	NoteCount  *int
+	AlertCount *int
 }
 
 // SnapshotFromFields constructs a Snapshot from individual fields, avoiding a
 // dependency on any PagerDuty type in this package.
-func SnapshotFromFields(id, title, service, status, urgency string, noteCount, alertCount *int, escalationLevel int) Snapshot {
+func SnapshotFromFields(id, title, service, status, urgency string, noteCount, alertCount *int) Snapshot {
 	return Snapshot{
-		ID:              id,
-		Title:           title,
-		Service:         service,
-		Status:          status,
-		Urgency:         urgency,
-		NoteCount:       noteCount,
-		AlertCount:      alertCount,
-		EscalationLevel: escalationLevel,
+		ID:         id,
+		Title:      title,
+		Service:    service,
+		Status:     status,
+		Urgency:    urgency,
+		NoteCount:  noteCount,
+		AlertCount: alertCount,
 	}
 }
 
@@ -121,13 +116,6 @@ func Diff(prev, curr []Snapshot) []Change {
 				Kind:       UrgencyChanged,
 				IncidentID: c.ID,
 				Summary:    fmt.Sprintf("Urgency changed: %s → %s", p.Urgency, c.Urgency),
-			})
-		}
-		if c.EscalationLevel > p.EscalationLevel {
-			changes = append(changes, Change{
-				Kind:       Escalated,
-				IncidentID: c.ID,
-				Summary:    fmt.Sprintf("Escalated: level %d → %d", p.EscalationLevel, c.EscalationLevel),
 			})
 		}
 		if p.NoteCount != nil && c.NoteCount != nil && *c.NoteCount > *p.NoteCount {

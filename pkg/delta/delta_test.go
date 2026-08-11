@@ -76,20 +76,6 @@ func TestDiff_UrgencyChange(t *testing.T) {
 	assert.Contains(t, changes[0].Summary, "high")
 }
 
-func TestDiff_Escalated(t *testing.T) {
-	prev := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", EscalationLevel: 1},
-	}
-	curr := []Snapshot{
-		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", EscalationLevel: 3},
-	}
-	changes := Diff(prev, curr)
-	require.Len(t, changes, 1)
-	assert.Equal(t, Escalated, changes[0].Kind)
-	assert.Contains(t, changes[0].Summary, "1")
-	assert.Contains(t, changes[0].Summary, "3")
-}
-
 func TestDiff_NoteAdded(t *testing.T) {
 	prev := []Snapshot{
 		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", NoteCount: intPtr(2)},
@@ -195,17 +181,6 @@ func TestDiff_EmptyBoth(t *testing.T) {
 	assert.Empty(t, changes)
 }
 
-func TestDiff_EscalationDecrease_NoChange(t *testing.T) {
-	prev := []Snapshot{
-		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", EscalationLevel: 3},
-	}
-	curr := []Snapshot{
-		{ID: "P1", Title: "A", Service: "svc", Status: "triggered", Urgency: "high", EscalationLevel: 1},
-	}
-	changes := Diff(prev, curr)
-	assert.Empty(t, changes, "de-escalation is not a meaningful change")
-}
-
 func TestNarrate_Empty(t *testing.T) {
 	result := Narrate(nil, time.Now())
 	assert.Equal(t, "", result)
@@ -250,7 +225,6 @@ func TestChangeKind_String(t *testing.T) {
 	assert.Equal(t, "resolved", IncidentResolved.String())
 	assert.Equal(t, "status_changed", StatusChanged.String())
 	assert.Equal(t, "urgency_changed", UrgencyChanged.String())
-	assert.Equal(t, "escalated", Escalated.String())
 	assert.Equal(t, "note_added", NoteAdded.String())
 	assert.Equal(t, "alert_added", AlertAdded.String())
 	assert.Equal(t, "unknown", ChangeKind(99).String())

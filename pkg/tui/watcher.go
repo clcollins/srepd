@@ -304,7 +304,7 @@ func toSnapshots(incidents []pagerduty.Incident, cache map[string]*cachedInciden
 		snaps = append(snaps, delta.SnapshotFromFields(
 			inc.ID, inc.Title, inc.Service.Summary,
 			inc.Status, inc.Urgency,
-			noteCount, alertCount, 0,
+			noteCount, alertCount,
 		))
 	}
 	return snaps
