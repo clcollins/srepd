@@ -9,6 +9,7 @@ import (
 	"github.com/clcollins/srepd/pkg/delta"
 	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWatcherBuffer_Append(t *testing.T) {
@@ -488,36 +489,70 @@ func TestBuildObservationContext_EmptyIncidentIDs(t *testing.T) {
 	assert.Contains(t, ctx, "P1", "queue summary still included")
 }
 
-// Headline integration test: two consecutive refreshes with IDENTICAL data
-// must produce exactly ONE investigation (on the first sighting). This test
-// FAILS if the delta gate is stubbed out.
-func TestDeltaGate_IdenticalRefreshesProduceOneInvestigation(t *testing.T) {
+// M1: Headline integration test exercising BOTH directions of the delta gate
+// in runDetectors. FAILS if the suppression gate is stubbed with `if false &&`.
+func TestRunDetectors_DeltaGateBothDirections(t *testing.T) {
+	m := createTestModel()
+	m.incidentCache = make(map[string]*cachedIncidentData)
+	m.incidentClusterMap = make(map[string][]string)
+	m.watcherDedup = newWatcherDedup(0) // disable cooldown to isolate delta gate
+
+	// 3 incidents on the same service → triggers service storm detector.
+	// Use low urgency to avoid triggering urgency-shift detector.
+	m.incidentList = []pagerduty.Incident{
+		makeIncident("P1", "svc-x", "low"),
+		makeIncident("P2", "svc-x", "low"),
+		makeIncident("P3", "svc-x", "low"),
+	}
+
+	// --- Direction 1: changes present → detectors MUST fire ---
+	changes1 := m.computeAndStoreDeltas()
+	require.NotEmpty(t, changes1, "first poll must produce IncidentNew changes")
+
+	beforeLen := m.watcherBuffer.Len()
+	cmds1 := m.runDetectors(changes1)
+	// With no AI provider, observations go to the buffer
+	assert.True(t, m.watcherBuffer.Len() > beforeLen || len(cmds1) > 0,
+		"non-empty changes must trigger detector observations")
+	firstPollBufLen := m.watcherBuffer.Len()
+
+	// --- Direction 2: no changes → detectors MUST NOT fire ---
+	changes2 := m.computeAndStoreDeltas()
+	assert.Empty(t, changes2, "identical second poll must produce zero changes")
+
+	cmds2 := m.runDetectors(changes2)
+	assert.Empty(t, cmds2, "runDetectors must return nil when changes are empty")
+	assert.Equal(t, firstPollBufLen, m.watcherBuffer.Len(),
+		"buffer must not grow when delta gate suppresses")
+
+	// --- Changed data re-enables detectors ---
+	m.incidentList[0] = makeIncident("P1", "svc-x", "high") // urgency change
+	changes3 := m.computeAndStoreDeltas()
+	require.NotEmpty(t, changes3, "changed data must produce changes")
+
+	cmds3 := m.runDetectors(changes3)
+	assert.True(t, m.watcherBuffer.Len() > firstPollBufLen || len(cmds3) > 0,
+		"changed data must re-enable detector observations")
+}
+
+// M3: the incidentList < 2 guard must suppress detectors for a single incident.
+// FAILS if the guard is changed to `< 0`.
+func TestRunDetectors_SingleIncidentNoInvestigation(t *testing.T) {
 	m := createTestModel()
 	m.incidentCache = make(map[string]*cachedIncidentData)
 	m.incidentClusterMap = make(map[string][]string)
 
-	incidents := []pagerduty.Incident{
-		{APIObject: pagerduty.APIObject{ID: "P1"}, Title: "Storm A", Service: pagerduty.APIObject{Summary: "svc-x"}, Status: "triggered", Urgency: "high"},
-		{APIObject: pagerduty.APIObject{ID: "P2"}, Title: "Storm B", Service: pagerduty.APIObject{Summary: "svc-x"}, Status: "triggered", Urgency: "high"},
-		{APIObject: pagerduty.APIObject{ID: "P3"}, Title: "Storm C", Service: pagerduty.APIObject{Summary: "svc-x"}, Status: "triggered", Urgency: "high"},
+	m.incidentList = []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
 	}
 
-	// First refresh: first sighting → should produce changes
-	m.incidentList = incidents
-	changes1 := m.computeAndStoreDeltas()
-	assert.NotEmpty(t, changes1, "first refresh must produce first-sighting changes")
+	changes := m.computeAndStoreDeltas()
+	require.NotEmpty(t, changes, "first-sighting must produce changes")
 
-	// Simulate detectors running (would produce observations for 3 on same service)
-	observations1 := detectAll(m.incidentList, m.incidentClusterMap)
-	assert.NotEmpty(t, observations1, "service storm must be detected")
-
-	// Second refresh: identical data → no changes
-	changes2 := m.computeAndStoreDeltas()
-	assert.Empty(t, changes2, "identical second refresh must produce zero changes")
-
-	// The delta gate in runDetectors would block investigation on second refresh
-	// because len(changes2) == 0. This is the core property: unchanged alerts
-	// are NOT re-investigated.
+	cmds := m.runDetectors(changes)
+	assert.Empty(t, cmds, "single incident must not trigger investigation")
+	assert.Equal(t, 0, m.watcherBuffer.Len(),
+		"single incident must not produce buffer entries")
 }
 
 // M2: cache loading between polls must not produce false NoteAdded/AlertAdded.
