@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -242,6 +243,15 @@ func TestWatcherDedup(t *testing.T) {
 		d := newWatcherDedup(5 * time.Minute)
 		d.IsNew("first thing")
 		assert.True(t, d.IsNew("second thing"))
+	})
+
+	t.Run("evicts expired entries when threshold exceeded", func(t *testing.T) {
+		d := newWatcherDedup(0) // zero cooldown → all entries are immediately expired
+		for i := 0; i < watcherDedupEvictThreshold+10; i++ {
+			d.IsNew(fmt.Sprintf("obs-%d", i))
+		}
+		assert.LessOrEqual(t, len(d.seen), watcherDedupEvictThreshold,
+			"expired entries must be evicted when threshold is exceeded")
 	})
 }
 

@@ -206,13 +206,26 @@ func newWatcherDedup(cooldown time.Duration) *watcherDedup {
 	}
 }
 
+const watcherDedupEvictThreshold = 100
+
 func (d *watcherDedup) IsNew(observation string) bool {
 	h := fmt.Sprintf("%x", sha256.Sum256([]byte(observation)))
 	if last, ok := d.seen[h]; ok && time.Since(last) < d.cooldown {
 		return false
 	}
 	d.seen[h] = time.Now()
+	if len(d.seen) > watcherDedupEvictThreshold {
+		d.evictExpired()
+	}
 	return true
+}
+
+func (d *watcherDedup) evictExpired() {
+	for k, ts := range d.seen {
+		if time.Since(ts) >= d.cooldown {
+			delete(d.seen, k)
+		}
+	}
 }
 
 func (m *model) runDetectors(changes []delta.Change) []tea.Cmd {
