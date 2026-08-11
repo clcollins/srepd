@@ -16,6 +16,7 @@ const (
 	UrgencyChanged
 	NoteAdded
 	AlertAdded
+	IncidentUpdated // title or service changed
 )
 
 func (k ChangeKind) String() string {
@@ -32,6 +33,8 @@ func (k ChangeKind) String() string {
 		return "note_added"
 	case AlertAdded:
 		return "alert_added"
+	case IncidentUpdated:
+		return "incident_updated"
 	default:
 		return "unknown"
 	}
@@ -55,7 +58,6 @@ type Snapshot struct {
 	ID         string
 	Title      string
 	Service    string
-	ClusterID  string
 	Status     string
 	Urgency    string
 	NoteCount  *int
@@ -103,6 +105,20 @@ func Diff(prev, curr []Snapshot) []Change {
 				Summary:    fmt.Sprintf("New incident: %s (%s)", c.Title, c.Service),
 			})
 			continue
+		}
+		if p.Title != c.Title {
+			changes = append(changes, Change{
+				Kind:       IncidentUpdated,
+				IncidentID: c.ID,
+				Summary:    fmt.Sprintf("Title changed: %s → %s", p.Title, c.Title),
+			})
+		}
+		if p.Service != c.Service {
+			changes = append(changes, Change{
+				Kind:       IncidentUpdated,
+				IncidentID: c.ID,
+				Summary:    fmt.Sprintf("Service changed: %s → %s", p.Service, c.Service),
+			})
 		}
 		if p.Status != c.Status {
 			changes = append(changes, Change{

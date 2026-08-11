@@ -76,6 +76,34 @@ func TestDiff_UrgencyChange(t *testing.T) {
 	assert.Contains(t, changes[0].Summary, "high")
 }
 
+func TestDiff_TitleChanged(t *testing.T) {
+	prev := []Snapshot{
+		{ID: "P1", Title: "Old Title", Service: "svc-a", Status: "triggered", Urgency: "high"},
+	}
+	curr := []Snapshot{
+		{ID: "P1", Title: "New Title", Service: "svc-a", Status: "triggered", Urgency: "high"},
+	}
+	changes := Diff(prev, curr)
+	require.Len(t, changes, 1)
+	assert.Equal(t, IncidentUpdated, changes[0].Kind)
+	assert.Contains(t, changes[0].Summary, "Old Title")
+	assert.Contains(t, changes[0].Summary, "New Title")
+}
+
+func TestDiff_ServiceChanged(t *testing.T) {
+	prev := []Snapshot{
+		{ID: "P1", Title: "Alert", Service: "svc-old", Status: "triggered", Urgency: "high"},
+	}
+	curr := []Snapshot{
+		{ID: "P1", Title: "Alert", Service: "svc-new", Status: "triggered", Urgency: "high"},
+	}
+	changes := Diff(prev, curr)
+	require.Len(t, changes, 1)
+	assert.Equal(t, IncidentUpdated, changes[0].Kind)
+	assert.Contains(t, changes[0].Summary, "svc-old")
+	assert.Contains(t, changes[0].Summary, "svc-new")
+}
+
 func TestDiff_NoteAdded(t *testing.T) {
 	prev := []Snapshot{
 		{ID: "P1", Title: "Alert A", Service: "svc-a", Status: "triggered", Urgency: "high", NoteCount: intPtr(2)},
@@ -227,5 +255,6 @@ func TestChangeKind_String(t *testing.T) {
 	assert.Equal(t, "urgency_changed", UrgencyChanged.String())
 	assert.Equal(t, "note_added", NoteAdded.String())
 	assert.Equal(t, "alert_added", AlertAdded.String())
+	assert.Equal(t, "incident_updated", IncidentUpdated.String())
 	assert.Equal(t, "unknown", ChangeKind(99).String())
 }
