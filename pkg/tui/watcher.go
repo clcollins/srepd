@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/clcollins/srepd/pkg/delta"
 )
 
 const (
@@ -189,7 +190,8 @@ func (m *model) advanceTypewriter() tea.Cmd {
 }
 
 type watcherObservation struct {
-	Summary string
+	Summary     string
+	IncidentIDs []string // triggering incident IDs for scoped context
 }
 
 type watcherDedup struct {
@@ -204,17 +206,37 @@ func newWatcherDedup(cooldown time.Duration) *watcherDedup {
 	}
 }
 
+const watcherDedupEvictThreshold = 100
+
 func (d *watcherDedup) IsNew(observation string) bool {
 	h := fmt.Sprintf("%x", sha256.Sum256([]byte(observation)))
 	if last, ok := d.seen[h]; ok && time.Since(last) < d.cooldown {
 		return false
 	}
 	d.seen[h] = time.Now()
+	if len(d.seen) > watcherDedupEvictThreshold {
+		d.evictExpired()
+	}
 	return true
 }
 
-func (m *model) runDetectors() []tea.Cmd {
+func (d *watcherDedup) evictExpired() {
+	for k, ts := range d.seen {
+		if time.Since(ts) >= d.cooldown {
+			delete(d.seen, k)
+		}
+	}
+}
+
+func (m *model) runDetectors(changes []delta.Change) []tea.Cmd {
 	if len(m.incidentList) < 2 {
+		return nil
+	}
+
+	// D1 gate: only investigate when the incident state actually changed.
+	// On first poll (no previous state), every incident is a first-sighting
+	// and produces IncidentNew changes — that is correct.
+	if len(changes) == 0 {
 		return nil
 	}
 
@@ -223,25 +245,27 @@ func (m *model) runDetectors() []tea.Cmd {
 	var cmds []tea.Cmd
 	added := false
 	for _, obs := range observations {
+		// Secondary rate limit: suppress re-investigation of the same
+		// observation text within the cooldown window, even if the delta
+		// gate fires (e.g. an unrelated field changed).
 		if !m.watcherDedup.IsNew(obs.Summary) {
 			continue
 		}
 
 		log.Debug("watcher.runDetectors", "observation", obs.Summary)
 
-		// Ambient synthesis runs unless the provider is in a known-error
-		// state — unverified providers get their first health signal from
-		// this very query.
 		if m.aiProvider != nil && m.aiHealth != aiHealthError && !m.watcherAnalyzing {
 			m.watcherAnalyzing = true
 			m.watcherQueryStart = time.Now()
 			m.watcherQueryTimeout = watcherSynthesisTimeout
 
-			// If the provider supports tools (Anthropic family) and a tool
-			// registry is available, run a tool-using investigation.
 			if m.toolRunnerFactory != nil && m.toolRegistry != nil && isAnthropicFamily(m.aiProvider.Name()) {
 				m.watcherQueryTimeout = m.investigationCfg.timeout
-				contextStr := buildWatcherContext(m)
+				contextStr := buildObservationContext(m, obs)
+				changesNarrative := delta.Narrate(changes, time.Now())
+				if changesNarrative != "" {
+					contextStr = changesNarrative + "\n\n" + contextStr
+				}
 				cmds = append(cmds, watcherInvestigateCmd(
 					m.toolRunnerFactory,
 					m.toolRegistry,
@@ -250,7 +274,8 @@ func (m *model) runDetectors() []tea.Cmd {
 					obs.Summary,
 					contextStr,
 					ai.ResolvedModel(m.aiProvider),
-					nil, // collected by wrappedOnAsk inside watcherInvestigateCmd
+					nil,
+					obs.IncidentIDs,
 				))
 			} else {
 				summary := buildIncidentSummary(m.incidentList)
@@ -273,6 +298,46 @@ func (m *model) runDetectors() []tea.Cmd {
 	return cmds
 }
 
+const maxRecentChanges = 200
+
+func toSnapshots(incidents []pagerduty.Incident, cache map[string]*cachedIncidentData) []delta.Snapshot {
+	snaps := make([]delta.Snapshot, 0, len(incidents))
+	for _, inc := range incidents {
+		var noteCount, alertCount *int
+		if c, ok := cache[inc.ID]; ok {
+			if c.notesLoaded {
+				n := len(c.notes)
+				noteCount = &n
+			}
+			if c.alertsLoaded {
+				a := len(c.alerts)
+				alertCount = &a
+			}
+		}
+		snaps = append(snaps, delta.SnapshotFromFields(
+			inc.ID, inc.Title, inc.Service.Summary,
+			inc.Status, inc.Urgency,
+			noteCount, alertCount,
+		))
+	}
+	return snaps
+}
+
+func (m *model) computeAndStoreDeltas() []delta.Change {
+	curr := toSnapshots(m.incidentList, m.incidentCache)
+	changes := delta.Diff(m.prevSnapshots, curr)
+	m.prevSnapshots = curr
+
+	if len(changes) > 0 {
+		m.recentChanges = append(m.recentChanges, changes...)
+		if len(m.recentChanges) > maxRecentChanges {
+			m.recentChanges = m.recentChanges[len(m.recentChanges)-maxRecentChanges:]
+		}
+	}
+
+	return changes
+}
+
 func buildIncidentSummary(incidents []pagerduty.Incident) string {
 	var lines []string
 	for _, inc := range incidents {
@@ -290,16 +355,19 @@ func detectAll(incidents []pagerduty.Incident, clusterMap map[string][]string) [
 }
 
 func detectServiceStorm(incidents []pagerduty.Incident) []watcherObservation {
+	serviceIncidents := make(map[string][]string)
 	serviceCounts := make(map[string]int)
 	for _, inc := range incidents {
 		serviceCounts[inc.Service.Summary]++
+		serviceIncidents[inc.Service.Summary] = append(serviceIncidents[inc.Service.Summary], inc.ID)
 	}
 
 	var observations []watcherObservation
 	for svc, count := range serviceCounts {
 		if count >= 3 {
 			observations = append(observations, watcherObservation{
-				Summary: fmt.Sprintf("Service storm: %d incidents on %s", count, svc),
+				Summary:     fmt.Sprintf("Service storm: %d incidents on %s", count, svc),
+				IncidentIDs: serviceIncidents[svc],
 			})
 		}
 	}
@@ -312,9 +380,11 @@ func detectClusterStorm(incidents []pagerduty.Incident, clusterMap map[string][]
 	}
 
 	clusterCounts := make(map[string]int)
+	clusterIncidents := make(map[string][]string)
 	for _, inc := range incidents {
 		for _, clusterID := range clusterMap[inc.ID] {
 			clusterCounts[clusterID]++
+			clusterIncidents[clusterID] = append(clusterIncidents[clusterID], inc.ID)
 		}
 	}
 
@@ -322,7 +392,8 @@ func detectClusterStorm(incidents []pagerduty.Incident, clusterMap map[string][]
 	for cluster, count := range clusterCounts {
 		if count >= 2 {
 			observations = append(observations, watcherObservation{
-				Summary: fmt.Sprintf("Cluster storm: %d incidents on cluster %s", count, cluster),
+				Summary:     fmt.Sprintf("Cluster storm: %d incidents on cluster %s", count, cluster),
+				IncidentIDs: clusterIncidents[cluster],
 			})
 		}
 	}
@@ -331,15 +402,18 @@ func detectClusterStorm(incidents []pagerduty.Incident, clusterMap map[string][]
 
 func detectUrgencyShift(incidents []pagerduty.Incident) []watcherObservation {
 	highCount := 0
+	var highIDs []string
 	for _, inc := range incidents {
 		if inc.Urgency == "high" {
 			highCount++
+			highIDs = append(highIDs, inc.ID)
 		}
 	}
 
 	if highCount >= 3 {
 		return []watcherObservation{{
-			Summary: fmt.Sprintf("High urgency cluster: %d/%d incidents are high urgency", highCount, len(incidents)),
+			Summary:     fmt.Sprintf("High urgency cluster: %d/%d incidents are high urgency", highCount, len(incidents)),
+			IncidentIDs: highIDs,
 		}}
 	}
 	return nil
@@ -356,6 +430,83 @@ func isWatcherCommand(input string) bool {
 
 func parseWatcherQuery(input string) string {
 	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(input), ":watcher"))
+}
+
+// buildObservationContext derives context from the observation's triggering
+// incidents, never from m.selectedIncident. Implements design choice (c):
+// triggering incidents are foregrounded with sibling alerts labelled as background.
+func buildObservationContext(m *model, obs watcherObservation) string {
+	var parts []string
+
+	for i, incID := range obs.IncidentIDs {
+		inc := findIncidentByID(m.incidentList, incID)
+		if inc == nil {
+			continue
+		}
+
+		label := "Triggering incident"
+		if i > 0 {
+			label = "Related incident"
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s (%s)", label, inc.Title, inc.ID))
+		parts = append(parts, fmt.Sprintf("Service: %s", inc.Service.Summary))
+		parts = append(parts, fmt.Sprintf("Status: %s, Urgency: %s", inc.Status, inc.Urgency))
+
+		var alerts []pagerduty.IncidentAlert
+		if cached, ok := m.incidentCache[inc.ID]; ok && cached.alertsLoaded {
+			alerts = cached.alerts
+		}
+
+		for _, alert := range alerts {
+			if details, ok := alert.Body["details"].(map[string]interface{}); ok {
+				if name, ok := details["alert_name"].(string); ok {
+					parts = append(parts, fmt.Sprintf("Alert: %s", name))
+				}
+				if sopURL, ok := details["firing"].(string); ok && sopURL != "" {
+					parts = append(parts, fmt.Sprintf("SOP: %s", sopURL))
+				}
+				if cluster, ok := details["cluster_id"].(string); ok {
+					parts = append(parts, fmt.Sprintf("Cluster: %s", cluster))
+					parts = append(parts, buildClusterContext(m, cluster)...)
+				}
+			}
+		}
+
+		var notes []pagerduty.IncidentNote
+		if cached, ok := m.incidentCache[inc.ID]; ok && cached.notesLoaded {
+			notes = cached.notes
+		}
+
+		if len(notes) > 0 {
+			parts = append(parts, fmt.Sprintf("Notes: %d", len(notes)))
+			for j, n := range notes {
+				if j >= 5 {
+					break
+				}
+				content := n.Content
+				if r := []rune(content); len(r) > 300 {
+					content = string(r[:300]) + "..."
+				}
+				parts = append(parts, fmt.Sprintf("  - %s", content))
+			}
+		}
+	}
+
+	if len(m.incidentList) > 0 {
+		parts = append(parts, fmt.Sprintf("\nFull incident queue (%d incidents):", len(m.incidentList)))
+		parts = append(parts, buildIncidentSummary(m.incidentList))
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+func findIncidentByID(incidents []pagerduty.Incident, id string) *pagerduty.Incident {
+	for i := range incidents {
+		if incidents[i].ID == id {
+			return &incidents[i]
+		}
+	}
+	return nil
 }
 
 func buildWatcherContext(m *model) string {

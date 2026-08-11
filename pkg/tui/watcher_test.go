@@ -1,11 +1,16 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	"github.com/clcollins/srepd/pkg/ai/tools"
+	"github.com/clcollins/srepd/pkg/delta"
+	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWatcherBuffer_Append(t *testing.T) {
@@ -239,6 +244,15 @@ func TestWatcherDedup(t *testing.T) {
 		d.IsNew("first thing")
 		assert.True(t, d.IsNew("second thing"))
 	})
+
+	t.Run("evicts expired entries when threshold exceeded", func(t *testing.T) {
+		d := newWatcherDedup(0) // zero cooldown → all entries are immediately expired
+		for i := 0; i < watcherDedupEvictThreshold+10; i++ {
+			d.IsNew(fmt.Sprintf("obs-%d", i))
+		}
+		assert.LessOrEqual(t, len(d.seen), watcherDedupEvictThreshold,
+			"expired entries must be evicted when threshold is exceeded")
+	})
 }
 
 func TestDetectAll(t *testing.T) {
@@ -409,4 +423,233 @@ func TestBuildWatcherContext_WithIncident(t *testing.T) {
 	assert.Contains(t, ctx, "test-service")
 	assert.Contains(t, ctx, "triggered")
 	assert.Contains(t, ctx, "high")
+}
+
+// D2 test: an observation for alert A, with a DIFFERENT incident selected,
+// must produce context naming A — and would FAIL if it reverted to m.selectedIncident.
+func TestBuildObservationContext_ScopedToTriggeringIncident(t *testing.T) {
+	m := createTestModel()
+
+	incidentA := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-A"},
+		Title:     "Alert on cluster-xyz",
+		Status:    "triggered",
+		Urgency:   "high",
+		Service:   pagerduty.APIObject{Summary: "svc-alpha"},
+	}
+	incidentB := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-B"},
+		Title:     "Unrelated alert",
+		Status:    "acknowledged",
+		Urgency:   "low",
+		Service:   pagerduty.APIObject{Summary: "svc-beta"},
+	}
+	m.incidentList = []pagerduty.Incident{incidentA, incidentB}
+
+	// User has selected incident B, but the observation is about A
+	m.selectedIncident = &incidentB
+
+	obs := watcherObservation{
+		Summary:     "Service storm on svc-alpha",
+		IncidentIDs: []string{"INC-A"},
+	}
+
+	ctx := buildObservationContext(&m, obs)
+
+	// Must contain triggering incident A's details
+	assert.Contains(t, ctx, "INC-A")
+	assert.Contains(t, ctx, "Alert on cluster-xyz")
+	assert.Contains(t, ctx, "svc-alpha")
+	assert.Contains(t, ctx, "triggered")
+
+	// The triggering section must not label incident B as "Triggering" or "Related"
+	assert.NotContains(t, ctx, "Triggering incident: Unrelated alert")
+	assert.NotContains(t, ctx, "Related incident: Unrelated alert")
+	// Queue summary includes all incidents (expected — design choice c)
+	assert.Contains(t, ctx, "Full incident queue")
+}
+
+func TestBuildObservationContext_MultipleTriggering(t *testing.T) {
+	m := createTestModel()
+	m.incidentList = []pagerduty.Incident{
+		{APIObject: pagerduty.APIObject{ID: "P1"}, Title: "First", Service: pagerduty.APIObject{Summary: "svc-a"}, Status: "triggered", Urgency: "high"},
+		{APIObject: pagerduty.APIObject{ID: "P2"}, Title: "Second", Service: pagerduty.APIObject{Summary: "svc-a"}, Status: "triggered", Urgency: "high"},
+	}
+
+	obs := watcherObservation{
+		Summary:     "Service storm",
+		IncidentIDs: []string{"P1", "P2"},
+	}
+
+	ctx := buildObservationContext(&m, obs)
+	assert.Contains(t, ctx, "P1")
+	assert.Contains(t, ctx, "P2")
+	assert.Contains(t, ctx, "Triggering incident")
+	assert.Contains(t, ctx, "Related incident")
+}
+
+func TestBuildObservationContext_EmptyIncidentIDs(t *testing.T) {
+	m := createTestModel()
+	m.incidentList = []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+	obs := watcherObservation{Summary: "Something happened"}
+
+	ctx := buildObservationContext(&m, obs)
+	assert.Contains(t, ctx, "P1", "queue summary still included")
+}
+
+// M1: Headline integration test exercising BOTH directions of the delta gate
+// in runDetectors. FAILS if the suppression gate is stubbed with `if false &&`.
+func TestRunDetectors_DeltaGateBothDirections(t *testing.T) {
+	m := createTestModel()
+	m.incidentCache = make(map[string]*cachedIncidentData)
+	m.incidentClusterMap = make(map[string][]string)
+	m.watcherDedup = newWatcherDedup(0) // disable cooldown to isolate delta gate
+
+	// 3 incidents on the same service → triggers service storm detector.
+	// Use low urgency to avoid triggering urgency-shift detector.
+	m.incidentList = []pagerduty.Incident{
+		makeIncident("P1", "svc-x", "low"),
+		makeIncident("P2", "svc-x", "low"),
+		makeIncident("P3", "svc-x", "low"),
+	}
+
+	// --- Direction 1: changes present → detectors MUST fire ---
+	changes1 := m.computeAndStoreDeltas()
+	require.NotEmpty(t, changes1, "first poll must produce IncidentNew changes")
+
+	beforeLen := m.watcherBuffer.Len()
+	cmds1 := m.runDetectors(changes1)
+	// With no AI provider, observations go to the buffer
+	assert.True(t, m.watcherBuffer.Len() > beforeLen || len(cmds1) > 0,
+		"non-empty changes must trigger detector observations")
+	firstPollBufLen := m.watcherBuffer.Len()
+
+	// --- Direction 2: no changes → detectors MUST NOT fire ---
+	changes2 := m.computeAndStoreDeltas()
+	assert.Empty(t, changes2, "identical second poll must produce zero changes")
+
+	cmds2 := m.runDetectors(changes2)
+	assert.Empty(t, cmds2, "runDetectors must return nil when changes are empty")
+	assert.Equal(t, firstPollBufLen, m.watcherBuffer.Len(),
+		"buffer must not grow when delta gate suppresses")
+
+	// --- Changed data re-enables detectors ---
+	m.incidentList[0] = makeIncident("P1", "svc-x", "high") // urgency change
+	changes3 := m.computeAndStoreDeltas()
+	require.NotEmpty(t, changes3, "changed data must produce changes")
+
+	cmds3 := m.runDetectors(changes3)
+	assert.True(t, m.watcherBuffer.Len() > firstPollBufLen || len(cmds3) > 0,
+		"changed data must re-enable detector observations")
+}
+
+// M3: the incidentList < 2 guard must suppress detectors for a single incident.
+// FAILS if the guard is changed to `< 0`.
+func TestRunDetectors_SingleIncidentNoInvestigation(t *testing.T) {
+	m := createTestModel()
+	m.incidentCache = make(map[string]*cachedIncidentData)
+	m.incidentClusterMap = make(map[string][]string)
+
+	m.incidentList = []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+
+	changes := m.computeAndStoreDeltas()
+	require.NotEmpty(t, changes, "first-sighting must produce changes")
+
+	cmds := m.runDetectors(changes)
+	assert.Empty(t, cmds, "single incident must not trigger investigation")
+	assert.Equal(t, 0, m.watcherBuffer.Len(),
+		"single incident must not produce buffer entries")
+}
+
+// M2: cache loading between polls must not produce false NoteAdded/AlertAdded.
+// Poll 1 with unloaded cache → Poll 2 with loaded cache (same data) → zero
+// note/alert changes. This test FAILS if toSnapshots treats "not loaded" as 0.
+func TestToSnapshots_UnloadedCacheSuppressesFalseChanges(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+
+	// Poll 1: cache entry exists but notes/alerts not yet loaded
+	cache1 := map[string]*cachedIncidentData{
+		"P1": {notesLoaded: false, alertsLoaded: false},
+	}
+	snap1 := toSnapshots(incidents, cache1)
+
+	// Between polls: lazy enrichment loads 5 notes and 3 alerts
+	cache2 := map[string]*cachedIncidentData{
+		"P1": {
+			notesLoaded:  true,
+			notes:        make([]pagerduty.IncidentNote, 5),
+			alertsLoaded: true,
+			alerts:       make([]pagerduty.IncidentAlert, 3),
+		},
+	}
+	snap2 := toSnapshots(incidents, cache2)
+
+	changes := delta.Diff(snap1, snap2)
+	for _, c := range changes {
+		assert.NotEqual(t, delta.NoteAdded, c.Kind,
+			"cache loading must not produce false NoteAdded")
+		assert.NotEqual(t, delta.AlertAdded, c.Kind,
+			"cache loading must not produce false AlertAdded")
+	}
+}
+
+// M2 counterpart: a genuine note addition AFTER cache load must still be detected.
+func TestToSnapshots_GenuineNoteAdditionAfterCacheLoad(t *testing.T) {
+	incidents := []pagerduty.Incident{
+		makeIncident("P1", "svc-a", "high"),
+	}
+
+	cache1 := map[string]*cachedIncidentData{
+		"P1": {notesLoaded: true, notes: make([]pagerduty.IncidentNote, 2)},
+	}
+	snap1 := toSnapshots(incidents, cache1)
+
+	cache2 := map[string]*cachedIncidentData{
+		"P1": {notesLoaded: true, notes: make([]pagerduty.IncidentNote, 3)},
+	}
+	snap2 := toSnapshots(incidents, cache2)
+
+	changes := delta.Diff(snap1, snap2)
+	found := false
+	for _, c := range changes {
+		if c.Kind == delta.NoteAdded {
+			found = true
+		}
+	}
+	assert.True(t, found, "genuine note addition must be detected")
+}
+
+func TestBuildAskFromVerdict_UsesOriginatingIncident(t *testing.T) {
+	mock := &pd.MockPagerDutyClient{}
+	m := createTestModel()
+	m.config = &pd.Config{Client: mock}
+
+	incidentA := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-ORIGIN"},
+		Title:     "Originating Alert",
+	}
+	incidentB := pagerduty.Incident{
+		APIObject: pagerduty.APIObject{ID: "INC-SELECTED"},
+		Title:     "UI Selected Alert",
+	}
+	m.incidentList = []pagerduty.Incident{incidentA, incidentB}
+	m.selectedIncident = &incidentB
+
+	verdict := tools.Verdict{
+		Tier:    tools.TierActionable,
+		Summary: "Post note",
+		Action:  "Investigation note content",
+	}
+
+	ask := m.buildAskFromVerdict(verdict, []string{"INC-ORIGIN"})
+
+	assert.Equal(t, "INC-ORIGIN", ask.IncidentID,
+		"must use originating incident, not m.selectedIncident")
+	assert.Equal(t, "Originating Alert", ask.IncidentTitle)
 }

@@ -454,10 +454,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.condition.ID = m.flagNextID
 		m.flagConditions = append(m.flagConditions, msg.condition)
 		m.rebuildFlagMatchCache()
-		watcherCmds := m.runDetectors()
 		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d added: %s", msg.condition.ID, msg.condition.Label))
 		rebuildCmd := func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
-		return m, tea.Batch(append(watcherCmds, flashCmd, rebuildCmd)...)
+		return m, tea.Batch(flashCmd, rebuildCmd)
 
 	case removeFlagConditionMsg:
 		for i, c := range m.flagConditions {
@@ -467,10 +466,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.rebuildFlagMatchCache()
-		watcherCmds := m.runDetectors()
 		flashCmd := m.flashNotification(fmt.Sprintf("flag #%d removed", msg.id))
 		rebuildCmd := func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
-		return m, tea.Batch(append(watcherCmds, flashCmd, rebuildCmd)...)
+		return m, tea.Batch(flashCmd, rebuildCmd)
 
 	case clearFlagConditionsMsg:
 		m.flagConditions = nil
@@ -734,7 +732,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tools.TierActionable:
 			m.watcherBuffer.Append("")
 			if msg.verdict.Action != "" {
-				ask := m.buildAskFromVerdict(msg.verdict)
+				ask := m.buildAskFromVerdict(msg.verdict, msg.incidentIDs)
 				m.approvals.Add(ask)
 			}
 			return m, m.startTypewriter(m.watcherMarker, msg.verdict.Summary)
@@ -1255,7 +1253,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-		cmds = append(cmds, m.runDetectors()...)
+		changes := m.computeAndStoreDeltas()
+		cmds = append(cmds, m.runDetectors(changes)...)
 
 	case parseTemplateForNoteMsg:
 		if m.selectedIncident == nil {

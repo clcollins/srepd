@@ -950,7 +950,11 @@ func TestRunDetectors_ModelPlumbing(t *testing.T) {
 		{APIObject: pagerduty.APIObject{ID: "P003"}, Service: pagerduty.APIObject{Summary: "svc-a"}, Urgency: "low"},
 	}
 
-	cmds := m.runDetectors()
+	// Simulate first-sighting: no prior state → all incidents are new changes
+	changes := m.computeAndStoreDeltas()
+	require.NotEmpty(t, changes, "first poll must produce IncidentNew changes")
+
+	cmds := m.runDetectors(changes)
 	require.NotEmpty(t, cmds, "runDetectors must produce commands for a service-storm with a healthy Anthropic provider")
 
 	// Execute the first command to trigger the investigation path.

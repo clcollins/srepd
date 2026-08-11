@@ -36,6 +36,7 @@ type investigationMsg struct {
 	verdict     tools.Verdict
 	err         error
 	toolAsks    []toolAsk
+	incidentIDs []string // triggering incident IDs for scoped actions
 }
 
 // investigationConfig holds the settings for a watcher investigation.
@@ -65,12 +66,14 @@ func watcherInvestigateCmd(
 	contextStr string,
 	model string,
 	onAsk func(toolName string, input json.RawMessage),
+	incidentIDs []string,
 ) tea.Cmd {
 	return func() tea.Msg {
 		if runner == nil || registry == nil {
 			return investigationMsg{
 				observation: observation,
 				err:         fmt.Errorf("tool runner or registry not configured"),
+				incidentIDs: incidentIDs,
 			}
 		}
 
@@ -117,6 +120,7 @@ func watcherInvestigateCmd(
 			return investigationMsg{
 				observation: observation,
 				err:         fmt.Errorf("investigation: model not configured; set llm_api.model or use a provider with a default"),
+				incidentIDs: incidentIDs,
 			}
 		}
 
@@ -144,6 +148,7 @@ func watcherInvestigateCmd(
 				return investigationMsg{
 					observation: observation,
 					err:         err,
+					incidentIDs: incidentIDs,
 				}
 			}
 			if msg == nil {
@@ -168,6 +173,7 @@ func watcherInvestigateCmd(
 			observation: observation,
 			verdict:     verdict,
 			toolAsks:    asks,
+			incidentIDs: incidentIDs,
 		}
 	}
 }

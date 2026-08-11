@@ -86,6 +86,42 @@ func ResolvedModel(p Provider) string {
 	return mr.Model()
 }
 
+// Chat is an optional interface a Provider may implement to support multi-turn
+// conversations with accumulated history. Providers that do not implement Chat
+// fall back to single-shot Query calls. The watcher uses this to maintain
+// session continuity ("this is the same cluster I flagged 20 minutes ago").
+type Chat interface {
+	Send(ctx context.Context, userMsg string) (string, error)
+	History() []Turn
+}
+
+// Turn represents a single message in a Chat history.
+type Turn struct {
+	Role    string // "user" or "assistant"
+	Content string
+}
+
+// SupportsChat reports whether p implements the Chat interface.
+func SupportsChat(p Provider) bool {
+	if p == nil {
+		return false
+	}
+	_, ok := p.(Chat)
+	return ok
+}
+
+// AsChat returns p as a Chat if it implements the interface, or nil.
+func AsChat(p Provider) Chat {
+	if p == nil {
+		return nil
+	}
+	c, ok := p.(Chat)
+	if !ok {
+		return nil
+	}
+	return c
+}
+
 // Config holds the configuration for an LLM API provider.
 type Config struct {
 	Provider  string `mapstructure:"provider"`

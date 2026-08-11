@@ -26,6 +26,7 @@ import (
 	"github.com/clcollins/srepd/pkg/ai/tools"
 	"github.com/clcollins/srepd/pkg/backplane"
 	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/clcollins/srepd/pkg/delta"
 	"github.com/clcollins/srepd/pkg/docs"
 	"github.com/clcollins/srepd/pkg/launcher"
 	"github.com/clcollins/srepd/pkg/ocm"
@@ -170,6 +171,8 @@ type model struct {
 	watcherMarker       string
 	agentMarker         string
 	watcherDedup        *watcherDedup
+	prevSnapshots       []delta.Snapshot // previous poll's snapshots for diffing
+	recentChanges       []delta.Change   // bounded log of recent changes (max 200)
 	watcherAnalyzing    bool
 	watcherQueryStart   time.Time
 	watcherQueryTimeout time.Duration
@@ -954,7 +957,7 @@ func defaultLogFilePath() string {
 	return logFilePathForOS(runtime.GOOS)
 }
 
-func (m *model) buildAskFromVerdict(verdict tools.Verdict) Ask {
+func (m *model) buildAskFromVerdict(verdict tools.Verdict, originatingIncidentIDs []string) Ask {
 	kind := inferAskKind(verdict.Action)
 	ask := Ask{
 		Kind:  kind,
@@ -962,10 +965,17 @@ func (m *model) buildAskFromVerdict(verdict tools.Verdict) Ask {
 		Body:  stripControl(verdict.Action),
 	}
 
-	// Snapshot the incident identity at creation time so that actions
-	// always target the incident that seeded the investigation, never
-	// whichever incident happens to be selected when the user accepts.
-	if m.selectedIncident != nil {
+	// Use the investigation's originating incident rather than whichever
+	// incident happens to be selected in the UI. This fixes D2: an ambient
+	// watcher must not depend on UI selection state.
+	var originInc *pagerduty.Incident
+	if len(originatingIncidentIDs) > 0 {
+		originInc = findIncidentByID(m.incidentList, originatingIncidentIDs[0])
+	}
+	if originInc != nil {
+		ask.IncidentID = originInc.ID
+		ask.IncidentTitle = originInc.Title
+	} else if m.selectedIncident != nil {
 		ask.IncidentID = m.selectedIncident.ID
 		ask.IncidentTitle = m.selectedIncident.Title
 	}
@@ -1061,6 +1071,11 @@ func initToolRegistryForModel(m *model) {
 		if err := tools.RegisterOCMTools(reg, m.ocmClient); err != nil {
 			log.Warn("ai.tools", "msg", "failed to register OCM tools", "error", err)
 		}
+	}
+	if err := tools.RegisterDeltaTools(reg, func() []delta.Change {
+		return m.recentChanges
+	}); err != nil {
+		log.Warn("ai.tools", "msg", "failed to register delta tools", "error", err)
 	}
 	m.toolRegistry = reg
 	log.Info("ai.tools", "msg", "tool registry initialized", "tools", len(reg.Tools()))
