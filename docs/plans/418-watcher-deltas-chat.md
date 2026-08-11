@@ -48,9 +48,14 @@ investigations, and the Chat interface abstraction.
 | IncidentResolved | ID exists in previous but not current |
 | StatusChanged | Status field differs |
 | UrgencyChanged | Urgency field differs |
-| Escalated | Escalation level increased |
-| NoteAdded | Note count increased |
-| AlertAdded | Alert count increased |
+| NoteAdded | Note count increased (skipped when previous count unknown) |
+| AlertAdded | Alert count increased (skipped when previous count unknown) |
+| IncidentUpdated | Title or service changed |
+
+**Removed:** `Escalated` — the PagerDuty `Incident` struct on the list
+response has no `escalation_level` field (that field exists only on
+`IncidentAlert`). The level was hardcoded to 0, so `Escalated` could
+never fire.
 
 ## Chat interface (D4)
 
@@ -88,12 +93,26 @@ use type assertions — no provider is forced to implement Chat.
 3. **D5 get_recent_events:** tool is ClassRead and returns expected
    JSON (test: `TestGetRecentEvents_IsClassRead`)
 
+## Post-review fixes (PR #427)
+
+| Defect | Fix | Tests |
+|--------|-----|-------|
+| M1: delta gate suppression untested | Added `TestRunDetectors_DeltaGateBothDirections` exercising both directions | Revert check: `if false &&` → test fails |
+| M2: lazy cache false-change burst | Changed `NoteCount`/`AlertCount` to `*int`; nil = unknown, skip comparison | `TestToSnapshots_UnloadedCacheSuppressesFalseChanges`, `TestToSnapshots_GenuineNoteAdditionAfterCacheLoad`, `TestDiff_NilNoteCountSkipsComparison`, `TestDiff_ZeroToNonZeroNoteCountDetected` |
+| M3: `incidentList < 2` guard untested | Added `TestRunDetectors_SingleIncidentNoInvestigation` | Guard is redundant with detector thresholds (defense in depth) |
+| N1: EscalationLevel hardcoded to 0 | Removed `Escalated` kind + `EscalationLevel` from Snapshot | PagerDuty Incident has no escalation_level on list response |
+| N2: ClusterID set but never compared | Removed from Snapshot | Was never populated by toSnapshots |
+| N3: watcherDedup.seen unbounded | Added eviction when map exceeds 100 entries | `TestWatcherDedup/evicts_expired_entries_when_threshold_exceeded` |
+| N4: Title/Service never compared | Added comparison, new `IncidentUpdated` kind | `TestDiff_TitleChanged`, `TestDiff_ServiceChanged` |
+
+**Dedup + delta coexistence:** the delta layer gates on whether incident
+STATE changed; the dedup layer gates on whether the same OBSERVATION TEXT
+was already investigated within the cooldown window. Both are needed.
+
 ## Constraints
 
 - No new Go modules added
 - No `//nolint` directives
 - No `replace` directives or vendoring
-- PagerDuty `Incident.EscalationPolicy` is `APIObject` (no `NumLoops`),
-  so escalation level defaults to 0 in snapshots
 - Pre-existing `cmd/` test failure (missing config keys) is not caused
   by these changes
