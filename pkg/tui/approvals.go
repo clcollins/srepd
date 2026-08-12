@@ -145,7 +145,7 @@ func (a *approvalsStrip) RenderExpanded(width int) string {
 		case AskDraftNote:
 			target = fmt.Sprintf("    Post note to incident %s", ask.IncidentID)
 		case AskSuggestedCommand:
-			target = fmt.Sprintf("    Copy command to clipboard")
+			target = "    Copy command to clipboard"
 		case AskEscalationSuggestion:
 			target = fmt.Sprintf("    Re-escalate incident %s", ask.IncidentID)
 		default:

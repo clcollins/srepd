@@ -179,13 +179,13 @@ type model struct {
 	typewriter          *typewriterState
 
 	// Tool investigation state (Phase 3 AI rearchitecture)
-	toolRegistry      *tools.Registry
-	toolRunnerFactory ToolRunnerFactory
-	investigationCfg  investigationConfig
-	approvals         *approvalsStrip
+	toolRegistry       *tools.Registry
+	toolRunnerFactory  ToolRunnerFactory
+	investigationCfg   investigationConfig
+	approvals          *approvalsStrip
 	approvalsExpanded  bool
 	watcherWasExpanded bool
-	toolsLoggedOnce   bool // whether non-Anthropic degradation was logged
+	toolsLoggedOnce    bool // whether non-Anthropic degradation was logged
 
 	// Live streaming state. When streamResponses is true and the provider supports
 	// streaming, watcher responses are appended token-by-token as they arrive

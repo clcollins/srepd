@@ -11,6 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/muesli/termenv"
+
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/delta"
 )
@@ -87,6 +89,9 @@ func (b *watcherBuffer) Clear() {
 func (m *model) renderWatcherMarkdown(content string, width int) string {
 	if width < 10 {
 		width = 80
+	}
+	if lipgloss.ColorProfile() == termenv.Ascii {
+		return lipgloss.NewStyle().Width(width).Render(content)
 	}
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithStyles(m.styles.GlamourStyle),
