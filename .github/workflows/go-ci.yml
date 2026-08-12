@@ -2,13 +2,12 @@
 
 name: Go CI
 
+# DISABLED: workflows are being migrated to Prow. Re-enable or remove
+# once Prow CI is configured on openshift-online/srepd.
 on:
   push:
     branches:
-      - main
-  pull_request:
-    branches:
-      - main
+      - disabled
 
 # No job writes to the repo; the Codecov upload uses its own CODECOV_TOKEN secret,
 # not GITHUB_TOKEN. Grant the minimal read-only scope.
