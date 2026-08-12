@@ -632,7 +632,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.watcherExpanded = true
 			m.recomputeLayout()
 		}
-		m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
+		m.watcherBuffer.Append(prefixMessage(m.watcherMarker, ""))
 		m.updateWatcherViewport()
 		return m, readStreamCmd(msg.ch)
 
@@ -644,7 +644,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// now, not at end of stream (idempotent for subsequent chunks).
 		m.aiHealth = aiHealthOK
 		m.watcherStreamPartial += msg.text
-		m.watcherBuffer.SetLast(prefixLines(m.watcherMarker, m.watcherStreamPartial))
+		m.watcherBuffer.SetLast(prefixMessage(m.watcherMarker, m.watcherStreamPartial))
 		m.updateWatcherViewport()
 		return m, readStreamCmd(msg.ch)
 
@@ -702,7 +702,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			m.aiHealth = aiHealthError
-			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
+			m.watcherBuffer.Append(prefixMessage(m.watcherMarker, msg.observation))
 			m.updateWatcherViewport()
 			return m, nil
 		}
@@ -715,7 +715,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			log.Debug("investigation", "error", msg.err)
 			log.Warn("investigation", "error", ai.ClassifyProviderError(msg.err))
-			m.watcherBuffer.Append(prefixLines(m.watcherMarker, msg.observation))
+			m.watcherBuffer.Append(prefixMessage(m.watcherMarker, msg.observation))
 			m.updateWatcherViewport()
 			return m, nil
 		}
@@ -1893,7 +1893,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.watcherExpanded = true
 			m.recomputeLayout()
 		}
-		m.watcherBuffer.Append(prefixLines(m.agentMarker, ""))
+		m.watcherBuffer.Append(prefixMessage(m.agentMarker, ""))
 		m.updateWatcherViewport()
 		return m, readAgentStreamCmd(msg.ch)
 
@@ -1902,7 +1902,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.agentStreamPartial += msg.text
-		m.watcherBuffer.SetLast(prefixLines(m.agentMarker, m.agentStreamPartial))
+		m.watcherBuffer.SetLast(prefixMessage(m.agentMarker, m.agentStreamPartial))
 		m.updateWatcherViewport()
 		return m, readAgentStreamCmd(msg.ch)
 

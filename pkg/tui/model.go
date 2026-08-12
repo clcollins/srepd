@@ -183,7 +183,8 @@ type model struct {
 	toolRunnerFactory ToolRunnerFactory
 	investigationCfg  investigationConfig
 	approvals         *approvalsStrip
-	approvalsExpanded bool
+	approvalsExpanded  bool
+	watcherWasExpanded bool
 	toolsLoggedOnce   bool // whether non-Anthropic degradation was logged
 
 	// Live streaming state. When streamResponses is true and the provider supports

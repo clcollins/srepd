@@ -630,7 +630,7 @@ func TestWatcherPromptMsg_StreamingDisabled_FallsBackToBlocking(t *testing.T) {
 func TestWatcherStreamChunkMsg_AccumulatesInPlace(t *testing.T) {
 	m := createTestModel()
 	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
-	m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
+	m.watcherBuffer.Append(prefixMessage(m.watcherMarker, ""))
 
 	ch := make(chan streamEvent)
 	m.watcherStreamCh = ch
@@ -993,7 +993,7 @@ func TestWatcherStreamChunkMsg_FirstTokenSetsHealthOK(t *testing.T) {
 	m := createTestModel()
 	windowSize = tea.WindowSizeMsg{Width: 80, Height: 60}
 	m.aiHealth = aiHealthUnverified
-	m.watcherBuffer.Append(prefixLines(m.watcherMarker, ""))
+	m.watcherBuffer.Append(prefixMessage(m.watcherMarker, ""))
 
 	ch := make(chan streamEvent)
 	m.watcherStreamCh = ch

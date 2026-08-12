@@ -176,7 +176,7 @@ func (m *model) advanceTypewriter() tea.Cmd {
 	}
 	tw.index = end
 
-	m.watcherBuffer.SetLast(prefixLines(tw.marker, tw.partial))
+	m.watcherBuffer.SetLast(prefixMessage(tw.marker, tw.partial))
 	m.updateWatcherViewport()
 
 	if tw.index >= len(tw.words) {
@@ -282,7 +282,7 @@ func (m *model) runDetectors(changes []delta.Change) []tea.Cmd {
 				cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, m.watcherSystemPrompt, obs.Summary, summary))
 			}
 		} else {
-			m.watcherBuffer.Append(prefixLines(m.watcherMarker, obs.Summary))
+			m.watcherBuffer.Append(prefixMessage(m.watcherMarker, obs.Summary))
 			added = true
 		}
 	}
@@ -673,4 +673,14 @@ func prefixLines(marker string, text string) string {
 		}
 	}
 	return strings.Join(result, "\n")
+}
+
+// prefixMessage prepends the marker exactly once at the start of the block.
+// Unlike prefixLines, continuation lines within the same --- block get NO
+// marker — the user sees one identifier per watcher/agent response.
+func prefixMessage(marker string, text string) string {
+	if text == "" {
+		return ""
+	}
+	return marker + text
 }
