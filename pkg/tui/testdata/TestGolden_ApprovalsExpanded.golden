@@ -30,12 +30,10 @@
 │     This may indicate a permissions issue following cluster ownership transfer.                                      │
 │                                                                                                                      │
 │   [Command] Restart ocm-agent pod                                                                                    │
-│     Copy command to clipboard (Test Alert Firing)                                                                    │
-│                                                                                                                      │
-│     oc delete pod -n openshift-ocm-agent-operator -l app=ocm-agent                                                   │
-│                                                                                                                      │
-│  [Enter] Accept  [d] Dismiss  [Esc] Close                                                                            │
-│                                                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
  h helpesc backctrl+q/ctrl+c quit                                                                                       
  P1234567                                                                                                 dev - dev     

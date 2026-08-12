@@ -1202,11 +1202,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						serviceName = serviceName + suffix
 					}
 				}
-				title := i.Title
+				title := stripControl(i.Title)
 				if matchedFlags, ok := m.flagMatchCache[i.ID]; ok && len(matchedFlags) > 0 {
 					title = m.flagMarker + title
 				}
-				rows = append(rows, table.Row{state, i.ID, title, serviceName})
+				rows = append(rows, table.Row{state, i.ID, title, stripControl(serviceName)})
 			}
 		}
 

@@ -279,15 +279,7 @@ func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea
 				return errMsg{fmt.Errorf("agent error: %s", ev.Text)}
 			}
 		}
-		// Render final result through glamour if available
-		if ev.Text != "" && m.markdownRenderer != nil {
-			rendered, err := m.markdownRenderer.Render(ev.Text)
-			if err == nil {
-				m.watcherBuffer.SetLast(prefixMessage(m.agentMarker, strings.TrimSpace(rendered)))
-			} else {
-				m.watcherBuffer.SetLast(prefixMessage(m.agentMarker, ev.Text))
-			}
-		} else if ev.Text != "" {
+		if ev.Text != "" {
 			m.watcherBuffer.SetLast(prefixMessage(m.agentMarker, ev.Text))
 		}
 		m.updateWatcherViewport()

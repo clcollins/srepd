@@ -60,7 +60,7 @@ func NewClient(cfg *Config, tokenFunc func() (string, error)) BackplaneClient {
 }
 
 func (c *Client) ListReports(ctx context.Context, clusterID string) ([]ReportSummary, error) {
-	endpoint := fmt.Sprintf("%s/backplane/cluster/%s/reports?last=10", c.config.URL, clusterID)
+	endpoint := fmt.Sprintf("%s/backplane/cluster/%s/reports?last=10", c.config.URL, url.PathEscape(clusterID))
 	log.Debug("backplane.ListReports", "cluster_id", clusterID)
 
 	body, err := c.doRequest(ctx, endpoint)
@@ -80,7 +80,7 @@ func (c *Client) ListReports(ctx context.Context, clusterID string) ([]ReportSum
 }
 
 func (c *Client) GetReport(ctx context.Context, clusterID, reportID string) (*Report, error) {
-	endpoint := fmt.Sprintf("%s/backplane/cluster/%s/reports/%s", c.config.URL, clusterID, reportID)
+	endpoint := fmt.Sprintf("%s/backplane/cluster/%s/reports/%s", c.config.URL, url.PathEscape(clusterID), url.PathEscape(reportID))
 	log.Debug("backplane.GetReport", "cluster_id", clusterID, "report_id", reportID)
 
 	body, err := c.doRequest(ctx, endpoint)

@@ -67,53 +67,6 @@ func TestWatcherBuffer_EmptyContent(t *testing.T) {
 	assert.Equal(t, 0, buf.Len())
 }
 
-func TestPrefixLines(t *testing.T) {
-	tests := []struct {
-		name     string
-		marker   string
-		text     string
-		expected string
-	}{
-		{
-			name:     "single line",
-			marker:   "🤖 ",
-			text:     "hello",
-			expected: "🤖 hello",
-		},
-		{
-			name:     "multi line",
-			marker:   "🤖 ",
-			text:     "line one\nline two\nline three",
-			expected: "🤖 line one\n🤖 line two\n🤖 line three",
-		},
-		{
-			name:     "blank lines preserved without marker",
-			marker:   "📡 ",
-			text:     "first\n\nsecond\n\nthird",
-			expected: "📡 first\n\n📡 second\n\n📡 third",
-		},
-		{
-			name:     "whitespace-only lines treated as blank",
-			marker:   "☻ ",
-			text:     "hello\n   \nworld",
-			expected: "☻ hello\n\n☻ world",
-		},
-		{
-			name:     "empty string",
-			marker:   "🤖 ",
-			text:     "",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := prefixLines(tt.marker, tt.text)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestResolveMarkers_Emoji(t *testing.T) {
 	mk := resolveMarkers(true)
 	assert.Equal(t, emojiFlagMarker, mk.flag)

@@ -93,25 +93,41 @@ func (m *model) renderWatcherMarkdown(content string, width int) string {
 	if lipgloss.ColorProfile() == termenv.Ascii {
 		return lipgloss.NewStyle().Width(width).Render(content)
 	}
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStyles(m.styles.GlamourStyle),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		return lipgloss.NewStyle().Width(width).Render(content)
+	if m.markdownRenderer == nil || m.watcherRendererWidth != width {
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithStyles(m.styles.GlamourStyle),
+			glamour.WithWordWrap(width),
+		)
+		if err != nil {
+			return lipgloss.NewStyle().Width(width).Render(content)
+		}
+		m.markdownRenderer = renderer
+		m.watcherRendererWidth = width
 	}
-	rendered, err := renderer.Render(content)
+	rendered, err := m.markdownRenderer.Render(content)
 	if err != nil {
 		return lipgloss.NewStyle().Width(width).Render(content)
 	}
 	return strings.TrimRight(rendered, "\n")
 }
 
-func (m *model) updateWatcherViewport() {
-	content := m.watcherBuffer.Content()
-	if m.watcherViewport.Width > 0 {
-		content = m.renderWatcherMarkdown(content, m.watcherViewport.Width)
+func (m *model) renderWatcherEntries(width int) string {
+	entries := m.watcherBuffer.entries
+	if len(entries) == 0 {
+		return ""
 	}
+	if width <= 0 {
+		return strings.Join(entries, "\n───\n")
+	}
+	rendered := make([]string, len(entries))
+	for i, entry := range entries {
+		rendered[i] = m.renderWatcherMarkdown(entry, width)
+	}
+	return strings.Join(rendered, "\n───\n")
+}
+
+func (m *model) updateWatcherViewport() {
+	content := m.renderWatcherEntries(m.watcherViewport.Width)
 	m.watcherViewport.SetContent(content)
 	m.watcherViewport.GotoBottom()
 
@@ -121,10 +137,7 @@ func (m *model) updateWatcherViewport() {
 }
 
 func (m *model) updateChatViewport() {
-	content := m.watcherBuffer.Content()
-	if m.chatViewport.Width > 0 {
-		content = m.renderWatcherMarkdown(content, m.chatViewport.Width)
-	}
+	content := m.renderWatcherEntries(m.chatViewport.Width)
 	wasAtBottom := m.chatViewport.AtBottom()
 	m.chatViewport.SetContent(content)
 	if wasAtBottom {
@@ -686,22 +699,9 @@ func stripControl(s string) string {
 	return b.String()
 }
 
-func prefixLines(marker string, text string) string {
-	lines := strings.Split(text, "\n")
-	var result []string
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			result = append(result, "")
-		} else {
-			result = append(result, marker+line)
-		}
-	}
-	return strings.Join(result, "\n")
-}
-
 // prefixMessage prepends the marker exactly once at the start of the block.
-// Unlike prefixLines, continuation lines within the same --- block get NO
-// marker — the user sees one identifier per watcher/agent response.
+// Continuation lines get NO marker — the user sees one identifier per
+// watcher/agent response.
 func prefixMessage(marker string, text string) string {
 	if text == "" {
 		return ""

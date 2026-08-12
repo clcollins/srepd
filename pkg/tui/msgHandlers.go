@@ -178,12 +178,6 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return updatedIncidentListMsg{m.incidentList, nil} }
 	}
 
-	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Watcher) {
-		m.watcherExpanded = !m.watcherExpanded
-		m.recomputeLayout()
-		return m, nil
-	}
-
 	// Tag input: ctrl+t opens input with tag prompt
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Tag) {
 		if m.table.SelectedRow() == nil {
@@ -196,35 +190,7 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Sequence(m.input.Focus())
 	}
 
-	// Commands for any focus mode
-	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
-		keyStr := msg.(tea.KeyMsg).String()
-		if keyStr == ":" || keyStr == "/" {
-			m.input.SetValue(keyStr)
-			m.input.SetCursor(1)
-		}
-		return m, tea.Sequence(
-			m.input.Focus(),
-		)
-	}
-
-	// Approvals overlay: when expanded, route keys to the approvals handler
-	if m.approvalsExpanded {
-		return switchApprovalsFocusMode(m, msg)
-	}
-
-	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Approvals) {
-		if m.approvals != nil && m.approvals.Count() > 0 {
-			m.watcherWasExpanded = m.watcherExpanded
-			m.approvalsExpanded = true
-			m.watcherExpanded = true
-			m.recomputeLayout()
-			return m, nil
-		}
-		return m, m.flashNotification("no pending approvals")
-	}
-
-	// Default commands for the table view
+	// Per-mode dispatch for non-table views
 	switch {
 	case m.tourMode:
 		return switchTourFocusMode(m, msg)
@@ -255,11 +221,44 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case m.viewingIncident:
 		return switchIncidentFocusMode(m, msg)
+	}
 
-	case m.input.Focused():
-		return switchInputFocusMode(m, msg)
+	// Below here: table view only (no modal view active)
 
-	case m.table.Focused():
+	// Approvals overlay: when expanded, route all keys to the approvals handler
+	if m.approvalsExpanded {
+		return switchApprovalsFocusMode(m, msg)
+	}
+
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Watcher) {
+		m.watcherExpanded = !m.watcherExpanded
+		m.recomputeLayout()
+		return m, nil
+	}
+
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Input) {
+		keyStr := msg.(tea.KeyMsg).String()
+		if keyStr == ":" || keyStr == "/" {
+			m.input.SetValue(keyStr)
+			m.input.SetCursor(1)
+		}
+		return m, tea.Sequence(
+			m.input.Focus(),
+		)
+	}
+
+	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Approvals) {
+		if m.approvals != nil && m.approvals.Count() > 0 {
+			m.watcherWasExpanded = m.watcherExpanded
+			m.approvalsExpanded = true
+			m.watcherExpanded = true
+			m.recomputeLayout()
+			return m, nil
+		}
+		return m, m.flashNotification("no pending approvals")
+	}
+
+	if m.table.Focused() {
 		return switchTableFocusMode(m, msg)
 	}
 

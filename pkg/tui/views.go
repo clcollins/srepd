@@ -925,8 +925,8 @@ func summarizeNotes(n []pagerduty.IncidentNote) []noteSummary {
 	for _, note := range n {
 		s = append(s, noteSummary{
 			ID:      note.ID,
-			User:    note.User.Summary,
-			Content: note.Content,
+			User:    stripControl(note.User.Summary),
+			Content: stripControl(note.Content),
 			Created: note.CreatedAt,
 		})
 	}
@@ -991,20 +991,20 @@ func summarizeAlerts(a []pagerduty.IncidentAlert, clusterCache map[string]*ocm.C
 
 		s = append(s, alertSummary{
 			ID:          alt.ID,
-			Name:        name,
+			Name:        stripControl(name),
 			Link:        link,
 			Cluster:     cluster,
-			ClusterName: clusterName,
+			ClusterName: stripControl(clusterName),
 			HTMLURL:     alt.HTMLURL,
-			Service:     alt.Service.Summary,
+			Service:     stripControl(alt.Service.Summary),
 			Created:     alt.CreatedAt,
 			Status:      alt.Status,
 			Incident:    alt.Incident.ID,
-			Severity:    normalized.Severity,
+			Severity:    stripControl(normalized.Severity),
 			Tags:        normalized.Tags,
-			AlertType:   normalized.AlertType,
-			Namespace:   normalized.Namespace,
-			Description: normalized.Description,
+			AlertType:   stripControl(normalized.AlertType),
+			Namespace:   stripControl(normalized.Namespace),
+			Description: stripControl(normalized.Description),
 		})
 
 	}
@@ -1037,23 +1037,23 @@ func summarizeIncident(i *pagerduty.Incident) incidentSummary {
 	var s incidentSummary
 
 	s.ID = i.ID
-	s.Title = i.Title
+	s.Title = stripControl(i.Title)
 	s.HTMLURL = i.HTMLURL
-	s.Service = i.Service.Summary
-	s.EscalationPolicy = i.EscalationPolicy.Summary
+	s.Service = stripControl(i.Service.Summary)
+	s.EscalationPolicy = stripControl(i.EscalationPolicy.Summary)
 	s.Created = i.CreatedAt
 	s.Urgency = i.Urgency
 	s.Status = i.Status
 
 	if i.Priority != nil {
-		s.Priority = i.Priority.Summary
+		s.Priority = stripControl(i.Priority.Summary)
 	}
 
 	for _, team := range i.Teams {
-		s.Teams = append(s.Teams, team.Summary)
+		s.Teams = append(s.Teams, stripControl(team.Summary))
 	}
 	for _, asn := range i.Assignments {
-		s.Assigned = append(s.Assigned, asn.Assignee.Summary)
+		s.Assigned = append(s.Assigned, stripControl(asn.Assignee.Summary))
 	}
 
 	for _, ack := range i.Acknowledgements {
@@ -1352,6 +1352,13 @@ func (m model) renderChatPane() string {
 
 func (m model) renderApprovalsPane() string {
 	content := m.approvals.RenderExpanded(m.layout.WatcherWidth)
+	if m.layout.WatcherHeight > 0 {
+		lines := strings.Split(content, "\n")
+		if len(lines) > m.layout.WatcherHeight {
+			lines = lines[:m.layout.WatcherHeight]
+		}
+		content = strings.Join(lines, "\n")
+	}
 	return m.styles.WatcherContainer.Render(content) + "\n"
 }
 

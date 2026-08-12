@@ -84,17 +84,19 @@ type model struct {
 	input          textinput.Model
 	tagInputActive bool
 	// This is a hack since viewport.Model doesn't have a Focused() method
-	viewingIncident  bool
-	incidentViewer   viewport.Model
-	viewingLog       bool
-	logViewer        viewport.Model
-	logFilePath      string
-	logDestination   string
-	startupTime      time.Time
-	help             help.Model
-	spinner          spinner.Model
-	apiInProgress    bool
-	markdownRenderer *glamour.TermRenderer
+	viewingIncident bool
+	incidentViewer  viewport.Model
+	viewingLog      bool
+	logViewer       viewport.Model
+	logFilePath     string
+	logDestination  string
+	startupTime     time.Time
+	help            help.Model
+	spinner         spinner.Model
+	apiInProgress   bool
+
+	markdownRenderer     *glamour.TermRenderer
+	watcherRendererWidth int
 
 	status string
 
@@ -975,10 +977,10 @@ func (m *model) buildAskFromVerdict(verdict tools.Verdict, originatingIncidentID
 	}
 	if originInc != nil {
 		ask.IncidentID = originInc.ID
-		ask.IncidentTitle = originInc.Title
+		ask.IncidentTitle = stripControl(originInc.Title)
 	} else if m.selectedIncident != nil {
 		ask.IncidentID = m.selectedIncident.ID
-		ask.IncidentTitle = m.selectedIncident.Title
+		ask.IncidentTitle = stripControl(m.selectedIncident.Title)
 	}
 
 	switch kind {
