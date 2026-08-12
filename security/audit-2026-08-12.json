@@ -1,0 +1,138 @@
+{
+  "audit": {
+    "date": "2026-08-12",
+    "scan_mode": "full_project_audit",
+    "tech_stack": "Go 1.26, Bubble Tea TUI, PagerDuty/OCM/Backplane APIs, AI providers",
+    "files_reviewed": 180,
+    "domains_analyzed": [
+      "application_sast",
+      "secrets",
+      "cicd",
+      "supply_chain",
+      "agent_skill",
+      "git_github"
+    ],
+    "overall_risk": "LOW"
+  },
+  "summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 2,
+    "low": 2,
+    "total": 4
+  },
+  "findings": [
+    {
+      "id": "SREPD-SEC-001",
+      "severity": "MEDIUM",
+      "title": "Backplane client interpolates clusterID into URL path without encoding",
+      "category": "application-url-path-injection",
+      "file": "pkg/backplane/client.go",
+      "lines": [63, 83],
+      "issue": "clusterID sourced from PagerDuty alert custom_details is interpolated directly into the URL path via fmt.Sprintf without url.PathEscape(). A crafted cluster ID containing path traversal sequences could redirect the request to an unintended API path on the same server.",
+      "impact": "Bearer token sent to unintended path on backplane server. Requires compromised alerting pipeline. Same-origin path manipulation only.",
+      "failure_scenario": "Attacker injects cluster_id='../../admin/endpoint' into a PagerDuty alert; the backplane bearer token is sent to an unintended API path.",
+      "verdict": "CONFIRMED",
+      "remediation": {
+        "fix": "Add url.PathEscape(clusterID) and url.PathEscape(reportID) in ListReports and GetReport",
+        "verify": "Test with a clusterID containing ../",
+        "prevent": "Add cluster ID format validation similar to OCM's clusterIDPattern"
+      }
+    },
+    {
+      "id": "SREPD-SEC-002",
+      "severity": "MEDIUM",
+      "title": "OpenAI-compat provider sends API key over HTTP when endpoint is misconfigured",
+      "category": "application-credential-exposure",
+      "file": "pkg/ai/openai_compat.go",
+      "lines": [199],
+      "related_files": ["pkg/ai/factory.go"],
+      "issue": "The openai provider sends Authorization: Bearer header with no enforcement that the endpoint uses TLS. If a user configures a remote http:// endpoint with an API key, it is transmitted in cleartext.",
+      "impact": "API key exposure to network observers if user misconfigures a remote HTTP endpoint.",
+      "failure_scenario": "User sets llm_api.endpoint to http://remote-server:8080 with api_key_env=OPENAI_API_KEY; API key transmitted in cleartext over the network.",
+      "verdict": "CONFIRMED",
+      "remediation": {
+        "fix": "In newOpenAICompatProvider, log a warning or reject if apiKey is set and endpoint scheme is http:// with a non-localhost host",
+        "verify": "Add unit test verifying the warning/rejection",
+        "prevent": "Document in docs/llm-providers.md that remote endpoints must use HTTPS"
+      }
+    },
+    {
+      "id": "SREPD-SEC-003",
+      "severity": "LOW",
+      "title": ".gitignore missing common sensitive file patterns",
+      "category": "git-incomplete-ignore-rules",
+      "file": ".gitignore",
+      "lines": [1],
+      "issue": "Missing patterns for .env, .env.*, *.pem, *.key, credentials.*, secrets.*. The PD config is stored outside the repo so risk is low.",
+      "impact": "Accidental commit of sensitive files if created in the repo directory.",
+      "failure_scenario": "Developer creates a .env file with API keys in the repo directory and accidentally commits it.",
+      "verdict": "PLAUSIBLE",
+      "remediation": {
+        "fix": "Add .env*, *.pem, *.key, credentials.*, secrets.* patterns to .gitignore",
+        "verify": "Confirm git check-ignore matches the new patterns",
+        "prevent": "Pre-commit hook with secret scanning"
+      }
+    },
+    {
+      "id": "SREPD-SEC-004",
+      "severity": "LOW",
+      "title": "math/rand used for identifier generation instead of crypto/rand",
+      "category": "application-weak-randomness",
+      "file": "pkg/rand/rand.go",
+      "lines": [6, 12, 13],
+      "issue": "Uses math/rand seeded with time.Now().UnixNano() for generating IDs. Used in pkg/pd/dev.go for dev fixture IDs and pkg/tui/approvals.go for approval request IDs. Predictable if process start time is known.",
+      "impact": "Minimal. Internal TUI identifiers for local state only. No network-facing or authentication use.",
+      "failure_scenario": "If rand.ID output were ever used as a security token, an attacker knowing process start time could predict all generated IDs.",
+      "verdict": "PLAUSIBLE",
+      "remediation": {
+        "fix": "Switch to crypto/rand if IDs are ever used in a security-sensitive context",
+        "verify": "N/A for current usage",
+        "prevent": "Lint rule to flag math/rand imports in non-test files"
+      }
+    }
+  ],
+  "strengths": [
+    {
+      "area": "Config file permissions",
+      "detail": "Enforced with 0600 + explicit Chmod",
+      "file": "pkg/config/config.go:287-298"
+    },
+    {
+      "area": "Launcher command injection",
+      "detail": "Per-arg variable substitution closes prior split-on-spaces vulnerability",
+      "file": "pkg/launcher/launcher.go:340-362"
+    },
+    {
+      "area": "Wrapper script shell escaping",
+      "detail": "shQuote() for proper POSIX shell escaping",
+      "file": "pkg/launcher/wrapper.go:17"
+    },
+    {
+      "area": "Agent CLI flag validation",
+      "detail": "deniedFlags list prevents overriding security-critical flags",
+      "file": "pkg/agent/session.go:25-39"
+    },
+    {
+      "area": "CI/CD pipeline hardening",
+      "detail": "All GitHub Actions SHA-pinned, workflow-level permissions: read-all, no dangerous triggers, dependabot configured"
+    },
+    {
+      "area": "Error message security",
+      "detail": "OpenAI provider excludes response body from error messages to prevent token leakage",
+      "file": "pkg/ai/openai_compat.go:96-97"
+    },
+    {
+      "area": "API timeouts",
+      "detail": "All PD API calls use contextWithTimeout() with 30s default"
+    },
+    {
+      "area": "Secret hygiene",
+      "detail": "No hardcoded secrets found in entire codebase"
+    },
+    {
+      "area": "Supply chain",
+      "detail": "All dependencies are well-known org-backed modules; Dependabot configured for gomod and github-actions"
+    }
+  ]
+}
