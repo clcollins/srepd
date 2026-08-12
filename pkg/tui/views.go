@@ -118,7 +118,11 @@ func (m model) View() string {
 		s.WriteString("\n")
 		s.WriteString(m.renderFooter())
 		s.WriteString("\n")
-		s.WriteString(m.renderWatcherPane())
+		if m.approvalsExpanded {
+			s.WriteString(m.renderApprovalsPane())
+		} else {
+			s.WriteString(m.renderWatcherPane())
+		}
 		if m.input.Focused() {
 			s.WriteString(m.input.View())
 		} else {
@@ -169,14 +173,10 @@ func (m model) View() string {
 	s.WriteString(helpView)
 	s.WriteString("\n")
 
-	// Add approvals strip above bottom status when asks are pending
-	if m.approvals != nil && m.approvals.Count() > 0 {
-		if m.approvalsExpanded {
-			s.WriteString(m.approvals.RenderExpanded(m.layout.ContentWidth))
-		} else {
-			s.WriteString(m.approvals.Render(m.layout.ContentWidth))
-			s.WriteString("\n")
-		}
+	// Add collapsed approvals badge above bottom status when asks are pending
+	if m.approvals != nil && m.approvals.Count() > 0 && !m.approvalsExpanded {
+		s.WriteString(m.approvals.Render(m.layout.ContentWidth))
+		s.WriteString("\n")
 	}
 
 	// Add bottom status line at terminal bottom
@@ -1348,6 +1348,11 @@ func (m model) renderChatPane() string {
 	s += m.styles.WatcherContainer.Render(m.chatViewport.View()) + "\n"
 	s += m.chatInput.View() + "\n"
 	return s
+}
+
+func (m model) renderApprovalsPane() string {
+	content := m.approvals.RenderExpanded(m.layout.WatcherWidth)
+	return m.styles.WatcherContainer.Render(content) + "\n"
 }
 
 func (m model) renderWatcherPane() string {

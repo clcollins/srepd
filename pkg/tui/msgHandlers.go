@@ -215,7 +215,10 @@ func (m model) keyMsgHandler(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg.(tea.KeyMsg), defaultKeyMap.Approvals) {
 		if m.approvals != nil && m.approvals.Count() > 0 {
+			m.watcherWasExpanded = m.watcherExpanded
 			m.approvalsExpanded = true
+			m.watcherExpanded = true
+			m.recomputeLayout()
 			return m, nil
 		}
 		return m, m.flashNotification("no pending approvals")
@@ -1107,6 +1110,12 @@ func (m *model) enterChatModeState() {
 	m.chatViewportGotoBottom()
 }
 
+func (m *model) closeApprovals() {
+	m.approvalsExpanded = false
+	m.watcherExpanded = m.watcherWasExpanded
+	m.recomputeLayout()
+}
+
 func switchApprovalsFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -1115,7 +1124,7 @@ func switchApprovalsFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case key.Matches(msg, defaultKeyMap.Back):
-			m.approvalsExpanded = false
+			m.closeApprovals()
 			return m, nil
 
 		case key.Matches(msg, defaultKeyMap.Up):
@@ -1129,7 +1138,7 @@ func switchApprovalsFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, defaultKeyMap.Enter):
 			cmd := m.approvals.Accept(m.approvals.Selected())
 			if m.approvals.Count() == 0 {
-				m.approvalsExpanded = false
+				m.closeApprovals()
 			}
 			return m, cmd
 
@@ -1138,7 +1147,7 @@ func switchApprovalsFocusMode(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if keyStr == "d" {
 				m.approvals.Dismiss(m.approvals.Selected())
 				if m.approvals.Count() == 0 {
-					m.approvalsExpanded = false
+					m.closeApprovals()
 				}
 				return m, nil
 			}
