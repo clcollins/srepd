@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -83,10 +84,28 @@ func (b *watcherBuffer) Clear() {
 	b.entries = b.entries[:0]
 }
 
+func (m *model) renderWatcherMarkdown(content string, width int) string {
+	if width < 10 {
+		width = 80
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(m.styles.GlamourStyle),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return lipgloss.NewStyle().Width(width).Render(content)
+	}
+	rendered, err := renderer.Render(content)
+	if err != nil {
+		return lipgloss.NewStyle().Width(width).Render(content)
+	}
+	return strings.TrimRight(rendered, "\n")
+}
+
 func (m *model) updateWatcherViewport() {
 	content := m.watcherBuffer.Content()
 	if m.watcherViewport.Width > 0 {
-		content = lipgloss.NewStyle().Width(m.watcherViewport.Width).Render(content)
+		content = m.renderWatcherMarkdown(content, m.watcherViewport.Width)
 	}
 	m.watcherViewport.SetContent(content)
 	m.watcherViewport.GotoBottom()
@@ -99,7 +118,7 @@ func (m *model) updateWatcherViewport() {
 func (m *model) updateChatViewport() {
 	content := m.watcherBuffer.Content()
 	if m.chatViewport.Width > 0 {
-		content = lipgloss.NewStyle().Width(m.chatViewport.Width).Render(content)
+		content = m.renderWatcherMarkdown(content, m.chatViewport.Width)
 	}
 	wasAtBottom := m.chatViewport.AtBottom()
 	m.chatViewport.SetContent(content)
