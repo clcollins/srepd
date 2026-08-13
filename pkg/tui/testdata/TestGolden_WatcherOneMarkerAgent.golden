@@ -1,0 +1,39 @@
+ >                                                                                             Showing assigned to You  
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ •  ID               Summary                                          Service                                         │
+│ •  P1234567         Test Alert Firing                                test-service                                    │
+│ •  P7654321         Database CPU High                                prod-db                                         │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Watching for updates...  [PAUSED] [high urgency only]                                            [AI Watcher] | idle   
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ 🤖 Hi! I'm here and watching the incident queue.                                                                     │
+│                                                                                                                      │
+│ Still the same situation on the cluster — waiting on AMS to fix                                                      │
+│ the ownership/role issue, then ocm-agent restart.                                                                    │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ h helpesc backctrl+q/ctrl+c quit                                                                                       
+ P1234567                                                                                                 dev - dev     

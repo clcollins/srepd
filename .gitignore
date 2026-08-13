@@ -16,3 +16,11 @@ coverage.out
 
 # Claude Code local settings (personal permissions, not committed)
 .claude/settings.local.json
+
+# Sensitive files
+.env
+.env.*
+*.pem
+*.key
+credentials.*
+secrets.*

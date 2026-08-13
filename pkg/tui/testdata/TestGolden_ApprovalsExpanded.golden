@@ -1,0 +1,39 @@
+ >                                                                                             Showing assigned to You  
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ •  ID               Summary                                          Service                                         │
+│ •  P1234567         Test Alert Firing                                test-service                                    │
+│ •  P7654321         Database CPU High                                prod-db                                         │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Watching for updates...  [PAUSED] [high urgency only]                                            [AI Watcher] | idle   
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Pending Approvals                                                                                                   │
+│                                                                                                                      │
+│ > [Note] OCM Agent notification failure on test-cluster.example.com                                                  │
+│     Post note to incident P1234567 (Test Alert Firing)                                                               │
+│                                                                                                                      │
+│     OCM Agent has been unable to post ServiceLog notifications for ≥60 minutes.                                      │
+│     This may indicate a permissions issue following cluster ownership transfer.                                      │
+│                                                                                                                      │
+│   [Command] Restart ocm-agent pod                                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ h helpesc backctrl+q/ctrl+c quit                                                                                       
+ P1234567                                                                                                 dev - dev     

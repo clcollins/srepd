@@ -183,9 +183,53 @@ func TestGolden_ChatMode(t *testing.T) {
 	m.chatInput.Prompt = " > "
 	m.chatInput.Focus()
 	m.watcherBuffer = newWatcherBuffer(50)
-	m.watcherBuffer.Append(prefixLines(m.agentMarker, "Hello! How can I help?"))
+	m.watcherBuffer.Append(prefixMessage(m.agentMarker, "Hello! How can I help?"))
 	m.recomputeLayout()
 	m.updateChatViewport()
 	m.chatViewportGotoBottom()
+	golden.RequireEqual(t, m.View())
+}
+
+func TestGolden_WatcherOneMarkerAgent(t *testing.T) {
+	m := goldenTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.watcherBuffer.Append(prefixMessage(m.agentMarker, "Hi! I'm here and watching the incident queue.\n\nStill the same situation on the cluster — waiting on AMS to fix\nthe ownership/role issue, then ocm-agent restart."))
+	m.recomputeLayout()
+	m.updateWatcherViewport()
+	golden.RequireEqual(t, m.View())
+}
+
+func TestGolden_WatcherOneMarkerWatcher(t *testing.T) {
+	m := goldenTestModel(t)
+	m.watcherExpanded = true
+	m.watcherBuffer = newWatcherBuffer(50)
+	m.watcherBuffer.Append(prefixMessage(m.watcherMarker, "**Key Findings:**\n- `etcdMembersDownSRE` is a high-severity control plane alert\n- With ≤3 etcd members, losing even one member threatens quorum"))
+	m.recomputeLayout()
+	m.updateWatcherViewport()
+	golden.RequireEqual(t, m.View())
+}
+
+func TestGolden_ApprovalsExpanded(t *testing.T) {
+	m := goldenTestModel(t)
+	m.approvals = newApprovalsStrip()
+	m.approvals.Add(Ask{
+		Kind:          AskDraftNote,
+		Title:         "OCM Agent notification failure on test-cluster.example.com",
+		Body:          "OCM Agent has been unable to post ServiceLog notifications for ≥60 minutes.\nThis may indicate a permissions issue following cluster ownership transfer.",
+		IncidentID:    "P1234567",
+		IncidentTitle: "Test Alert Firing",
+	})
+	m.approvals.Add(Ask{
+		Kind:          AskSuggestedCommand,
+		Title:         "Restart ocm-agent pod",
+		Body:          "oc delete pod -n openshift-ocm-agent-operator -l app=ocm-agent",
+		IncidentID:    "P1234567",
+		IncidentTitle: "Test Alert Firing",
+	})
+	m.watcherWasExpanded = false
+	m.approvalsExpanded = true
+	m.watcherExpanded = true
+	m.recomputeLayout()
 	golden.RequireEqual(t, m.View())
 }

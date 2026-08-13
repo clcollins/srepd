@@ -252,19 +252,19 @@ func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea
 		}
 		m.agentSessionInitSeen = true
 		m.agentStreamPartial = ""
-		m.watcherBuffer.Append(prefixLines(m.agentMarker, ""))
+		m.watcherBuffer.Append(prefixMessage(m.agentMarker, ""))
 		m.updateWatcherViewport()
 		return m, readAgentSessionCmd(msg.session)
 
 	case agent.TextDelta:
 		m.agentStreamPartial += ev.Text
-		m.watcherBuffer.SetLast(prefixLines(m.agentMarker, m.agentStreamPartial))
+		m.watcherBuffer.SetLast(prefixMessage(m.agentMarker, m.agentStreamPartial))
 		m.updateWatcherViewport()
 		return m, readAgentSessionCmd(msg.session)
 
 	case agent.ToolUse:
 		toolLine := fmt.Sprintf("⚙ %s %s", ev.Tool, ev.ToolInput)
-		m.watcherBuffer.Append(prefixLines(m.agentMarker, toolLine))
+		m.watcherBuffer.Append(prefixMessage(m.agentMarker, toolLine))
 		m.updateWatcherViewport()
 		return m, readAgentSessionCmd(msg.session)
 
@@ -279,16 +279,8 @@ func (m model) handleAgentSessionEvent(msg agentSessionEventMsg) (tea.Model, tea
 				return errMsg{fmt.Errorf("agent error: %s", ev.Text)}
 			}
 		}
-		// Render final result through glamour if available
-		if ev.Text != "" && m.markdownRenderer != nil {
-			rendered, err := m.markdownRenderer.Render(ev.Text)
-			if err == nil {
-				m.watcherBuffer.SetLast(prefixLines(m.agentMarker, strings.TrimSpace(rendered)))
-			} else {
-				m.watcherBuffer.SetLast(prefixLines(m.agentMarker, ev.Text))
-			}
-		} else if ev.Text != "" {
-			m.watcherBuffer.SetLast(prefixLines(m.agentMarker, ev.Text))
+		if ev.Text != "" {
+			m.watcherBuffer.SetLast(prefixMessage(m.agentMarker, ev.Text))
 		}
 		m.updateWatcherViewport()
 		m.setStatus("agent response received")

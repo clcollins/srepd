@@ -864,7 +864,7 @@ func TestAgentStreamChunkMsg_AppendsText(t *testing.T) {
 	m.claudeQuerying = true
 	m.agentStreamPartial = "hello "
 	m.watcherExpanded = true
-	m.watcherBuffer.Append(prefixLines(m.agentMarker, "hello "))
+	m.watcherBuffer.Append(prefixMessage(m.agentMarker, "hello "))
 
 	ch := make(chan streamEvent, 1)
 	ch <- streamEvent{text: "more"}

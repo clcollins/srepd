@@ -302,7 +302,7 @@ func TestView_ChatModeRendersExpectedContent(t *testing.T) {
 	m.chatInput.Prompt = " > "
 	m.chatInput.Focus()
 	m.watcherBuffer = newWatcherBuffer(50)
-	m.watcherBuffer.Append(prefixLines(m.agentMarker, "Agent response text"))
+	m.watcherBuffer.Append(prefixMessage(m.agentMarker, "Agent response text"))
 	m.recomputeLayout()
 	m.updateChatViewport()
 	m.chatViewportGotoBottom()

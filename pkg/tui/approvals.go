@@ -118,6 +118,8 @@ func (a *approvalsStrip) RenderExpanded(width int) string {
 		return ""
 	}
 
+	wrapStyle := lipgloss.NewStyle().Width(width)
+
 	var lines []string
 	header := lipgloss.NewStyle().
 		Bold(true).
@@ -125,6 +127,7 @@ func (a *approvalsStrip) RenderExpanded(width int) string {
 		Width(width).
 		Render(" Pending Approvals ")
 	lines = append(lines, header)
+	lines = append(lines, "")
 
 	for i, ask := range a.asks {
 		prefix := "  "
@@ -132,18 +135,51 @@ func (a *approvalsStrip) RenderExpanded(width int) string {
 			prefix = "> "
 		}
 		kindLabel := askKindLabel(ask.Kind)
-		line := fmt.Sprintf("%s[%s] %s", prefix, kindLabel, ask.Title)
-		lines = append(lines, line)
+
+		titleLine := fmt.Sprintf("%s[%s] %s", prefix, kindLabel, ask.Title)
+		lines = append(lines, wrapStyle.Render(titleLine))
+
+		// Action target line: what this approval will do and to which incident
+		var target string
+		switch ask.Kind {
+		case AskDraftNote:
+			target = fmt.Sprintf("    Post note to incident %s", ask.IncidentID)
+		case AskSuggestedCommand:
+			target = "    Copy command to clipboard"
+		case AskEscalationSuggestion:
+			target = fmt.Sprintf("    Re-escalate incident %s", ask.IncidentID)
+		default:
+			target = fmt.Sprintf("    Action on incident %s", ask.IncidentID)
+		}
+		if ask.IncidentTitle != "" {
+			target += fmt.Sprintf(" (%s)", ask.IncidentTitle)
+		}
+		lines = append(lines, wrapStyle.Render(target))
+
+		// Body: the content the user is approving
+		if ask.Body != "" {
+			lines = append(lines, "")
+			bodyLines := strings.Split(ask.Body, "\n")
+			for _, bl := range bodyLines {
+				lines = append(lines, wrapStyle.Render("    "+bl))
+			}
+		}
+
+		if i < len(a.asks)-1 {
+			lines = append(lines, "")
+		}
 	}
 
+	lines = append(lines, "")
 	footer := " [Enter] Accept  [d] Dismiss  [Esc] Close "
 	lines = append(lines, footer)
 
-	result := ""
+	var result strings.Builder
 	for _, l := range lines {
-		result += l + "\n"
+		result.WriteString(l)
+		result.WriteString("\n")
 	}
-	return result
+	return result.String()
 }
 
 // inferAskKind determines the AskKind from a verdict's action text.

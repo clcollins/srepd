@@ -6,10 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/glamour/v2"
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/muesli/termenv"
+
 	"github.com/clcollins/srepd/pkg/ai"
 	"github.com/clcollins/srepd/pkg/delta"
 )
@@ -83,11 +86,48 @@ func (b *watcherBuffer) Clear() {
 	b.entries = b.entries[:0]
 }
 
-func (m *model) updateWatcherViewport() {
-	content := m.watcherBuffer.Content()
-	if m.watcherViewport.Width > 0 {
-		content = lipgloss.NewStyle().Width(m.watcherViewport.Width).Render(content)
+func (m *model) renderWatcherMarkdown(content string, width int) string {
+	if width < 10 {
+		width = 80
 	}
+	if lipgloss.ColorProfile() == termenv.Ascii {
+		return lipgloss.NewStyle().Width(width).Render(content)
+	}
+	if m.markdownRenderer == nil || m.watcherRendererWidth != width {
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithStyles(m.styles.GlamourStyle),
+			glamour.WithWordWrap(width),
+		)
+		if err != nil {
+			return lipgloss.NewStyle().Width(width).Render(content)
+		}
+		m.markdownRenderer = renderer
+		m.watcherRendererWidth = width
+	}
+	rendered, err := m.markdownRenderer.Render(content)
+	if err != nil {
+		return lipgloss.NewStyle().Width(width).Render(content)
+	}
+	return strings.TrimRight(rendered, "\n")
+}
+
+func (m *model) renderWatcherEntries(width int) string {
+	entries := m.watcherBuffer.entries
+	if len(entries) == 0 {
+		return ""
+	}
+	if width <= 0 {
+		return strings.Join(entries, "\n───\n")
+	}
+	rendered := make([]string, len(entries))
+	for i, entry := range entries {
+		rendered[i] = m.renderWatcherMarkdown(entry, width)
+	}
+	return strings.Join(rendered, "\n───\n")
+}
+
+func (m *model) updateWatcherViewport() {
+	content := m.renderWatcherEntries(m.watcherViewport.Width)
 	m.watcherViewport.SetContent(content)
 	m.watcherViewport.GotoBottom()
 
@@ -97,10 +137,7 @@ func (m *model) updateWatcherViewport() {
 }
 
 func (m *model) updateChatViewport() {
-	content := m.watcherBuffer.Content()
-	if m.chatViewport.Width > 0 {
-		content = lipgloss.NewStyle().Width(m.chatViewport.Width).Render(content)
-	}
+	content := m.renderWatcherEntries(m.chatViewport.Width)
 	wasAtBottom := m.chatViewport.AtBottom()
 	m.chatViewport.SetContent(content)
 	if wasAtBottom {
@@ -176,7 +213,7 @@ func (m *model) advanceTypewriter() tea.Cmd {
 	}
 	tw.index = end
 
-	m.watcherBuffer.SetLast(prefixLines(tw.marker, tw.partial))
+	m.watcherBuffer.SetLast(prefixMessage(tw.marker, tw.partial))
 	m.updateWatcherViewport()
 
 	if tw.index >= len(tw.words) {
@@ -282,7 +319,7 @@ func (m *model) runDetectors(changes []delta.Change) []tea.Cmd {
 				cmds = append(cmds, watcherSynthesizeCmd(m.aiProvider, m.watcherSystemPrompt, obs.Summary, summary))
 			}
 		} else {
-			m.watcherBuffer.Append(prefixLines(m.watcherMarker, obs.Summary))
+			m.watcherBuffer.Append(prefixMessage(m.watcherMarker, obs.Summary))
 			added = true
 		}
 	}
@@ -662,15 +699,12 @@ func stripControl(s string) string {
 	return b.String()
 }
 
-func prefixLines(marker string, text string) string {
-	lines := strings.Split(text, "\n")
-	var result []string
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			result = append(result, "")
-		} else {
-			result = append(result, marker+line)
-		}
+// prefixMessage prepends the marker exactly once at the start of the block.
+// Continuation lines get NO marker — the user sees one identifier per
+// watcher/agent response.
+func prefixMessage(marker string, text string) string {
+	if text == "" {
+		return ""
 	}
-	return strings.Join(result, "\n")
+	return marker + text
 }

@@ -7,11 +7,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/log"
 )
+
+func validateEndpointSecurity(endpoint string) error {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("openai: invalid endpoint URL: %w", err)
+	}
+	if parsed.Scheme == "http" {
+		host := parsed.Hostname()
+		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+			return fmt.Errorf("openai: refusing to send API key over HTTP to non-localhost host %q; use HTTPS for remote endpoints", host)
+		}
+	}
+	return nil
+}
 
 type openaiCompatProvider struct {
 	endpoint       string
@@ -24,6 +39,12 @@ type openaiCompatProvider struct {
 func newOpenAICompatProvider(cfg Config, apiKey string) (*openaiCompatProvider, error) {
 	if cfg.Endpoint == "" {
 		return nil, fmt.Errorf("openai: endpoint is required")
+	}
+
+	if apiKey != "" {
+		if err := validateEndpointSecurity(cfg.Endpoint); err != nil {
+			return nil, err
+		}
 	}
 
 	return &openaiCompatProvider{
