@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/charmbracelet/log"
 )
 
@@ -26,6 +27,12 @@ func resolveBedrockRegion(cfg Config) string {
 			log.Debug("ai.bedrock", "msg", "region from env", "env", env, "region", v)
 			return v
 		}
+	}
+	// Fall back to the AWS SDK config chain — reads ~/.aws/config for the
+	// active profile (AWS_PROFILE, AWS_DEFAULT_PROFILE, or "default").
+	if awsCfg, err := config.LoadDefaultConfig(context.Background()); err == nil && awsCfg.Region != "" {
+		log.Debug("ai.bedrock", "msg", "region from AWS SDK config chain", "region", awsCfg.Region)
+		return awsCfg.Region
 	}
 	return ""
 }

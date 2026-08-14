@@ -130,6 +130,7 @@ func launchTUIWithConfig() {
 		true,  // configMode
 		false, // ocmAuthPending — never authenticate during config mode
 		nil,   // aiProvider — not needed in config mode
+		nil,   // aiProviderErr — not needed in config mode
 		"",    // agentCLICommand — not needed in config mode
 		nil,   // backplaneClient — not needed in config mode
 		nil,   // backplaneConfig — not needed in config mode

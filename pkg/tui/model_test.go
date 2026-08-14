@@ -1501,9 +1501,10 @@ func TestInitialModel_ValidConfig(t *testing.T) {
 			},
 		}
 
-		teaModel, cmd := InitialModelWithConfig(config, editor, l, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
+		teaModel, cmd := InitialModelWithConfig(config, editor, l, launcher.ClusterLauncher{}, false, nil, nil, nil, "", nil)
 		assert.NotNil(t, teaModel, "InitialModelWithConfig should return a non-nil model")
-		assert.NotNil(t, cmd, "InitialModelWithConfig should return a non-nil cmd")
+		// cmd is nil when there are no startup errors (no errMsg to fire)
+		_ = cmd
 
 		m := teaModel.(model)
 
@@ -1528,7 +1529,7 @@ func TestInitialModel_DebugFlag(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, true, nil, nil, "", nil)
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, true, nil, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.True(t, m.debug, "debug should be true when passed as true")
@@ -1537,12 +1538,14 @@ func TestInitialModel_DebugFlag(t *testing.T) {
 
 func TestInitialModelWithConfig_NilConfig(t *testing.T) {
 	t.Run("nil config sets m.err", func(t *testing.T) {
-		teaModel, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
+		teaModel, _ := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.NotNil(t, m.err, "m.err should be set when config is nil")
 		assert.Contains(t, m.err.Error(), "config is nil", "error should mention nil config")
-		assert.NotNil(t, cmd, "cmd should be non-nil (returns errMsg)")
+		// Init() surfaces m.err — cmd is nil from constructor, error shown via Init()
+		cmd := m.Init()
+		assert.NotNil(t, cmd, "Init() should return a cmd when m.err is set")
 	})
 }
 
@@ -1555,7 +1558,7 @@ func TestInitialModelWithConfig_SetsConfig(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.Equal(t, config, m.config, "config should be stored on the model")
@@ -1564,7 +1567,7 @@ func TestInitialModelWithConfig_SetsConfig(t *testing.T) {
 }
 
 func TestInitialModelWithConfig_CmdReturnsErrMsg(t *testing.T) {
-	t.Run("cmd produces errMsg with nil error for valid config", func(t *testing.T) {
+	t.Run("cmd produces no errMsg for valid config with no errors", func(t *testing.T) {
 		config := &pd.Config{
 			Client: &pd.MockPagerDutyClient{},
 			CurrentUser: &pagerduty.User{
@@ -1572,24 +1575,45 @@ func TestInitialModelWithConfig_CmdReturnsErrMsg(t *testing.T) {
 			},
 		}
 
-		_, cmd := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
-		assert.NotNil(t, cmd, "cmd should be non-nil")
+		_, cmd := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, nil, "", nil)
+		// With no errors (valid config, no aiProviderErr), cmd is tea.Batch() with
+		// no items — it returns nil, not an errMsg. Firing it should not panic.
+		if cmd != nil {
+			msg := cmd()
+			if msg != nil {
+				_, ok := msg.(errMsg)
+				assert.False(t, ok, "cmd should not produce an errMsg for valid config")
+			}
+		}
+	})
 
-		msg := cmd()
-		em, ok := msg.(errMsg)
-		assert.True(t, ok, "cmd should produce an errMsg")
-		assert.Nil(t, em.error, "error should be nil for valid config")
+	t.Run("m.err is set when aiProviderErr is set", func(t *testing.T) {
+		config := &pd.Config{
+			Client: &pd.MockPagerDutyClient{},
+			CurrentUser: &pagerduty.User{
+				APIObject: pagerduty.APIObject{ID: "U123"},
+			},
+		}
+		providerErr := fmt.Errorf("ai: bedrock requires region")
+
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, providerErr, "", nil)
+		m := teaModel.(model)
+		assert.Equal(t, providerErr, m.err, "m.err should be set to aiProviderErr so Init() surfaces it via the modal")
 	})
 }
 
 func TestInitialModelWithConfig_CmdReturnsErrMsgForNilConfig(t *testing.T) {
-	t.Run("cmd produces errMsg with non-nil error for nil config", func(t *testing.T) {
-		_, cmd := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
-		assert.NotNil(t, cmd, "cmd should be non-nil")
+	t.Run("m.err is set for nil config so Init() surfaces it via modal", func(t *testing.T) {
+		teaModel, _ := InitialModelWithConfig(nil, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, nil, "", nil)
+		m := teaModel.(model)
+		assert.NotNil(t, m.err, "m.err should be set for nil config")
 
+		// Init() surfaces m.err via errMsg — verify the pattern holds
+		cmd := m.Init()
+		assert.NotNil(t, cmd, "Init() should return a cmd when m.err is set")
 		msg := cmd()
 		em, ok := msg.(errMsg)
-		assert.True(t, ok, "cmd should produce an errMsg")
+		assert.True(t, ok, "Init() cmd should produce an errMsg")
 		assert.NotNil(t, em.error, "error should be non-nil for nil config")
 	})
 }
@@ -1603,7 +1627,7 @@ func TestInitialModel_ScheduledJobsInitialized(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		assert.GreaterOrEqual(t, len(m.scheduledJobs), 1, "should have at least one scheduled job (PollIncidents)")
@@ -1619,7 +1643,7 @@ func TestInitialModel_MarkdownRenderer(t *testing.T) {
 			},
 		}
 
-		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, "", nil)
+		teaModel, _ := InitialModelWithConfig(config, []string{"vi"}, launcher.ClusterLauncher{}, launcher.ClusterLauncher{}, false, nil, nil, nil, "", nil)
 		m := teaModel.(model)
 
 		// markdownRenderer should be non-nil (created by NewTermRenderer)
@@ -1804,10 +1828,11 @@ func TestInitialModelWithConfig_FieldInitialization(t *testing.T) {
 	l := launcher.ClusterLauncher{}
 	debug := true
 
-	result, cmd := InitialModelWithConfig(mockConfig, editor, l, launcher.ClusterLauncher{}, debug, nil, nil, "", nil)
+	result, cmd := InitialModelWithConfig(mockConfig, editor, l, launcher.ClusterLauncher{}, debug, nil, nil, nil, "", nil)
 
 	assert.NotNil(t, result, "model should not be nil")
-	assert.NotNil(t, cmd, "cmd should not be nil")
+	// cmd is nil when there are no startup errors (no errMsg to fire)
+	_ = cmd
 
 	m, ok := result.(model)
 	assert.True(t, ok, "result should be a model")
