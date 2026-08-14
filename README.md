@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **srepd has moved to [openshift-online/srepd](https://github.com/openshift-online/srepd).**
+> This repository is archived. Release v1.6.5 is a final bridge release:
+> running `srepd update` from any older version will migrate you to the
+> new repository automatically. New installs:
+> `go install github.com/openshift-online/srepd@latest`
+
 ![srepd](img/srepd.jpg)
 
 # SREPD

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	githubReleasesURL  = "https://api.github.com/repos/clcollins/srepd/releases/latest"
+	githubReleasesURL  = "https://api.github.com/repos/openshift-online/srepd/releases/latest"
 	updateCheckTimeout = 10 * time.Second
 )
 
@@ -52,7 +52,7 @@ func checkForUpdate(devMode bool, apiURL string) tea.Cmd {
 			return updateAvailableMsg{
 				current:    Version,
 				latest:     "v99.0.0",
-				releaseURL: "https://github.com/clcollins/srepd/releases/tag/v99.0.0",
+				releaseURL: "https://github.com/openshift-online/srepd/releases/tag/v99.0.0",
 			}
 		}
 

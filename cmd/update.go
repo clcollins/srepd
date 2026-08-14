@@ -14,7 +14,7 @@ var updateCmd = &cobra.Command{
 	Long: `Update srepd to the latest GitHub release in place.
 
 Downloads the latest release binary for the current OS and architecture
-from https://github.com/clcollins/srepd/releases, extracts it, and
+from https://github.com/openshift-online/srepd/releases, extracts it, and
 replaces the current binary. Restart srepd after updating.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := tui.RunSelfUpdate(); err != nil {
