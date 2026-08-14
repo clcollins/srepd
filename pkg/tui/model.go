@@ -420,6 +420,7 @@ func InitialModel(
 	configMode bool,
 	ocmAuthPending bool,
 	aiProvider ai.Provider,
+	aiProviderErr error,
 	agentCLICommand string,
 	backplaneClient backplane.BackplaneClient,
 	backplaneConfig *backplane.Config,
@@ -546,13 +547,14 @@ func InitialModel(
 	if err != nil {
 		log.Error("InitialModel", "error", err)
 		m.err = err
+	} else if aiProviderErr != nil {
+		log.Warn("InitialModel", "aiProviderErr", aiProviderErr)
+		m.err = aiProviderErr
 	}
 
 	initToolRegistryForModel(&m)
 
-	return m, func() tea.Msg {
-		return errMsg{err}
-	}
+	return m, nil
 }
 
 // InitialModelWithConfig creates the initial TUI model using a pre-built pd.Config.
@@ -566,6 +568,7 @@ func InitialModelWithConfig(
 	debug bool,
 	ocmClient ocm.OCMClient,
 	aiProvider ai.Provider,
+	aiProviderErr error,
 	agentCLICommand string,
 	backplaneClient backplane.BackplaneClient,
 ) (tea.Model, tea.Cmd) {
@@ -676,13 +679,14 @@ func InitialModelWithConfig(
 
 	if config == nil {
 		m.err = fmt.Errorf("InitialModelWithConfig: config is nil")
+	} else if aiProviderErr != nil {
+		log.Warn("InitialModelWithConfig", "aiProviderErr", aiProviderErr)
+		m.err = aiProviderErr
 	}
 
 	initToolRegistryForModel(&m)
 
-	return m, func() tea.Msg {
-		return errMsg{m.err}
-	}
+	return m, nil
 }
 
 func (m *model) readLog() tea.Cmd {

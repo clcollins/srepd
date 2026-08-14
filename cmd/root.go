@@ -232,6 +232,7 @@ func launchTUI() {
 	ocmClient, asyncOCMClient, ocmAuthPending, cfg := setupOCM()
 
 	var aiProvider ai.Provider
+	var aiProviderErr error
 	llmCfg := ai.Config{
 		Provider:  viper.GetString("llm_api.provider"),
 		APIKeyEnv: viper.GetString("llm_api.api_key_env"),
@@ -243,10 +244,12 @@ func launchTUI() {
 	if llmCfg.Provider != "" {
 		if err := ai.ValidateConfig(llmCfg); err != nil {
 			log.Warn("LLM API config invalid, AI features disabled", "error", err)
+			aiProviderErr = err
 		} else {
 			provider, providerErr := ai.NewProvider(llmCfg)
 			if providerErr != nil {
 				log.Warn("Failed to create LLM provider, AI features disabled", "error", providerErr)
+				aiProviderErr = providerErr
 			} else {
 				aiProvider = provider
 				log.Info("LLM provider initialized", "provider", provider.Name())
@@ -308,6 +311,7 @@ func launchTUI() {
 		false,
 		ocmAuthPending,
 		aiProvider,
+		aiProviderErr,
 		viper.GetString("agent_cli_command"),
 		bpClient,
 		bpConfig,
@@ -525,6 +529,7 @@ func runDevMode() {
 	}
 
 	var aiProvider ai.Provider
+	var aiProviderErr error
 	llmCfg := ai.Config{
 		Provider:  viper.GetString("llm_api.provider"),
 		APIKeyEnv: viper.GetString("llm_api.api_key_env"),
@@ -536,10 +541,12 @@ func runDevMode() {
 	if llmCfg.Provider != "" {
 		if err := ai.ValidateConfig(llmCfg); err != nil {
 			log.Warn("LLM API config invalid, AI features disabled", "error", err)
+			aiProviderErr = err
 		} else {
 			provider, providerErr := ai.NewProvider(llmCfg)
 			if providerErr != nil {
 				log.Warn("Failed to create LLM provider, AI features disabled", "error", providerErr)
+				aiProviderErr = providerErr
 			} else {
 				aiProvider = provider
 				log.Info("LLM provider initialized", "provider", provider.Name())
@@ -555,6 +562,7 @@ func runDevMode() {
 		viper.GetBool("debug"),
 		ocmMock,
 		aiProvider,
+		aiProviderErr,
 		viper.GetString("agent_cli_command"),
 		bpMock,
 	)
