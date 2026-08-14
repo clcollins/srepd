@@ -25,7 +25,7 @@ a consistent green tree.
 ## Approach
 
 Surgical restoration of the exact changes from PR #426, verified against
-`gh pr diff 426 --repo clcollins/srepd`. No modifications, no adjacent
+`gh pr diff 426 --repo openshift-online/srepd`. No modifications, no adjacent
 changes.
 
 ## Revert check

@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/clcollins/srepd/pkg/agent"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/agent"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

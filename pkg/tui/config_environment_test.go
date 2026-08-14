@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/openshift-online/srepd/pkg/launcher"
 	"github.com/stretchr/testify/assert"
 )
 

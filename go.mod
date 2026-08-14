@@ -1,4 +1,4 @@
-module github.com/clcollins/srepd
+module github.com/openshift-online/srepd
 
 go 1.26.5
 

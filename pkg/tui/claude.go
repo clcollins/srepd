@@ -16,8 +16,8 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/agent"
-	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/openshift-online/srepd/pkg/agent"
+	"github.com/openshift-online/srepd/pkg/ai"
 )
 
 // CommandExecutor abstracts command execution so tests can inject a mock

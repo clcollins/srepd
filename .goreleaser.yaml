@@ -12,8 +12,8 @@ builds:
   - env:
       - CGO_ENABLED=0
     ldflags:
-      - -X github.com/clcollins/srepd/pkg/tui.Version={{ if .IsSnapshot }}{{.ShortCommit}}{{ else }}{{.Version}}{{ end }}
-      - -X github.com/clcollins/srepd/pkg/tui.GitSHA={{.ShortCommit}}
+      - -X github.com/openshift-online/srepd/pkg/tui.Version={{ if .IsSnapshot }}{{.ShortCommit}}{{ else }}{{.Version}}{{ end }}
+      - -X github.com/openshift-online/srepd/pkg/tui.GitSHA={{.ShortCommit}}
     goos:
       - linux
       - darwin
@@ -44,5 +44,5 @@ changelog:
 
 release:
   github:
-    owner: clcollins
+    owner: openshift-online
     name: srepd

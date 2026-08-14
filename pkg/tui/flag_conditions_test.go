@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
-	"github.com/clcollins/srepd/pkg/ocm"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 )
 

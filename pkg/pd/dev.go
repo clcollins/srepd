@@ -12,7 +12,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/rand"
+	"github.com/openshift-online/srepd/pkg/rand"
 )
 
 // FixtureConfig holds the dev mode configuration data loaded from config.json

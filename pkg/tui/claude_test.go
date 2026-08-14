@@ -10,8 +10,8 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/agent"
-	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	"github.com/openshift-online/srepd/pkg/agent"
+	pkgconfig "github.com/openshift-online/srepd/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
 

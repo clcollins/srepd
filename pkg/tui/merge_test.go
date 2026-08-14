@@ -6,7 +6,7 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 )
 

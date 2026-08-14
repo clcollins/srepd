@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"runtime"
 
-	pkgconfig "github.com/clcollins/srepd/pkg/config"
-	"github.com/clcollins/srepd/pkg/launcher"
+	pkgconfig "github.com/openshift-online/srepd/pkg/config"
+	"github.com/openshift-online/srepd/pkg/launcher"
 	"github.com/spf13/cobra"
 )
 

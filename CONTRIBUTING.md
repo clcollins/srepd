@@ -21,7 +21,7 @@ local Go version in sync with what `go.mod` declares.
 ### Clone and verify
 
 ```bash
-git clone https://github.com/clcollins/srepd.git
+git clone https://github.com/openshift-online/srepd.git
 cd srepd
 make test-all
 ```

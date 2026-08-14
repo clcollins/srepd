@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
-	"github.com/clcollins/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/ocm"
 	"github.com/stretchr/testify/assert"
 )
 

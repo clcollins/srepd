@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/container"
+	"github.com/openshift-online/srepd/pkg/container"
 )
 
 const clusterLoginCommandFlag = "cluster_login_command"

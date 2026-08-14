@@ -14,9 +14,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/ai"
-	"github.com/clcollins/srepd/pkg/ai/policy"
-	"github.com/clcollins/srepd/pkg/ai/tools"
+	"github.com/openshift-online/srepd/pkg/ai"
+	"github.com/openshift-online/srepd/pkg/ai/policy"
+	"github.com/openshift-online/srepd/pkg/ai/tools"
 )
 
 // ToolRunnerFactory creates a BetaToolRunner. Implemented by *anthropic.BetaMessageService.

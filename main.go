@@ -24,8 +24,8 @@ package main
 import (
 	"embed"
 
-	"github.com/clcollins/srepd/cmd"
-	"github.com/clcollins/srepd/pkg/docs"
+	"github.com/openshift-online/srepd/cmd"
+	"github.com/openshift-online/srepd/pkg/docs"
 )
 
 //go:embed README.md

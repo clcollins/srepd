@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/muesli/termenv"
 
-	"github.com/clcollins/srepd/pkg/ai"
-	"github.com/clcollins/srepd/pkg/delta"
+	"github.com/openshift-online/srepd/pkg/ai"
+	"github.com/openshift-online/srepd/pkg/delta"
 )
 
 const (

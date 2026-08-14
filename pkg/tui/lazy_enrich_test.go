@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

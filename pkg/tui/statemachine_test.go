@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"pgregory.net/rapid"
 )
 

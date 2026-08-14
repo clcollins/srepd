@@ -8,10 +8,10 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/ai/policy"
-	"github.com/clcollins/srepd/pkg/delta"
-	"github.com/clcollins/srepd/pkg/ocm"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/ai/policy"
+	"github.com/openshift-online/srepd/pkg/delta"
+	"github.com/openshift-online/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/pd"
 )
 
 const maxServiceLogs = 5

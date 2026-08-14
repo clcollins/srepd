@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	pkgconfig "github.com/clcollins/srepd/pkg/config"
-	"github.com/clcollins/srepd/pkg/deprecation"
-	"github.com/clcollins/srepd/pkg/launcher"
-	"github.com/clcollins/srepd/pkg/tui"
+	pkgconfig "github.com/openshift-online/srepd/pkg/config"
+	"github.com/openshift-online/srepd/pkg/deprecation"
+	"github.com/openshift-online/srepd/pkg/launcher"
+	"github.com/openshift-online/srepd/pkg/tui"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"

@@ -6,8 +6,8 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/ai/tools"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/ai/tools"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

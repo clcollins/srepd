@@ -5,7 +5,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/launcher"
+	"github.com/openshift-online/srepd/pkg/launcher"
 	"github.com/stretchr/testify/assert"
 )
 

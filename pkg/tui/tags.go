@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/pd"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

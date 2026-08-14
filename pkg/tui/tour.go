@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
-	pkgconfig "github.com/clcollins/srepd/pkg/config"
+	pkgconfig "github.com/openshift-online/srepd/pkg/config"
 	"github.com/spf13/viper"
 )
 

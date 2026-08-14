@@ -1,21 +1,13 @@
-> [!IMPORTANT]
-> **srepd has moved to [openshift-online/srepd](https://github.com/openshift-online/srepd).**
-> This repository is archived. Release v1.6.5 is a final bridge release:
-> running `srepd update` from any older version will migrate you to the
-> new repository automatically. New installs:
-> `go install github.com/openshift-online/srepd@latest`
-
 ![srepd](img/srepd.jpg)
 
 # SREPD
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/clcollins/srepd)](https://golang.org)
-[![Build Status](https://github.com/clcollins/srepd/actions/workflows/go-ci.yml/badge.svg)](https://github.com/clcollins/srepd/actions/workflows/go-ci.yml)
-[![codecov](https://codecov.io/gh/clcollins/srepd/graph/badge.svg)](https://codecov.io/gh/clcollins/srepd)
-[![Go Report Card](https://goreportcard.com/badge/github.com/clcollins/srepd)](https://goreportcard.com/report/github.com/clcollins/srepd)
-[![Go Reference](https://pkg.go.dev/badge/github.com/clcollins/srepd.svg)](https://pkg.go.dev/github.com/clcollins/srepd)
-[![GitHub Release](https://img.shields.io/github/v/release/clcollins/srepd)](https://github.com/clcollins/srepd/releases)
-[![License](https://img.shields.io/github/license/clcollins/srepd)](https://github.com/clcollins/srepd/blob/main/LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/openshift-online/srepd)](https://golang.org)
+[![Build Status](https://github.com/openshift-online/srepd/actions/workflows/go-ci.yml/badge.svg)](https://github.com/openshift-online/srepd/actions/workflows/go-ci.yml)
+[![codecov](https://codecov.io/gh/openshift-online/srepd/graph/badge.svg)](https://codecov.io/gh/openshift-online/srepd)
+[![Go Reference](https://pkg.go.dev/badge/github.com/openshift-online/srepd.svg)](https://pkg.go.dev/github.com/openshift-online/srepd)
+[![GitHub Release](https://img.shields.io/github/v/release/openshift-online/srepd)](https://github.com/openshift-online/srepd/releases)
+[![License](https://img.shields.io/github/license/openshift-online/srepd)](https://github.com/openshift-online/srepd/blob/main/LICENSE)
 
 A PagerDuty terminal user interface focused on common SRE tasks.
 

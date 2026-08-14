@@ -27,8 +27,8 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	pkgconfig "github.com/clcollins/srepd/pkg/config"
-	"github.com/clcollins/srepd/pkg/pd"
+	pkgconfig "github.com/openshift-online/srepd/pkg/config"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

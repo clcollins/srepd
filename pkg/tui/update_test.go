@@ -15,8 +15,8 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/launcher"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/launcher"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -268,7 +268,7 @@ func TestCheckForUpdate_WithMockServer(t *testing.T) {
 	t.Run("detects newer version from GitHub API", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintln(w, `{"tag_name": "v2.0.0", "html_url": "https://github.com/clcollins/srepd/releases/tag/v2.0.0"}`)
+			_, _ = fmt.Fprintln(w, `{"tag_name": "v2.0.0", "html_url": "https://github.com/openshift-online/srepd/releases/tag/v2.0.0"}`)
 		}))
 		defer server.Close()
 
@@ -278,7 +278,7 @@ func TestCheckForUpdate_WithMockServer(t *testing.T) {
 		updateMsg, ok := msg.(updateAvailableMsg)
 		assert.True(t, ok, "should return updateAvailableMsg")
 		assert.Equal(t, "v2.0.0", updateMsg.latest)
-		assert.Equal(t, "https://github.com/clcollins/srepd/releases/tag/v2.0.0", updateMsg.releaseURL)
+		assert.Equal(t, "https://github.com/openshift-online/srepd/releases/tag/v2.0.0", updateMsg.releaseURL)
 	})
 
 	t.Run("returns nil when already on latest", func(t *testing.T) {
@@ -288,7 +288,7 @@ func TestCheckForUpdate_WithMockServer(t *testing.T) {
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintln(w, `{"tag_name": "v1.5.0", "html_url": "https://github.com/clcollins/srepd/releases/tag/v1.5.0"}`)
+			_, _ = fmt.Fprintln(w, `{"tag_name": "v1.5.0", "html_url": "https://github.com/openshift-online/srepd/releases/tag/v1.5.0"}`)
 		}))
 		defer server.Close()
 
@@ -389,7 +389,7 @@ func TestUpdateAvailableMsg_HandledInModel(t *testing.T) {
 		msg := updateAvailableMsg{
 			current:    "v1.0.0",
 			latest:     "v1.1.0",
-			releaseURL: "https://github.com/clcollins/srepd/releases/tag/v1.1.0",
+			releaseURL: "https://github.com/openshift-online/srepd/releases/tag/v1.1.0",
 		}
 
 		result, _ := m.Update(msg)
@@ -397,7 +397,7 @@ func TestUpdateAvailableMsg_HandledInModel(t *testing.T) {
 
 		assert.True(t, updated.updateAvailable)
 		assert.Equal(t, "v1.1.0", updated.updateVersion)
-		assert.Equal(t, "https://github.com/clcollins/srepd/releases/tag/v1.1.0", updated.updateReleaseURL)
+		assert.Equal(t, "https://github.com/openshift-online/srepd/releases/tag/v1.1.0", updated.updateReleaseURL)
 	})
 }
 

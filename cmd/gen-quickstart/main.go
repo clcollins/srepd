@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/clcollins/srepd/pkg/tui"
+	"github.com/openshift-online/srepd/pkg/tui"
 )
 
 func main() {

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	pkgconfig "github.com/clcollins/srepd/pkg/config"
 	"github.com/coreos/go-systemd/journal"
+	pkgconfig "github.com/openshift-online/srepd/pkg/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"

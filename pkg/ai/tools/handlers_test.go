@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/clcollins/srepd/pkg/ai/policy"
-	"github.com/clcollins/srepd/pkg/ai/tools"
-	"github.com/clcollins/srepd/pkg/delta"
-	"github.com/clcollins/srepd/pkg/ocm"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/ai/policy"
+	"github.com/openshift-online/srepd/pkg/ai/tools"
+	"github.com/openshift-online/srepd/pkg/delta"
+	"github.com/openshift-online/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

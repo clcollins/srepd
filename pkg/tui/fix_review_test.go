@@ -9,10 +9,10 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/clcollins/srepd/pkg/agent"
-	"github.com/clcollins/srepd/pkg/ai/tools"
-	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/muesli/termenv"
+	"github.com/openshift-online/srepd/pkg/agent"
+	"github.com/openshift-online/srepd/pkg/ai/tools"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -15,9 +15,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	ansi "github.com/charmbracelet/x/ansi"
-	"github.com/clcollins/srepd/pkg/alert"
-	"github.com/clcollins/srepd/pkg/backplane"
-	"github.com/clcollins/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/alert"
+	"github.com/openshift-online/srepd/pkg/backplane"
+	"github.com/openshift-online/srepd/pkg/ocm"
 )
 
 const (

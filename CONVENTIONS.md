@@ -4,7 +4,7 @@
 
 - Language: Go
 - Go version: 1.26.5 (from go.mod)
-- Module path: `github.com/clcollins/srepd`
+- Module path: `github.com/openshift-online/srepd`
 - Entry point: `main.go` using cobra + viper
 - Linter: golangci-lint
 - Test framework: `go test` with `testify` for assertions

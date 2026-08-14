@@ -8,8 +8,8 @@ import (
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/alert"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/alert"
+	"github.com/openshift-online/srepd/pkg/pd"
 )
 
 const (

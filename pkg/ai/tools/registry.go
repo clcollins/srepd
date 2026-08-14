@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/clcollins/srepd/pkg/ai/policy"
+	"github.com/openshift-online/srepd/pkg/ai/policy"
 )
 
 // MaxResponseBytes is the truncation cap for tool handler output.

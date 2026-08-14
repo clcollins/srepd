@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/clcollins/srepd/pkg/ai/policy"
-	"github.com/clcollins/srepd/pkg/ai/tools"
+	"github.com/openshift-online/srepd/pkg/ai/policy"
+	"github.com/openshift-online/srepd/pkg/ai/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

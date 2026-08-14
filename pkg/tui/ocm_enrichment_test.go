@@ -7,9 +7,9 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clcollins/srepd/pkg/launcher"
-	"github.com/clcollins/srepd/pkg/ocm"
-	"github.com/clcollins/srepd/pkg/pd"
+	"github.com/openshift-online/srepd/pkg/launcher"
+	"github.com/openshift-online/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 )
 

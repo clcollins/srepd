@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/clcollins/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/ocm"
 )
 
 // FlagConditionType identifies the kind of flag condition.

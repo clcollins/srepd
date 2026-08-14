@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/exp/golden"
-	"github.com/clcollins/srepd/pkg/pd"
 	"github.com/muesli/termenv"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/require"
 )
 

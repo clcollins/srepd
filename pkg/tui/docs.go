@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/clcollins/srepd/pkg/docs"
+	"github.com/openshift-online/srepd/pkg/docs"
 )
 
 const defaultDocsTabsPerPage = 8

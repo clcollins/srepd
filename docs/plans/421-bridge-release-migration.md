@@ -1,4 +1,4 @@
-# Plan 421: Bridge Release v1.6.5 — clcollins/srepd → openshift-online/srepd Migration
+# Plan 421: Bridge Release v1.6.5 — openshift-online/srepd → openshift-online/srepd Migration
 
 ## Problem
 
@@ -8,7 +8,7 @@ no redirects of any kind. Every srepd binary in the field (v1.6.4 and earlier)
 has this URL compiled in:
 
 ```
-https://api.github.com/repos/clcollins/srepd/releases/latest
+https://api.github.com/repos/openshift-online/srepd/releases/latest
 ```
 
 (`githubReleasesURL` constant, `pkg/tui/update.go`). Without a bridge, existing
@@ -18,7 +18,7 @@ date" forever.
 
 ## Approach
 
-Publish one final release in the old repo (`clcollins/srepd`) whose only
+Publish one final release in the old repo (`openshift-online/srepd`) whose only
 functional change is pointing `githubReleasesURL` at `openshift-online/srepd`.
 Old binaries see v1.6.5 as an update, self-update to it from this repo's release
 assets, and from then on check `openshift-online/srepd` — where they'll find
@@ -37,7 +37,7 @@ v1.7.0+ and complete the migration.
 - `README.md`: prominent `[!IMPORTANT]` migration notice at the very top
 
 **Explicitly NOT changed:**
-- `go.mod` module path or any import paths — repo keeps `github.com/clcollins/srepd`
+- `go.mod` module path or any import paths — repo keeps `github.com/openshift-online/srepd`
 - `.goreleaser.yaml` — `release.github.owner` stays `clcollins` so the release
   publishes to this repo where old binaries are looking
 - `pkg/tui/update_test.go` — fixture URLs are self-contained httptest strings
@@ -46,7 +46,7 @@ v1.7.0+ and complete the migration.
 ## Ordering / Prerequisites
 
 - **`openshift-online/srepd` must rename its `go.mod` module path** from
-  `github.com/clcollins/srepd` to `github.com/openshift-online/srepd` (and
+  `github.com/openshift-online/srepd` to `github.com/openshift-online/srepd` (and
   update all internal import paths) before publishing v1.7.0. Without this,
   `go install github.com/openshift-online/srepd@latest` (advertised in the
   bridge README notice) fails with a module path mismatch error for new users.
@@ -69,7 +69,7 @@ v1.7.0+ and complete the migration.
 
 ## Verification
 
-- `curl -s https://api.github.com/repos/clcollins/srepd/releases/latest | jq .tag_name` → `"v1.6.5"`
+- `curl -s https://api.github.com/repos/openshift-online/srepd/releases/latest | jq .tag_name` → `"v1.6.5"`
 - Download a v1.6.4 binary, run `srepd update` → updates to v1.6.5
 - Run the v1.6.5 binary's `srepd update` → reaches openshift-online/srepd
 - `strings dist/.../srepd | grep releases/latest` → shows only the openshift-online URL

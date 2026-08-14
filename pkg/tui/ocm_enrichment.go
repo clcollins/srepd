@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/backplane"
-	"github.com/clcollins/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/backplane"
+	"github.com/openshift-online/srepd/pkg/ocm"
 )
 
 const ocmAPITimeout = 30 * time.Second

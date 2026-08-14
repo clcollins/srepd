@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	pkgrand "github.com/clcollins/srepd/pkg/rand"
+	pkgrand "github.com/openshift-online/srepd/pkg/rand"
 )
 
 // AskKind categorizes the type of user approval request.

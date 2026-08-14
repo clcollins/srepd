@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/clcollins/srepd/pkg/ai"
+	"github.com/openshift-online/srepd/pkg/ai"
 )
 
 // streamEvent is a single item from a provider stream: either a token of text or a

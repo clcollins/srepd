@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/clcollins/srepd/pkg/backplane"
-	"github.com/clcollins/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/backplane"
+	"github.com/openshift-online/srepd/pkg/ocm"
 	"github.com/stretchr/testify/assert"
 )
 

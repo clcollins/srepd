@@ -11,9 +11,9 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
-	pkgconfig "github.com/clcollins/srepd/pkg/config"
-	"github.com/clcollins/srepd/pkg/ocm"
-	"github.com/clcollins/srepd/pkg/pd"
+	pkgconfig "github.com/openshift-online/srepd/pkg/config"
+	"github.com/openshift-online/srepd/pkg/ocm"
+	"github.com/openshift-online/srepd/pkg/pd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
