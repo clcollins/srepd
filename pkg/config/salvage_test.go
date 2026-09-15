@@ -13,11 +13,11 @@ import (
 
 func TestSalvageConfigValues_ExtractsToken(t *testing.T) {
 	broken := `---
-# PagerDuty API token
-token: u+tEnfytqWmndsYy-ghQ
+# Dummy PagerDuty API token
+token: u+1234567890abcd-xyz
 
 # PagerDuty team IDs
-  - PASPK4G
+  - PAS1234
 
 # Optional settings
 editor: vim
@@ -25,7 +25,7 @@ terminal: gnome-terminal --
 `
 	vals := SalvageConfigValues([]byte(broken))
 
-	assert.Equal(t, "u+tEnfytqWmndsYy-ghQ", vals["token"])
+	assert.Equal(t, "u+1234567890abcd-xyz", vals["token"])
 	assert.Equal(t, "vim", vals["editor"])
 	assert.Equal(t, "gnome-terminal --", vals["terminal"])
 }
