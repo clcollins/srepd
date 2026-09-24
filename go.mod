@@ -17,7 +17,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/google/uuid v1.6.0
 	github.com/muesli/termenv v0.16.0
-	github.com/openshift-online/ocm-common v0.0.44
+	github.com/openshift-online/ocm-common v0.0.45
 	github.com/openshift-online/ocm-sdk-go v0.1.510
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
