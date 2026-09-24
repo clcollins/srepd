@@ -391,8 +391,8 @@ github.com/openshift-online/ocm-api-model/model v0.0.465 h1:efuoDRUihaFVu0x7zL3y
 github.com/openshift-online/ocm-api-model/model v0.0.465/go.mod h1:PQIoq6P8Vlb7goOdRMLK8nJY+B7HH0RTqYAa4kyidTE=
 github.com/openshift-online/ocm-cli v1.0.2 h1:8xz1/kqwGI5mE/pYRGkHy5MgUEZa4BwshxHJlVBfpXA=
 github.com/openshift-online/ocm-cli v1.0.2/go.mod h1:/JxCCvDl/LbtDc9kJdIMleHbjNufztY5f/rzlayxBVQ=
-github.com/openshift-online/ocm-common v0.0.44 h1:MwXBQt+LJPqmix0wkLi7YqQVh3XY2LHpGCrPwWH60q4=
-github.com/openshift-online/ocm-common v0.0.44/go.mod h1:8+czO01A9gb1KDOwGmgEhZOZ/iTImuLQVo6l54jJc0I=
+github.com/openshift-online/ocm-common v0.0.45 h1:bwYNMdhnFNfmzrsf8hH9kqs6Jj5+jSG+JcE60JHVlGE=
+github.com/openshift-online/ocm-common v0.0.45/go.mod h1:8+czO01A9gb1KDOwGmgEhZOZ/iTImuLQVo6l54jJc0I=
 github.com/openshift-online/ocm-sdk-go v0.1.510 h1:oPwgGHPi6LeY+RANXUhJwVvkY4yvddyRqHHThHZZRyM=
 github.com/openshift-online/ocm-sdk-go v0.1.510/go.mod h1:7zNO9AaTPxnqb7/pynAJqKWaxB/GSJePnOndlQJWk60=
 github.com/pb33f/ordered-map/v2 v2.3.1 h1:5319HDO0aw4DA4gzi+zv4FXU9UlSs3xGZ40wcP1nBjY=
